@@ -30,3 +30,7 @@ this order:
 
 - For Rust work under `crates/`, follow `crates/AGENTS.md`.
 - For Lite work under `apps/lite/`, follow `apps/lite/AGENTS.md`.
+
+## Running commands
+
+When invoking specifically `node` or `pnpm`, or `cargo` and friends, prefix the commands with `mise exec --`. Mise manages these toolchains.
