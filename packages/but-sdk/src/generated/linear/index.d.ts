@@ -2686,6 +2686,8 @@ export type HunkResolution = {
 } | {
   type: "content";
   subject: string;
+} | {
+  type: "ai";
 };
 
 /** JSON transport type for the outcome of applying per-hunk resolutions. */
@@ -2696,6 +2698,11 @@ export type HunkResolutionResult = {
   newCommit: string;
   /** How many conflicts were resolved. */
   resolved: number;
+  /**
+   * Whether the fully resolved commit ended up with the same tree as
+   * its parent — the resolutions dropped all of its changes.
+   */
+  commitEmptied: boolean;
   /** The conflicts that remain, per file. */
   remaining: Array<RemainingConflicts>;
   /** Workspace state after the apply. */

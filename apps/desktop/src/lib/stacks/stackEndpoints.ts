@@ -23,6 +23,8 @@ import type {
 	AiResolutionResult,
 	BranchLandResult,
 	CommitConflicts,
+	HunkResolutionResult,
+	ResolutionSpec,
 	CommitAbsorption,
 	BranchDetails,
 	BranchReference,
@@ -444,6 +446,26 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				projectId,
 				commitId,
 				dryRun: false,
+			}),
+			invalidatesTags: (_result, _error, { stackId }) => [
+				invalidatesList(ReduxTag.HeadSha),
+				invalidatesList(ReduxTag.BranchChanges),
+				invalidatesList(ReduxTag.WorktreeChanges),
+				...(stackId ? [invalidatesItem(ReduxTag.StackDetails, stackId)] : []),
+			],
+		}),
+		resolveCommitConflictHunks: build.mutation<
+			HunkResolutionResult,
+			{ projectId: string; stackId?: string; commitId: string; specs: ResolutionSpec[] }
+		>({
+			extraOptions: {
+				command: "resolve_commit_conflict_hunks",
+				actionName: "Resolve Conflict",
+			},
+			query: ({ projectId, commitId, specs }) => ({
+				projectId,
+				commitId,
+				specs,
 			}),
 			invalidatesTags: (_result, _error, { stackId }) => [
 				invalidatesList(ReduxTag.HeadSha),

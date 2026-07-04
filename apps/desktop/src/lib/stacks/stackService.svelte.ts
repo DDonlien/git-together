@@ -547,6 +547,10 @@ export class StackService {
 		return this.backendApi.endpoints.resolveCommitConflictsAi.useMutation();
 	}
 
+	get resolveCommitConflictHunks() {
+		return this.backendApi.endpoints.resolveCommitConflictHunks.useMutation();
+	}
+
 	commitConflicts(projectId: string, commitId: string) {
 		return this.backendApi.endpoints.commitConflicts.useQuery({ projectId, commitId });
 	}

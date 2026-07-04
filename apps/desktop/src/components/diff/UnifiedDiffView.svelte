@@ -218,6 +218,20 @@
 	}
 </script>
 
+{#snippet conflictCards(bucket: { hunk: ConflictHunk; index: number }[])}
+	{#each bucket as conflict (conflict.index)}
+		<ConflictHunkCard
+			hunk={conflict.hunk}
+			index={conflict.index}
+			total={conflictHunks?.length ?? 0}
+			{projectId}
+			{stackId}
+			{commitId}
+			path={change.path}
+		/>
+	{/each}
+{/snippet}
+
 {#if fileDependenciesQuery}
 	<ReduxResult {projectId} result={fileDependenciesQuery.result} children={unifiedDiff} />
 {:else}
@@ -261,6 +275,9 @@
 				</div>
 			{/if}
 			{#if linesModified > LARGE_DIFF_THRESHOLD && !showAnyways}
+				{#if showConflicts && conflictHunks}
+					{@render conflictCards(conflictHunks.map((hunk, index) => ({ hunk, index })))}
+				{/if}
 				<HiddenDiffNotice
 					handleShow={() => {
 						showAnyways = true;
@@ -271,13 +288,7 @@
 					{@const selection = uncommittedService.hunkCheckStatus(stackId, change.path, hunk)}
 					{@const [_, lineLocks] = getLineLocks(hunk, fileDependencies?.dependencies ?? [])}
 					{@const hunkId = generateHunkId(change.path, hunkIndex)}
-					{#each conflictBuckets[hunkIndex] ?? [] as conflict (conflict.index)}
-						<ConflictHunkCard
-							hunk={conflict.hunk}
-							index={conflict.index}
-							total={conflictHunks?.length ?? 0}
-						/>
-					{/each}
+					{@render conflictCards(conflictBuckets[hunkIndex] ?? [])}
 					<div
 						class="hunk-content"
 						use:draggableChips={{
@@ -376,13 +387,7 @@
 					</div>
 				{:else}
 					{#if showConflicts}
-						{#each conflictBuckets[0] ?? [] as conflict (conflict.index)}
-							<ConflictHunkCard
-								hunk={conflict.hunk}
-								index={conflict.index}
-								total={conflictHunks?.length ?? 0}
-							/>
-						{/each}
+						{@render conflictCards(conflictBuckets[0] ?? [])}
 					{:else if diff.subject.hunks.length === 0}
 						<div class="hunk-placehoder">
 							<EmptyStatePlaceholder image={emptyFileSvg} gap={12} topBottomPadding={34}>
@@ -402,13 +407,7 @@
 					{/if}
 				{/each}
 				{#if filteredHunks.length > 0 && renderedHunkCount >= filteredHunks.length}
-					{#each conflictBuckets[filteredHunks.length] ?? [] as conflict (conflict.index)}
-						<ConflictHunkCard
-							hunk={conflict.hunk}
-							index={conflict.index}
-							total={conflictHunks?.length ?? 0}
-						/>
-					{/each}
+					{@render conflictCards(conflictBuckets[filteredHunks.length] ?? [])}
 				{/if}
 			{/if}
 		{:else if diff.type === "TooLarge"}
