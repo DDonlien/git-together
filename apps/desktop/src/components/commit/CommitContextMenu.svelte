@@ -53,7 +53,6 @@
 </script>
 
 <script lang="ts">
-	import ConflictHunksModal from "$components/commit/ConflictHunksModal.svelte";
 	import { AI_SERVICE } from "$lib/ai/service";
 	import { CLIPBOARD_SERVICE } from "$lib/backend/clipboard";
 	import { URL_SERVICE } from "$lib/backend/url";
@@ -96,8 +95,6 @@
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
 	const [createBranch, branchCreation] = stackService.branchCreate;
 	const [resolveConflictsAi, aiResolution] = stackService.resolveCommitConflictsAi;
-
-	let conflictHunksModal: ConflictHunksModal | undefined = $state();
 
 	const aiGenEnabled = $derived(projectAiGenEnabled(projectId));
 	const commitHasConflicts = $derived(
@@ -282,17 +279,6 @@
 								}
 							}}
 						/>
-						{#if contextData.hasConflicts}
-							<ContextMenuItem
-								label="Show conflicts"
-								icon="info"
-								testId={TestId.CommitRowContextMenu_ShowConflicts}
-								onclick={() => {
-									conflictHunksModal?.show(commitId);
-									close();
-								}}
-							/>
-						{/if}
 						{#if contextData.hasConflicts && $aiGenEnabled && aiConfigurationValid}
 							<ContextMenuItem
 								label="Resolve conflicts with AI"
@@ -425,6 +411,4 @@
 			{/if}
 		{/snippet}
 	</KebabButton>
-
-	<ConflictHunksModal bind:this={conflictHunksModal} {projectId} />
 {/if}
