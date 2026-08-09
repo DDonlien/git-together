@@ -20,13 +20,18 @@ import { commitBody, commitTitle, shortCommitId } from "#ui/commit.ts";
 import {
 	branchFileParent,
 	branchIdentityKey,
+	type BranchOperand,
+	branchOperand,
 	commitFileParent,
+	type CommitOperand,
+	commitOperand,
 	type FileOperand,
 	fileOperand,
 	hunkOperand,
 	type FileParent,
 	type HunkOperand,
 	type Operand,
+	uncommittedChangesFileParent,
 	weakCommitIdentityKey,
 } from "#ui/operands.ts";
 import type { BranchTab } from "#ui/projects/project.ts";
@@ -141,6 +146,7 @@ import {
 } from "./diff-view.ts";
 import { DiffMinimap } from "./DiffMinimap.tsx";
 import { getMinimapFiles, measureWrapColumns, type MinimapSelection } from "./diff-minimap.ts";
+import type { DetailsSelection } from "./details-selection.ts";
 
 export type DiffViewerHandle = CodeViewHandle<Annotation>;
 
@@ -1386,11 +1392,11 @@ const CommitDetailsSkeleton: FC = () => {
 };
 
 const CommitDetails: FC<{
-	selection: Extract<Operand, { _tag: "Commit" }>;
+	commit: CommitOperand;
 	onActiveFileSelection: (itemId: string, firstHunk: HunkOperand | null) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
-}> = ({ selection, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
+}> = ({ commit, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
@@ -1405,7 +1411,7 @@ const CommitDetails: FC<{
 	const commitBodyId = useId();
 
 	const { data: commitDetails } = useSuspenseQuery(
-		commitDetailsWithLineStatsQueryOptions({ projectId, commitId: selection.commitId }),
+		commitDetailsWithLineStatsQueryOptions({ projectId, commitId: commit.commitId }),
 	);
 
 	const fmtDate = new Intl.DateTimeFormat(undefined, {
@@ -1513,7 +1519,7 @@ const CommitDetails: FC<{
 				filesVisible={filesVisible}
 				filesItems={getCommitFileRowItems({ commitDetails })}
 				onPassiveFileSelection={selectFile}
-				selection={selection}
+				selection={commitOperand(commit)}
 				projectId={projectId}
 				onActiveFileSelection={onActiveFileSelection}
 				viewerRef={viewerRef}
@@ -1523,18 +1529,15 @@ const CommitDetails: FC<{
 	);
 };
 
-const BranchDetails: FC<{
-	selection: Extract<Operand, { _tag: "Branch" }>;
-	onActiveFileSelection: (itemId: string, firstHunk: HunkOperand | null) => void;
-	viewerRef: RefObject<DiffViewerHandle | null>;
-	didScrollToViaFileRef: RefObject<boolean>;
-}> = ({ selection, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
+/** A branch's own changes, whatever the branch's standing. */
+const BranchDiff: FC<BranchDetailsProps> = ({
+	branch,
+	onActiveFileSelection,
+	viewerRef,
+	didScrollToViaFileRef,
+}) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
-	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
-	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
-	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : null;
 	const dispatch = useAppDispatch();
-	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
 	const filesVisibleState = useAppSelector((state) =>
 		projectSlice.selectors.selectFilesVisible(state, projectId),
 	);
@@ -1542,7 +1545,91 @@ const BranchDetails: FC<{
 		projectSlice.selectors.selectCanShowFiles(state, projectId),
 	);
 	const filesVisible = canShowFiles && filesVisibleState;
-	const branchRef = decodeBytes(selection.branchRef);
+
+	const selectFile = (selection: string) => {
+		dispatch(projectSlice.actions.selectFiles({ projectId, selection }));
+	};
+
+	return (
+		<SuspenseQuery
+			{...branchDiffQueryOptions({ projectId, branch: decodeBytes(branch.branchRef) })}
+		>
+			{({ data: branchDiff }) => (
+				<Diff
+					changes={branchDiff.changes}
+					filesVisible={filesVisible}
+					filesItems={branchDiff.changes.map((change) =>
+						changeFileRowItem({
+							change,
+							path: change.path,
+							dependencyCommitIds: [],
+						}),
+					)}
+					onPassiveFileSelection={selectFile}
+					selection={branchOperand(branch)}
+					projectId={projectId}
+					onActiveFileSelection={onActiveFileSelection}
+					viewerRef={viewerRef}
+					didScrollToViaFileRef={didScrollToViaFileRef}
+				/>
+			)}
+		</SuspenseQuery>
+	);
+};
+
+const BranchTitleRow: FC<{ branchName: string }> = ({ branchName }) => {
+	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
+
+	return (
+		<div className={styles.titleRow}>
+			{detailsFullWindow && <TopLeftControls />}
+
+			<div className={styles.title}>
+				<Icon name="branch" />
+				<h3 className={classes("text-15", "text-semibold")}>{branchName}</h3>
+			</div>
+		</div>
+	);
+};
+
+type BranchDetailsProps = {
+	branch: BranchOperand;
+	onActiveFileSelection: (itemId: string, firstHunk: HunkOperand | null) => void;
+	viewerRef: RefObject<DiffViewerHandle | null>;
+	didScrollToViaFileRef: RefObject<boolean>;
+};
+
+/**
+ * A branch the workspace does not hold, as the branches tab lists them. It has
+ * no position to review against, so its changes are all there is to show.
+ */
+const UnappliedBranchDetails: FC<BranchDetailsProps> = (p) => (
+	<div className={styles.container}>
+		<div className={styles.headerWrap}>
+			<BranchTitleRow
+				branchName={branchDetailsParams(decodeBytes(p.branch.branchRef)).branchName}
+			/>
+		</div>
+
+		<Suspense fallback={<div className={classes(styles.loadingTab, "text-13")}>Loading…</div>}>
+			<BranchDiff {...p} />
+		</Suspense>
+	</div>
+);
+
+/** A branch applied to the workspace: its changes, and the review of them. */
+const AppliedBranchDetails: FC<BranchDetailsProps> = ({
+	branch,
+	onActiveFileSelection,
+	viewerRef,
+	didScrollToViaFileRef,
+}) => {
+	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
+	const { data: forgeInfo } = useQuery(forgeInfoOptions(projectId));
+	const { data: headInfo } = useQuery(headInfoQueryOptions(projectId));
+	const headInfoIndex = headInfo ? getHeadInfoIndex(headInfo) : null;
+	const dispatch = useAppDispatch();
+	const branchRef = decodeBytes(branch.branchRef);
 	const branchName = branchDetailsParams(branchRef).branchName;
 	const branchTab = useAppSelector((state) =>
 		projectSlice.selectors.selectBranchTab(state, projectId, branchName),
@@ -1608,13 +1695,9 @@ const BranchDetails: FC<{
 		},
 	]);
 
-	const selectFile = (selection: string) => {
-		dispatch(projectSlice.actions.selectFiles({ projectId, selection }));
-	};
-
 	// Use push status of segment, not branch details; something about remote
 	// tracking refs.
-	const branchCtx = headInfoIndex?.branchContextByRefBytes(selection.branchRef);
+	const branchCtx = headInfoIndex?.branchContextByRefBytes(branch.branchRef);
 	const parentSegment = branchCtx?.stack.segments[branchCtx.segmentIndex + 1];
 	const targetBranch =
 		!parentSegment || parentSegment.pushStatus === "integrated"
@@ -1626,14 +1709,7 @@ const BranchDetails: FC<{
 	return (
 		<div className={styles.container} ref={ref}>
 			<div className={styles.headerWrap}>
-				<div className={styles.titleRow}>
-					{detailsFullWindow && <TopLeftControls />}
-
-					<div className={styles.title}>
-						<Icon name="branch" />
-						<h3 className={classes("text-15", "text-semibold")}>{branchName}</h3>
-					</div>
-				</div>
+				<BranchTitleRow branchName={branchName} />
 
 				<div className={classes(styles.tabsRow, branchTab === "pr" && styles.tabsRowPrCap)}>
 					<ToggleGroup
@@ -1748,27 +1824,12 @@ const BranchDetails: FC<{
 						)}
 					</div>
 				) : (
-					<SuspenseQuery {...branchDiffQueryOptions({ projectId, branch: branchRef })}>
-						{({ data: branchDiff }) => (
-							<Diff
-								changes={branchDiff.changes}
-								filesVisible={filesVisible}
-								filesItems={branchDiff.changes.map((change) =>
-									changeFileRowItem({
-										change,
-										path: change.path,
-										dependencyCommitIds: [],
-									}),
-								)}
-								onPassiveFileSelection={selectFile}
-								selection={selection}
-								projectId={projectId}
-								onActiveFileSelection={onActiveFileSelection}
-								viewerRef={viewerRef}
-								didScrollToViaFileRef={didScrollToViaFileRef}
-							/>
-						)}
-					</SuspenseQuery>
+					<BranchDiff
+						branch={branch}
+						onActiveFileSelection={onActiveFileSelection}
+						viewerRef={viewerRef}
+						didScrollToViaFileRef={didScrollToViaFileRef}
+					/>
 				)}
 			</Suspense>
 		</div>
@@ -1797,13 +1858,11 @@ const FileDetailsSkeleton: FC = () => {
 };
 
 const FileDetails: FC<{
-	selection: Extract<Operand, { _tag: "File" }> & {
-		parent: Extract<FileParent, { _tag: "UncommittedChanges" }>;
-	};
+	path: string;
 	onActiveFileSelection: (itemId: string, firstHunk: HunkOperand | null) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
-}> = ({ selection, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
+}> = ({ path, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
 	const { id: projectId } = useParams({ from: "/project/$id/workspace" });
 	const dispatch = useAppDispatch();
 	const detailsFullWindow = useAppSelector(interfaceSlice.selectors.selectDetailsFullWindow);
@@ -1841,7 +1900,7 @@ const FileDetails: FC<{
 					filesVisible={filesVisible}
 					filesItems={filesItems}
 					onPassiveFileSelection={selectFile}
-					selection={selection}
+					selection={fileOperand({ parent: uncommittedChangesFileParent, path })}
 					projectId={projectId}
 					onActiveFileSelection={onActiveFileSelection}
 					viewerRef={viewerRef}
@@ -1858,46 +1917,33 @@ const FileDetails: FC<{
 };
 
 export const Details: FC<{
-	selection: Operand | null;
+	selection: DetailsSelection | null;
 	onActiveFileSelection: (itemId: string, firstHunk: HunkOperand | null) => void;
 	viewerRef: RefObject<DiffViewerHandle | null>;
 	didScrollToViaFileRef: RefObject<boolean>;
 }> = ({ selection, onActiveFileSelection, viewerRef, didScrollToViaFileRef }) => {
 	if (!selection) return;
 
+	const viewProps = { onActiveFileSelection, viewerRef, didScrollToViaFileRef };
+
 	return Match.value(selection).pipe(
-		Match.tags({
+		Match.tagsExhaustive({
 			Commit: (commit) => (
 				<Suspense fallback={<CommitDetailsSkeleton />}>
-					<CommitDetails
-						key={weakCommitIdentityKey(commit)}
-						selection={commit}
-						onActiveFileSelection={onActiveFileSelection}
-						viewerRef={viewerRef}
-						didScrollToViaFileRef={didScrollToViaFileRef}
-					/>
+					<CommitDetails key={weakCommitIdentityKey(commit)} commit={commit} {...viewProps} />
 				</Suspense>
 			),
-			Branch: (branch) => (
-				<BranchDetails
-					key={branchIdentityKey(branch)}
-					selection={branch}
-					onActiveFileSelection={onActiveFileSelection}
-					viewerRef={viewerRef}
-					didScrollToViaFileRef={didScrollToViaFileRef}
-				/>
+			AppliedBranch: (branch) => (
+				<AppliedBranchDetails key={branchIdentityKey(branch)} branch={branch} {...viewProps} />
+			),
+			UnappliedBranch: (branch) => (
+				<UnappliedBranchDetails key={branchIdentityKey(branch)} branch={branch} {...viewProps} />
+			),
+			UncommittedFile: ({ path }) => (
+				<Suspense fallback={<FileDetailsSkeleton />}>
+					<FileDetails path={path} {...viewProps} />
+				</Suspense>
 			),
 		}),
-		Match.when({ _tag: "File", parent: { _tag: "UncommittedChanges" } }, (file) => (
-			<Suspense fallback={<FileDetailsSkeleton />}>
-				<FileDetails
-					selection={file}
-					onActiveFileSelection={onActiveFileSelection}
-					viewerRef={viewerRef}
-					didScrollToViaFileRef={didScrollToViaFileRef}
-				/>
-			</Suspense>
-		)),
-		Match.orElseAbsurd,
 	);
 };
