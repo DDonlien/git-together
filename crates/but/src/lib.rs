@@ -1050,10 +1050,10 @@ async fn match_subcommand(
         }
         #[cfg(feature = "legacy")]
         Subcommands::Pull { check } => {
-            command::legacy::pull::handle(&mut ctx, out, check)
+            let ws = command::legacy::pull::handle(&mut ctx, out, check)
                 .await
                 .emit_metrics(metrics_ctx)?;
-            None
+            ws
         }
         #[cfg(feature = "legacy")]
         Subcommands::Fetch => {
@@ -1066,10 +1066,10 @@ async fn match_subcommand(
                     "Assuming you meant to check for upstream work, running `but pull --check`"
                 )
             )?;
-            command::legacy::pull::handle(&mut ctx, out, true)
+            let ws = command::legacy::pull::handle(&mut ctx, out, true)
                 .await
                 .emit_metrics(metrics_ctx)?;
-            None
+            ws
         }
         #[cfg(feature = "legacy")]
         Subcommands::Clean {
