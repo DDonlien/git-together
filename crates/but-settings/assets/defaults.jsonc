@@ -5,9 +5,9 @@
 	"onboardingComplete": false,
 	"telemetry": {
 		// Whether the anonymous metrics are enabled.
-		"appMetricsEnabled": true,
+		"appMetricsEnabled": false,
 		// Whether anonymous error reporting is enabled.
-		"appErrorReportingEnabled": true,
+		"appErrorReportingEnabled": false,
 		/// Distinct ID, if reporting is enabled.
 		"appDistinctId": null,
 		// Whether settings have been migrated from the legacy Tauri store.
@@ -28,8 +28,8 @@
 		"watchMode": "auto",
 		"writeCommitEvolution": false,
 		"tuiFileBrowser": false,
-		/// Enable experimental worktree manipulation support.
-		"worktreeManipulation": false
+		/// Enable real Git worktree support used by GitTogether Work Sessions.
+		"worktreeManipulation": true
 	},
 	// Allows for additional "connect-src" hosts to be included. Requires app restart.
 	"extraCsp": {
@@ -76,10 +76,10 @@
 		// This controls Tauri's built-in update mechanism for the desktop application.
 		// DEPRECATED: This field will be replaced by the top-level `appUpdatesCheckIntervalSec` setting.
 		// New code should use `appUpdatesCheckIntervalSec` instead.
-		"checkForUpdatesIntervalInSeconds": 3600
+		"checkForUpdatesIntervalInSeconds": 0
 	},
 	// The duration between application update checks in seconds. If `0`, no update checks will be performed.
 	// This controls background update checks for both CLI and GUI.
 	// In the future, this will replace the legacy `ui.checkForUpdatesIntervalInSeconds` setting.
-	"appUpdatesCheckIntervalSec": 3600
+	"appUpdatesCheckIntervalSec": 0
 }

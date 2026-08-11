@@ -1,7 +1,7 @@
 {
 	"name": "root",
 	"private": true,
-	"repository": "https://github.com/DDonlien/gittogether.git",
+	"repository": "https://github.com/DDonlien/git-together.git",
 	"engines": {
 		"node": ">=20.11"
 	},
@@ -16,6 +16,7 @@
 		"dev:desktop-with-env": "cargo build -p but && cargo build -p gitbutler-git && node ./scripts/run-desktop-tauri-with-env.mjs development pnpm tauri dev",
 		"dev:internal-tauri": "turbo watch --filter @gitbutler/desktop dev",
 		"package": "turbo run package",
+		"package:gittogether:local": "bash ./scripts/package-gittogether-local.sh",
 		"ui:playwright:install:unit": "turbo run --filter @gitbutler/ui playwright:install:unit",
 		"ui:playwright:install:ct": "turbo run --filter @gitbutler/ui playwright:install:ct",
 		"test": "turbo run test --no-daemon",

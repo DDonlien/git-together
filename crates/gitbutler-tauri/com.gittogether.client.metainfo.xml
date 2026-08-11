@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.gittogether.client</id>
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>LicenseRef-FSL-1.1-MIT=https://github.com/DDonlien/git-together/blob/git-together/main/LICENSE.md</project_license>
+  <name>GitTogether</name>
+  <summary>A local-first Git branch, worktree, and multi-repository workspace</summary>
+  <developer id="com.gittogether">
+    <name>GitTogether</name>
+  </developer>
+  <description>
+    <p>
+      GitTogether helps developers coordinate repositories, branches, worktrees,
+      Work Sessions, and local task context from one desktop application.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/DDonlien/git-together</url>
+  <url type="bugtracker">https://github.com/DDonlien/git-together/issues</url>
+  <url type="vcs-browser">https://github.com/DDonlien/git-together</url>
+  <content_rating type="oars-1.1" />
+  <categories>
+    <category>Development</category>
+    <category>RevisionControl</category>
+  </categories>
+  <launchable type="desktop-id">com.gittogether.client.desktop</launchable>
+</component>

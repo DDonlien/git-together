@@ -168,7 +168,6 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let help_menu = SubmenuBuilder::new(handle, "Help")
         .text("help/documentation", "Documentation")
-        .text("help/debugging-guide", "Debugging Guide")
         .text("help/github", "Source Code")
         .text("help/release-notes", "Release Notes")
         .separator()
@@ -178,11 +177,6 @@ pub fn build<R: Runtime>(handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .text("help/open-logs-folder", "Open Logs Folder")
         .text("help/open-config-folder", "Open Config Folder")
         .text("help/open-cache-folder", "Open Cache Folder")
-        .separator()
-        .text("help/discord", "Discord")
-        .text("help/youtube", "YouTube")
-        .text("help/bluesky", "Bluesky")
-        .text("help/x", "X")
         .separator()
         .item(
             &MenuItemBuilder::with_id(
@@ -337,21 +331,12 @@ pub fn handle_event(webview: &WebviewWindow, event: &MenuEvent) {
 
     'open_link: {
         let result = match event.id().0.as_str() {
-            "help/documentation" => open::that("https://docs.gitbutler.com"),
-            "help/debugging-guide" => {
-                open::that("https://docs.gitbutler.com/development/debugging")
-            }
-            "help/github" => open::that("https://github.com/gitbutlerapp/gitbutler"),
-            "help/release-notes" => {
-                open::that("https://github.com/gitbutlerapp/gitbutler/releases")
-            }
+            "help/documentation" => open::that("https://github.com/DDonlien/git-together#readme"),
+            "help/github" => open::that("https://github.com/DDonlien/git-together"),
+            "help/release-notes" => open::that("https://github.com/DDonlien/git-together/releases"),
             "help/report-issue" => {
-                open::that("https://github.com/gitbutlerapp/gitbutler/issues/new/choose")
+                open::that("https://github.com/DDonlien/git-together/issues/new/choose")
             }
-            "help/discord" => open::that("https://discord.com/invite/MmFkmaJ42D"),
-            "help/youtube" => open::that("https://www.youtube.com/@gitbutlerapp"),
-            "help/bluesky" => open::that("https://bsky.app/profile/gitbutler.com"),
-            "help/x" => open::that("https://x.com/gitbutler"),
             _ => break 'open_link,
         };
 

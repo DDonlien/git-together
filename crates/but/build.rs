@@ -24,12 +24,12 @@ fn main() {
 
     let identifier = if let Ok(channel) = std::env::var("CHANNEL") {
         match channel.as_str() {
-            "nightly" => "com.gitbutler.app.nightly",
-            "release" => "com.gitbutler.app",
-            _ => "com.gitbutler.app.dev",
+            "nightly" => "com.gittogether.client.nightly",
+            "release" => "com.gittogether.client",
+            _ => "com.gittogether.client.dev",
         }
     } else {
-        "com.gitbutler.app.dev"
+        "com.gittogether.client.dev"
     };
     println!("cargo:rustc-env=IDENTIFIER={identifier}");
 

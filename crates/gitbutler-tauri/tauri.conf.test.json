@@ -1,6 +1,6 @@
 {
 	"productName": "GitTogether Test",
-	"identifier": "com.gittogether.app.test",
+	"identifier": "com.gittogether.client.test",
 	"build": {
 		"beforeBuildCommand": "[ \"$CI\" = \"true\" ] || pnpm build:desktop -- --mode development && cargo build -p gitbutler-git"
 	}
