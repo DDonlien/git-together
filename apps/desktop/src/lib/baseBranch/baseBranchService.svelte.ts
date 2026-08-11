@@ -72,10 +72,15 @@ export default class BaseBranchService {
 		return this.backendApi.endpoints.workspaceFetchStatus.useQuery({ projectId });
 	}
 
-	async fetchFromRemotes(projectId: string, action: "auto" | "modal" = "auto") {
+	async fetchFromRemotes(
+		projectId: string,
+		action: "auto" | "modal" = "auto",
+		options: { rethrow?: boolean } = {},
+	) {
 		return await this.backendApi.endpoints.workspaceFetchFromRemotes
 			.mutate({ projectId, action })
 			.catch((error: unknown) => {
+				if (options.rethrow) throw error;
 				// Auto-fetches run on a timer and shouldn't surface to the user.
 				// `showError` defers per-code presentation (silent for
 				// `DefaultTargetNotFound`, warning for `ProjectGitAuth`, the

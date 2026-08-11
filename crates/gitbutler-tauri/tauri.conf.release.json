@@ -1,6 +1,6 @@
 {
-	"productName": "GitButler",
-	"identifier": "com.gitbutler.app",
+	"productName": "GitTogether",
+	"identifier": "com.gittogether.app",
 	"build": {
 		"beforeBuildCommand": "bash ./crates/gitbutler-tauri/tauri-before-build-command.sh production"
 	},

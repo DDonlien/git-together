@@ -22,7 +22,7 @@
 		/// Use the V3 unapply compatibility mode that keeps workspace commits unless deleting the workspace ref.
 		"unapplyV3Pgm": false,
 		/// Enable single branch mode.
-		"singleBranch": false,
+		"singleBranch": true,
 		/// Control how the filesystem watch should be established.
 		/// Possible values: "auto", "legacy", "modern".
 		"watchMode": "auto",

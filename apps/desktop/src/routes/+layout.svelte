@@ -164,7 +164,7 @@
 />
 
 <svelte:head>
-	<title>GitButler</title>
+	<title>GitTogether</title>
 </svelte:head>
 
 <div class="app-root" role="application" oncontextmenu={(e) => !dev && e.preventDefault()}>

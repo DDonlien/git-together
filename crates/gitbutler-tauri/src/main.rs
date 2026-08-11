@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     let mut tauri_context = generate_context!();
     but_secret::secret::set_application_namespace(&tauri_context.config().identifier);
 
-    // Set the macOS notification bundle ID so notifications appear as GitButler.
+    // Set the macOS notification bundle ID so notifications appear as GitTogether.
     #[cfg(target_os = "macos")]
     {
         if let Err(e) = notify_rust::set_application(&tauri_context.config().identifier) {

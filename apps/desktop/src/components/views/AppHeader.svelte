@@ -40,13 +40,13 @@
 	const currentMode = $derived(mode.response);
 	const currentBranchName = $derived.by(() => {
 		if (currentMode?.type === "OpenWorkspace") {
-			return "gitbutler/workspace";
+			return "repository workspace";
 		} else if (currentMode?.type === "OutsideWorkspace") {
 			return currentMode.subject.branchName || "detached HEAD";
 		} else if (currentMode?.type === "Edit") {
-			return "gitbutler/edit";
+			return "repository edit";
 		}
-		return "gitbutler/workspace";
+		return "repository workspace";
 	});
 
 	const isNotInWorkspace = $derived(
@@ -297,7 +297,7 @@
 		</div>
 
 		{#if currentMode && isNotInWorkspace}
-			<Tooltip text="Switch back to gitbutler/workspace">
+			<Tooltip text="Switch back to the repository workspace">
 				<Button
 					kind="outline"
 					testId={TestId.ChromeHeaderSwitchBackToWorkspaceButton}

@@ -1,6 +1,6 @@
 {
-	"productName": "GitButler Dev",
-	"identifier": "com.gitbutler.app.dev",
+	"productName": "GitTogether Dev",
+	"identifier": "com.gittogether.app.dev",
 	"build": {
 		"beforeDevCommand": "pnpm dev:internal-tauri",
 		"beforeBuildCommand": "[ \"$CI\" = \"true\" ] || pnpm build:desktop -- --mode development",
@@ -10,7 +10,7 @@
 	"bundle": {
 		"active": false,
 		"category": "DeveloperTool",
-		"copyright": "Copyright © 2023-2026 GitButler. All rights reserved.",
+		"copyright": "Copyright © 2026 GitTogether. All rights reserved.",
 		"createUpdaterArtifacts": "v1Compatible",
 		"targets": ["app", "dmg", "appimage", "deb", "rpm", "msi"],
 		"icon": [

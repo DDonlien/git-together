@@ -1,6 +1,6 @@
 {
-	"productName": "GitButler Nightly",
-	"identifier": "com.gitbutler.app.nightly",
+	"productName": "GitTogether Nightly",
+	"identifier": "com.gittogether.app.nightly",
 	"build": {
 		"beforeBuildCommand": "bash ./crates/gitbutler-tauri/tauri-before-build-command.sh nightly"
 	},

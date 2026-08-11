@@ -42,7 +42,7 @@
 </script>
 
 <div class="welcome" data-testid={TestId.WelcomePage}>
-	<h1 class="welcome-title text-serif-42">Welcome to GitButler!</h1>
+	<h1 class="welcome-title text-serif-42">Welcome to GitTogether!</h1>
 	<div class="welcome__actions">
 		<div class="welcome__actions--repo">
 			<input
@@ -88,7 +88,7 @@
 					icon="docs"
 					href="https://docs.gitbutler.com/features/virtual-branches/branch-lanes"
 				>
-					GitButler docs
+					Git workflow docs
 				</IconLink>
 				<IconLink icon="youtube" href="https://www.youtube.com/@gitbutlerapp">
 					Watch tutorials
