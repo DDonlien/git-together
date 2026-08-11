@@ -8,6 +8,7 @@ mod fetch_status;
 mod file_write_lock;
 mod forge_review;
 mod gerrit_metadata;
+mod gittogether;
 mod hunk_assignments;
 mod virtual_branches;
 mod worktree_meta;

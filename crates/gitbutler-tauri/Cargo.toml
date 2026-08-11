@@ -59,6 +59,8 @@ rusqlite.workspace = true
 backtrace = { version = "0.3.76", optional = true }
 console-subscriber = "0.5.0"
 gix = { workspace = true, features = ["max-performance", "worktree-mutation"] }
+git2.workspace = true
+uuid.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
 
@@ -70,13 +72,16 @@ tracing-appender = "0.2.5"
 tracing-subscriber.workspace = true
 tracing-forest.workspace = true
 open.workspace = true
-## This is only used on macOS when it's the stable build to open `com.gitbutler.app` folders.
+## This is only used on macOS when it's the stable build to open `com.gittogether.client` folders.
 ## Ideally, we could only use the dependency then.
 opener = { version = "0.8.3", features = ["reveal"], optional = true }
 url = "2.5.4"
 but-path.workspace = true
 tauri-plugin-deep-link = "2"
 document-features = { version = "0.2", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-trafficlights-positioner = { git = "https://github.com/gitbutlerapp/tauri-plugin-trafficlights-positioner", branch = "v2" }

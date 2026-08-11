@@ -31,4 +31,6 @@ pub mod zip;
 
 pub mod env;
 
+pub mod gittogether;
+
 pub mod csp;

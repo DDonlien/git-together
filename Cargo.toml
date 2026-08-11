@@ -220,6 +220,8 @@ gix-testtools = { version = "0.20.0", git = "https://github.com/GitoxideLabs/git
 
 
 git2 = { version = "0.21.0", features = [
+    "https",
+    "ssh",
     "unstable-sha256",
     "vendored-openssl",
     "vendored-libgit2",

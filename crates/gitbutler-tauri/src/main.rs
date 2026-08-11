@@ -18,7 +18,7 @@ use but_api::{
 };
 use but_settings::AppSettingsWithDiskSync;
 use gitbutler_tauri::{
-    WindowState, askpass, csp::csp_with_extras, env, logs, menu, projects, settings, zip,
+    WindowState, askpass, csp::csp_with_extras, gittogether, logs, menu, projects, settings, zip,
 };
 use tauri::{Emitter, Manager, generate_context};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -112,7 +112,7 @@ fn main() -> anyhow::Result<()> {
 
         let builder = tauri::Builder::default()
             .setup(move |tauri_app| {
-                let window = gitbutler_tauri::window::create(
+                let _window = gitbutler_tauri::window::create(
                     tauri_app.handle(),
                     "main",
                     "index.html".into(),
@@ -121,8 +121,8 @@ fn main() -> anyhow::Result<()> {
 
                 // TODO(mtsgrd): Is there a better way to disable devtools in E2E tests?
                 #[cfg(debug_assertions)]
-                if tauri_app.config().product_name != Some("GitButler Test".to_string()) {
-                    window.open_devtools();
+                if tauri_app.config().product_name != Some("GitTogether Test".to_string()) {
+                    _window.open_devtools();
                 }
 
                 let app_handle = tauri_app.handle();
@@ -353,6 +353,25 @@ fn main() -> anyhow::Result<()> {
                 projects::server_capabilities,
                 projects::set_project_active,
                 projects::open_project_in_window,
+                gittogether::gittogether_repository_overview,
+                gittogether::gittogether_file_diff,
+                gittogether::gittogether_file_preview,
+                gittogether::gittogether_fetch,
+                gittogether::gittogether_get_latest_preview,
+                gittogether::gittogether_get_latest_apply,
+                gittogether::gittogether_commit_all,
+                gittogether::gittogether_push,
+                gittogether::gittogether_connections,
+                gittogether::gittogether_connection_save,
+                gittogether::gittogether_connection_delete,
+                gittogether::gittogether_connection_bind,
+                gittogether::gittogether_clone,
+                gittogether::gittogether_session_create,
+                gittogether::gittogether_session_snapshot,
+                gittogether::gittogether_session_assessment,
+                gittogether::gittogether_thread_create,
+                gittogether::gittogether_message_add,
+                gittogether::gittogether_messages,
                 zip::get_logs_archive_path,
                 zip::get_project_archive_path,
                 zip::get_anonymous_graph_path,
@@ -366,7 +385,7 @@ fn main() -> anyhow::Result<()> {
                 settings::update_ui,
                 // Debug-only - not for production!
                 #[cfg(debug_assertions)]
-                env::env_vars,
+                gitbutler_tauri::env::env_vars,
                 commit::reword::tauri_commit_reword::commit_reword,
                 commit::insert_blank::tauri_commit_insert_blank::commit_insert_blank,
                 commit::create::tauri_commit_create::commit_create,

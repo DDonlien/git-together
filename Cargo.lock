@@ -3840,7 +3840,9 @@ dependencies = [
  "libc",
  "libgit2-sys",
  "log",
+ "openssl-probe 0.1.6",
  "openssl-sys",
+ "url",
 ]
 
 [[package]]
@@ -4173,6 +4175,7 @@ dependencies = [
  "but-settings",
  "console-subscriber",
  "document-features",
+ "git2",
  "gitbutler-project",
  "gitbutler-watcher",
  "gix",
@@ -4198,12 +4201,14 @@ dependencies = [
  "tauri-plugin-trafficlights-positioner",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-appender",
  "tracing-forest",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -6290,6 +6295,7 @@ source = "git+https://github.com/gitbutlerapp/git2-rs?rev=a87a7bb3f6843504339fe7
 dependencies = [
  "cc",
  "libc",
+ "libssh2-sys",
  "libz-sys",
  "openssl-sys",
  "pkg-config",
@@ -6337,6 +6343,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1f111c8c41e7c61a49cd34e44c7619462967221a6443b0ec299e0ac30cfb9b1"
 dependencies = [
  "cc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
+name = "libssh2-sys"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c04141a07bb0c0bc461cb657808764de571702a59bc5c726c400ac9a7625e3ab"
+dependencies = [
+ "cc",
+ "libc",
+ "libz-sys",
+ "openssl-sys",
  "pkg-config",
  "vcpkg",
 ]
