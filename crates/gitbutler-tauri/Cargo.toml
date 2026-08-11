@@ -96,9 +96,8 @@ default = ["custom-protocol", "devtools", "opener"]
 builtin-but = ["dep:but", "but-action/builtin-but"]
 ## A very specific utility flag to make clear that the 'but' binary is managed by a package manager.
 packaged-but-distribution = ["but?/packaged-but-distribution"]
-## Disable the auto-updater in the frontend.
-##
-## Note that it will still be compiled into the backend, so the technical capability of auto-updates remains.
+## Disable updater checks in the frontend and omit the updater plugin from the Tauri runtime.
+## The dependency remains compiled so upstream builds can enable the plugin without changing features.
 disable-auto-updates = []
 ## A forwarding to all crates that have windows-specific adjustments for testing on non-Windows.
 windows = []

@@ -45,7 +45,7 @@ Change
 
 - Feature：应用名称、窗口标题、仓库身份、开发配置和后续发布配置明确使用 GitTogether，同时保留必要的 GitButler 兼容信息。
 - 用户价值：用户能分辨当前运行的是 GitTogether，而不是一个没有说明的 GitButler 私有构建。
-- 当前状态：已实现本地 macOS 产品基线。应用名、图标、Bundle ID、仓库地址、deep-link、CLI namespace 和配置使用 GitTogether；上游 telemetry 与 updater 默认关闭，发布配置不再引用上游 endpoint 或签名 key，本地 arm64 包使用独立身份和 ad-hoc 签名。Apple Developer ID 签名与 notarization 属于公开发布凭证流程，不伪装为本次已完成。
+- 当前状态：已实现本地 macOS 产品基线。应用名、图标、Bundle ID、仓库地址、deep-link、CLI namespace 和配置使用 GitTogether；上游 telemetry 与 updater 默认关闭，`disable-auto-updates` 发布包不注册 updater plugin，发布配置不再引用上游 endpoint 或签名 key。本地 arm64 `0.2.5` 包使用独立身份和 ad-hoc 签名，并已完成真实窗口启动与响应验收。Apple Developer ID 签名与 notarization 属于公开发布凭证流程，不伪装为本次已完成。
 
 ## Version line - 0.1.x - 移除不需要的 GitButler 本地 Workflow
 
@@ -67,7 +67,7 @@ Change
 - Feature：在继承 GitButler 优秀 GUI 的基础上，去掉用户不需要的本地 workflow 入口和复杂度，同时保留文件、branch、worktree、diff 和 commit 的核心体验。
 - 用户价值：用户仍然得到 GitButler 已经验证过的视觉和交互基础，但不会被 Butler 专属逻辑强迫改变工作方式。
 - 视觉约束：新增页面直接使用 GitButler 现有的视觉风格、主题 token、布局模式和 `@gitbutler/ui` 组件；附件中的灰色线框只定义信息层级和空间关系，不定义新的颜色、字体、控件或设计系统。
-- 当前状态：已实现。Repository Workspace 收敛为 repository-first 的真实 Git 操作界面，保留文件预览、diff、commit、branch/worktree 和操作结果反馈；GitButler 旧能力仍可作为兼容基础存在，不会在新首页强迫用户进入 Butler 专属流程。
+- 当前状态：已实现。Repository Workspace 收敛为 repository-first 的真实 Git 操作界面，保留文件预览、diff、commit、branch/worktree 和操作结果反馈；`0.2.5` 发布包已实际启动、完成 repository 状态加载，并通过一次 Refresh 响应验证。GitButler 旧能力仍可作为兼容基础存在，不会在新首页强迫用户进入 Butler 专属流程。
 - 边界：这一阶段是移除和收敛已有本地功能，不提前把所有新的 GitTogether 功能塞进旧界面。
 
 ## Version line - 0.2.x - 增加 Local GitTogether Feature
