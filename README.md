@@ -90,6 +90,18 @@ The `but` CLI is the same Rust backend engine with a Rust command line UI.
 
 You can find our end user documentation at: <https://docs.gitbutler.com>
 
+## GitTogether project documents
+
+This fork keeps the existing GitButler source layout so that future changes can
+be compared with and retrieved from `upstream` without an artificial path
+migration. GitTogether-specific collaboration rules and project tracking are
+documented separately:
+
+- [`AGENTS.md`](AGENTS.md)：协作规范、Git 边界和目录索引
+- [`REQUIREMENTS.md`](REQUIREMENTS.md)：Feature 范围、状态和完成边界
+- [`DESIGN.md`](DESIGN.md)：现有 UI 的视觉约束
+- [`agent-log/`](agent-log/)：Agent 执行日志
+
 ## Bugs and Feature Requests
 
 If you have a bug or feature request, feel free to open an [issue](https://github.com/gitbutlerapp/gitbutler/issues/new),

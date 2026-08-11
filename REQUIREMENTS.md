@@ -1,115 +1,175 @@
-# GitTogether Requirements
+# GitTogether Requirements / Feature 清单
 
-Status snapshot: 2026-08-11
+状态快照：2026-08-11
 
-GitTogether is a local-first client built from the GitButler codebase. The
-current product direction is to make ordinary Git branches and worktrees the
-primary user model, while keeping the existing GitButler Git operations as a
-foundation that can be progressively reshaped.
+本文件只描述 GitTogether 想提供的用户可感知 Feature、产品边界和版本阶段，不是 Agent 的执行计划，也不是待办 Task list。实现步骤、改哪些文件、运行什么命令和临时决定记录在 `agent-log/` 或专门的工程计划中。
 
-## Status legend
+Feature ID 是稳定标识；Feature 被放入哪条版本线，以本文件的阶段结构为准。
 
-- **Done**: implemented in the current working tree and covered by the current
-  validation where applicable.
-- **Partial**: the user-facing entry point or foundation exists, but the
-  behavior is still backed by an existing GitButler flow, placeholder data, or
-  an incomplete integration.
-- **Pending**: required work that has not been implemented yet.
-- **Deferred**: intentionally outside the current local-only phase.
+## 产品定位
 
-## Product boundary
+GitTogether 是一个基于 GitButler 的 repository-first workspace for humans and AI agents：继承 GitButler 已经做好的 Git GUI、diff、commit 和桌面应用基础，同时把产品中心改成多个 repository、真实 branch/worktree、Work Session、Agent 和 Presence。
 
-### Local-first behavior
+核心对象关系是：
 
-GitTogether must remain useful without a GitTogether cloud service. Local Git
-operations, repository discovery, branch/worktree organization, file review,
-commit creation, and terminal access must not require Presence, GPS, or an
-agent service.
+```text
+Repository
+  ↓
+Workspace
+  ↓
+Worktree / Branch
+  ↓
+Work Session
+  ↓
+Human / Agent
+  ↓
+Change
+```
 
-### Service-dependent behavior
+用户自己决定任务如何组织。GitTogether 不按单个文件拆任务，也不要求用户为一次包含几千个文件的批量资产操作创建几千个 worktree；自动化围绕一次 Work Session 聚合状态、隔离修改、创建快照并判断后续合并。
 
-Presence, GPS, remote agent orchestration, hosted conversation history, and
-GitTogether-specific update infrastructure are separate phases. They must not
-be faked as complete by the local client.
+## Version line - 0.0.x - GitButler fork 基线
 
-### Repository bootstrap
+### Phase - 0.0.0 - 继承 GitButler 客户端基础
 
-- The original empty `DDonlien/git-together` repository is intentionally kept
-  for the user to delete later.
-- The active fork is `DDonlien/gittogether`.
-- The local checkout is `D:\Projects\GitHubPersonal\git-together`.
-- `origin` points to the personal fork; `upstream` points to
-  `gitbutlerapp/gitbutler`.
+#### F-0.0.1 GitButler fork baseline
 
-## Functional requirements
+- Feature：GitTogether 从 GitButler fork 开始，保留其成熟的桌面应用、Git 操作、GUI、diff、commit、provider integration 和跨平台基础。
+- 用户价值：先得到一个能运行、能管理 Git、能查看文件变化的客户端，不重新实现 Git GUI 的基础能力。
+- 当前状态：已建立 GitButler fork、`origin`/`upstream` 关系和 `git-together/main` 分支；现有源码目录保持原样，便于未来从 GitButler 获取更新。
+- 边界：这一阶段不重新设计完整 Git 客户端，也不因为 agent-template 改变 `apps/`、`crates/`、`packages/` 或 `e2e/` 的历史路径。
 
-| ID    | Requirement                          | Status   | Acceptance criteria / remaining work                                                                                                                                                                                                                                                                                                  |
-| ----- | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R-001 | GitTogether application identity     | Partial  | The main desktop titles, onboarding copy, package repository metadata, Tauri product names/identifiers, and log names use GitTogether. Remaining: replace or explicitly retain upstream-facing release, documentation, telemetry, icon, CLI, and deep-link branding before a public release.                                          |
-| R-002 | Multi-repository home dashboard      | Done     | The root route opens a dashboard showing all registered repositories, with loading and empty states, repository cards, search, selection, add-local, and clone actions.                                                                                                                                                               |
-| R-003 | Repository search and selection      | Done     | Users can filter repositories by title/path, select individual cards, select or clear all visible cards, and see the selected count.                                                                                                                                                                                                  |
-| R-004 | Batch Get latest                     | Done     | The dashboard fetches selected repositories concurrently, fetches all visible repositories when none are selected, reports aggregate failures, and does not claim success when a fetch rejects.                                                                                                                                       |
-| R-005 | Real Git branch mode by default      | Done     | New GitTogether settings enable `singleBranch` by default, and the settings UI exposes the mode as Git mode instead of an admin-only experiment. Existing GitButler single-branch backend behavior remains the implementation base.                                                                                                   |
-| R-006 | Branch and worktree organization     | Partial  | Existing branch creation and stack/worktree screens remain available and the default mode no longer forces the virtual workspace branch. Remaining: define and implement the GitTogether information architecture for freely organizing branches and linked worktrees, including clearer worktree ownership and safe switching rules. |
-| R-007 | Workspace files and diffs            | Partial  | Opening a repository still reaches the existing workspace with real changed-file and diff views. The dashboard Details > Files tab is currently an entry point/placeholder and must become a live repository-scoped view.                                                                                                             |
-| R-008 | Commit flow                          | Partial  | Dashboard “Review & commit” opens the existing workspace commit editor, preserving file selection, hooks, validation, and branch creation. Remaining: provide a GitTogether-native commit surface and a clear result state when the commit is created.                                                                                |
-| R-009 | Batch commit                         | Pending  | Add a safe multi-repository commit queue with per-repository commit messages, selected-file review, independent success/failure results, cancellation, and recovery. A failure in one repository must not silently commit or discard changes in another.                                                                              |
-| R-010 | Push flow                            | Partial  | Existing per-repository/per-branch GitButler push controls remain available. Remaining: implement GitTogether-native push status and a batch push queue with remote/branch selection, authentication errors, conflict handling, retry, and per-repository results.                                                                    |
-| R-011 | Batch commit and push                | Pending  | Combine R-009 and R-010 only after both individual flows are safe. The UI must never imply that push happened when only a commit was created; each repository needs an explicit commit and push state.                                                                                                                                |
-| R-012 | Four-region information architecture | Partial  | The dashboard has persistent Repositories, AI tasks, Conversation, and Details panels with reorder/collapse controls. AI tasks and Conversation are currently empty states; Details is partly placeholder content.                                                                                                                    |
-| R-013 | Context: Git Graph                   | Partial  | The dashboard exposes a Git Graph tab and links to the repository workspace. Remaining: render a live repository graph with bottom-up chronological direction, branch/worktree labels, selected commit state, and navigation into diffs.                                                                                              |
-| R-014 | Context: Files                       | Partial  | The dashboard exposes a Files tab. Remaining: show live changed files, staged/unstaged state, filtering, selection, and diff navigation for the selected repository.                                                                                                                                                                  |
-| R-015 | Context: Git details                 | Partial  | The dashboard exposes Git details and shows local Git mode. Remaining: show current branch, target/upstream, worktree path, ahead/behind, remotes, dirty state, conflicts, and last operation from live data.                                                                                                                         |
-| R-016 | Context: Terminal                    | Partial  | The dashboard exposes a Terminal tab and selected worktree path. Remaining: embed or open a real terminal scoped to the selected repository/worktree with safe lifecycle and copy/paste behavior.                                                                                                                                     |
-| R-017 | AI tasks                             | Pending  | Add a repository-scoped task model and UI for creating, queuing, cancelling, retrying, and reviewing tasks. Tasks must work locally without requiring a hosted agent service; provider-specific capabilities must be explicit.                                                                                                        |
-| R-018 | Conversation                         | Pending  | Add repository/worktree-scoped conversation state, message history, composer, task handoff, and local persistence. Hosted synchronization is optional and must not be a prerequisite for local use.                                                                                                                                   |
-| R-019 | Agent integration                    | Deferred | Connect local tasks/conversations to an agent runtime only after the local task and conversation contracts are stable. This is not part of the current server-independent milestone.                                                                                                                                                  |
-| R-020 | Presence and GPS                     | Deferred | Implement presence, location/GPS, collaboration discovery, permissions, privacy controls, and the required service APIs in a later server-backed phase.                                                                                                                                                                               |
-| R-021 | Remote and forge integrations        | Partial  | Existing GitHub/GitLab/Bitbucket integration code remains available through the fork. Remaining: audit all forge-dependent copy and flows so local GitTogether operation remains clear when no forge account or cloud service is connected.                                                                                           |
-| R-022 | Update infrastructure                | Pending  | Replace or disable the inherited GitButler updater endpoints and signing configuration before distributing GitTogether builds. Do not point a GitTogether release at GitButler update infrastructure.                                                                                                                                 |
-| R-023 | Deep links and CLI identity          | Partial  | Existing `but`, `but-dev`, and `but-nightly` schemes and internal `but` binaries are retained for compatibility. Decide whether GitTogether should add new schemes/CLI names or intentionally document compatibility before release.                                                                                                  |
-| R-024 | Error handling and recovery          | Partial  | Batch fetch now aggregates failures correctly. Remaining: add consistent per-repository operation states, retry, cancellation, conflict/authentication guidance, and durable recovery for commit/push/task operations.                                                                                                                |
-| R-025 | Accessibility and responsive layout  | Partial  | New dashboard components pass current Svelte accessibility diagnostics and include responsive layouts. Remaining: keyboard navigation, focus restoration, screen-reader semantics for reorderable panels/tabs, and end-to-end checks at supported window sizes.                                                                       |
-| R-026 | Runtime validation                   | Partial  | Frontend package checks, targeted ESLint, production frontend build, JSON/JSONC parsing, and Rust formatting pass. Remaining: `cargo check`, Tauri build, launch, and interactive runtime validation with a real local repository.                                                                                                    |
-| R-027 | Release packaging                    | Pending  | Build GitTogether development/test/nightly/release packages with correct identifiers, icons, metadata, updater policy, deep links, bundled helper binaries, and clean install/upgrade behavior.                                                                                                                                       |
-| R-028 | Documentation                        | Partial  | This document records the full product scope and the current status. Remaining: add user-facing GitTogether setup, Git mode, dashboard, branch/worktree, commit/push, task, and privacy documentation.                                                                                                                                |
+### Phase - 0.0.1 - 建立 GitTogether 产品基线
 
-## Current implementation map
+#### F-0.0.2 GitTogether product identity
 
-- `apps/desktop/src/components/dashboard/RepositoryDashboard.svelte`:
-  dashboard layout, repository query, selection, panel persistence, and batch
-  fetch entry point.
-- `apps/desktop/src/components/dashboard/RepositoryCard.svelte`: repository
-  card, target/upstream summary, sync control, and commit entry point.
-- `apps/desktop/src/routes/+page.svelte`: dashboard home route.
-- `apps/desktop/src/routes/[projectId]/workspace/+page.svelte`: dashboard
-  deep-link into the existing commit editor.
-- `apps/desktop/src/lib/baseBranch/baseBranchService.svelte.ts`: optional
-  rethrow support for aggregate fetch error handling.
-- `crates/but-settings/assets/defaults.jsonc`: real Git branch mode default.
-- `crates/gitbutler-tauri/tauri.conf*.json`: GitTogether application identity
-  for development, test, nightly, and release configurations.
-- `apps/desktop/src/components/views/AppHeader.svelte`: GitTogether-neutral
-  workspace labels in the single-branch presentation.
+- Feature：应用名称、窗口标题、仓库身份、开发配置和后续发布配置明确使用 GitTogether，同时保留必要的 GitButler 兼容信息。
+- 用户价值：用户能分辨当前运行的是 GitTogether，而不是一个没有说明的 GitButler 私有构建。
+- 当前状态：已有部分 GitTogether branding；发布、更新、CLI、deep-link、telemetry 和 signing 等边界仍需后续统一。
 
-## Definition of complete for the next milestone
+## Version line - 0.1.x - 移除不需要的 GitButler 本地 Workflow
 
-The next milestone is complete when:
+### Phase - 0.1.0 - 取消强制 Virtual Branch Workflow
 
-1. R-007 through R-016 show live repository-scoped data rather than
-   placeholders.
-2. R-009 through R-011 provide independently recoverable commit/push queues.
-3. R-017 and R-018 work locally with an explicit provider/service boundary.
-4. R-022, R-023, and R-027 are resolved before any public GitTogether build is
-   distributed.
-5. R-026 includes Rust/Tauri build and interactive runtime validation.
-6. The requirements status in this file is updated in the same change as each
-   milestone implementation.
+#### F-0.1.1 Git Mode / ordinary branch policy
 
-## Explicit non-goals for this milestone
+- Feature：默认使用用户熟悉的普通 Git branch、commit、merge 和 worktree；移除或关闭 GitButler 强制创建 Virtual Branch 的本地 workflow。
+- 用户价值：branch 是真实存在、可以被其他 Git 工具看到的版本差异，worktree 与 GitTogether UI 保持同步。
+- 产品判断：保留 GitButler 多工作区、多个 branch/worktree 并行管理的理念，因为它适合现代 Agent 开发流程；不保留 Virtual Branch 作为中间抽象，因为普通 Git branch 已经能够清晰、稳定地表达版本差异，也更容易与其他 Git 工具、脚本和 Agent 协作。
+- 继续路径：以 GitButler 现有实验性 Git mode 和 `singleBranch` 基础继续改造，把它作为普通 Git branch/worktree 工作流的技术起点，而不是从零重写 GitButler 的 workspace GUI。
+- 边界：Virtual Branch 或 Agent Mode 可以作为可选能力保留，但不能强制所有用户改变原有 Git 心智模型。
 
-- Deleting the original `DDonlien/git-together` repository automatically.
-- Pushing to `gitbutlerapp/gitbutler` or any upstream repository.
-- Claiming AI, Presence, GPS, or hosted service integration is complete.
-- Treating the current Details placeholders as live Git data.
-- Shipping inherited GitButler updater endpoints as GitTogether infrastructure.
+### Phase - 0.1.1 - 简化继承的 GitButler 本地 GUI
+
+#### F-0.1.7 Repository Workspace GUI
+
+- Feature：在继承 GitButler 优秀 GUI 的基础上，去掉用户不需要的本地 workflow 入口和复杂度，同时保留文件、branch、worktree、diff 和 commit 的核心体验。
+- 用户价值：用户仍然得到 GitButler 已经验证过的视觉和交互基础，但不会被 Butler 专属逻辑强迫改变工作方式。
+- 视觉约束：新增页面直接使用 GitButler 现有的视觉风格、主题 token、布局模式和 `@gitbutler/ui` 组件；附件中的灰色线框只定义信息层级和空间关系，不定义新的颜色、字体、控件或设计系统。
+- 边界：这一阶段是移除和收敛已有本地功能，不提前把所有新的 GitTogether 功能塞进旧界面。
+
+## Version line - 0.2.x - 增加 Local GitTogether Feature
+
+### Phase - 0.2.0 - 多仓库总览与批量 Git 操作
+
+#### F-0.1.2 Multi-repository overview
+
+- Feature：GitTogether 首页展示本机能够找到或登记的所有 repository，而不是只打开一个 repository 的 Git Graph。
+- 用户价值：用户可以同时管理十几个小型游戏 idea、工具仓库或 Agent 项目，并看到 branch、worktree、dirty state、ahead/behind、Agent 和 Presence 摘要。
+- 布局参考：全局视图按纵向 repository group 组织；每个 repository 有一行主要标题和对应的操作区域，下面缩进显示该 repository 的 branch/worktree 行，每个 branch/worktree 的操作与对象保持同一行对齐；多个 repository 依次向下排列，并保留左侧窄导航或上下文栏的位置。
+- 边界：repository overview 是 GitTogether 的主要入口；从这里可以进入单仓库 workspace，也可以选择多个 repository 执行批量操作。
+
+#### F-0.1.3 One-click fetch / commit / push
+
+- Feature：用户可以从总览页或仓库范围内一键执行 fetch、创建 commit 和 push，并分别看到每个 repository 的真实结果。
+- 用户价值：不需要逐个打开十几个仓库、切换窗口、重复执行相同的 Git 操作。
+- 边界：fetch、commit 和 push 必须显示不同状态；不能把本地 commit 当成 push 成功，也不能用一个总成功提示掩盖单个仓库失败。
+
+### Phase - 0.2.1 - 模仿 Perforce 的中央式 Git 使用方式
+
+#### F-0.1.4 Get Latest
+
+- Feature：提供类似 Perforce `Get Latest` 的用户操作，让用户从中央来源获取最新状态，并在 Git branch/worktree 规则下安全地更新本地工作区。
+- 用户价值：用户可以用接近 Perforce 的直观方式更新项目，而不必先理解一组分散的 fetch、merge、rebase 和 checkout 命令。
+- 边界：Get Latest 的 GUI 语义需要明确区分“只获取远端引用”和“把最新内容应用到当前 worktree”；遇到本地修改、冲突或 branch 不一致时，必须先显示风险，不得静默覆盖用户工作。
+
+### Phase - 0.2.2 - 多 Worktree、Branch 与 Work Session
+
+#### F-0.1.5 Multi-worktree / multi-branch workspace
+
+- Feature：同一个 repository 内的多个 worktree 或 branch 可以在一个 workspace 中并排显示、自由组织和切换，必要时拖到侧边栏或同时打开多个上下文。
+- 用户价值：用户可以同时观察 `main`、feature branch 和 agent branch，不需要在多个孤立窗口之间来回切换。
+- 布局参考：仓库内视图以横向并排的 branch 列组织；每一列上方是一个真实 branch/worktree 卡片，下方直接排列属于该 branch 的 commit、change 或状态区域，使多个 branch 能够在同一视口内比较。
+- 边界：每个 worktree 都对应真实 Git branch，并显示 owner、base commit、dirty state、当前 session 和可用操作；GitTogether 不把多个 worktree 假装成一个 branch。
+
+#### F-0.1.6 Protected Work Session
+
+- Feature：用户开始一段本地工作时，GitTogether 可以把它放入个人或会话级的安全 worktree，持续记录 base commit、touched files、touched roots、操作类型和 dirty 状态，并在结束时生成 snapshot commit。
+- 用户价值：用户不需要手动为一次 Fix Up Redirectors 或其他批量资产操作拆分大量 worktree；系统保护工作边界，但不替用户决定任务内容。
+- 边界：自动合并只能基于 base commit 到目标分支的真实文件交集、Presence 状态和资产风险判断；不以“main 是否有任何 diff”作为唯一判断，也不默认自动合并高风险二进制资产。
+
+### Phase - 0.2.3 - Local Workspace GUI 与 Context Panel
+
+#### F-0.1.8 Four-region workspace and context panel
+
+- Feature：workspace 可以围绕四类可组合区域组织：左侧 Repository，仓库内的 Threads/Tasks，中间主要 Chat，最右侧 Context Panel；区域可以展开、收起和重新排列。
+- Context Panel 至少包含 Files、Diff、Preview、Terminal、Git Graph 和 Git Details；Git Graph 从下往上展示历史和 branch 关系。
+- 用户价值：repository、任务/对话、Agent 和 Git 上下文在一个页面内相互关联，而不是分别散落在 Git GUI、终端、Agent 工具和文件浏览器中。
+- 边界：这是一项 GUI Feature 设计，不把每个面板或每种状态拆成独立的 implementation task；具体布局可在设计阶段继续收敛。
+
+### Phase - 0.2.4 - 自托管 Git 服务器访问
+
+#### F-0.1.9 Self-hosted Git server connection
+
+- Feature：用户可以配置任意 Git 服务器的访问地址、账号和密码，并把这组连接配置绑定到一个或多个 repository，用于 clone、fetch、Get Latest、push 等需要访问远端的操作。
+- 用户价值：用户不需要等待 GitTogether 为每一种服务商单独开发登录流程，就可以连接自己部署或自行托管的 GitHub Enterprise、GitLab、Gitea、Forgejo、Bitbucket Server 或其他兼容 Git 传输协议的服务器。
+- 边界：第一阶段以通用 Git over HTTPS 和服务器支持的账号/密码认证为基础；GitHub、GitLab 等服务商专属的 Pull Request、CI 和高级 API 仍然是可选的 provider-specific 能力，不能假设所有自托管服务器都提供这些 API。
+- 安全：密码或等效的访问 secret 必须进入操作系统凭据存储，不写入 repository 配置、远程 URL、Feature 文档、日志或终端输出；用户可以查看、替换和撤销已保存的连接配置。
+- 交互：添加 repository、Home 空状态、repository Settings 和远程操作失败提示都应能引导用户选择或创建服务器连接配置，并明确显示当前操作使用的服务器和账号。
+
+## Version line - 0.3.x - Git Presence Server 心跳功能
+
+### Phase - 0.3.0 - Git Presence Server Heartbeat
+
+#### F-0.2.1 Git Presence Server heartbeat
+
+- Feature：建立 Git Presence Server（GPS），接收 GitTogether Client 的 heartbeat 和聚合后的工作状态。
+- 用户价值：用户可以知道某个 repository、worktree 或 Work Session 是否仍然在线，以及其他人或 Agent 当前是否在工作。
+- 边界：heartbeat 主要负责续命；状态变化时发送新的聚合 snapshot。一次修改几千个文件仍然是一条包含状态摘要、touched files/roots/count 和操作类型的消息，不是几千条消息。
+
+### Phase - 0.3.1 - 本机 Bridge 与 Presence 状态
+
+#### F-0.2.2 Local client bridge
+
+- Feature：同一台机器上的 UE、Godot 或其他工具客户端先把状态发送给 GitTogether Local Bridge，再由 GitTogether 作为本机唯一的 Presence 出口连接 GPS。
+- 用户价值：不同工具不需要各自维护 Git、用户、branch、worktree 和网络身份，Presence 状态不会因为多个客户端同时上报而互相冲突。
+- 边界：外部工具负责采集本地事件，GitTogether 负责结合 Git 状态和 Work Session 整理统一消息；GPS 不直接接收多个本机客户端的平行身份。
+
+#### F-0.2.3 Presence state and claims
+
+- Feature：GPS 和 GitTogether 共同表达 viewing、editing、dirty、claimed、locked 等状态，并支持 repository、worktree、folder、file 或 asset 范围的 claims。
+- 用户价值：用户能够知道谁正在改什么、谁占用了什么，以及当前变化是否影响自己的 snapshot 或合并判断。
+- 边界：Presence 广播以 session state 替换和广播为主，服务器不需要在每次广播前对所有用户逐文件计算复杂 diff；新用户进入项目时可以获取一次完整状态。
+
+### Phase - 0.3.2 - Presence-aware 合并与授权
+
+#### F-0.2.4 Presence-aware safe merge
+
+- Feature：本地 GitTogether 在 snapshot 或合并判断时可以使用 GPS 的 Presence 状态，结合 Git diff 判断是否安全、需要警告或进入 review。
+- 用户价值：提交之后仍然可以停在“已提交、未合并、可审查、可回滚”的安全中间态，不因自动化而强行覆盖他人的工作。
+- 边界：同文件 locked、claimed 或 editing 时默认暂停自动合并；Presence 是安全判断依据之一，不替代 Git 自己的冲突分析。
+
+#### F-0.2.5 Simple identity and administration
+
+- Feature：GPS 初期采用直观的用户身份和授权方式，例如绑定用户的隐式 key、邮箱登录，以及在 GitTogether GUI 中提供简约的管理入口。
+- 用户价值：普通用户不需要理解复杂的 token、服务部署或权限系统；有管理权限的用户可以在 GitTogether 中管理项目授权。
+- 边界：第一版优先简单、可解释、可维护；长期的管理能力仍属于 GitTogether GUI 与 GPS 之间的产品设计范围。
+
+## 当前产品边界
+
+- `0.0.x` 先保证 GitButler fork 能作为 GitTogether 基线使用，并保留 upstream 合并能力。
+- `0.1.x` 只处理移除或关闭不需要的 GitButler 本地 workflow，不把新产品能力混入这一阶段。
+- `0.2.x` 增加本地 GitTogether Feature：repository overview、fetch/commit/push、Get Latest、多 worktree/branch、Protected Work Session、新的 workspace GUI 和自托管 Git 服务器访问。
+- `0.3.x` 再加入 GPS heartbeat、Presence snapshot、claims、Presence-aware merge 和初期授权。
+- 不因为采用 agent-template 而移动已有 GitButler 源码目录；文档和协作规则可以迁移，源码路径先保持兼容 upstream 的状态。
+- 不把 Feature 清单写成实现任务清单；实现计划、测试命令和逐文件修改记录在其他工程文档中。
