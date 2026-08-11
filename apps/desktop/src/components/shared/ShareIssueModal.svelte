@@ -71,7 +71,7 @@
 		const appInfo = await backend.getAppInfo();
 		const appVersion = appInfo.version;
 		const indexLength = await gitIndexLength();
-		context += "GitButler Version: " + appVersion + "\n";
+		context += "GitTogether Version: " + appVersion + "\n";
 		context += "Browser: " + navigator.userAgent + "\n";
 		context += "URL: " + window.location.href + "\n";
 		context += "Length of index: " + indexLength + "\n";
@@ -150,12 +150,12 @@
 
 <Modal
 	bind:this={modal}
-	title="Share debug data with GitButler team for review"
+	title="Export GitTogether debug data for review"
 	onSubmit={async () => await submit()}
 >
 	<div class="content-wrapper">
 		<p class="content-wrapper__help-text text-13 text-body">
-			If you are having trouble, please share your project and logs with the GitButler team. We will
+			If you are having trouble, export the project and logs for the GitTogether issue you are
 			review it for you and help identify how we can help resolve the issue.
 		</p>
 
@@ -213,7 +213,7 @@
 	{#snippet controls()}
 		<Button kind="outline" type="reset" onclick={close}>Close</Button>
 		<Button disabled={!sendLogs && !sendProjectRepository && !sendGraph} style="pop" type="submit"
-			>Share with GitButler</Button
+			>Export debug data</Button
 		>
 	{/snippet}
 </Modal>

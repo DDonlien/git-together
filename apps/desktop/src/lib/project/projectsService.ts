@@ -128,7 +128,7 @@ export class ProjectsService {
 			showToast({
 				style: "info",
 				title: "Adding projects is disabled",
-				message: "Projects can only be added when GitButler runs on your local machine.",
+				message: "Repositories can only be added when GitTogether runs on your local machine.",
 			});
 			return;
 		}
@@ -171,11 +171,11 @@ export class ProjectsService {
 		// of noisy toast:show_error captures.
 		if (/^\\\\wsl.localhost/i.test(path)) {
 			const message =
-				"For WSL2 projects, install the Linux version of GitButler inside of your WSL2 distro.";
+				"For WSL2 repositories, install the Linux version of GitTogether inside your WSL2 distro.";
 			console.warn(message);
 			showToast({
 				style: "info",
-				title: "Use the Linux version of GitButler",
+				title: "Use the Linux version of GitTogether",
 				message,
 			});
 

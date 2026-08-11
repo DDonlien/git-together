@@ -56,11 +56,11 @@
 	<div class="remove-project-description">
 		<p class="text-14 text-body">
 			Are you sure you want to remove
-			<span class="text-bold">{projectTitle}</span> from GitButler?
+			<span class="text-bold">{projectTitle}</span> from GitTogether?
 		</p>
 
 		<p class="text-12 text-body details-text">
-			When you delete your project from GitButler, your repository doesn't get deleted. It just
+			When you remove your project from GitTogether, your repository isn't deleted. It is only
 			removes the project from the list, keeping your repository safe and easy to access.
 		</p>
 	</div>

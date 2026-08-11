@@ -280,7 +280,7 @@
 <CardGroup>
 	<CardGroup.Item>
 		{#snippet title()}
-			Install the GitButler CLI <code class="code-string">but</code>
+			Install the compatible <code class="code-string">but</code> CLI
 		{/snippet}
 
 		{#snippet caption()}
@@ -291,9 +291,9 @@
 				On Windows, you can manually copy the executable (<code>`but`</code>) to a directory in your
 				PATH. Click "Show Command" for instructions.
 			{:else}
-				Installs the GitButler CLI (<code>`but`</code>) in your PATH, allowing you to use it from
-				the terminal. This action will request admin privileges. Alternatively, you could create a
-				symlink manually.
+				Installs the upstream-compatible CLI (<code>`but`</code>) in your PATH so GitTogether's
+				shared Git engine can also be used from the terminal. This action will request admin
+				privileges. Alternatively, you could create a symlink manually.
 			{/if}
 		{/snippet}
 
@@ -352,7 +352,7 @@
 			Remove all projects
 		{/snippet}
 		{#snippet caption()}
-			You can delete all projects from the GitButler app.
+			You can remove all repositories from the GitTogether app.
 			<br />
 			Your code remains safe. it only clears the configuration.
 		{/snippet}
@@ -371,7 +371,7 @@
 	title="Remove all projects"
 	onSubmit={onDeleteClicked}
 >
-	<p>Are you sure you want to remove all GitButler projects?</p>
+	<p>Are you sure you want to remove all GitTogether repositories?</p>
 
 	{#snippet controls(close)}
 		<Button style="danger" kind="outline" loading={isDeleting} type="submit">Remove</Button>

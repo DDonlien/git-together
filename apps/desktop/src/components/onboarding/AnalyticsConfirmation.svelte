@@ -1,18 +1,15 @@
 <script lang="ts">
 	import AnalyticsSettings from "$components/shared/AnalyticsSettings.svelte";
-	import { initAnalyticsIfEnabled } from "$lib/analytics/analytics";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
-	import { OnboardingEvent, POSTHOG_WRAPPER } from "$lib/telemetry/posthog";
 	import { inject } from "@gitbutler/core/context";
 	import { AsyncButton, TestId } from "@gitbutler/ui";
 
 	const settingsService = inject(SETTINGS_SERVICE);
 	const appSettings = $derived(settingsService.appSettings);
-	const posthog = inject(POSTHOG_WRAPPER);
 </script>
 
 <div class="analytics-confirmation">
-	<h1 class="title text-serif-42">Before we begin</h1>
+	<h1 class="title text-serif-42">Privacy by default</h1>
 	<AnalyticsSettings />
 
 	{#if $appSettings !== undefined}
@@ -23,10 +20,6 @@
 				icon="chevron-right"
 				action={async () => {
 					await settingsService.updateOnboardingComplete(true);
-					initAnalyticsIfEnabled($appSettings, posthog, true).then(() => {
-						// Await the initialization before logging the event to ensure PostHog is ready
-						posthog.captureOnboarding(OnboardingEvent.ConfirmedAnalytics);
-					});
 				}}
 			>
 				Continue

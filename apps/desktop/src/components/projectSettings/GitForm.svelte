@@ -2,6 +2,7 @@
 	import CommitSigningForm from "$components/projectSettings/CommitSigningForm.svelte";
 	import GitHooksForm from "$components/projectSettings/GitHooksForm.svelte";
 	import KeysForm from "$components/projectSettings/KeysForm.svelte";
+	import ServerConnectionForm from "$components/projectSettings/ServerConnectionForm.svelte";
 	import ReduxResult from "$components/shared/ReduxResult.svelte";
 	import SettingsSection from "$components/shared/SettingsSection.svelte";
 	import { BACKEND } from "$lib/backend";
@@ -21,6 +22,9 @@
 		await projectsService.updateProject({ ...project, force_push_protection: value });
 	}
 </script>
+
+<ServerConnectionForm {projectId} />
+<Spacer />
 
 <SettingsSection>
 	<CardGroup>

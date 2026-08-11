@@ -50,11 +50,11 @@
 
 <CardGroup.Item standalone labelFor="committerSigning">
 	{#snippet title()}
-		Credit GitButler as the committer
+		Credit upstream GitButler as the committer
 	{/snippet}
 	{#snippet caption()}
-		By default, everything in the GitButler client is free to use. You can opt in to crediting us as
-		the committer in your virtual branch commits to help spread the word.
+		GitTogether keeps the upstream GitButler committer-credit compatibility option. You can opt in
+		to crediting GitButler as the committer in your virtual branch commits to help spread the word.
 		<Link
 			href="https://github.com/gitbutlerapp/gitbutler-docs/blob/d81a23779302c55f8b20c75bf7842082815b4702/content/docs/features/virtual-branches/committer-mark.mdx"
 		>

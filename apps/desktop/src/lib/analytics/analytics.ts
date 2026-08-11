@@ -1,22 +1,12 @@
-import { initSentry } from "$lib/analytics/sentry";
-import { PostHogWrapper } from "$lib/telemetry/posthog";
+import type { PostHogWrapper } from "$lib/telemetry/posthog";
 import type { AppSettings } from "@gitbutler/but-sdk";
 
 export async function initAnalyticsIfEnabled(
-	appSettings: AppSettings,
-	postHog: PostHogWrapper,
-	confirmedOverride?: boolean,
-) {
-	if (import.meta.env.MODE === "development" || import.meta.env.CI) return;
-
-	const confirmed = confirmedOverride ?? appSettings.onboardingComplete;
-
-	if (confirmed) {
-		if (appSettings.telemetry.appErrorReportingEnabled) {
-			initSentry();
-		}
-		if (appSettings.telemetry.appMetricsEnabled) {
-			await postHog.init();
-		}
-	}
+	_appSettings: AppSettings,
+	_postHog: PostHogWrapper,
+	_confirmedOverride?: boolean,
+): Promise<void> {
+	// GitTogether 0.2.x is local-first and has no independent telemetry service.
+	// Never initialize the upstream GitButler PostHog or Sentry projects, including
+	// when an existing fork-era settings file still contains enabled flags.
 }

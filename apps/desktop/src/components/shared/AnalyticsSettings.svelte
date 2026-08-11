@@ -1,28 +1,15 @@
 <script lang="ts">
-	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
-	import { inject } from "@gitbutler/core/context";
-	import { CardGroup, Link, TestId, Toggle } from "@gitbutler/ui";
-
-	const settingsService = inject(SETTINGS_SERVICE);
-	const appSettings = $derived(settingsService.appSettings);
-	const errorReportingEnabled = $derived($appSettings?.telemetry.appErrorReportingEnabled);
-	const metricsEnabled = $derived($appSettings?.telemetry.appMetricsEnabled);
+	import { CardGroup, TestId, Toggle } from "@gitbutler/ui";
 </script>
 
 <div class="analytics-settings__content">
 	<p class="text-13 text-body analytics-settings__text">
-		GitButler uses telemetry strictly to help us improve the client. We do not collect any personal
-		information, unless explicitly allowed below. <Link href="https://gitbutler.com/privacy">
-			Privacy policy
-		</Link>
+		GitTogether 0.2.x does not send usage metrics or automatic error reports to GitButler, PostHog,
+		Sentry, or another project service.
 	</p>
 	<p class="text-13 text-body analytics-settings__text">
-		We kindly ask you to consider keeping these settings enabled as it helps us catch issues more
-		quickly. If you choose to disable them, please feel free to share your feedback on our <Link
-			href="https://discord.gg/MmFkmaJ42D"
-		>
-			Discord
-		</Link>.
+		Diagnostic logs stay on this machine unless you explicitly choose and share an archive. These
+		controls are locked off by the current product policy.
 	</p>
 </div>
 
@@ -32,17 +19,14 @@
 			Error reporting
 		{/snippet}
 		{#snippet caption()}
-			Toggle reporting of application crashes and errors.
+			Automatic external error reporting is disabled.
 		{/snippet}
 		{#snippet actions()}
 			<Toggle
 				id="errorReportingToggle"
 				testId={TestId.OnboardingPageAnalyticsSettingsErrorReportingToggle}
-				checked={errorReportingEnabled}
-				onclick={() =>
-					settingsService.updateTelemetry({
-						appErrorReportingEnabled: !errorReportingEnabled,
-					})}
+				checked={false}
+				disabled
 			/>
 		{/snippet}
 	</CardGroup.Item>
@@ -52,17 +36,14 @@
 			Usage metrics
 		{/snippet}
 		{#snippet caption()}
-			Toggle sharing of usage statistics.
+			Automatic external usage reporting is disabled.
 		{/snippet}
 		{#snippet actions()}
 			<Toggle
 				id="metricsEnabledToggle"
 				testId={TestId.OnboardingPageAnalyticsSettingsTelemetryToggle}
-				checked={metricsEnabled}
-				onclick={() =>
-					settingsService.updateTelemetry({
-						appMetricsEnabled: !metricsEnabled,
-					})}
+				checked={false}
+				disabled
 			/>
 		{/snippet}
 	</CardGroup.Item>

@@ -144,7 +144,7 @@ function handleTopLevel(
 	}
 }
 
-const DEEP_LINK_SCHEMES = ["but", "but-dev", "but-nightly"] as const;
+const DEEP_LINK_SCHEMES = ["gittogether", "gittogether-dev", "gittogether-nightly"] as const;
 
 const DEEP_LINK_TOP_LEVEL_PATHS = ["open", "login"] as const;
 type DeepLinkTopLevelPath = (typeof DEEP_LINK_TOP_LEVEL_PATHS)[number];
