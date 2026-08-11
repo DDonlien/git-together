@@ -10,6 +10,9 @@ type WatcherEventType = WatcherEvent["payload"]["type"];
  */
 const refreshedBy: Record<ProjectQueryKey, ReadonlyArray<WatcherEventType>> = {
 	absorptionPlan: ["gitActivity", "workspaceActivity", "worktreeChanges"],
+	// The generated name is deduped against local branches and the short names of
+	// remote-tracking branches, so anything that moves a ref can invalidate it.
+	branchCannedName: ["gitFetch", "gitActivity", "workspaceActivity"],
 	// A fetch changes no local commit, but it moves remote-tracking refs.
 	branchDetails: ["gitFetch", "gitActivity", "workspaceActivity"],
 	branchDiff: ["gitFetch", "gitActivity", "workspaceActivity"],
@@ -19,6 +22,10 @@ const refreshedBy: Record<ProjectQueryKey, ReadonlyArray<WatcherEventType>> = {
 	ciChecks: [],
 	commentReactions: [],
 	comments: ["gitActivity", "workspaceActivity", "worktreeChanges"],
+	// Derived from the trees the commit itself carries, so nothing outside it
+	// can change the answer. Resolving rewrites the commit, which moves the
+	// query to a new key rather than staling this one.
+	commitConflicts: [],
 	commitDetailsWithLineStats: ["gitActivity", "workspaceActivity"],
 	currentForgeLogin: [],
 	dryRun: ["gitActivity", "workspaceActivity", "worktreeChanges"],

@@ -9,6 +9,7 @@ export declare const apiParamNames: {
 	readonly apply: readonly ["projectId", "existingBranch"];
 	readonly applyBranchIntegration: readonly ["projectId", "branch", "integration", "dryRun"];
 	readonly assignHunk: readonly ["projectId", "assignments"];
+	readonly branchCannedName: readonly ["projectId"];
 	readonly branchCheckout: readonly ["projectId", "branch"];
 	readonly branchCheckoutNew: readonly ["projectId", "name"];
 	readonly branchCreate: readonly ["projectId", "newRef", "placement"];
@@ -28,6 +29,7 @@ export declare const apiParamNames: {
 	readonly commentsList: readonly ["projectId"];
 	readonly commitAmend: readonly ["projectId", "commitId", "changes", "changesSource", "dryRun"];
 	readonly commitCherryPick: readonly ["projectId", "sourceCommitIds", "relativeTo", "side", "dryRun"];
+	readonly commitConflicts: readonly ["projectId", "commitId"];
 	readonly commitCreate: readonly ["projectId", "relativeTo", "side", "changes", "changesSource", "message", "dryRun"];
 	readonly commitDetailsWithLineStats: readonly ["projectId", "commitId"];
 	readonly commitDiscard: readonly ["projectId", "subjectCommitId", "dryRun"];
@@ -103,6 +105,7 @@ export declare const apiParamNames: {
 	readonly removeReviewLabel: readonly ["projectId", "reviewId", "label"];
 	readonly removeReviewReaction: readonly ["projectId", "reviewId", "reactionId"];
 	readonly requestReview: readonly ["projectId", "reviewId", "logins"];
+	readonly resolveCommitConflictHunks: readonly ["projectId", "commitId", "specs"];
 	readonly restoreSnapshotWithKind: readonly ["projectId", "restoreKind", "sha"];
 	readonly reviewApply: readonly ["projectId", "reviewId"];
 	readonly reviewTemplate: readonly ["projectId"];

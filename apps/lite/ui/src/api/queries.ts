@@ -10,12 +10,14 @@ import * as ms from "ms";
  * invalidate a whole query root holding nothing but a project id.
  */
 export type ProjectQueryKey =
+	| "branchCannedName"
 	| "branchDetails"
 	| "branchDiff"
 	| "branchList"
 	| "changesInWorktree"
 	| "ciChecks"
 	| "comments"
+	| "commitConflicts"
 	| "commitDetailsWithLineStats"
 	| "forgeInfo"
 	| "headInfo"
@@ -49,6 +51,17 @@ type GlobalQueryKey =
 	| "guiSettings";
 
 export type QueryKey = ProjectQueryKey | GlobalQueryKey;
+
+/**
+ * The name the backend would generate for a branch created right now. Used to
+ * name the branch a commit is about to create before it exists, so it goes
+ * stale as soon as any branch is created — see `refreshedBy` in `watcher.ts`.
+ */
+export const branchCannedNameQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["branchCannedName" satisfies QueryKey, projectId],
+		queryFn: () => window.lite.branchCannedName(projectId),
+	});
 
 export const branchDetailsQueryOptions = ({ projectId, ...params }: PayloadFor<"branchDetails">) =>
 	queryOptions({
@@ -92,6 +105,29 @@ export const commitDetailsWithLineStatsQueryOptions = ({
 	queryOptions({
 		queryKey: ["commitDetailsWithLineStats" satisfies QueryKey, projectId, params],
 		queryFn: () => window.lite.commitDetailsWithLineStats({ projectId, ...params }),
+	});
+
+/**
+ * A conflicted commit's conflicts, derived from the trees the commit itself
+ * carries — so the answer is immutable per commit id, and an apply that
+ * rewrites the commit lands on a different key rather than invalidating this
+ * one. Enable it only for commits already known to conflict: the backend
+ * answers for any commit, but the round-trip is pure cost otherwise.
+ */
+export const commitConflictsQueryOptions = ({
+	projectId,
+	enabled,
+	...params
+}: PayloadFor<"commitConflicts"> & { enabled: boolean }) =>
+	queryOptions({
+		queryKey: ["commitConflicts" satisfies QueryKey, projectId, params],
+		queryFn: () => window.lite.commitConflicts({ projectId, ...params }),
+		enabled,
+		staleTime: Infinity,
+		// A commit whose conflicts have no hunk representation — a binary, a
+		// deletion, an oversized file — makes the backend reject the whole
+		// commit. That is a property of the commit, so retrying cannot help.
+		retry: false,
 	});
 
 export const forgeInfoOptions = (projectId: string) =>
