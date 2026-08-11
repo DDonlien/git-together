@@ -26,9 +26,10 @@
 ## 间距与布局
 
 - 优先复用现有组件的间距和布局约束，不在单个页面中创造另一套 spacing scale。
-- Dashboard 的 Repositories、AI tasks、Conversation 和 Details 四个区域是信息架构的一部分；调整布局时必须保留区域之间的关系和可发现性。
+- Dashboard 的 Repositories、Threads/Tasks、Chat 和 Context 四个区域是信息架构的一部分；每个区域可以独立折叠，并通过明确的方向控件重新排列，调整后仍必须保持区域关系和恢复入口可发现。
 - 仓库卡片、文件列表、diff 和 commit 信息应支持快速纵向扫描，并保持操作控件与对应对象相邻。
 - 响应式布局应在较窄窗口中保持主要操作可见；隐藏或折叠区域必须有清晰的恢复入口。
+- Context 使用 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace tabs；Git Graph 的视觉阅读方向从下往上，Branch Workspace 横向排列真实 branch/worktree 列。
 
 ## 页面布局参考
 
@@ -47,6 +48,7 @@
 - 同一 repository 的多个真实 branch/worktree 横向并排展示，每个 branch/worktree 占据一个可比较的列。
 - 每列顶部是 branch/worktree 信息卡片；其下方直接显示该 branch 的 commit、change 或相关状态。
 - 各列保持一致的宽度、标题位置和主要状态位置，便于同时比较 branch、commit、dirty state、ahead/behind 和 Agent session。
+- 每列显示 HEAD/base、worktree 路径、dirty/conflict、ahead/behind、Work Session 与当前 changes；焦点动作切换 Context，方向按钮保存用户的列排序。
 - 横向空间不足时，沿用 GitButler 现有的滚动、折叠或上下文切换模式，不把多个 branch 压缩成不可读的单列列表。
 - branch 列表达真实 Git branch/worktree，不恢复 GitButler Virtual Branch 的专用抽象。
 
