@@ -2,11 +2,13 @@
 
 GitTogether 是一个本地优先的 Git 工作台，用来同时管理多个 repository、真实 branch、worktree、Work Session，以及与这些工作上下文绑定的任务和对话。它以普通 Git 心智模型为默认入口，不要求用户先采用 Virtual Branch。
 
-当前产品版本为 `0.2.5`，权威版本号位于 [`VERSION`](VERSION)。桌面端使用 Tauri、Svelte 和 Rust，现阶段主要支持 macOS 本地工作流。
+当前产品版本为 `0.2.6`，权威版本号位于 [`VERSION`](VERSION)。桌面端使用 Tauri、Svelte 和 Rust，现阶段主要支持 macOS 本地工作流。
 
 ## 已有能力
 
-- 在首页总览多个本地 repository，并展示真实 branch、worktree、dirty、ahead/behind 和远端状态。
+- 默认进入继承自 GitButler 的单仓库 Workspace，并保留 Branches、Operation History、文件、diff 和 commit 体验。
+- 通过侧边栏的全局 Overview 总览多个本地 repository，并展示真实 branch、worktree、dirty、ahead/behind 和远端状态。
+- 通过项目级 Work Trees 进入 GitTogether 的多 worktree、Work Session、任务、对话和 Context 试验界面，而不替换原 Workspace。
 - 对多个 repository 分别执行 fetch、commit、push，并保留每项操作的独立结果。
 - 预检并安全执行 Get Latest；本地修改、分叉历史或缺失 upstream 时不会覆盖工作区。
 - 创建真实 Git worktree 形式的 Protected Work Session，记录 base、修改范围和 snapshot commit。

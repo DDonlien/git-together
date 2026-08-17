@@ -26,10 +26,18 @@
 ## 间距与布局
 
 - 优先复用现有组件的间距和布局约束，不在单个页面中创造另一套 spacing scale。
-- Dashboard 的 Repositories、Threads/Tasks、Chat 和 Context 四个区域是信息架构的一部分；每个区域可以独立折叠，并通过明确的方向控件重新排列，调整后仍必须保持区域关系和恢复入口可发现。
+- 默认页面继续使用 GitButler 原有 Workspace 布局；GitTogether 的 Overview 与 Work Trees 是侧边栏中的独立试验入口，不接管默认页面。
+- Work Trees 的 Repositories、Threads/Tasks、Chat 和 Context 四个区域是信息架构的一部分；每个区域可以独立折叠，并通过明确的方向控件重新排列，调整后仍必须保持区域关系和恢复入口可发现。
 - 仓库卡片、文件列表、diff 和 commit 信息应支持快速纵向扫描，并保持操作控件与对应对象相邻。
 - 响应式布局应在较窄窗口中保持主要操作可见；隐藏或折叠区域必须有清晰的恢复入口。
 - Context 使用 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace tabs；Git Graph 的视觉阅读方向从下往上，Branch Workspace 横向排列真实 branch/worktree 列。
+
+### 侧边栏层级
+
+- 侧边栏继续使用 GitButler 的 `34px` 方形按钮、`4px` 间距、圆角、主题 token 和左侧激活指示器。
+- 项目级顶部依次为 Workspaces、Branches、Operation History 和 Work Trees；Project Setting 位于项目级区域底部。
+- Project Setting 上方与全局级入口上方各放置一条共享 `Spacer` 分隔线，形成 Rider 风格的两个横向层级边界。
+- 全局级依次为 Overview、Global Setting 和 Share Feedback；图标来自现有共享图标库，所有入口必须有可读 tooltip。
 
 ## 页面布局参考
 
@@ -92,6 +100,7 @@
 
 ## 相关实现入口
 
+- Sidebar：`apps/desktop/src/components/views/AppSidebar.svelte`
 - Dashboard：`apps/desktop/src/components/dashboard/RepositoryDashboard.svelte`
 - Repository card：`apps/desktop/src/components/dashboard/RepositoryCard.svelte`
 - Shared UI：`packages/ui/src/lib/components/`
