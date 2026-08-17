@@ -1,11 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
-	import CliSymlinkSetup from "$components/settings/CliSymlinkSetup.svelte";
-	import AccessTokenSignIn from "$components/shared/AccessTokenSignIn.svelte";
 	import { BACKEND } from "$lib/backend";
-	import { getUserErrorCode } from "$lib/backend/ipc";
-	import { CLI_MANAGER } from "$lib/config/cli";
-	import { showToast } from "$lib/notifications/toasts";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { TERMINAL_SERVICE } from "$lib/settings/terminalService";
@@ -17,20 +12,8 @@
 	import { UPDATER_SERVICE } from "$lib/updater/updater";
 	import { USER_SERVICE } from "$lib/user/userService.svelte";
 	import { inject } from "@gitbutler/core/context";
-	import {
-		Button,
-		CardGroup,
-		Modal,
-		ProfilePictureUpload,
-		Select,
-		SelectItem,
-		Spacer,
-		Textbox,
-		Toggle,
-		chipToasts,
-	} from "@gitbutler/ui";
+	import { Button, CardGroup, Modal, Select, SelectItem, Toggle, chipToasts } from "@gitbutler/ui";
 	import { onMount } from "svelte";
-	import type { User } from "$lib/user/user";
 
 	const userService = inject(USER_SERVICE);
 	const settingsService = inject(SETTINGS_SERVICE);
@@ -39,22 +22,12 @@
 	const updaterService = inject(UPDATER_SERVICE);
 	const disableAutoChecks = updaterService.disableAutoChecks;
 
-	const cliManager = inject(CLI_MANAGER);
-	const [instalCLI, installingCLI] = cliManager.install;
-
 	const backend = inject(BACKEND);
 	const platformName = backend.platformName;
 
 	const terminalService = inject(TERMINAL_SERVICE);
 
-	const appSettings = settingsService.appSettings;
-
-	let saving = $state(false);
-	let newName = $state("");
 	let isDeleting = $state(false);
-	let loaded = $state(false);
-
-	let userPicture = $state(userService.user?.picture);
 
 	let deleteConfirmationModal: ReturnType<typeof Modal> | undefined = $state();
 
@@ -93,54 +66,6 @@
 		}
 	});
 
-	$effect(() => {
-		if (userService.user && !loaded) {
-			loaded = true;
-			userService.getUser().then((cloudUser) => {
-				const userData: User = {
-					...cloudUser,
-					name: cloudUser.name || undefined,
-					email: cloudUser.email || undefined,
-					login: cloudUser.login || undefined,
-					picture: cloudUser.picture || "#",
-					locale: cloudUser.locale || "en",
-					access_token: cloudUser.access_token || "impossible-situation",
-					role: cloudUser.role || "user",
-					supporter: cloudUser.supporter || false,
-				};
-				userPicture = userData.picture;
-				userService.setUser(userData);
-			});
-			newName = userService.user?.name || "";
-		}
-	});
-
-	let selectedPictureFile: File | undefined = $state();
-
-	async function onSubmit(e: SubmitEvent) {
-		if (!userService.user) return;
-		saving = true;
-
-		e.preventDefault();
-
-		try {
-			const updatedUser = await userService.updateUser({
-				name: newName,
-				picture: selectedPictureFile,
-			});
-			userService.setUser(updatedUser);
-			chipToasts.success("Profile updated");
-			selectedPictureFile = undefined;
-		} finally {
-			saving = false;
-		}
-	}
-
-	function onPictureChange(file: File) {
-		selectedPictureFile = file;
-		userPicture = URL.createObjectURL(file);
-	}
-
 	async function onDeleteClicked() {
 		isDeleting = true;
 		try {
@@ -154,54 +79,7 @@
 			isDeleting = false;
 		}
 	}
-
-	let showSymlink = $state(false);
 </script>
-
-{#if userService.user}
-	<CardGroup>
-		<form onsubmit={onSubmit} class="profile-form">
-			<ProfilePictureUpload
-				bind:picture={userPicture}
-				onFileSelect={onPictureChange}
-				onInvalidFileType={() => chipToasts.error("Please use a valid image file")}
-			/>
-
-			<div id="contact-info" class="contact-info">
-				<div class="contact-info__fields">
-					<Textbox label="Full name" bind:value={newName} required />
-					<Textbox label="Email" value={userService.user?.email} readonly />
-				</div>
-
-				<Button type="submit" style="pop" loading={saving}>Update profile</Button>
-			</div>
-		</form>
-	</CardGroup>
-
-	<CardGroup>
-		<CardGroup.Item>
-			{#snippet title()}
-				Forget credentials and log out
-			{/snippet}
-			{#snippet caption()}
-				Click here to clear your credentials and unwind.
-			{/snippet}
-			{#snippet actions()}
-				<Button
-					kind="outline"
-					icon="logout"
-					onclick={async () => {
-						await userService.forgetUserCredentials();
-					}}>Forget credentials</Button
-				>
-			{/snippet}
-		</CardGroup.Item>
-	</CardGroup>
-{/if}
-
-<AccessTokenSignIn />
-
-<Spacer />
 
 <CardGroup>
 	<CardGroup.Item alignment="center">
@@ -280,75 +158,6 @@
 <CardGroup>
 	<CardGroup.Item>
 		{#snippet title()}
-			Install the compatible <code class="code-string">but</code> CLI
-		{/snippet}
-
-		{#snippet caption()}
-			{#if $appSettings?.ui.cliIsManagedByPackageManager}
-				The <code>but</code> CLI is managed by your package manager. Please use your package manager to
-				install, update, or remove it.
-			{:else if platformName === "windows"}
-				On Windows, you can manually copy the executable (<code>`but`</code>) to a directory in your
-				PATH. Click "Show Command" for instructions.
-			{:else}
-				Installs the upstream-compatible CLI (<code>`but`</code>) in your PATH so GitTogether's
-				shared Git engine can also be used from the terminal. This action will request admin
-				privileges. Alternatively, you could create a symlink manually.
-			{/if}
-		{/snippet}
-
-		{#if !$appSettings?.ui.cliIsManagedByPackageManager}
-			<div class="flex flex-col gap-16">
-				<div class="flex gap-8 justify-end">
-					{#if platformName !== "windows"}
-						<Button
-							style="pop"
-							icon="play"
-							onclick={async () => {
-								try {
-									await instalCLI();
-								} catch (err: unknown) {
-									// osascript returns a generic non-success when the
-									// user dismisses the macOS admin-privileges prompt.
-									// The backend tags that specific case with a
-									// `CliInstallCancelled` code so we can show an info
-									// toast instead of an error toast.
-									if (getUserErrorCode(err) === "CliInstallCancelled") {
-										showToast({
-											style: "info",
-											message: "CLI install cancelled.",
-										});
-										return;
-									}
-									throw err;
-								}
-							}}
-							loading={installingCLI.current.isLoading}
-						>
-							Install But CLI</Button
-						>
-					{/if}
-					<Button
-						style="gray"
-						kind="outline"
-						disabled={showSymlink}
-						onclick={() => (showSymlink = !showSymlink)}>Show command</Button
-					>
-				</div>
-			</div>
-
-			{#if showSymlink}
-				<CliSymlinkSetup class="m-t-14" />
-			{/if}
-		{/if}
-	</CardGroup.Item>
-</CardGroup>
-
-<Spacer />
-
-<CardGroup>
-	<CardGroup.Item>
-		{#snippet title()}
 			Remove all projects
 		{/snippet}
 		{#snippet caption()}
@@ -378,26 +187,3 @@
 		<Button style="pop" onclick={close}>Cancel</Button>
 	{/snippet}
 </Modal>
-
-<style lang="postcss">
-	.profile-form {
-		display: flex;
-		padding: 16px;
-		gap: 24px;
-	}
-
-	.contact-info {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 20px;
-	}
-
-	.contact-info__fields {
-		display: flex;
-		flex-direction: column;
-		width: 100%;
-		gap: 12px;
-	}
-</style>

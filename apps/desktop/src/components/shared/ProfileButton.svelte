@@ -10,5 +10,5 @@
 
 <ProfileButton
 	srcUrl={userService.user?.picture ?? null}
-	onclick={async () => openGeneralSettings()}
+	onclick={async () => openGeneralSettings("gitbutler")}
 />

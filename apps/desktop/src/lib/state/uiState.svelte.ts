@@ -9,14 +9,14 @@ import type { ScrollbarVisilitySettings } from "@gitbutler/ui";
 
 export type GeneralSettingsPageId =
 	| "general"
+	| "gitbutler"
 	| "appearance"
 	| "lanes-and-branches"
 	| "git"
 	| "integrations"
 	| "ai"
 	| "telemetry"
-	| "experimental"
-	| "organizations";
+	| "experimental";
 export type ProjectSettingsPageId = "project" | "git" | "ai" | "experimental";
 export type RejectionReason =
 	| "workspaceMergeConflict"

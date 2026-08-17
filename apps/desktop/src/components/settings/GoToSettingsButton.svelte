@@ -9,7 +9,7 @@
 	style="pop"
 	icon="login"
 	onclick={async () => {
-		openGeneralSettings("general");
+		openGeneralSettings("gitbutler");
 	}}
 >
 	Go to Settings

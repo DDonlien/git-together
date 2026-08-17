@@ -69,6 +69,7 @@ Change
 - 视觉约束：新增页面直接使用 GitButler 现有的视觉风格、主题 token、布局模式和 `@gitbutler/ui` 组件；附件中的灰色线框只定义信息层级和空间关系，不定义新的颜色、字体、控件或设计系统。
 - 当前状态：修正中。GitButler 原有 Workspace、Branches、Operation History、文件、diff 和 commit 界面必须继续作为默认体验；GitTogether 的试验功能只能通过侧边栏中的独立入口进入，不能再次用新 Dashboard 替换原工作区。
 - 边界：侧边栏按项目级和全局级分组。项目级保留 Workspace、Branches、Operation History，并新增 Work Trees；Project Settings 在项目级区域底部对齐。全局级提供 Overview、Global Settings 和 Share Feedback。两个层级使用明确的分隔线，不把项目设置混入全局设置。
+- Global Settings 边界：左栏在 General 后单列 GitButler；GitButler 账号与 access token、上游 committer credit、兼容 `but` CLI、GitButler organizations 与上游资源统一收纳在该页。General 只保留 GitTogether 自身的编辑器、终端、更新与本地项目管理设置；通用 Git、AI Provider 和 forge integrations 继续使用各自页面。
 
 ## Version line - 0.2.x - 增加 Local GitTogether Feature
 

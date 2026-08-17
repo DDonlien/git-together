@@ -38,6 +38,7 @@
 - 项目级顶部依次为 Workspaces、Branches、Operation History 和 Work Trees；Project Setting 位于项目级区域底部。
 - Project Setting 上方与全局级入口上方各放置一条共享 `Spacer` 分隔线，形成 Rider 风格的两个横向层级边界。
 - 全局级依次为 Overview、Global Setting 和 Share Feedback；图标来自现有共享图标库，所有入口必须有可读 tooltip。
+- Global Settings 左栏在 General 后放置 GitButler；账号与 access token、上游 committer credit、兼容 `but` CLI、organizations 和上游资源集中在 GitButler 页。General 保持 GitTogether 自身设置，通用 Git、AI Provider 与 forge integrations 仍保留独立页面。
 
 ## 页面布局参考
 

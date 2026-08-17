@@ -3,17 +3,13 @@
 	import AiSettings from "$components/settings/AiSettings.svelte";
 	import ExperimentalSettings from "$components/settings/ExperimentalSettings.svelte";
 	import GeneralSettings from "$components/settings/GeneralSettings.svelte";
+	import GitButlerSettings from "$components/settings/GitButlerSettings.svelte";
 	import GitSettings from "$components/settings/GitSettings.svelte";
 	import IntegrationsSettings from "$components/settings/IntegrationsSettings.svelte";
 	import LanesAndBranchesSettings from "$components/settings/LanesAndBranchesSettings.svelte";
-	import OrganisationSettings from "$components/settings/OrganisationSettings.svelte";
 	import SettingsModalLayout from "$components/settings/SettingsModalLayout.svelte";
 	import TelemetrySettings from "$components/settings/TelemetrySettings.svelte";
-	import { URL_SERVICE } from "$lib/backend/url";
 	import { generalSettingsPages } from "$lib/settings/generalSettingsPages";
-	import { USER_SERVICE } from "$lib/user/userService.svelte";
-	import { inject } from "@gitbutler/core/context";
-	import { Icon } from "@gitbutler/ui";
 	import type { GeneralSettingsModalState, GeneralSettingsPageId } from "$lib/state/uiState.svelte";
 
 	type Props = {
@@ -21,9 +17,6 @@
 	};
 
 	const { data }: Props = $props();
-
-	const userService = inject(USER_SERVICE);
-	const urlService = inject(URL_SERVICE);
 
 	let currentSelectedId = $derived(data.selectedId || generalSettingsPages[0]!.id);
 
@@ -36,13 +29,14 @@
 	title="Global settings"
 	pages={generalSettingsPages}
 	selectedId={currentSelectedId}
-	isAdmin={userService.user?.role === "admin"}
 	onSelectPage={selectPage}
 >
 	{#snippet content({ currentPage })}
 		{#if currentPage}
 			{#if currentPage.id === "general"}
 				<GeneralSettings />
+			{:else if currentPage.id === "gitbutler"}
+				<GitButlerSettings />
 			{:else if currentPage.id === "appearance"}
 				<AppearanceSettings />
 			{:else if currentPage.id === "lanes-and-branches"}
@@ -57,8 +51,6 @@
 				<TelemetrySettings />
 			{:else if currentPage.id === "experimental"}
 				<ExperimentalSettings />
-			{:else if currentPage.id === "organizations"}
-				<OrganisationSettings />
 			{:else}
 				Settings page {currentPage.id} not Found.
 			{/if}
@@ -66,57 +58,4 @@
 			Settings page {currentSelectedId} not Found.
 		{/if}
 	{/snippet}
-
-	{#snippet footer()}
-		<div class="social">
-			<button
-				type="button"
-				class="social-btn"
-				onclick={async () => await urlService.openExternalUrl("https://docs.gitbutler.com/")}
-			>
-				<Icon name="docs" />
-				<span class="text-13 text-bold">Docs</span>
-				<div class="text-13 open-link-icon">↗</div>
-			</button>
-			<button
-				type="button"
-				class="social-btn"
-				onclick={async () => await urlService.openExternalUrl("https://discord.gg/MmFkmaJ42D")}
-			>
-				<Icon name="discord" />
-				<span class="text-13 text-bold">Our Discord</span>
-				<div class="text-13 open-link-icon">↗</div>
-			</button>
-		</div>
-	{/snippet}
 </SettingsModalLayout>
-
-<style lang="postcss">
-	/* BANNERS */
-	.social {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.social-btn {
-		display: flex;
-		align-items: center;
-		padding: 8px 12px;
-		gap: 12px;
-		border-radius: var(--radius-m);
-		background-color: var(--bg-1);
-		color: var(--text-2);
-		text-align: left;
-		transition: all var(--transition-fast);
-
-		&:hover {
-			background-color: var(--hover-bg-1);
-		}
-	}
-
-	.open-link-icon {
-		transform: translateY(-2px) translateX(-4px);
-		color: var(--text-3);
-	}
-</style>

@@ -4,7 +4,6 @@ interface SettingsPage {
 	id: string;
 	label: string;
 	icon: IconName;
-	adminOnly?: boolean;
 }
 
 export const generalSettingsPages = [
@@ -12,6 +11,11 @@ export const generalSettingsPages = [
 		id: "general",
 		label: "General",
 		icon: "settings",
+	},
+	{
+		id: "gitbutler",
+		label: "GitButler",
+		icon: "workbench",
 	},
 	{
 		id: "appearance",
@@ -47,12 +51,6 @@ export const generalSettingsPages = [
 		id: "experimental",
 		label: "Experimental",
 		icon: "lab",
-	},
-	{
-		id: "organizations",
-		label: "Organizations",
-		icon: "factory",
-		adminOnly: true,
 	},
 ] as const satisfies readonly SettingsPage[];
 
