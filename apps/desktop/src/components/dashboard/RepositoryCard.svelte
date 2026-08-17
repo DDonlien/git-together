@@ -6,6 +6,7 @@
 		RepositoryOverview,
 	} from "$lib/gittogether/types";
 	import type { Project } from "$lib/project/project";
+	import { Button, Icon } from "@gitbutler/ui";
 
 	type Props = {
 		project: Project;
@@ -17,7 +18,6 @@
 		selectedWorktreePath?: string;
 		operation?: ProjectOperationState;
 		onToggle: (projectId: string) => void;
-		onFocus: (projectId: string) => void;
 		onOpen: (projectId: string) => void;
 		onSelectBranch: (projectId: string, branch: BranchSummary) => void;
 		onAction: (projectId: string, action: RepositoryAction) => void;
@@ -33,7 +33,6 @@
 		selectedWorktreePath,
 		operation,
 		onToggle,
-		onFocus,
 		onOpen,
 		onSelectBranch,
 		onAction,
@@ -62,10 +61,10 @@
 		<button
 			class="repository-card__identity"
 			type="button"
-			onclick={() => onFocus(project.id)}
-			aria-label={`Focus ${project.title}`}
+			onclick={() => onOpen(project.id)}
+			aria-label={`Open ${project.title} workspace`}
 		>
-			<span class="repository-card__icon" aria-hidden="true">⌘</span>
+			<span class="repository-card__icon" aria-hidden="true"><Icon name="repo" size={16} /></span>
 			<span class="repository-card__name-wrap">
 				<strong>{project.title}</strong>
 				<span>{project.path}</span>
@@ -87,35 +86,41 @@
 		</div>
 
 		<div class="repository-card__actions">
-			<button
-				type="button"
+			<Button
+				size="tag"
+				kind="outline"
 				onclick={() => onAction(project.id, "fetch")}
 				disabled={busy || !overview}
 			>
 				Fetch
-			</button>
-			<button
-				type="button"
+			</Button>
+			<Button
+				size="tag"
+				kind="outline"
 				onclick={() => onAction(project.id, "commit")}
 				disabled={busy || !overview}
 			>
 				Commit
-			</button>
-			<button
-				type="button"
+			</Button>
+			<Button
+				size="tag"
+				kind="outline"
 				onclick={() => onAction(project.id, "push")}
 				disabled={busy || !overview}
 			>
 				Push
-			</button>
-			<button
-				type="button"
+			</Button>
+			<Button
+				size="tag"
+				kind="outline"
 				onclick={() => onAction(project.id, "latest")}
 				disabled={busy || !overview}
 			>
 				Get Latest
-			</button>
-			<button type="button" onclick={() => onOpen(project.id)}>Workspace ↗</button>
+			</Button>
+			<Button size="tag" kind="outline" icon="open-in-folder" onclick={() => onOpen(project.id)}
+				>Workspace</Button
+			>
 		</div>
 	</div>
 
@@ -332,27 +337,6 @@
 	.repository-card__actions {
 		flex: 0 0 auto;
 		gap: 4px;
-	}
-
-	.repository-card__actions button {
-		padding: 6px 8px;
-		border: 1px solid var(--border-2);
-		border-radius: 7px;
-		background: var(--bg-2);
-		color: var(--text-2);
-		font: inherit;
-		font-size: 9px;
-		cursor: pointer;
-	}
-
-	.repository-card__actions button:hover:not(:disabled) {
-		border-color: var(--fill-pop-bg);
-		color: var(--text-1);
-	}
-
-	.repository-card__actions button:disabled {
-		cursor: default;
-		opacity: 0.45;
 	}
 
 	.operation {

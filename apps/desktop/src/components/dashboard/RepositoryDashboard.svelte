@@ -11,7 +11,7 @@
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import { persisted } from "@gitbutler/shared/persisted";
-	import { chipToasts } from "@gitbutler/ui";
+	import { Button, Icon, Textbox, chipToasts } from "@gitbutler/ui";
 	import { convertFileSrc } from "@tauri-apps/api/core";
 	import { onMount, untrack } from "svelte";
 	import { get } from "svelte/store";
@@ -33,6 +33,15 @@
 	type PanelId = "repositories" | "tasks" | "conversation" | "details";
 	type DetailTab = "files" | "diff" | "preview" | "terminal" | "graph" | "git";
 	type ModalId = "commit" | "latest" | "connections" | "session" | null;
+	type DashboardView = "overview" | "worktrees";
+
+	type Props = {
+		view?: DashboardView;
+		activeProjectId?: string;
+		embedded?: boolean;
+	};
+
+	let { view = "overview", activeProjectId, embedded = false }: Props = $props();
 
 	const panelIds: PanelId[] = ["repositories", "tasks", "conversation", "details"];
 	const panelTitles: Record<PanelId, string> = {
@@ -54,8 +63,8 @@
 	const projectsService = inject(PROJECTS_SERVICE);
 	const uiState = inject(UI_STATE);
 	const gitTogether = new GitTogetherService(backend);
-	const projectsQuery = $derived(projectsService.projects());
-	const serverCapabilitiesQuery = $derived(projectsService.serverCapabilities());
+	const projectsQuery = projectsService.projects();
+	const serverCapabilitiesQuery = projectsService.serverCapabilities();
 	const canAddProjects = $derived(serverCapabilitiesQuery.response?.canAddProjects ?? true);
 
 	const panelOrder = persisted<PanelId[]>(panelIds, "gittogether-dashboard-panel-order");
@@ -118,15 +127,20 @@
 	let cloneLoading = $state(false);
 
 	const projects = $derived(projectsQuery.response ?? []);
+	const scopedProjects = $derived(
+		view === "worktrees" && activeProjectId
+			? projects.filter((project) => project.id === activeProjectId)
+			: projects,
+	);
 	const filteredProjects = $derived.by(() => {
 		const normalized = filter.trim().toLowerCase();
-		if (!normalized) return projects;
-		return projects.filter((project) =>
+		if (!normalized) return scopedProjects;
+		return scopedProjects.filter((project) =>
 			`${project.title} ${project.path}`.toLowerCase().includes(normalized),
 		);
 	});
 	const focusedProject = $derived(
-		projects.find((project) => project.id === focusedProjectId) ?? filteredProjects[0],
+		scopedProjects.find((project) => project.id === focusedProjectId) ?? filteredProjects[0],
 	);
 	const focusedOverview = $derived(focusedProject ? overviews[focusedProject.id] : undefined);
 	const focusedWorktreePath = $derived(
@@ -143,6 +157,7 @@
 		focusedOverview?.threads.find((thread) => thread.id === selectedThreadId),
 	);
 	const visibleProjectIds = $derived(filteredProjects.map((project) => project.id));
+	const visiblePanels = $derived<PanelId[]>(view === "overview" ? ["repositories"] : $panelOrder);
 	const allVisibleSelected = $derived(
 		visibleProjectIds.length > 0 &&
 			visibleProjectIds.every((id) => selectedProjectIds.includes(id)),
@@ -155,15 +170,19 @@
 	onMount(() => {
 		void loadConnections();
 		const refreshInterval = window.setInterval(() => {
-			if (projects.length > 0) void refreshProjects();
+			if (scopedProjects.length > 0) void refreshProjects();
 		}, 10_000);
 		return () => window.clearInterval(refreshInterval);
 	});
 
 	$effect(() => {
-		const ids = projects.map((project) => project.id);
+		const ids = scopedProjects.map((project) => project.id);
 		untrack(() => {
-			if (!focusedProjectId || !ids.includes(focusedProjectId)) focusedProjectId = ids[0];
+			const preferredProjectId =
+				activeProjectId && ids.includes(activeProjectId) ? activeProjectId : ids[0];
+			if (!focusedProjectId || !ids.includes(focusedProjectId) || activeProjectId) {
+				focusedProjectId = preferredProjectId;
+			}
 			for (const id of ids) {
 				if (!overviews[id] && !overviewLoading[id]) void refreshOverview(id);
 			}
@@ -327,7 +346,7 @@
 		}
 	}
 
-	async function refreshProjects(projectIds = projects.map((project) => project.id)) {
+	async function refreshProjects(projectIds = scopedProjects.map((project) => project.id)) {
 		await Promise.all(projectIds.map(refreshOverview));
 	}
 
@@ -765,129 +784,152 @@
 </script>
 
 <svelte:head>
-	<title>GitTogether · Repository workspace</title>
+	<title>GitTogether · {view === "overview" ? "Overview" : "Work Trees"}</title>
 </svelte:head>
 
-<main class="dashboard" aria-label="GitTogether repository workspace">
+<main
+	class:dashboard--embedded={embedded}
+	class:dashboard--overview={view === "overview"}
+	class="dashboard"
+	aria-label={view === "overview" ? "GitTogether overview" : "GitTogether work trees"}
+>
 	<header class="dashboard-header">
 		<div class="dashboard-brand">
-			<div class="dashboard-brand__mark" aria-hidden="true">GT</div>
+			<div class="dashboard-brand__mark" aria-hidden="true">
+				<Icon name={view === "overview" ? "repo" : "split"} size={18} />
+			</div>
 			<div>
-				<h1>GitTogether</h1>
-				<p>Ordinary Git branches, real worktrees, local-first collaboration</p>
+				<h1>{view === "overview" ? "Overview" : "Work Trees"}</h1>
+				<p>
+					{view === "overview"
+						? "All registered repositories and their real Git state"
+						: "Parallel worktrees, local sessions, threads, and repository context"}
+				</p>
 			</div>
 		</div>
 		<div class="dashboard-header__actions">
 			<span class="connection-state"><i></i>Local Git mode · Presence unavailable until 0.3.x</span>
-			<button
-				type="button"
-				class="button"
-				onclick={() => {
-					activeModal = "connections";
-					void loadConnections();
-				}}
-			>
-				Connections
-			</button>
-			{#if canAddProjects}
-				<button type="button" class="button button--primary" onclick={addProject}
-					>+ Add repository</button
+			{#if view === "overview"}
+				<Button
+					kind="outline"
+					icon="link"
+					onclick={() => {
+						activeModal = "connections";
+						void loadConnections();
+					}}
 				>
+					Connections
+				</Button>
+				{#if canAddProjects}
+					<Button style="pop" icon="plus" onclick={addProject}>Add repository</Button>
+				{/if}
+				<Button
+					kind="outline"
+					icon="clone"
+					onclick={() => {
+						activeModal = "connections";
+						void loadConnections();
+					}}
+				>
+					Clone with account
+				</Button>
+			{:else}
+				<Button
+					kind="outline"
+					icon="refresh"
+					onclick={() => void refreshProjects()}
+					disabled={projects.length === 0}
+				>
+					Refresh
+				</Button>
 			{/if}
-			<button
-				type="button"
-				class="button"
-				onclick={() => {
-					activeModal = "connections";
-					void loadConnections();
-				}}
-			>
-				Clone with account
-			</button>
 		</div>
 	</header>
 
-	<div class="dashboard-toolbar">
-		<div class="dashboard-toolbar__title">
-			<span class="eyebrow">Overview</span>
-			<strong>{projects.length} {projects.length === 1 ? "repository" : "repositories"}</strong>
-		</div>
-		<label class="search-box">
-			<span aria-hidden="true">⌕</span>
-			<input
+	{#if view === "overview"}
+		<div class="dashboard-toolbar">
+			<div class="dashboard-toolbar__title">
+				<span class="eyebrow">Repositories</span>
+				<strong>{projects.length} {projects.length === 1 ? "repository" : "repositories"}</strong>
+			</div>
+			<Textbox
 				bind:value={filter}
 				placeholder="Search repositories"
-				aria-label="Search repositories"
+				iconLeft="search"
+				width={240}
 			/>
-		</label>
-		<button type="button" class="toolbar-link" onclick={toggleVisibleProjects}>
-			{allVisibleSelected ? "Clear visible" : "Select visible"}
-		</button>
-		<div class="batch-actions" aria-label="Batch Git operations">
-			<button
-				type="button"
-				onclick={() => void runBatch("fetch")}
-				disabled={visibleProjectIds.length === 0}>Fetch</button
+			<Button kind="ghost" onclick={toggleVisibleProjects}>
+				{allVisibleSelected ? "Clear visible" : "Select visible"}
+			</Button>
+			<div class="batch-actions" aria-label="Batch Git operations">
+				<Button
+					kind="outline"
+					onclick={() => void runBatch("fetch")}
+					disabled={visibleProjectIds.length === 0}>Fetch</Button
+				>
+				<Button
+					kind="outline"
+					onclick={() => openCommit()}
+					disabled={visibleProjectIds.length === 0}>Commit</Button
+				>
+				<Button
+					kind="outline"
+					onclick={() => void runBatch("push")}
+					disabled={visibleProjectIds.length === 0}>Push</Button
+				>
+				<Button
+					kind="outline"
+					onclick={() => void prepareLatest()}
+					disabled={visibleProjectIds.length === 0}
+				>
+					Get Latest…
+				</Button>
+			</div>
+			<Button
+				kind="ghost"
+				icon="refresh"
+				onclick={() => void refreshProjects()}
+				disabled={projects.length === 0}>Refresh</Button
 			>
-			<button type="button" onclick={() => openCommit()} disabled={visibleProjectIds.length === 0}
-				>Commit</button
-			>
-			<button
-				type="button"
-				onclick={() => void runBatch("push")}
-				disabled={visibleProjectIds.length === 0}>Push</button
-			>
-			<button
-				type="button"
-				class="batch-actions__latest"
-				onclick={() => void prepareLatest()}
-				disabled={visibleProjectIds.length === 0}
-			>
-				Get Latest…
-			</button>
 		</div>
-		<button
-			type="button"
-			class="toolbar-link"
-			onclick={() => void refreshProjects()}
-			disabled={projects.length === 0}>↻ Refresh</button
-		>
-	</div>
+	{/if}
 
 	<div class="dashboard-grid">
-		{#each $panelOrder as panel, index (panel)}
+		{#each visiblePanels as panel, index (panel)}
 			<section
 				class:panel-collapsed={isCollapsed(panel)}
 				class="dashboard-panel dashboard-panel--{panel}"
 			>
 				<div class="panel-header">
 					<div>
-						<span class="panel-kicker">{String(index + 1).padStart(2, "0")}</span>
+						{#if view === "worktrees"}<span class="panel-kicker"
+								>{String(index + 1).padStart(2, "0")}</span
+							>{/if}
 						<h2>{panelTitles[panel]}</h2>
 					</div>
-					<div class="panel-header__actions">
-						<button
-							type="button"
-							aria-label={`Move ${panelTitles[panel]} left`}
-							onclick={() => movePanel(panel, -1)}
-							disabled={index === 0}>←</button
-						>
-						<button
-							type="button"
-							aria-label={`Move ${panelTitles[panel]} right`}
-							onclick={() => movePanel(panel, 1)}
-							disabled={index === $panelOrder.length - 1}>→</button
-						>
-						<button
-							type="button"
-							aria-label={isCollapsed(panel)
-								? `Expand ${panelTitles[panel]}`
-								: `Collapse ${panelTitles[panel]}`}
-							onclick={() => togglePanel(panel)}
-						>
-							{isCollapsed(panel) ? "+" : "−"}
-						</button>
-					</div>
+					{#if view === "worktrees"}<div class="panel-header__actions">
+							<button
+								type="button"
+								aria-label={`Move ${panelTitles[panel]} left`}
+								onclick={() => movePanel(panel, -1)}
+								disabled={index === 0}>←</button
+							>
+							<button
+								type="button"
+								aria-label={`Move ${panelTitles[panel]} right`}
+								onclick={() => movePanel(panel, 1)}
+								disabled={index === visiblePanels.length - 1}>→</button
+							>
+							<button
+								type="button"
+								aria-label={isCollapsed(panel)
+									? `Expand ${panelTitles[panel]}`
+									: `Collapse ${panelTitles[panel]}`}
+								onclick={() => togglePanel(panel)}
+							>
+								{isCollapsed(panel) ? "+" : "−"}
+							</button>
+						</div>{/if}
 				</div>
 
 				{#if !isCollapsed(panel)}
@@ -938,7 +980,6 @@
 											selectedWorktreePath={selectedWorktreePaths[project.id]}
 											operation={operations[project.id]}
 											onToggle={toggleProject}
-											onFocus={focusProject}
 											onOpen={(id) => goto(projectPath(id))}
 											onSelectBranch={selectBranch}
 											onAction={repositoryAction}
@@ -1705,13 +1746,30 @@
 		padding: 24px clamp(16px, 3vw, 46px) 34px;
 		overflow: auto;
 		gap: 16px;
-		background:
-			radial-gradient(
-				circle at 88% 0%,
-				color-mix(in srgb, var(--fill-pop-bg) 10%, transparent),
-				transparent 32%
-			),
-			var(--bg-2);
+		background: var(--bg-2);
+	}
+	.dashboard--embedded {
+		height: 100%;
+		min-height: 0;
+		padding: 0;
+		gap: 10px;
+		background: transparent;
+	}
+	.dashboard--embedded .dashboard-header {
+		padding: 2px 0;
+	}
+	.dashboard--embedded .dashboard-grid {
+		flex: 1;
+		min-height: 0;
+	}
+	.dashboard--embedded .dashboard-panel {
+		max-height: none;
+	}
+	.dashboard--overview .dashboard-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.dashboard--overview .dashboard-panel {
+		max-height: none;
 	}
 	.dashboard-header,
 	.dashboard-toolbar,
@@ -1758,10 +1816,10 @@
 		place-items: center;
 		width: 40px;
 		height: 40px;
-		border-radius: 12px;
-		background: var(--fill-pop-bg);
-		box-shadow: 0 8px 24px color-mix(in srgb, var(--fill-pop-bg) 24%, transparent);
-		color: var(--bg-1);
+		border: 1px solid var(--border-2);
+		border-radius: var(--radius-ml);
+		background: var(--bg-1);
+		color: var(--text-2);
 		font-weight: 800;
 		font-size: 13px;
 		letter-spacing: -0.06em;
@@ -1798,12 +1856,11 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background: #d4a64f;
-		box-shadow: 0 0 0 3px color-mix(in srgb, #d4a64f 14%, transparent);
+		background: var(--clr-warning-50);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--clr-warning-50) 14%, transparent);
 	}
 	.button,
 	.toolbar-link,
-	.batch-actions button,
 	.panel-header__actions button,
 	.mini-button,
 	.session-actions button,
@@ -1833,7 +1890,6 @@
 	}
 	.button:disabled,
 	.toolbar-link:disabled,
-	.batch-actions button:disabled,
 	.panel-header__actions button:disabled,
 	button:disabled {
 		cursor: default;
@@ -1887,23 +1943,7 @@
 		font-size: 9px;
 	}
 	.batch-actions {
-		padding: 3px;
-		gap: 2px;
-		border: 1px solid var(--border-2);
-		border-radius: 9px;
-		background: var(--bg-1);
-	}
-	.batch-actions button {
-		padding: 6px 8px;
-		border-radius: 6px;
-		font-size: 9px;
-	}
-	.batch-actions button:hover:not(:disabled) {
-		background: var(--bg-2);
-		color: var(--text-1);
-	}
-	.batch-actions__latest {
-		background: color-mix(in srgb, var(--fill-pop-bg) 13%, var(--bg-2)) !important;
+		gap: 4px;
 	}
 	.dashboard-grid {
 		display: grid;

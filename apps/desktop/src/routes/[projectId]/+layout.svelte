@@ -301,7 +301,7 @@
 		if (projectId) {
 			untrack(() => setupFetchInterval());
 		} else {
-			goto("/onboarding");
+			goto("/");
 		}
 	});
 

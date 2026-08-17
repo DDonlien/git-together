@@ -34,6 +34,22 @@ export function isHistoryPath() {
 	return isUrl<{ projectId: string }>("/[projectId]/history");
 }
 
+export function workTreesPath(projectId: string) {
+	return `/${projectId}/worktrees`;
+}
+
+export function isWorkTreesPath() {
+	return isUrl<{ projectId: string }>("/[projectId]/worktrees");
+}
+
+export function overviewPath(projectId: string) {
+	return `/${projectId}/overview`;
+}
+
+export function isOverviewPath() {
+	return isUrl<{ projectId: string }>("/[projectId]/overview");
+}
+
 export function branchesPath(projectId: string) {
 	return `/${projectId}/branches`;
 }

@@ -1,6 +1,7 @@
 # will have compiled rust files and executables
 /target/
 /release/
+/_builds/
 generated-archives/
 generated-do-not-edit/
 /cli-docs/

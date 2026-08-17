@@ -67,8 +67,8 @@ Change
 - Feature：在继承 GitButler 优秀 GUI 的基础上，去掉用户不需要的本地 workflow 入口和复杂度，同时保留文件、branch、worktree、diff 和 commit 的核心体验。
 - 用户价值：用户仍然得到 GitButler 已经验证过的视觉和交互基础，但不会被 Butler 专属逻辑强迫改变工作方式。
 - 视觉约束：新增页面直接使用 GitButler 现有的视觉风格、主题 token、布局模式和 `@gitbutler/ui` 组件；附件中的灰色线框只定义信息层级和空间关系，不定义新的颜色、字体、控件或设计系统。
-- 当前状态：已实现。Repository Workspace 收敛为 repository-first 的真实 Git 操作界面，保留文件预览、diff、commit、branch/worktree 和操作结果反馈；`0.2.5` 发布包已实际启动、完成 repository 状态加载，并通过一次 Refresh 响应验证。GitButler 旧能力仍可作为兼容基础存在，不会在新首页强迫用户进入 Butler 专属流程。
-- 边界：这一阶段是移除和收敛已有本地功能，不提前把所有新的 GitTogether 功能塞进旧界面。
+- 当前状态：修正中。GitButler 原有 Workspace、Branches、Operation History、文件、diff 和 commit 界面必须继续作为默认体验；GitTogether 的试验功能只能通过侧边栏中的独立入口进入，不能再次用新 Dashboard 替换原工作区。
+- 边界：侧边栏按项目级和全局级分组。项目级保留 Workspace、Branches、Operation History，并新增 Work Trees；Project Settings 在项目级区域底部对齐。全局级提供 Overview、Global Settings 和 Share Feedback。两个层级使用明确的分隔线，不把项目设置混入全局设置。
 
 ## Version line - 0.2.x - 增加 Local GitTogether Feature
 
@@ -76,11 +76,11 @@ Change
 
 #### F-0.1.2 Multi-repository overview
 
-- Feature：GitTogether 首页展示本机能够找到或登记的所有 repository，而不是只打开一个 repository 的 Git Graph。
+- Feature：GitTogether 提供全局 Overview，展示本机能够找到或登记的所有 repository，而不是一次只能查看一个 repository。
 - 用户价值：用户可以同时管理十几个小型游戏 idea、工具仓库或 Agent 项目，并看到 branch、worktree、dirty state、ahead/behind、Agent 和 Presence 摘要。
-- 当前状态：已实现。首页聚合已登记的本地 repository，按仓库展示真实 branch、linked worktree、HEAD/base、dirty、conflict、ahead/behind、Work Session owner 和 Presence 可用性；用户可以单选或多选仓库。
+- 当前状态：修正中。Overview 继续聚合已登记的本地 repository，按仓库展示真实 branch、linked worktree、HEAD/base、dirty、conflict、ahead/behind、Work Session owner 和 Presence 可用性；入口改为侧边栏的全局级 Overview 按钮，不接管应用默认首页。
 - 布局参考：全局视图按纵向 repository group 组织；每个 repository 有一行主要标题和对应的操作区域，下面缩进显示该 repository 的 branch/worktree 行，每个 branch/worktree 的操作与对象保持同一行对齐；多个 repository 依次向下排列，并保留左侧窄导航或上下文栏的位置。
-- 边界：repository overview 是 GitTogether 的主要入口；从这里可以进入单仓库 workspace，也可以选择多个 repository 执行批量操作。
+- 边界：Overview 是独立的全局试验视图；应用默认仍进入 GitButler 原有单仓库 Workspace。从 Overview 点击 repository 必须直接进入该 repository 的原 Workspace，也可以选择多个 repository 执行批量操作。
 
 #### F-0.1.3 One-click fetch / commit / push
 
@@ -104,7 +104,7 @@ Change
 
 - Feature：同一个 repository 内的多个 worktree 或 branch 可以在一个 workspace 中并排显示、自由组织和切换，必要时拖到侧边栏或同时打开多个上下文。
 - 用户价值：用户可以同时观察 `main`、feature branch 和 agent branch，不需要在多个孤立窗口之间来回切换。
-- 当前状态：已实现。Context 中的 Branch Workspace 以横向真实 branch/worktree 列展示 HEAD/base、dirty、ahead/behind、session 和当前 changes；列可重新排序、聚焦到对应 Context，并可直接在该 worktree 打开终端。
+- 当前状态：修正中。项目级 Work Trees 视图以横向真实 branch/worktree 列展示 HEAD/base、dirty、ahead/behind、session 和当前 changes；它通过侧边栏中的独立按钮进入，不替换原 Workspace。列可重新排序、聚焦到对应 Context，并可直接在该 worktree 打开终端。
 - 布局参考：仓库内视图以横向并排的 branch 列组织；每一列上方是一个真实 branch/worktree 卡片，下方直接排列属于该 branch 的 commit、change 或状态区域，使多个 branch 能够在同一视口内比较。
 - 边界：每个 worktree 都对应真实 Git branch，并显示 owner、base commit、dirty state、当前 session 和可用操作；GitTogether 不把多个 worktree 假装成一个 branch。
 
@@ -122,7 +122,7 @@ Change
 - Feature：workspace 可以围绕四类可组合区域组织：左侧 Repository，仓库内的 Threads/Tasks，中间主要 Chat，最右侧 Context Panel；区域可以展开、收起和重新排列。
 - Context Panel 至少包含 Files、Diff、Preview、Terminal、Git Graph 和 Git Details；Git Graph 从下往上展示历史和 branch 关系。
 - 用户价值：repository、任务/对话、Agent 和 Git 上下文在一个页面内相互关联，而不是分别散落在 Git GUI、终端、Agent 工具和文件浏览器中。
-- 当前状态：已实现。Repositories、Threads/Tasks、Chat、Context 四个区域可独立折叠并用方向按钮重新排列；Context 提供 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace，Git Graph 按从下往上的阅读方向呈现。
+- 当前状态：修正中。Repositories、Threads/Tasks、Chat、Context 四个区域继续作为 Work Trees 试验视图的一部分，可独立折叠并用方向按钮重新排列；Context 提供 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace。该试验视图必须复用 GitButler App Shell、共享组件和视觉状态。
 - 边界：这是一项 GUI Feature 设计，不把每个面板或每种状态拆成独立的 implementation task；具体布局可在设计阶段继续收敛。
 
 ### Phase - 0.2.4 - 自托管 Git 服务器访问
