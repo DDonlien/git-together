@@ -126,6 +126,15 @@ Change
 - 当前状态：修正中。Repositories、Threads/Tasks、Chat、Context 四个区域继续作为 Work Trees 试验视图的一部分，可独立折叠并用方向按钮重新排列；Context 提供 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace。该试验视图必须复用 GitButler App Shell、共享组件和视觉状态。
 - 边界：这是一项 GUI Feature 设计，不把每个面板或每种状态拆成独立的 implementation task；具体布局可在设计阶段继续收敛。
 
+#### F-0.1.10 Subscription and API AI providers
+
+- Feature：Global Settings 的 AI Options 将 ChatGPT 订阅、OpenAI API 与 OpenCode Go API 表达为三个独立 Provider；现有 OpenAI 配置只改名为 OpenAI API，原有配置 ID、API key 和模型选择必须继续生效。
+- 用户价值：用户既可以通过浏览器授权使用本机 ChatGPT 订阅，也可以继续使用 OpenAI API key，或使用 OpenCode Go 订阅提供的 API key 与动态模型目录，不需要把三种计费和授权方式混在同一个选项里。
+- 当前状态：已实现并完成本地验证。Rust/Tauri 承担 ChatGPT OAuth 2.0 PKCE、token 刷新、模型发现和新增 Provider 请求，Svelte 只接收非敏感状态与流式文本；OpenCode Go 模型按其 Responses、Chat Completions 或 Messages 协议路由。
+- 授权边界：ChatGPT 订阅通过系统浏览器完成 OAuth 授权，GitTogether 为自身保存 refresh token；不抓取浏览器 Cookie，不读取或改写 ChatGPT、Codex 或其他应用的私有凭据文件。OpenCode Go 使用用户从 OpenCode 控制台取得的 API key，不伪装为 OAuth。
+- 安全：订阅 token 和 OpenCode Go API key 只保存在操作系统凭据存储中，不写入 Git config、普通设置、日志、错误文本或前端持久状态；账号标识只用于界面显示和请求路由，不进入日志。
+- 验收边界：Provider 选择、旧 OpenAI 配置兼容、登录/退出、模型刷新、连接测试、token 刷新与三种 OpenCode Go 协议路由必须有针对性测试；真实订阅调用仍需要用户在系统浏览器完成一次账号授权。
+
 ### Phase - 0.2.4 - 自托管 Git 服务器访问
 
 #### F-0.1.9 Self-hosted Git server connection

@@ -72,7 +72,11 @@
 			debugInfo += `, Config valid: ${isConfigValid}`;
 
 			if (!isConfigValid) {
-				if (modelKind === ModelKind.OpenAI || modelKind === ModelKind.Anthropic) {
+				if (modelKind === ModelKind.OpenAISubscription) {
+					throw new Error("Please sign in with ChatGPT before testing OpenAI Subscription");
+				} else if (modelKind === ModelKind.OpenCodeGo) {
+					throw new Error("Please save an OpenCode Go API key before testing this provider");
+				} else if (modelKind === ModelKind.OpenAI || modelKind === ModelKind.Anthropic) {
 					if (isUsingButlerAPI && !userService.user) {
 						throw new Error("Please sign in to use GitButler's AI API");
 					} else {
@@ -207,7 +211,11 @@
 				{#snippet content()}
 					<div class="result-content" transition:slide={{ duration: 250 }}>
 						{#if error}
-							{#if (modelKind === ModelKind.OpenAI || modelKind === ModelKind.Anthropic) && isUsingButlerAPI && !userService.user}
+							{#if modelKind === ModelKind.OpenAISubscription}
+								<span> Sign in with ChatGPT in OpenAI Subscription settings, then try again. </span>
+							{:else if modelKind === ModelKind.OpenCodeGo}
+								<span> Save a valid OpenCode Go API key, then try again. </span>
+							{:else if (modelKind === ModelKind.OpenAI || modelKind === ModelKind.Anthropic) && isUsingButlerAPI && !userService.user}
 								<span> Please sign in to use GitButler's AI API. </span>
 							{:else if modelKind === ModelKind.OpenAI || modelKind === ModelKind.Anthropic}
 								<span> Please check your API key or try GitButler's API. </span>

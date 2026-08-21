@@ -4,12 +4,14 @@
 	import AuthorizationBanner from "$components/settings/AuthorizationBanner.svelte";
 	import SettingsSection from "$components/shared/SettingsSection.svelte";
 	import { AISecretHandle, AI_SERVICE, GitAIConfigKey, KeyOption } from "$lib/ai/service";
+	import type { AiModel, ApiKeyStatus, SubscriptionStatus } from "$lib/ai/nativeClient";
 	import { OpenAIModelName, AnthropicModelName, ModelKind } from "$lib/ai/types";
 	import { GIT_CONFIG_SERVICE } from "$lib/config/gitConfigService";
 	import { SECRET_SERVICE } from "$lib/secrets/secretsService";
 	import { USER_SERVICE } from "$lib/user/userService.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import {
+		Button,
 		CardGroup,
 		Icon,
 		InfoMessage,
@@ -31,6 +33,11 @@
 	let initialized = false;
 
 	let modelKind: ModelKind | undefined = $state();
+	let openAISubscriptionModel: string | undefined = $state();
+	let openAISubscriptionStatus: SubscriptionStatus | undefined = $state();
+	let openAISubscriptionModels: AiModel[] = $state([]);
+	let openAISubscriptionBusy = $state(false);
+	let openAISubscriptionError: string | undefined = $state();
 	let openAIKeyOption: KeyOption | undefined = $state();
 	let anthropicKeyOption: KeyOption | undefined = $state();
 	let openAIKey: string | undefined = $state();
@@ -45,6 +52,88 @@
 	let lmStudioModel: string | undefined = $state();
 	let openRouterKey: string | undefined = $state();
 	let openRouterModel: string | undefined = $state();
+	let openCodeGoKey = $state("");
+	let openCodeGoModel: string | undefined = $state();
+	let openCodeGoStatus: ApiKeyStatus | undefined = $state();
+	let openCodeGoModels: AiModel[] = $state([]);
+	let openCodeGoBusy = $state(false);
+	let openCodeGoError: string | undefined = $state();
+
+	function errorMessage(error: unknown): string {
+		return error instanceof Error ? error.message : String(error);
+	}
+
+	function modelOptions(models: AiModel[]) {
+		return models.map((model) => ({ label: model.label, value: model.id }));
+	}
+
+	async function loadOpenAISubscriptionModels() {
+		if (!openAISubscriptionStatus?.authenticated) return;
+		openAISubscriptionModels = await aiService.getOpenAISubscriptionModels();
+		if (!openAISubscriptionModels.some((model) => model.id === openAISubscriptionModel)) {
+			openAISubscriptionModel = openAISubscriptionModels[0]?.id;
+		}
+	}
+
+	async function signInOpenAISubscription() {
+		openAISubscriptionBusy = true;
+		openAISubscriptionError = undefined;
+		try {
+			openAISubscriptionStatus = await aiService.signInOpenAISubscription();
+			await loadOpenAISubscriptionModels();
+		} catch (error) {
+			openAISubscriptionError = errorMessage(error);
+		} finally {
+			openAISubscriptionBusy = false;
+		}
+	}
+
+	async function signOutOpenAISubscription() {
+		openAISubscriptionBusy = true;
+		openAISubscriptionError = undefined;
+		try {
+			openAISubscriptionStatus = await aiService.signOutOpenAISubscription();
+			openAISubscriptionModels = [];
+		} catch (error) {
+			openAISubscriptionError = errorMessage(error);
+		} finally {
+			openAISubscriptionBusy = false;
+		}
+	}
+
+	async function loadOpenCodeGoModels() {
+		openCodeGoModels = await aiService.getOpenCodeGoModels();
+		if (!openCodeGoModels.some((model) => model.id === openCodeGoModel)) {
+			openCodeGoModel = openCodeGoModels[0]?.id;
+		}
+	}
+
+	async function saveOpenCodeGoKey() {
+		openCodeGoBusy = true;
+		openCodeGoError = undefined;
+		try {
+			openCodeGoStatus = await aiService.saveOpenCodeGoKey(openCodeGoKey);
+			openCodeGoKey = "";
+			await loadOpenCodeGoModels();
+		} catch (error) {
+			openCodeGoError = errorMessage(error);
+		} finally {
+			openCodeGoBusy = false;
+		}
+	}
+
+	async function deleteOpenCodeGoKey() {
+		openCodeGoBusy = true;
+		openCodeGoError = undefined;
+		try {
+			openCodeGoStatus = await aiService.deleteOpenCodeGoKey();
+			openCodeGoKey = "";
+		} catch (error) {
+			openCodeGoError = errorMessage(error);
+		} finally {
+			openCodeGoBusy = false;
+		}
+	}
 
 	async function setConfiguration(key: GitAIConfigKey, value: string | undefined) {
 		if (!initialized) return;
@@ -58,6 +147,15 @@
 
 	onMount(async () => {
 		modelKind = await aiService.getModelKind();
+		openAISubscriptionModel = await aiService.getOpenAISubscriptionModelName();
+		openAISubscriptionStatus = await aiService.getOpenAISubscriptionStatus();
+		if (openAISubscriptionStatus.authenticated) {
+			try {
+				await loadOpenAISubscriptionModels();
+			} catch (error) {
+				openAISubscriptionError = errorMessage(error);
+			}
+		}
 
 		openAIKeyOption = await aiService.getOpenAIKeyOption();
 		openAIModelName = await aiService.getOpenAIModelName();
@@ -78,6 +176,14 @@
 
 		openRouterKey = await aiService.getOpenRouterKey();
 		openRouterModel = await aiService.getOpenRouterModelName();
+
+		openCodeGoModel = await aiService.getOpenCodeGoModelName();
+		openCodeGoStatus = await aiService.getOpenCodeGoStatus();
+		try {
+			await loadOpenCodeGoModels();
+		} catch (error) {
+			openCodeGoError = errorMessage(error);
+		}
 
 		// Ensure reactive declarations have finished running before we set initialized to true
 		await tick();
@@ -136,6 +242,9 @@
 		setConfiguration(GitAIConfigKey.ModelProvider, modelKind);
 	});
 	run(() => {
+		setConfiguration(GitAIConfigKey.OpenAISubscriptionModelName, openAISubscriptionModel);
+	});
+	run(() => {
 		setConfiguration(GitAIConfigKey.OpenAIKeyOption, openAIKeyOption);
 	});
 	run(() => {
@@ -178,6 +287,9 @@
 		setConfiguration(GitAIConfigKey.OpenRouterModelName, openRouterModel);
 	});
 	run(() => {
+		setConfiguration(GitAIConfigKey.OpenCodeGoModelName, openCodeGoModel);
+	});
+	run(() => {
 		if (form) form.modelKind.value = modelKind;
 	});
 </script>
@@ -190,15 +302,86 @@
 {/snippet}
 
 <p class="text-13 text-body ai-settings__about-text">
-	GitButler supports multiple AI providers: OpenAI and Anthropic (via API or your own key),
-	OpenRouter for access to hundreds of models, plus local models through Ollama and LM Studio.
+	GitTogether supports ChatGPT subscription access, OpenAI and Anthropic APIs, OpenCode Go API,
+	OpenRouter, and local models through Ollama and LM Studio.
 </p>
 
 <CardGroup>
 	<form class="git-radio" bind:this={form} onchange={(e) => onFormChange(e.currentTarget)}>
+		<CardGroup.Item labelFor="open-ai-subscription">
+			{#snippet title()}
+				OpenAI Subscription
+			{/snippet}
+			{#snippet actions()}
+				<RadioButton
+					name="modelKind"
+					id="open-ai-subscription"
+					value={ModelKind.OpenAISubscription}
+				/>
+			{/snippet}
+		</CardGroup.Item>
+		{#if modelKind === ModelKind.OpenAISubscription}
+			<CardGroup.Item>
+				<div class="ai-settings__provider-fields">
+					{#if openAISubscriptionError}
+						<InfoMessage style="danger" filled outlined={false} error={openAISubscriptionError}>
+							{#snippet title()}ChatGPT authorization failed{/snippet}
+							{#snippet content()}Try signing in again or check the network connection.{/snippet}
+						</InfoMessage>
+					{:else if openAISubscriptionStatus?.authenticated}
+						<InfoMessage style="success" filled outlined={false}>
+							{#snippet title()}Connected to ChatGPT{/snippet}
+							{#snippet content()}
+								{openAISubscriptionStatus?.email ?? "Subscription authorization is active."}
+							{/snippet}
+						</InfoMessage>
+					{:else}
+						{@render shortNote(
+							"Sign in in your browser to use models included with your ChatGPT subscription. No API key is required.",
+						)}
+					{/if}
+
+					{#if openAISubscriptionStatus?.authenticated && openAISubscriptionModels.length > 0}
+						<Select
+							value={openAISubscriptionModel}
+							options={modelOptions(openAISubscriptionModels)}
+							label="Subscription model"
+							wide
+							onselect={(value) => {
+								openAISubscriptionModel = value;
+							}}
+						>
+							{#snippet itemSnippet({ item, highlighted })}
+								<SelectItem selected={item.value === openAISubscriptionModel} {highlighted}>
+									{item.label}
+								</SelectItem>
+							{/snippet}
+						</Select>
+					{/if}
+
+					<div class="ai-settings__provider-actions">
+						{#if openAISubscriptionStatus?.authenticated}
+							<Button
+								kind="outline"
+								loading={openAISubscriptionBusy}
+								onclick={signOutOpenAISubscription}>Sign out</Button
+							>
+						{:else}
+							<Button
+								style="pop"
+								icon="open-in-browser"
+								loading={openAISubscriptionBusy}
+								onclick={signInOpenAISubscription}>Sign in with ChatGPT</Button
+							>
+						{/if}
+					</div>
+				</div>
+			</CardGroup.Item>
+		{/if}
+
 		<CardGroup.Item labelFor="open-ai">
 			{#snippet title()}
-				Open AI
+				OpenAI API
 			{/snippet}
 			{#snippet actions()}
 				<RadioButton name="modelKind" id="open-ai" value={ModelKind.OpenAI} />
@@ -324,6 +507,73 @@
 						{/snippet}
 					</Select>
 				{/if}
+			</CardGroup.Item>
+		{/if}
+
+		<CardGroup.Item labelFor="opencode-go">
+			{#snippet title()}
+				OpenCode Go API
+			{/snippet}
+			{#snippet actions()}
+				<RadioButton name="modelKind" id="opencode-go" value={ModelKind.OpenCodeGo} />
+			{/snippet}
+		</CardGroup.Item>
+		{#if modelKind === ModelKind.OpenCodeGo}
+			<CardGroup.Item>
+				<div class="ai-settings__provider-fields">
+					{#if openCodeGoError}
+						<InfoMessage style="danger" filled outlined={false} error={openCodeGoError}>
+							{#snippet title()}OpenCode Go configuration failed{/snippet}
+							{#snippet content()}Check the API key and network connection, then try again.{/snippet}
+						</InfoMessage>
+					{:else if openCodeGoStatus?.hasApiKey}
+						<InfoMessage style="success" filled outlined={false}>
+							{#snippet title()}API key saved{/snippet}
+							{#snippet content()}
+								The key is stored in the system keychain and is never loaded back into this form.
+							{/snippet}
+						</InfoMessage>
+					{/if}
+
+					<Textbox
+						label={openCodeGoStatus?.hasApiKey ? "Replace API key" : "API key"}
+						type="password"
+						bind:value={openCodeGoKey}
+						placeholder="OpenCode Go API key"
+					/>
+
+					<div class="ai-settings__provider-actions">
+						<Button
+							style="pop"
+							disabled={!openCodeGoKey.trim()}
+							loading={openCodeGoBusy}
+							onclick={saveOpenCodeGoKey}>Save API key</Button
+						>
+						{#if openCodeGoStatus?.hasApiKey}
+							<Button kind="outline" loading={openCodeGoBusy} onclick={deleteOpenCodeGoKey}
+								>Clear saved key</Button
+							>
+						{/if}
+					</div>
+
+					{#if openCodeGoModels.length > 0}
+						<Select
+							value={openCodeGoModel}
+							options={modelOptions(openCodeGoModels)}
+							label="Model"
+							wide
+							onselect={(value) => {
+								openCodeGoModel = value;
+							}}
+						>
+							{#snippet itemSnippet({ item, highlighted })}
+								<SelectItem selected={item.value === openCodeGoModel} {highlighted}>
+									{item.label}
+								</SelectItem>
+							{/snippet}
+						</Select>
+					{/if}
+				</div>
 			</CardGroup.Item>
 		{/if}
 
@@ -499,5 +749,18 @@
 	.ai-settings__section-text-block {
 		display: flex;
 		flex-direction: column;
+	}
+
+	.ai-settings__provider-fields {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.ai-settings__provider-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 </style>

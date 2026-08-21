@@ -1,5 +1,24 @@
-import { isValidDeepLinkUrl, parseDeepLinkUrl } from "$lib/backend/tauri";
+import {
+	formatIpcParamsForLogging,
+	isValidDeepLinkUrl,
+	parseDeepLinkUrl,
+} from "$lib/backend/tauri";
 import { describe, expect, test } from "vitest";
+
+describe("formatIpcParamsForLogging", () => {
+	test.each(["ai_evaluate", "ai_opencode_key_save", "secret_set_global"])(
+		"redacts %s params",
+		(command) => {
+			expect(formatIpcParamsForLogging(command, { secret: "do-not-log" })).toBe("[redacted]");
+		},
+	);
+
+	test("keeps ordinary command params useful for diagnostics", () => {
+		expect(formatIpcParamsForLogging("get_project", { id: "project-id" })).toBe(
+			'{"id":"project-id"}',
+		);
+	});
+});
 
 describe("isValidDeepLinkUrl", () => {
 	test("returns true for valid GitTogether URLs", () => {

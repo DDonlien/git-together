@@ -18,7 +18,8 @@ use but_api::{
 };
 use but_settings::AppSettingsWithDiskSync;
 use gitbutler_tauri::{
-    WindowState, askpass, csp::csp_with_extras, gittogether, logs, menu, projects, settings, zip,
+    WindowState, ai, askpass, csp::csp_with_extras, gittogether, logs, menu, projects, settings,
+    zip,
 };
 use tauri::{Emitter, Manager, generate_context};
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -111,6 +112,7 @@ fn main() -> anyhow::Result<()> {
             });
 
         let builder = tauri::Builder::default()
+            .manage(ai::AiRuntime::default())
             .setup(move |tauri_app| {
                 let _window = gitbutler_tauri::window::create(
                     tauri_app.handle(),
@@ -216,6 +218,15 @@ fn main() -> anyhow::Result<()> {
             .plugin(tauri_plugin_store::Builder::default().build())
             .plugin(log.build())
             .invoke_handler(tauri::generate_handler![
+                ai::ai_subscription_status,
+                ai::ai_subscription_sign_in,
+                ai::ai_subscription_sign_out,
+                ai::ai_subscription_models,
+                ai::ai_opencode_status,
+                ai::ai_opencode_key_save,
+                ai::ai_opencode_key_delete,
+                ai::ai_opencode_models,
+                ai::ai_evaluate,
                 github::tauri_init_github_device_oauth::init_github_device_oauth,
                 github::tauri_check_github_auth_status::check_github_auth_status,
                 github::tauri_store_github_pat::store_github_pat,

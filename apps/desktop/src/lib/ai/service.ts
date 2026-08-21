@@ -13,6 +13,12 @@ import {
 } from "$lib/ai/ollamaClient";
 import { OpenAIClient } from "$lib/ai/openAIClient";
 import {
+	NativeAIClient,
+	type AiModel,
+	type ApiKeyStatus,
+	type SubscriptionStatus,
+} from "$lib/ai/nativeClient";
+import {
 	AUTOCOMPLETE_SUGGESTION_PROMPT_CONTENT,
 	DEFAULT_PR_SUMMARY_MAIN_DIRECTIVE,
 	FILL_MARKER,
@@ -36,6 +42,7 @@ import type { GitConfigService } from "$lib/config/gitConfigService";
 import type { SecretsService } from "$lib/secrets/secretsService";
 import type { TokenMemoryService } from "$lib/user/tokenMemoryService";
 import type { HttpClient } from "@gitbutler/shared/network/httpClient";
+import type { IBackend } from "$lib/backend";
 
 const maxDiffLengthLimitForAPI = 5000;
 const prDescriptionTokenLimit = 4096;
@@ -53,6 +60,7 @@ export enum AISecretHandle {
 
 export enum GitAIConfigKey {
 	ModelProvider = "gitbutler.aiModelProvider",
+	OpenAISubscriptionModelName = "gitbutler.aiOpenAISubscriptionModelName",
 	OpenAIKeyOption = "gitbutler.aiOpenAIKeyOption",
 	OpenAIModelName = "gitbutler.aiOpenAIModelName",
 	OpenAICustomEndpoint = "gitbutler.aiOpenAICustomEndpoint",
@@ -64,6 +72,7 @@ export enum GitAIConfigKey {
 	LMStudioEndpoint = "gitbutler.aiLMStudioEndpoint",
 	LMStudioModelName = "gitbutler.aiLMStudioModelName",
 	OpenRouterModelName = "gitbutler.aiOpenRouterModelName",
+	OpenCodeGoModelName = "gitbutler.aiOpenCodeGoModelName",
 }
 
 interface BaseAIServiceOpts {
@@ -132,6 +141,7 @@ export class AIService {
 		private secretsService: SecretsService,
 		private cloud: HttpClient,
 		private tokenMemoryService: TokenMemoryService,
+		private backend?: IBackend,
 	) {}
 
 	async getModelKind() {
@@ -146,6 +156,29 @@ export class AIService {
 			GitAIConfigKey.OpenAIKeyOption,
 			KeyOption.ButlerAPI,
 		);
+	}
+
+	async getOpenAISubscriptionModelName() {
+		return await this.gitConfig.getWithDefault<string>(
+			GitAIConfigKey.OpenAISubscriptionModelName,
+			"gpt-5.4-mini",
+		);
+	}
+
+	async getOpenAISubscriptionStatus(): Promise<SubscriptionStatus> {
+		return await this.nativeBackend.invoke("ai_subscription_status");
+	}
+
+	async signInOpenAISubscription(): Promise<SubscriptionStatus> {
+		return await this.nativeBackend.invoke("ai_subscription_sign_in");
+	}
+
+	async signOutOpenAISubscription(): Promise<SubscriptionStatus> {
+		return await this.nativeBackend.invoke("ai_subscription_sign_out");
+	}
+
+	async getOpenAISubscriptionModels(): Promise<AiModel[]> {
+		return await this.nativeBackend.invoke("ai_subscription_models");
 	}
 
 	async getOpenAICustomEndpoint() {
@@ -252,6 +285,34 @@ export class AIService {
 		);
 	}
 
+	async getOpenCodeGoModelName() {
+		return await this.gitConfig.getWithDefault<string>(
+			GitAIConfigKey.OpenCodeGoModelName,
+			"gpt-5.6-luna",
+		);
+	}
+
+	async getOpenCodeGoStatus(): Promise<ApiKeyStatus> {
+		return await this.nativeBackend.invoke("ai_opencode_status");
+	}
+
+	async saveOpenCodeGoKey(apiKey: string): Promise<ApiKeyStatus> {
+		return await this.nativeBackend.invoke("ai_opencode_key_save", { apiKey });
+	}
+
+	async deleteOpenCodeGoKey(): Promise<ApiKeyStatus> {
+		return await this.nativeBackend.invoke("ai_opencode_key_delete");
+	}
+
+	async getOpenCodeGoModels(): Promise<AiModel[]> {
+		return await this.nativeBackend.invoke("ai_opencode_models");
+	}
+
+	private get nativeBackend(): IBackend {
+		if (!this.backend) throw new Error("Native AI providers require the GitTogether desktop app");
+		return this.backend;
+	}
+
 	async usingGitButlerAPI() {
 		const modelKind = await this.getModelKind();
 		const openAIKeyOption = await this.getOpenAIKeyOption();
@@ -273,6 +334,12 @@ export class AIService {
 		const lmStudioModelName = await this.getLMStudioModelName();
 
 		if (await this.usingGitButlerAPI()) return !!get(this.tokenMemoryService.token);
+		if (modelKind === ModelKind.OpenAISubscription) {
+			return (await this.getOpenAISubscriptionStatus()).authenticated;
+		}
+		if (modelKind === ModelKind.OpenCodeGo) {
+			return (await this.getOpenCodeGoStatus()).hasApiKey;
+		}
 
 		const openAIActiveAndKeyProvided =
 			modelKind === ModelKind.OpenAI && !!(await this.getOpenAIKey());
@@ -306,6 +373,26 @@ export class AIService {
 	// Secondly, if the user has opted to bring their own key but hasn't provided one, it will return undefined
 	async buildClient(): Promise<AIClient | undefined> {
 		const modelKind = await this.getModelKind();
+
+		if (modelKind === ModelKind.OpenAISubscription) {
+			const status = await this.getOpenAISubscriptionStatus();
+			if (!status.authenticated) {
+				throw new Error("Sign in with ChatGPT before using OpenAI Subscription");
+			}
+			return new NativeAIClient(
+				this.nativeBackend,
+				modelKind,
+				await this.getOpenAISubscriptionModelName(),
+			);
+		}
+
+		if (modelKind === ModelKind.OpenCodeGo) {
+			const status = await this.getOpenCodeGoStatus();
+			if (!status.hasApiKey) {
+				throw new Error("Save an OpenCode Go API key before using this provider");
+			}
+			return new NativeAIClient(this.nativeBackend, modelKind, await this.getOpenCodeGoModelName());
+		}
 
 		if (await this.usingGitButlerAPI()) {
 			// TODO(CTO): Once @estib has landed the new auth, it would be good to

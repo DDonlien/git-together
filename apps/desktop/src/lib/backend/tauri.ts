@@ -226,7 +226,7 @@ async function tauriInvoke<T>(command: string, params: Record<string, unknown> =
 		return await invokeTauri<T>(command, params);
 	} catch (error: unknown) {
 		if (isNormalizedError(error)) {
-			console.error(`ipc->${command}: ${JSON.stringify(params)}`, error);
+			console.error(`ipc->${command}: ${formatIpcParamsForLogging(command, params)}`, error);
 			// Re-throw as a proper Error subclass so the stack points at the
 			// caller and Sentry can fingerprint by name + message instead of
 			// bucketing every raw `{name, message, code}` rejection together.
@@ -234,6 +234,19 @@ async function tauriInvoke<T>(command: string, params: Record<string, unknown> =
 		}
 		throw error;
 	}
+}
+
+const IPC_COMMANDS_WITH_SENSITIVE_PARAMS = new Set([
+	"ai_evaluate",
+	"ai_opencode_key_save",
+	"secret_set_global",
+]);
+
+export function formatIpcParamsForLogging(
+	command: string,
+	params: Record<string, unknown>,
+): string {
+	return IPC_COMMANDS_WITH_SENSITIVE_PARAMS.has(command) ? "[redacted]" : JSON.stringify(params);
 }
 
 function tauriListen<T>(event: EventName, handle: EventCallback<T>) {

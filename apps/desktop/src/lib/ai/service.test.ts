@@ -1,5 +1,6 @@
 import { AnthropicAIClient } from "$lib/ai/anthropicClient";
 import { ButlerAIClient } from "$lib/ai/butlerClient";
+import { NativeAIClient } from "$lib/ai/nativeClient";
 import { OpenAIClient } from "$lib/ai/openAIClient";
 import {
 	SHORT_DEFAULT_BRANCH_TEMPLATE,
@@ -278,6 +279,52 @@ describe("AIService", () => {
 			await expect(aiService.buildClient.bind(aiService)).rejects.toThrowError(
 				new Error("When using OpenRouter, you must provide a valid API key"),
 			);
+		});
+
+		test("When OpenAI Subscription is authenticated, it returns a native client", async () => {
+			const gitConfig = new DummyGitConfigService({
+				...defaultGitConfig,
+				[GitAIConfigKey.ModelProvider]: ModelKind.OpenAISubscription,
+				[GitAIConfigKey.OpenAISubscriptionModelName]: "gpt-5.4-mini",
+			});
+			const secretsService = new DummySecretsService();
+			const tokenMemoryService = new TokenMemoryService();
+			const cloud = new HttpClient(vi.fn(), "https://www.example.com", tokenMemoryService.token);
+			const backend = mockCreateBackend();
+			backend.invoke.mockResolvedValue({ authenticated: true, email: "person@example.com" });
+			const aiService = new AIService(
+				gitConfig,
+				secretsService,
+				cloud,
+				tokenMemoryService,
+				backend,
+			);
+
+			expect(await aiService.buildClient()).toBeInstanceOf(NativeAIClient);
+			expect(backend.invoke).toHaveBeenCalledWith("ai_subscription_status");
+		});
+
+		test("When OpenCode Go has a saved key, it returns a native client", async () => {
+			const gitConfig = new DummyGitConfigService({
+				...defaultGitConfig,
+				[GitAIConfigKey.ModelProvider]: ModelKind.OpenCodeGo,
+				[GitAIConfigKey.OpenCodeGoModelName]: "gpt-5.6-luna",
+			});
+			const secretsService = new DummySecretsService();
+			const tokenMemoryService = new TokenMemoryService();
+			const cloud = new HttpClient(vi.fn(), "https://www.example.com", tokenMemoryService.token);
+			const backend = mockCreateBackend();
+			backend.invoke.mockResolvedValue({ hasApiKey: true });
+			const aiService = new AIService(
+				gitConfig,
+				secretsService,
+				cloud,
+				tokenMemoryService,
+				backend,
+			);
+
+			expect(await aiService.buildClient()).toBeInstanceOf(NativeAIClient);
+			expect(backend.invoke).toHaveBeenCalledWith("ai_opencode_status");
 		});
 	});
 

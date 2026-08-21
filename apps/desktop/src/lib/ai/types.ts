@@ -2,8 +2,10 @@ import { isStr } from "@gitbutler/ui/utils/string";
 import type { Persisted } from "@gitbutler/shared/persisted";
 
 export enum ModelKind {
+	OpenAISubscription = "openai-subscription",
 	OpenAI = "openai",
 	Anthropic = "anthropic",
+	OpenCodeGo = "opencode-go",
 	Ollama = "ollama",
 	LMStudio = "lmstudio",
 	OpenRouter = "openrouter",
