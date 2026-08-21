@@ -3,7 +3,6 @@
 	import GitHubAccountBadge from "$components/forge/GitHubAccountBadge.svelte";
 	import GitLabAccountBadge from "$components/forge/GitLabAccountBadge.svelte";
 	import ForgeAccountConfig from "$components/projectSettings/ForgeAccountConfig.svelte";
-	import { GIT_CONFIG_SERVICE } from "$lib/config/gitConfigService";
 	import {
 		bitbucketAccountIdentifierToString,
 		stringToBitbucketAccountIdentifier,
@@ -29,10 +28,8 @@
 	import type {
 		BitbucketAccountIdentifier,
 		ForgeName,
-		GitHubStackingMode,
 		GithubAccountIdentifier,
 		GitlabAccountIdentifier,
-		ReviewStackingDescription,
 	} from "@gitbutler/but-sdk";
 
 	type ForgeSelection = ForgeName | "default";
@@ -52,15 +49,6 @@
 	const forgeInfo = $derived(forgeInfoQuery.response);
 	const determinedForgeType = $derived(forgeInfo?.name ?? "default");
 	const projectsService = inject(PROJECTS_SERVICE);
-	const gitConfigService = inject(GIT_CONFIG_SERVICE);
-	const gitConfigQuery = $derived(gitConfigService.gbConfig(projectId));
-	const reviewStackingDescription = $derived(
-		(gitConfigQuery.response?.gitbutlerReviewStackingDescription ??
-			"bottom") as ReviewStackingDescription,
-	);
-	const githubStackingMode = $derived(
-		(gitConfigQuery.response?.gitbutlerGithubStackingMode ?? "auto") as GitHubStackingMode,
-	);
 	const projectQuery = $derived(projectsService.getProject(projectId));
 	const project = $derived(projectQuery.response);
 
@@ -115,13 +103,6 @@
 		});
 	}
 
-	async function updateReviewStackingDescription(value: ReviewStackingDescription) {
-		await gitConfigService.setGbConfig(projectId, { gitbutlerReviewStackingDescription: value });
-	}
-
-	async function updateGitHubStackingMode(value: GitHubStackingMode) {
-		await gitConfigService.setGbConfig(projectId, { gitbutlerGithubStackingMode: value });
-	}
 </script>
 
 <CardGroup>
@@ -163,75 +144,7 @@
 		{/if}
 	</CardGroup.Item>
 
-	<CardGroup.Item>
-		{#snippet title()}
-			Stack information in review descriptions
-		{/snippet}
-
-		{#snippet caption()}
-			Choose where GitButler-managed stack information appears. Changes apply on the next review
-			sync. The default is Bottom. Does not apply to native GitHub stacked pull requests, where
-			GitHub shows the stack on its own.
-		{/snippet}
-
-		<div data-testid="review-stacking-description-select">
-			<Select
-				value={reviewStackingDescription}
-				options={[
-					{ label: "Bottom", value: "bottom" },
-					{ label: "Top", value: "top" },
-					{ label: "Disabled", value: "disabled" },
-				]}
-				wide
-				onselect={(value) => updateReviewStackingDescription(value as ReviewStackingDescription)}
-			>
-				{#snippet itemSnippet({ item, highlighted })}
-					<div data-testid={`review-stacking-description-option-${item.value}`}>
-						<SelectItem selected={item.value === reviewStackingDescription} {highlighted}>
-							{item.label}
-						</SelectItem>
-					</div>
-				{/snippet}
-			</Select>
-		</div>
-	</CardGroup.Item>
-
 	{#if forgeInfo?.name === "github"}
-		<CardGroup.Item>
-			{#snippet title()}
-				Native GitHub stacked pull requests
-			{/snippet}
-
-			{#snippet caption()}
-				Register this project’s reviewed stacks with GitHub’s private-preview stacks API. Higher
-				pull requests may merge the pull requests below them. Auto falls back to description
-				metadata when the repository is not enrolled in the preview, while Native reports an error.
-				Changes apply on the next push or pull request creation. Fork-backed pull requests always
-				use description metadata.
-			{/snippet}
-
-			<div data-testid="github-stacking-mode-select">
-				<Select
-					value={githubStackingMode}
-					options={[
-						{ label: "Auto", value: "auto" },
-						{ label: "Disabled", value: "disabled" },
-						{ label: "Native", value: "native" },
-					]}
-					wide
-					onselect={(value) => updateGitHubStackingMode(value as GitHubStackingMode)}
-				>
-					{#snippet itemSnippet({ item, highlighted })}
-						<div data-testid={`github-stacking-mode-option-${item.value}`}>
-							<SelectItem selected={item.value === githubStackingMode} {highlighted}>
-								{item.label}
-							</SelectItem>
-						</div>
-					{/snippet}
-				</Select>
-			</div>
-		</CardGroup.Item>
-
 		<ForgeAccountConfig
 			{projectId}
 			displayName="GitHub"

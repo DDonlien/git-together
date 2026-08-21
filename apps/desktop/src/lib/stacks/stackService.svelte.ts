@@ -117,18 +117,6 @@ export class StackService {
 		);
 	}
 
-	get newStack() {
-		return this.backendApi.endpoints.createStack.useMutation();
-	}
-
-	get newStackMutation() {
-		return this.backendApi.endpoints.createStack.mutate;
-	}
-
-	get updateStackOrder() {
-		return this.backendApi.endpoints.updateStackOrder.mutate;
-	}
-
 	branches(projectId: string, stackId?: string) {
 		return this.backendApi.endpoints.workspaceDetails.useQuery(
 			{ projectId },
@@ -547,18 +535,6 @@ export class StackService {
 		return this.backendApi.endpoints.resolveCommitConflictsAi.useMutation();
 	}
 
-	get newBranch() {
-		return this.backendApi.endpoints.newBranch.useMutation();
-	}
-
-	get branchCreate() {
-		return this.backendApi.endpoints.branchCreate.useMutation();
-	}
-
-	get branchRemove() {
-		return this.backendApi.endpoints.branchRemove.useMutation();
-	}
-
 	get branchRename() {
 		return this.backendApi.endpoints.branchRename.useMutation({
 			// Optimistically follow the rename in the UI, mirroring `updateBranchName`. `laneId` and
@@ -605,10 +581,6 @@ export class StackService {
 
 	get insertBlankCommit() {
 		return this.backendApi.endpoints.insertBlankCommit;
-	}
-
-	get unapply() {
-		return this.backendApi.endpoints.unapply.mutate;
 	}
 
 	get landBranch() {
@@ -719,14 +691,6 @@ export class StackService {
 		return this.backendApi.endpoints.commitCherryPick.useMutation();
 	}
 
-	get moveBranch() {
-		return this.backendApi.endpoints.moveBranch.mutate;
-	}
-
-	get tearOffBranch() {
-		return this.backendApi.endpoints.tearOffBranch.mutate;
-	}
-
 	initialBranchIntegration(
 		projectId: string,
 		branchRef: string,
@@ -756,14 +720,6 @@ export class StackService {
 			integration: args.integration,
 			dryRun: true,
 		});
-	}
-
-	get branchApply() {
-		return this.backendApi.endpoints.branchApply.mutate;
-	}
-
-	get reviewApply() {
-		return this.backendApi.endpoints.reviewApply.mutate;
 	}
 
 	get deleteLocalBranch() {

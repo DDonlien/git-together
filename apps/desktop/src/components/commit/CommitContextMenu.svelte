@@ -93,7 +93,6 @@
 	const modeService = injectOptional(MODE_SERVICE, undefined);
 	const aiService = inject(AI_SERVICE);
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
-	const [createBranch, branchCreation] = stackService.branchCreate;
 	const [resolveConflictsAi, aiResolution] = stackService.resolveCommitConflictsAi;
 
 	const aiGenEnabled = $derived(projectAiGenEnabled(projectId));
@@ -133,21 +132,6 @@
 			relativeTo: { type: "commit", subject: commitId },
 			side: location,
 			dryRun: false,
-		});
-	}
-
-	async function handleCreateNewRef(commitId: string, side: "above" | "below") {
-		const newName = await stackService.fetchNewBranchName(projectId);
-		await createBranch({
-			projectId,
-			newRef: `refs/heads/${newName}`,
-			placement: {
-				type: "dependent",
-				subject: {
-					relativeTo: { type: "commit", subject: commitId },
-					side,
-				},
-			},
 		});
 	}
 
@@ -361,34 +345,6 @@
 											insertBlankCommit(commitId, "below");
 											closeSubmenu();
 											close();
-										}}
-									/>
-								</ContextMenuSection>
-							{/snippet}
-						</ContextMenuItemSubmenu>
-						<ContextMenuItemSubmenu label="Create branch" icon="branch">
-							{#snippet submenu({ close: closeSubmenu })}
-								<ContextMenuSection>
-									<ContextMenuItem
-										label="Add branch above"
-										disabled={isReadOnly || branchCreation.current.isLoading}
-										onclick={async () => {
-											if (!isReadOnly) {
-												await handleCreateNewRef(commitId, "above");
-												closeSubmenu();
-												close();
-											}
-										}}
-									/>
-									<ContextMenuItem
-										label="Add branch below"
-										disabled={isReadOnly || branchCreation.current.isLoading}
-										onclick={async () => {
-											if (!isReadOnly) {
-												await handleCreateNewRef(commitId, "below");
-												closeSubmenu();
-												close();
-											}
 										}}
 									/>
 								</ContextMenuSection>

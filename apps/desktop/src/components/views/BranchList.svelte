@@ -1,11 +1,7 @@
 <script lang="ts">
-	import AddDependentBranchModal, {
-		type AddDependentBranchModalProps,
-	} from "$components/branch/AddDependentBranchModal.svelte";
 	import BranchCard from "$components/branch/BranchCard.svelte";
 	import BranchDividerLine from "$components/branch/BranchDividerLine.svelte";
 	import BranchHeaderContextMenu from "$components/branch/BranchHeaderContextMenu.svelte";
-	import BranchReorderDropzone from "$components/branch/BranchReorderDropzone.svelte";
 	import LandBranchModal from "$components/branch/LandBranchModal.svelte";
 	import ChangedFilesPanel from "$components/files/ChangedFilesPanel.svelte";
 	import PushButton from "$components/forge/PushButton.svelte";
@@ -27,12 +23,10 @@
 	import { precomputeStack, segmentContext } from "$lib/stacks/segmentContext";
 	import { getStackContext } from "$lib/stacks/stackController.svelte";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
-	import { ensureValue } from "$lib/utils/validation";
 	import { inject } from "@gitbutler/core/context";
 	import { reactive } from "@gitbutler/shared/reactiveUtils.svelte";
 	import { Button, TestId } from "@gitbutler/ui";
 	import { QueryStatus } from "@reduxjs/toolkit/query";
-	import { tick } from "svelte";
 	import type { Segment } from "@gitbutler/but-sdk";
 
 	type Props = {
@@ -53,8 +47,6 @@
 	const forgeInfo = $derived(forgeInfoQuery.response);
 	const auth = useForgeAuth(reactive(() => projectId));
 
-	let addDependentBranchModalContext = $state<AddDependentBranchModalProps>();
-	let addDependentBranchModal = $state<AddDependentBranchModal>();
 	let landBranchModal = $state<LandBranchModal>();
 
 	const selection = $derived(controller.selection);
@@ -101,9 +93,6 @@
 	{#each segments as segment, i}
 		{@const ctx = segmentContext(segments, i, stackPrecomputed)}
 		{@const branchName = segment.refName?.displayName}
-		{@const branchReference = segment.refName
-			? new TextDecoder().decode(new Uint8Array(segment.refName.fullNameBytes))
-			: undefined}
 		{@const branchLabel = branchName ?? "Unnamed segment"}
 		{@const remoteTrackingBranch = segment.remoteTrackingRefName
 			? new TextDecoder().decode(new Uint8Array(segment.remoteTrackingRefName.fullNameBytes))
@@ -135,16 +124,7 @@
 		{@const startCommittingDz = branchName
 			? new StartCommitDzHandler(projectId, stackId, branchName)
 			: undefined}
-		{#if stackId && branchName}
-			<BranchReorderDropzone
-				{projectId}
-				{stackId}
-				{branchName}
-				{lineColor}
-				isCommitting={controller.isCommitting}
-				isFirst={firstBranch}
-			/>
-		{:else if !firstBranch}
+		{#if !firstBranch}
 			<BranchDividerLine {lineColor} />
 		{/if}
 		{#snippet changedFiles()}
@@ -196,56 +176,23 @@
 		{/snippet}
 
 		{#snippet buttons()}
-			{#if first && branchName}
-				<Button
-					icon="stack-plus"
-					testId={TestId.BranchHeaderAddDependentBranchButton}
-					size="tag"
-					kind="outline"
-					tooltip={controller.isReadOnly ? "Read-only mode" : "Create new branch"}
-					onclick={async () => {
-						addDependentBranchModalContext = {
-							projectId,
-							stackId: ensureValue(stackId),
-							branchReference: ensureValue(branchReference),
-						};
-
-						await tick();
-						addDependentBranchModal?.show();
-					}}
-					disabled={controller.isReadOnly}
-				/>
-			{/if}
-
 			{#if $landDirectly}
-				{#if (lastBranch || firstBranch) && !isNewBranch && branchName}
-					{@const wholeStack = !lastBranch}
-					{@const lowerBranches = wholeStack
-						? segments
-								.slice(i + 1)
-								.map((s) => s.refName?.displayName)
-								.filter((name): name is string => !!name)
-						: []}
-					{@const blockedByConflicts = wholeStack
-						? segments.slice(i).some((s) => s.commits.some((c) => c.hasConflicts))
-						: isConflicted}
+				{#if !isNewBranch && branchName}
 					<Button
 						size="tag"
 						kind="outline"
 						shrinkable
 						onclick={(e) => {
 							e.stopPropagation();
-							landBranchModal?.show(branchName, wholeStack ? { lowerBranches } : undefined);
+							landBranchModal?.show(branchName);
 						}}
-						disabled={!!controller.exclusiveAction || blockedByConflicts}
-						tooltip={blockedByConflicts
+						disabled={!!controller.exclusiveAction || isConflicted}
+						tooltip={isConflicted
 							? "Resolve conflicts before landing"
-							: wholeStack
-								? "Land the whole stack directly into the target branch"
-								: "Land directly into the target branch"}
+							: "Land directly into the target branch"}
 						icon="branch-merge"
 					>
-						{wholeStack ? "Land stack" : "Land"}
+						Land
 					</Button>
 				{/if}
 			{:else if canPublishPR && !isNewBranch && branchName}
@@ -293,9 +240,6 @@
 					{stackId}
 					{segment}
 					withForce={ctx.withForce}
-					multipleBranches={segments.length > 1}
-					isFirstBranchInStack={firstBranch}
-					isLastBranchInStack={lastBranch}
 				/>
 			{/if}
 		{/snippet}
@@ -305,9 +249,6 @@
 				{@const data = {
 					segment,
 					prNumber,
-					first,
-					stackLength: segments.length,
-					lastBranch,
 					isNewBranch,
 				}}
 				<BranchHeaderContextMenu
@@ -374,13 +315,6 @@
 		</BranchCard>
 	{/each}
 </div>
-
-{#if addDependentBranchModalContext}
-	<AddDependentBranchModal
-		bind:this={addDependentBranchModal}
-		{...addDependentBranchModalContext}
-	/>
-{/if}
 
 <LandBranchModal bind:this={landBranchModal} {projectId} targetBranchName={landTargetName} />
 

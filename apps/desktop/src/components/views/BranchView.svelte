@@ -1,8 +1,6 @@
 <script lang="ts">
 	import BranchDetails from "$components/branch/BranchDetails.svelte";
 	import BranchHeaderContextMenu from "$components/branch/BranchHeaderContextMenu.svelte";
-	import BranchRenameModal from "$components/branch/BranchRenameModal.svelte";
-	import DeleteBranchModal from "$components/branch/DeleteBranchModal.svelte";
 	import CommitListItem from "$components/commit/CommitListItem.svelte";
 	import BranchReview from "$components/forge/BranchReview.svelte";
 	import Drawer from "$components/shared/Drawer.svelte";
@@ -26,7 +24,6 @@
 		parent: Segment | undefined;
 		child: Segment | undefined;
 		withForce: boolean;
-		stackLength: number;
 		active?: boolean;
 		grow?: boolean;
 		clientHeight?: number;
@@ -46,7 +43,6 @@
 		parent,
 		child,
 		withForce,
-		stackLength,
 		grow,
 		clientHeight = $bindable(),
 		rounded,
@@ -83,9 +79,6 @@
 	const conflictedCommitsInBranch = $derived(
 		segment.commits.filter((commit) => commit.hasConflicts),
 	);
-
-	let renameBranchModal = $state<BranchRenameModal>();
-	let deleteBranchModal = $state<DeleteBranchModal>();
 
 	// Handler for resolving conflicts - find the earliest conflicted commit
 	async function handleResolveConflicts() {
@@ -146,7 +139,6 @@
 		{@const data = {
 			segment,
 			prNumber,
-			stackLength,
 		}}
 		<BranchHeaderContextMenu {projectId} {stackId} {laneId} contextData={data} />
 	{/snippet}
@@ -209,22 +201,12 @@
 			</div>
 			<h3 class="text-16 text-semibold branch-view__empty-state__title">This is a new branch</h3>
 			<p class="text-13 text-body branch-view__empty-state__description">
-				Commit your changes here. You can stack additional branches or apply them independently. You
-				can also drag and drop files to start a new commit.
+				Commit your changes to the checked-out branch. You can also drag and drop files to start a
+				new commit.
 			</p>
 		</div>
 	{/if}
 </Drawer>
-
-<BranchRenameModal
-	{projectId}
-	{stackId}
-	{laneId}
-	{branchName}
-	bind:this={renameBranchModal}
-	isPushed={!!remoteTrackingBranch}
-/>
-<DeleteBranchModal {projectId} {stackId} {branchName} bind:this={deleteBranchModal} />
 
 <style>
 	.branch__header {

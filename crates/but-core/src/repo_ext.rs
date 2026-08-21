@@ -170,26 +170,20 @@ impl RepositoryExt for gix::Repository {
     }
 
     fn commit_signatures(&self) -> anyhow::Result<(gix::actor::Signature, gix::actor::Signature)> {
-        let author = self
+        let author: gix::actor::Signature = self
             .author()
             .transpose()?
             .context("No author is configured in Git")
-            .context(Code::AuthorMissing)?;
+            .context(Code::AuthorMissing)?
+            .into();
 
-        let commit_as_gitbutler = self
-            .config_snapshot()
-            .boolean("gitbutler.gitbutlerCommitter")
-            .unwrap_or_default();
-        let committer = if commit_as_gitbutler {
-            committer_signature()
-        } else {
-            self.committer()
-                .transpose()?
-                .and_then(|s| s.to_owned().ok())
-                .unwrap_or_else(committer_signature)
-        };
+        let committer = self
+            .committer()
+            .transpose()?
+            .and_then(|signature| signature.to_owned().ok())
+            .unwrap_or_else(|| author.clone());
 
-        Ok((author.into(), committer))
+        Ok((author, committer))
     }
 
     fn local_common_config_for_editing(
@@ -465,26 +459,4 @@ impl RepositoryExt for gix::Repository {
         let (options, conflict_kind) = self.merge_options_fail_fast()?;
         Ok((options.with_rewrites(None), conflict_kind))
     }
-}
-
-const GITBUTLER_COMMIT_AUTHOR_NAME: &str = "GitButler";
-const GITBUTLER_COMMIT_AUTHOR_EMAIL: &str = "gitbutler@gitbutler.com";
-
-/// Provide a signature with the GitButler author, and the current time or the time overridden
-/// depending on the value for `purpose`.
-fn committer_signature() -> gix::actor::Signature {
-    gix::actor::Signature {
-        name: GITBUTLER_COMMIT_AUTHOR_NAME.into(),
-        email: GITBUTLER_COMMIT_AUTHOR_EMAIL.into(),
-        time: commit_time("GIT_COMMITTER_DATE"),
-    }
-}
-
-/// Return the time of a commit as `now` unless the `overriding_variable_name` contains a parseable date,
-/// which is used instead.
-fn commit_time(overriding_variable_name: &str) -> gix::date::Time {
-    std::env::var(overriding_variable_name)
-        .ok()
-        .and_then(|time| gix::date::parse(&time, Some(std::time::SystemTime::now())).ok())
-        .unwrap_or_else(gix::date::Time::now_local_or_utc)
 }

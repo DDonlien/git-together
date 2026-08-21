@@ -1,12 +1,8 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
 	import PRListCard from "$components/branchesPage/PRListCard.svelte";
 	import ReduxResult from "$components/shared/ReduxResult.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
-	import { workspacePath } from "$lib/routes/routes.svelte";
-	import { handleApplyOutcome } from "$lib/stacks/stack";
-	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 
 	import { inject } from "@gitbutler/core/context";
 
@@ -24,17 +20,6 @@
 	const forgeInfo = $derived(forgeInfoQuery.response);
 	const prQuery = $derived(prService.get(projectId, prNumber, { forceRefetch: true }));
 	const prUnit = $derived(forgeInfo?.unit);
-
-	const stackService = inject(STACK_SERVICE);
-
-	export async function applyPr() {
-		const outcome = await stackService.reviewApply({
-			projectId,
-			reviewId: prNumber,
-		});
-		handleApplyOutcome(outcome);
-		goto(workspacePath(projectId));
-	}
 </script>
 
 <ReduxResult result={prQuery.result} {projectId} {onerror}>

@@ -7,6 +7,7 @@
 	import { FILE_SELECTION_MANAGER } from "$lib/selection/fileSelectionManager.svelte";
 	import { createWorktreeSelection } from "$lib/selection/key";
 	import { UNCOMMITTED_SERVICE } from "$lib/selection/uncommittedService.svelte";
+	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { ActionEvent, POSTHOG_WRAPPER } from "$lib/telemetry/posthog";
 	import { inject } from "@gitbutler/core/context";
@@ -25,6 +26,7 @@
 
 	const uiState = inject(UI_STATE);
 	const uncommittedService = inject(UNCOMMITTED_SERVICE);
+	const stackService = inject(STACK_SERVICE);
 	const idSelection = inject(FILE_SELECTION_MANAGER);
 	const posthog = inject(POSTHOG_WRAPPER);
 	const projectState = $derived(uiState.project(projectId));
@@ -35,6 +37,9 @@
 	const treeChanges = $derived(uncommittedService.changesByStackId(null));
 	const treeChangesCount = $derived(treeChanges.current.length);
 	const changesToCommit = $derived(treeChangesCount > 0);
+	const stacksQuery = $derived(stackService.stacks(projectId));
+	const checkedOutStack = $derived(stacksQuery.response?.at(0));
+	const checkedOutBranchName = $derived(checkedOutStack?.segments.at(0)?.refName?.displayName);
 	let foldedContentWidth = $state<number>(0);
 
 	function unfoldView() {
@@ -59,11 +64,11 @@
 		const selectionId = createWorktreeSelection({});
 		const selectedPaths = idSelection.values(selectionId).map((entry) => entry.path);
 
-		// If there are selected paths in the unassigned selection, we check those.
+		// If the user selected paths in the working tree, stage those paths.
 		if (selectedPaths.length > 0) {
 			uncommittedService.checkFiles(null, selectedPaths);
 		} else {
-			uncommittedService.checkAll(null);
+			uncommittedService.uncheckAll(null);
 		}
 	}
 
@@ -132,24 +137,27 @@
 						type="button"
 						wide
 						reversedDirection
-						disabled={!!projectState.exclusiveAction.current}
+						disabled={!!projectState.exclusiveAction.current ||
+							!checkedOutStack?.id ||
+							!checkedOutBranchName}
 						onclick={() => {
+							if (!checkedOutStack?.id || !checkedOutBranchName) return;
 							projectState.exclusiveAction.set({
 								type: "commit",
-								stackId: undefined,
-								branchName: undefined,
+								stackId: checkedOutStack.id,
+								branchName: checkedOutBranchName,
 							});
 							checkFilesForCommit();
-							posthog.captureAction(ActionEvent.CommitToNewBranch);
+							posthog.captureAction(ActionEvent.CommitToCurrentBranch);
 						}}
 						icon={isCommitting ? undefined : "plus"}
-						testId={TestId.CommitToNewBranchButton}
+						testId={TestId.CommitToCurrentBranchButton}
 						kind="outline"
 					>
 						{#if isCommitting}
 							Committing…
 						{:else}
-							Commit to new branch
+							Commit to current branch
 						{/if}
 					</Button>
 				</div>

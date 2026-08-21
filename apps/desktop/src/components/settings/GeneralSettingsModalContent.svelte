@@ -3,7 +3,6 @@
 	import AiSettings from "$components/settings/AiSettings.svelte";
 	import ExperimentalSettings from "$components/settings/ExperimentalSettings.svelte";
 	import GeneralSettings from "$components/settings/GeneralSettings.svelte";
-	import GitSettings from "$components/settings/GitSettings.svelte";
 	import IntegrationsSettings from "$components/settings/IntegrationsSettings.svelte";
 	import LanesAndBranchesSettings from "$components/settings/LanesAndBranchesSettings.svelte";
 	import OrganisationSettings from "$components/settings/OrganisationSettings.svelte";
@@ -45,11 +44,9 @@
 				<GeneralSettings />
 			{:else if currentPage.id === "appearance"}
 				<AppearanceSettings />
-			{:else if currentPage.id === "lanes-and-branches"}
+			{:else if currentPage.id === "branches-and-commits"}
 				<LanesAndBranchesSettings />
-			{:else if currentPage.id === "git"}
-				<GitSettings />
-			{:else if currentPage.id === "integrations"}
+			{:else if currentPage.id === "git-integrations"}
 				<IntegrationsSettings />
 			{:else if currentPage.id === "ai"}
 				<AiSettings />

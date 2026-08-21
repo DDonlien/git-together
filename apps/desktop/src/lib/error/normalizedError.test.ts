@@ -90,7 +90,7 @@ describe("IpcError.fingerprint", () => {
 	test("strips UUIDs", () => {
 		const err = new IpcError(
 			{ message: "branch with ID 00000000-0000-0000-0000-000000000000 not found" },
-			"unapply_stack",
+			"branch_checkout",
 		);
 		expect(err.fingerprint[2]).toBe("branch with ID <uuid> not found");
 	});
@@ -111,13 +111,13 @@ describe("IpcError.fingerprint", () => {
 	test("strips quoted branch names so different branches bucket together", () => {
 		const a = new IpcError(
 			{ message: "Branch 'branch-one' cannot be created: the target commit is not present" },
-			"create_virtual_branch",
+			"branch_create",
 		);
 		const b = new IpcError(
 			{
 				message: "Branch 'branch-two' cannot be created: the target commit is not present",
 			},
-			"create_virtual_branch",
+			"branch_create",
 		);
 		expect(a.fingerprint).toEqual(b.fingerprint);
 		expect(a.fingerprint[2]).toContain("'<id>'");

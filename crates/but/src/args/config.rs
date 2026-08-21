@@ -475,22 +475,18 @@ pub enum MetricsStatus {
 pub enum FeatureFlag {
     /// Use the V3 unapply compatibility mode.
     UnapplyV3Pgm,
-    /// Enable single-branch mode.
-    SingleBranch,
 }
 
 impl FeatureFlag {
     pub fn as_str(self) -> &'static str {
         match self {
             FeatureFlag::UnapplyV3Pgm => "unapply-v3-pgm",
-            FeatureFlag::SingleBranch => "single-branch",
         }
     }
 
     pub fn as_json_key(self) -> &'static str {
         match self {
             FeatureFlag::UnapplyV3Pgm => "unapply_v3_pgm",
-            FeatureFlag::SingleBranch => "single_branch",
         }
     }
 }

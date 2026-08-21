@@ -7,9 +7,15 @@ import {
 } from "$lib/state/tags";
 import { createEntityAdapter, type EntityState } from "@reduxjs/toolkit";
 import type { ForgeProvider, RemoteBranchInfo } from "$lib/baseBranch/baseBranch";
+import type { GitBranchListing } from "$lib/branches/branchListing";
 import type { BackendEndpointBuilder } from "$lib/state/backendApi";
-import type { BaseBranch, WorkspaceFetchStatus } from "@gitbutler/but-sdk";
-import type { BranchListing, BranchListingDetails } from "@gitbutler/but-sdk";
+import type {
+	BaseBranch,
+	BranchCheckoutResult,
+	ListedBranch,
+	ListedStack,
+	WorkspaceFetchStatus,
+} from "@gitbutler/but-sdk";
 
 export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 	return {
@@ -41,21 +47,7 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.StackDetails),
 			],
 		}),
-		setTarget: build.mutation<
-			BaseBranch,
-			{ projectId: string; branch: string; pushRemote?: string; stashUncommitted?: boolean }
-		>({
-			extraOptions: { command: "set_base_branch" },
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesType(ReduxTag.ForgeProvider),
-				invalidatesType(ReduxTag.BaseBranchData),
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-			],
-		}),
-		// Like setTarget, but only writes project metadata: the user stays on the
-		// current branch instead of being moved into the GitButler workspace.
+		// Update integration metadata without changing the checked-out branch.
 		setTargetRef: build.mutation<
 			void,
 			{ projectId: string; targetRef: string; pushRemote?: string }
@@ -72,14 +64,29 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.HeadMetadata),
 			],
 		}),
-		switchBackToWorkspace: build.mutation<BaseBranch, { projectId: string }>({
-			extraOptions: { command: "switch_back_to_workspace" },
+		checkoutBranch: build.mutation<BranchCheckoutResult, { projectId: string; branch: number[] }>({
+			extraOptions: { command: "branch_checkout", actionName: "Checkout Branch" },
 			query: (args) => args,
 			invalidatesTags: [
-				invalidatesType(ReduxTag.ForgeProvider),
-				invalidatesType(ReduxTag.BaseBranchData),
+				invalidatesList(ReduxTag.HeadMetadata),
 				invalidatesList(ReduxTag.Stacks),
 				invalidatesList(ReduxTag.StackDetails),
+				invalidatesList(ReduxTag.BranchListing),
+				invalidatesList(ReduxTag.WorktreeChanges),
+			],
+		}),
+		checkoutNewBranch: build.mutation<
+			BranchCheckoutResult,
+			{ projectId: string; name: string | null }
+		>({
+			extraOptions: { command: "branch_checkout_new", actionName: "Create and Checkout Branch" },
+			query: (args) => args,
+			invalidatesTags: [
+				invalidatesList(ReduxTag.HeadMetadata),
+				invalidatesList(ReduxTag.Stacks),
+				invalidatesList(ReduxTag.StackDetails),
+				invalidatesList(ReduxTag.BranchListing),
+				invalidatesList(ReduxTag.WorktreeChanges),
 			],
 		}),
 		remoteBranches: build.query<RemoteBranchInfo[], { projectId: string }>({
@@ -94,27 +101,41 @@ export function buildBranchEndpoints(build: BackendEndpointBuilder) {
 		}),
 
 		// ── Branch Listing ──────────────────────────────────────────
-		listBranches: build.query<EntityState<BranchListing, string>, { projectId: string }>({
-			extraOptions: { command: "list_branches" },
+		listBranches: build.query<EntityState<GitBranchListing, string>, { projectId: string }>({
+			extraOptions: { command: "branch_list" },
 			query: (args) => args,
 			providesTags: [providesList(ReduxTag.BranchListing)],
-			transformResponse: (response: BranchListing[]) => {
-				return listingAdapter.addMany(listingAdapter.getInitialState(), response);
+			transformResponse: (response: ListedStack[]) => {
+				const branches = response.flatMap((stack) => stack.branches.map(toGitBranchListing));
+				return listingAdapter.addMany(listingAdapter.getInitialState(), branches);
 			},
-		}),
-		branchListingDetails: build.query<
-			BranchListingDetails,
-			{ projectId: string; branchName: string }
-		>({
-			extraOptions: { command: "get_branch_listing_details" },
-			query: ({ projectId, branchName }) => ({ projectId, branchNames: [branchName] }),
-			transformResponse: (response: BranchListingDetails[]) => response.at(0)!,
-			providesTags: [providesList(ReduxTag.BranchListing)],
 		}),
 	};
 }
 
-const listingAdapter = createEntityAdapter<BranchListing, string>({
+function toGitBranchListing(branch: ListedBranch): GitBranchListing {
+	const remotes = branch.remoteRefs.flatMap(({ full }) => {
+		const prefix = "refs/remotes/";
+		const suffix = `/${branch.displayName}`;
+		if (!full.startsWith(prefix) || !full.endsWith(suffix)) return [];
+		return [full.slice(prefix.length, -suffix.length)];
+	});
+
+	return {
+		name: branch.displayName,
+		remotes: [...new Set(remotes)],
+		updatedAt: branch.updatedAtMs ?? 0,
+		lastCommiter: {
+			name: branch.lastAuthor?.name ?? null,
+			email: branch.lastAuthor?.email ?? null,
+			gravatarUrl: branch.lastAuthor?.gravatarUrl ?? null,
+		},
+		hasLocal: branch.hasLocal,
+		commitCount: branch.commitCount,
+	};
+}
+
+const listingAdapter = createEntityAdapter<GitBranchListing, string>({
 	selectId: (listing) => listing.name,
 });
 

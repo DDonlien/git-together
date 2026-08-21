@@ -2,7 +2,7 @@
 
 GitTogether 是一个本地优先的 Git 工作台，用来同时管理多个 repository、真实 branch、worktree、Work Session，以及与这些工作上下文绑定的任务和对话。它以普通 Git 心智模型为默认入口，不要求用户先采用 Virtual Branch。
 
-当前产品版本为 `0.2.6`，权威版本号位于 [`VERSION`](VERSION)。桌面端使用 Tauri、Svelte 和 Rust，现阶段主要支持 macOS 本地工作流。
+当前产品版本为 `0.2.7`，权威版本号位于 [`VERSION`](VERSION)。桌面端使用 Tauri、Svelte 和 Rust，现阶段主要支持 macOS 本地工作流。
 
 ## 已有能力
 

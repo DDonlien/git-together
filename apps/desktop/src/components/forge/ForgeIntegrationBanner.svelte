@@ -56,7 +56,7 @@
 	});
 
 	function configureIntegration(): void {
-		openGeneralSettings("integrations");
+		openGeneralSettings("git-integrations");
 	}
 
 	function dismissPrompt() {

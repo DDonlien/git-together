@@ -91,16 +91,8 @@ export default class BaseBranchService {
 			});
 	}
 
-	get setTarget() {
-		return this.backendApi.endpoints.setTarget.useMutation();
-	}
-
 	get setTargetRef() {
 		return this.backendApi.endpoints.setTargetRef.useMutation();
-	}
-
-	get switchBackToWorkspace() {
-		return this.backendApi.endpoints.switchBackToWorkspace.useMutation();
 	}
 
 	remoteBranches(projectId: string) {

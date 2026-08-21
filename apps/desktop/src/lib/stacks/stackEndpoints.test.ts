@@ -204,63 +204,6 @@ describe("buildStackEndpoints", () => {
 		]);
 	});
 
-	test("uses move_branch with normalized refs and dryRun disabled", () => {
-		const endpoints = buildStackEndpoints(createEndpointBuilder());
-		const query = endpoints.moveBranch.query;
-
-		expect(endpoints.moveBranch.extraOptions).toEqual({
-			command: "move_branch",
-			actionName: "Move Branch",
-		});
-		expect(query).toBeDefined();
-		expect(
-			query?.({
-				projectId: "project-1",
-				subjectBranch: "refs/heads/feature/source",
-				targetBranch: "refs/heads/feature/target",
-			}),
-		).toEqual({
-			projectId: "project-1",
-			subjectBranch: "refs/heads/feature/source",
-			targetBranch: "refs/heads/feature/target",
-			dryRun: false,
-		});
-	});
-
-	test("uses tear_off_branch with normalized refs and dryRun disabled", () => {
-		const endpoints = buildStackEndpoints(createEndpointBuilder());
-		const query = endpoints.tearOffBranch.query;
-		const invalidatesTags = endpoints.tearOffBranch.invalidatesTags;
-		const args = {
-			projectId: "project-1",
-			sourceStackId: "stack-1",
-			subjectBranchName: "feature/source",
-		};
-
-		expect(endpoints.tearOffBranch.extraOptions).toEqual({
-			command: "tear_off_branch",
-			actionName: "Tear Off Branch",
-		});
-		expect(query).toBeDefined();
-		expect(query?.(args)).toEqual({
-			projectId: "project-1",
-			subjectBranch: "refs/heads/feature/source",
-			dryRun: false,
-		});
-
-		if (typeof invalidatesTags !== "function") {
-			throw new Error("Expected tearOffBranch.invalidatesTags to be callable");
-		}
-
-		expect(invalidatesTags(undefined, undefined, args, undefined)).toEqual([
-			invalidatesList(ReduxTag.HeadSha),
-			invalidatesList(ReduxTag.WorktreeChanges),
-			invalidatesList(ReduxTag.Stacks),
-			invalidatesList(ReduxTag.BranchChanges),
-			invalidatesItem(ReduxTag.StackDetails, "stack-1"),
-		]);
-	});
-
 	test("uses get_initial_branch_integration with the branch ref", () => {
 		const endpoints = buildStackEndpoints(createEndpointBuilder());
 		const query = endpoints.getInitialBranchIntegration.query;
@@ -324,63 +267,6 @@ describe("buildStackEndpoints", () => {
 			invalidatesList(ReduxTag.Stacks),
 			invalidatesList(ReduxTag.StackDetails),
 			invalidatesList(ReduxTag.BranchListing),
-		]);
-	});
-
-	test("uses apply for branch application", () => {
-		const endpoints = buildStackEndpoints(createEndpointBuilder());
-		const query = endpoints.branchApply.query;
-
-		expect(endpoints.branchApply.extraOptions).toEqual({
-			command: "apply",
-			actionName: "Apply Branch",
-		});
-		expect(query).toBeDefined();
-		expect(
-			query?.({
-				projectId: "project-1",
-				existingBranch: "refs/heads/feature",
-			}),
-		).toEqual({
-			projectId: "project-1",
-			existingBranch: "refs/heads/feature",
-		});
-		expect(endpoints.branchApply.invalidatesTags).toEqual([
-			invalidatesList(ReduxTag.HeadMetadata),
-			invalidatesList(ReduxTag.HeadSha),
-			invalidatesList(ReduxTag.WorktreeChanges),
-			invalidatesList(ReduxTag.Stacks),
-			invalidatesList(ReduxTag.StackDetails),
-			invalidatesList(ReduxTag.BranchListing),
-		]);
-	});
-
-	test("uses review_apply for review application", () => {
-		const endpoints = buildStackEndpoints(createEndpointBuilder());
-		const query = endpoints.reviewApply.query;
-
-		expect(endpoints.reviewApply.extraOptions).toEqual({
-			command: "review_apply",
-			actionName: "Apply Review",
-		});
-		expect(query).toBeDefined();
-		expect(
-			query?.({
-				projectId: "project-1",
-				reviewId: 42,
-			}),
-		).toEqual({
-			projectId: "project-1",
-			reviewId: 42,
-		});
-		expect(endpoints.reviewApply.invalidatesTags).toEqual([
-			invalidatesList(ReduxTag.HeadMetadata),
-			invalidatesList(ReduxTag.HeadSha),
-			invalidatesList(ReduxTag.WorktreeChanges),
-			invalidatesList(ReduxTag.Stacks),
-			invalidatesList(ReduxTag.StackDetails),
-			invalidatesList(ReduxTag.BranchListing),
-			invalidatesList(ReduxTag.PullRequests),
 		]);
 	});
 

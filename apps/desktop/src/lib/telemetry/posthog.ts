@@ -163,5 +163,5 @@ export enum OnboardingEvent {
 }
 
 export enum ActionEvent {
-	CommitToNewBranch = "action_commit_to_new_branch",
+	CommitToCurrentBranch = "action_commit_to_current_branch",
 }

@@ -10,9 +10,8 @@ import type { ScrollbarVisilitySettings } from "@gitbutler/ui";
 export type GeneralSettingsPageId =
 	| "general"
 	| "appearance"
-	| "lanes-and-branches"
-	| "git"
-	| "integrations"
+	| "branches-and-commits"
+	| "git-integrations"
 	| "ai"
 	| "telemetry"
 	| "experimental"
@@ -157,7 +156,6 @@ export type GlobalUiState = {
 	useRuler: boolean;
 	rulerCountValue: number;
 	aiSuggestionsOnType: boolean;
-	draftBranchName: string | undefined;
 	modal: GlobalModalState | undefined;
 	// User settings (migrated from userSettings.ts)
 	aiSummariesEnabled: boolean;
@@ -233,7 +231,6 @@ export class UiState {
 		useRuler: true,
 		rulerCountValue: 72,
 		aiSuggestionsOnType: false,
-		draftBranchName: undefined,
 		modal: undefined,
 		// User settings defaults
 		aiSummariesEnabled: false,

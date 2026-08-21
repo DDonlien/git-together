@@ -60,10 +60,17 @@
 - 横向空间不足时，沿用 GitButler 现有的滚动、折叠或上下文切换模式，不把多个 branch 压缩成不可读的单列列表。
 - branch 列表达真实 Git branch/worktree，不恢复 GitButler Virtual Branch 的专用抽象。
 
+### Global Settings 的 Git Integrations
+
+- 原有 `Git stuff` 与 `Integrations` 在侧栏合并为单一 `Git Integrations` 入口，避免把 Git 自动化设置、provider 账号与自托管服务器凭据拆成相邻但互相割裂的页面。
+- GitHub、GitLab、Bitbucket 与 Gitea / self-hosted Git 都使用现有 `CardGroup`、输入框、按钮、加载和错误状态；Gitea 不引入独立的卡片视觉体系。
+- 自托管连接是全局复用配置，因此创建、编辑与撤销放在 Global Settings；repository Settings 仅选择和绑定已有连接，并提供返回 `Git Integrations` 的清晰入口。
+
 ### 组件与视觉边界
 
 - 优先复用 `@gitbutler/ui` 的 Button、Card、Input、Tabs、状态提示、列表、Modal 和布局组件。
 - 优先复用 GitButler 已有的 theme tokens、border、surface、focus、loading、error 和 diff 状态样式。
+- Work Trees 的辅助信息、控件与元数据、正文、区块标题和页标题分别复用 `text-11`、`text-12`、`text-13`、`text-14`、`text-18` 层级；按钮高度复用 `--size-tag` / `--size-button`，输入框与卡片圆角复用现有 radius tokens。
 - 附件是布局草图，不是要求照搬的视觉主题；不得因为线框图使用了灰色粗边框，就在 GitTogether 中创建独立的灰色卡片体系。
 - 新增页面应先寻找 GitButler 中对应的现有组件和交互，再补充 GitTogether 所需的最小组合层。
 

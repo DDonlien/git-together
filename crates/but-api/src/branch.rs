@@ -1513,7 +1513,7 @@ pub fn branch_checkout(
     branch_checkout_with_perm(ctx, branch, guard.write_permission())
 }
 
-/// Creates a new local branch at the project target SHA, checks it out, and
+/// Creates a new local branch at the current `HEAD`, checks it out, and
 /// returns the resulting workspace state.
 ///
 /// If `name` is provided, it is treated as a short branch name and normalized
@@ -1529,14 +1529,14 @@ pub fn branch_checkout_new(
     branch_checkout_new_with_perm(ctx, name, guard.write_permission())
 }
 
-/// Creates a new local branch at the project target SHA and checks it out under
+/// Creates a new local branch at the current `HEAD` and checks it out under
 /// caller-held exclusive repository access.
 pub fn branch_checkout_new_with_perm(
     ctx: &mut but_ctx::Context,
     name: Option<String>,
     perm: &mut RepoExclusive,
 ) -> anyhow::Result<BranchCheckoutResult> {
-    let target_commit_id = ctx.project_meta()?.target_commit_id_or_err()?;
+    let head_commit_id = ctx.repo.get()?.head_id()?.detach();
     let branch = {
         let repo = ctx.repo.get()?;
         let branch = match name {
@@ -1553,7 +1553,7 @@ pub fn branch_checkout_new_with_perm(
 
         repo.reference(
             branch.as_ref(),
-            target_commit_id,
+            head_commit_id,
             PreviousValue::MustNotExist,
             "branch checkout new",
         )

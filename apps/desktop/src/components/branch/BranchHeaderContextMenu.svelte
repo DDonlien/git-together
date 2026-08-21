@@ -4,9 +4,6 @@
 	export type BranchHeaderContextData = {
 		segment: Segment;
 		prNumber?: number;
-		first?: boolean;
-		stackLength: number;
-		lastBranch?: boolean;
 		isNewBranch?: boolean;
 	};
 </script>
@@ -15,9 +12,6 @@
 	import BranchRenameModal, {
 		type BranchRenameModalProps,
 	} from "$components/branch/BranchRenameModal.svelte";
-	import DeleteBranchModal, {
-		type DeleteBranchModalProps,
-	} from "$components/branch/DeleteBranchModal.svelte";
 	import ReduxResult from "$components/shared/ReduxResult.svelte";
 	import { PROMPT_SERVICE } from "$lib/ai/aiPromptService";
 	import { AI_SERVICE } from "$lib/ai/service";
@@ -28,7 +22,6 @@
 	import { useForgeAuth } from "$lib/forge/forgeAuth.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
-	import { MODE_SERVICE } from "$lib/mode/modeService";
 	import { getStackContext } from "$lib/stacks/stackController.svelte";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { inject } from "@gitbutler/core/context";
@@ -73,14 +66,7 @@
 	const promptService = inject(PROMPT_SERVICE);
 	const urlService = inject(URL_SERVICE);
 	const clipboardService = inject(CLIPBOARD_SERVICE);
-	const modeService = inject(MODE_SERVICE);
 	const auth = useForgeAuth(reactive(() => projectId));
-
-	// The app layout keeps rendering stack UI in Edit and single-branch
-	// OutsideWorkspace modes (see routes/[projectId]/+layout.svelte), but the
-	// backend refuses stack/branch mutations there.
-	const mode = $derived(modeService.mode(projectId));
-	const isOpenWorkspace = $derived(mode.response?.type === "OpenWorkspace");
 
 	const forgeInfoQuery = $derived(forgeInfoService.get(projectId));
 	const forgeInfo = $derived(forgeInfoQuery.response);
@@ -90,7 +76,6 @@
 	const baseBranchName = $derived(baseBranchNameQuery.response);
 	const [insertBlankCommitInBranch, commitInsertion] = stackService.insertBlankCommit.useMutation();
 	const [renameReference] = stackService.branchRename;
-	const [createBranch, branchCreation] = stackService.branchCreate;
 
 	// Component is read-only when stackId is undefined
 	const isReadOnly = $derived(!stackId);
@@ -131,8 +116,6 @@
 
 	let renameBranchModal = $state<BranchRenameModal>();
 	let renameBranchModalContext = $state<BranchRenameModalProps>();
-	let deleteBranchModal = $state<DeleteBranchModal>();
-	let deleteBranchModalContext = $state<DeleteBranchModalProps>();
 
 	async function setAIConfigurationValid() {
 		aiConfigurationValid = await aiService.validateConfiguration();
@@ -171,22 +154,6 @@
 		}
 	}
 
-	async function handleCreateNewRef(stackId: string, position: "above" | "below") {
-		if (!branchName) return;
-		const branchReference = `refs/heads/${branchName}`;
-		await createBranch({
-			projectId,
-			newRef: null,
-			placement: {
-				type: "dependent",
-				subject: {
-					relativeTo: { type: "reference", subject: branchReference },
-					side: position,
-				},
-			},
-		});
-	}
-
 	$effect(() => {
 		setAIConfigurationValid();
 	});
@@ -198,7 +165,7 @@
 	contextMenuTestId={TestId.BranchHeaderContextMenu}
 >
 	{#snippet contextMenu({ close })}
-		{@const { prNumber, first, stackLength, lastBranch, isNewBranch } = contextData}
+		{@const { prNumber, isNewBranch } = contextData}
 		<ContextMenuSection>
 			{#if remoteTrackingBranch && branchName}
 				<ContextMenuItem
@@ -226,35 +193,6 @@
 		</ContextMenuSection>
 		{#if stackId}
 			<ContextMenuSection>
-				<ContextMenuItemSubmenu
-					label="Create branch"
-					icon="stack-plus"
-					disabled={isReadOnly || branchCreation.current.isLoading}
-				>
-					{#snippet submenu({ close: closeSubmenu })}
-						<ContextMenuSection>
-							<ContextMenuItem
-								label="Create branch above"
-								testId={TestId.BranchHeaderContextMenu_AddDependentBranch}
-								disabled={isReadOnly}
-								onclick={async () => {
-									await handleCreateNewRef(stackId, "above");
-									closeSubmenu();
-									close();
-								}}
-							/>
-							<ContextMenuItem
-								label="Create branch below"
-								disabled={isReadOnly}
-								onclick={async () => {
-									await handleCreateNewRef(stackId, "below");
-									closeSubmenu();
-									close();
-								}}
-							/>
-						</ContextMenuSection>
-					{/snippet}
-				</ContextMenuItemSubmenu>
 				<ContextMenuItem
 					label="Add empty commit"
 					icon="commit-plus"
@@ -321,24 +259,6 @@
 						}}
 					/>
 				{/if}
-				{#if branchName && stackLength && ((stackLength > 1 && (!first || !hasCommits)) || (stackLength === 1 && branchCommits.length === 0))}
-					<ContextMenuItem
-						label="Delete"
-						icon="bin"
-						testId={TestId.BranchHeaderContextMenu_Delete}
-						disabled={isReadOnly}
-						onclick={async () => {
-							deleteBranchModalContext = {
-								projectId,
-								stackId,
-								branchName,
-							};
-							await tick();
-							deleteBranchModal?.show();
-							close();
-						}}
-					/>
-				{/if}
 			</ContextMenuSection>
 		{/if}
 		{#if stackId && branchName}
@@ -361,7 +281,7 @@
 						/>
 					</ContextMenuSection>
 				{/if}
-			{:else if lastBranch && !isNewBranch}
+			{:else if !isNewBranch}
 				<ContextMenuSection>
 					<ContextMenuItem
 						label="Land"
@@ -414,29 +334,9 @@
 				{#snippet error()}{/snippet}
 			</ReduxResult>
 		{/if}
-
-		{#if stackId && first}
-			<ContextMenuSection>
-				<ContextMenuItem
-					label="Unapply Stack"
-					icon="eject"
-					testId={TestId.BranchHeaderContextMenu_UnapplyBranch}
-					disabled={isReadOnly || !isOpenWorkspace}
-					caption={!isOpenWorkspace ? "Only available in workspace mode" : undefined}
-					onclick={async () => {
-						close();
-						await stackService.unapply({ projectId, stackId });
-					}}
-				/>
-			</ContextMenuSection>
-		{/if}
 	{/snippet}
 </KebabButton>
 
 {#if renameBranchModalContext}
 	<BranchRenameModal bind:this={renameBranchModal} {...renameBranchModalContext} />
-{/if}
-
-{#if deleteBranchModalContext}
-	<DeleteBranchModal bind:this={deleteBranchModal} {...deleteBranchModalContext} />
 {/if}

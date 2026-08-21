@@ -2,13 +2,8 @@
 	import { goto } from "$app/navigation";
 	import ProjectSettingsShortcutHandler from "$components/settings/ProjectSettingsShortcutHandler.svelte";
 	import AnalyticsMonitor from "$components/shared/AnalyticsMonitor.svelte";
-	import FullviewLoading from "$components/shared/FullviewLoading.svelte";
-	import NotOnGitButlerBranch from "$components/shared/NotOnGitButlerBranch.svelte";
 	import ProjectShortcutHandler from "$components/shared/ProjectShortcutHandler.svelte";
-	import ReduxResult from "$components/shared/ReduxResult.svelte";
 	import AppLayout from "$components/views/AppLayout.svelte";
-	import NoBaseBranch from "$components/views/NoBaseBranch.svelte";
-	import ProblemLoadingRepo from "$components/views/ProblemLoadingRepo.svelte";
 	import { BACKEND } from "$lib/backend";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
 	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
@@ -25,7 +20,6 @@
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { CLIENT_STATE } from "$lib/state/clientState.svelte";
-	import { combineResults } from "$lib/state/helpers";
 	import { invalidatesList, ReduxTag } from "$lib/state/tags";
 	import { OnboardingEvent, POSTHOG_WRAPPER } from "$lib/telemetry/posthog";
 	import { debounce } from "$lib/utils/debounce";
@@ -210,9 +204,8 @@
 					clientState.backendApi.util.invalidateTags([invalidatesList(ReduxTag.Diff)]),
 				);
 			}),
-			// Activity that requires re-reading workspace state — emitted on
-			// remote-ref updates (push, external fetch) and on external
-			// writes to `virtual_branches.toml` (e.g. by the `but` CLI).
+			// Activity that requires re-reading repository state, such as
+			// remote-ref updates or metadata written by another process.
 			backend.listen(`project://${projectId}/workspace-activity`, () => {
 				clientState.dispatch(
 					clientState.backendApi.util.invalidateTags([
@@ -344,13 +337,6 @@
 		setActiveProjectOrRedirect(projectId);
 	});
 
-	// Clear backend API state when project changes
-	$effect(() => {
-		if (projectId) {
-			clientState.backendApi.util.resetApiState();
-		}
-	});
-
 	// Cleanup on destroy
 	onDestroy(() => {
 		clearFetchInterval();
@@ -360,31 +346,11 @@
 <ProjectSettingsShortcutHandler {projectId} />
 <ProjectShortcutHandler />
 
-<ReduxResult {projectId} result={combineResults(baseBranchQuery.result, modeQuery.result)}>
-	{#snippet children([baseBranch, mode], { projectId })}
-		{#if !baseBranch}
-			<NoBaseBranch {projectId} />
-		{:else if baseBranch}
-			{#if mode.type === "OpenWorkspace" || mode.type === "Edit" || ($settingsStore?.featureFlags.singleBranch && mode.subject.branchName)}
-				<div class="view-wrap" role="group" ondragover={(e) => e.preventDefault()}>
-					<AppLayout {projectId} sidebarDisabled={mode.type === "Edit"}>
-						{@render pageChildren()}
-					</AppLayout>
-				</div>
-			{:else if mode.type === "OutsideWorkspace"}
-				<NotOnGitButlerBranch {projectId} {baseBranch}>
-					{@render pageChildren()}
-				</NotOnGitButlerBranch>
-			{/if}
-		{/if}
-	{/snippet}
-	{#snippet loading()}
-		<FullviewLoading />
-	{/snippet}
-	{#snippet error(baseError)}
-		<ProblemLoadingRepo {projectId} error={baseError} />
-	{/snippet}
-</ReduxResult>
+<div class="view-wrap" role="group" ondragover={(e) => e.preventDefault()}>
+	<AppLayout {projectId} sidebarDisabled={modeQuery.response?.type === "Edit"}>
+		{@render pageChildren()}
+	</AppLayout>
+</div>
 
 <AnalyticsMonitor {projectId} />
 

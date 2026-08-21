@@ -92,7 +92,7 @@ impl AppSettingsWithDiskSync {
         &self,
         FeatureFlagsUpdate {
             unapply_v3_pgm,
-            single_branch,
+            single_branch: _,
             worktree_manipulation,
         }: FeatureFlagsUpdate,
     ) -> Result<()> {
@@ -100,9 +100,10 @@ impl AppSettingsWithDiskSync {
         if let Some(unapply_v3_pgm) = unapply_v3_pgm {
             settings.feature_flags.unapply_v3_pgm = unapply_v3_pgm;
         }
-        if let Some(single_branch) = single_branch {
-            settings.feature_flags.single_branch = single_branch;
-        }
+        // Real Git branch mode is a GitTogether product invariant. The input
+        // field remains deserializable for older clients, but can no longer
+        // re-enable the legacy managed-workspace workflow.
+        settings.feature_flags.single_branch = true;
         if let Some(worktree_manipulation) = worktree_manipulation {
             settings.feature_flags.worktree_manipulation = worktree_manipulation;
         }
@@ -192,5 +193,22 @@ mod tests {
             Some(true),
             "the API payload should map unapplyV3Pgm to the settings update"
         );
+    }
+
+    #[test]
+    fn feature_flags_update_cannot_enable_legacy_workspace_mode() {
+        let (dir, settings) = create_test_settings();
+
+        settings
+            .update_feature_flags(FeatureFlagsUpdate {
+                unapply_v3_pgm: None,
+                single_branch: Some(false),
+                worktree_manipulation: None,
+            })
+            .unwrap();
+
+        assert!(settings.get().unwrap().feature_flags.single_branch);
+        let reloaded = AppSettingsWithDiskSync::new_with_customization(dir.path(), None).unwrap();
+        assert!(reloaded.get().unwrap().feature_flags.single_branch);
     }
 }

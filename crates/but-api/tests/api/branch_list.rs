@@ -35,6 +35,26 @@ fn cached_review(source_branch: &str, number: i64) -> ForgeReview {
 }
 
 #[test]
+fn lists_real_branches_without_a_project_target() -> anyhow::Result<()> {
+    let (repo, _tmp) = repo_with_feature_branch()?;
+    let ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
+
+    let mut names: Vec<String> = but_api::branch::branch_list(&ctx)?
+        .into_iter()
+        .flat_map(|stack| stack.branches)
+        .map(|branch| branch.branch.display_name.to_str_lossy().into_owned())
+        .collect();
+    names.sort();
+
+    assert_eq!(
+        names,
+        vec!["feature".to_string(), "main".to_string()],
+        "ordinary Git refs remain visible when no integration target is configured"
+    );
+    Ok(())
+}
+
+#[test]
 fn groups_classifies_and_enriches_from_cache() -> anyhow::Result<()> {
     let (repo, _tmp) = repo_with_feature_branch()?;
     set_project_target_to_feature(&repo)?;

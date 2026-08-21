@@ -85,29 +85,22 @@ export function getStackServiceMock() {
 	StackServiceMock.prototype.branchChanges = vi.fn();
 	StackServiceMock.prototype.branchChange = vi.fn();
 
-	StackServiceMock.prototype.newStack = vi.fn();
-	StackServiceMock.prototype.newStackMutation = vi.fn();
-	StackServiceMock.prototype.createStack = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.updateStack = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
-	StackServiceMock.prototype.updateStackOrder = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.pushStack = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.createCommit = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.updateCommitMessage = [
 		vi.fn(),
 		reactive(() => mockReduxFulfilled({})),
 	];
-	StackServiceMock.prototype.newBranch = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.uncommit = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.insertBlankCommit = {
 		useMutation: vi.fn(() => [vi.fn(), reactive(() => mockReduxFulfilled({}))]),
 		mutate: vi.fn(),
 	};
-	StackServiceMock.prototype.unapply = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.publishBranch = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.amendCommit = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.discardChanges = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.updateBranchName = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
-	StackServiceMock.prototype.branchRemove = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.branchRename = [vi.fn(), reactive(() => mockReduxFulfilled({}))];
 	StackServiceMock.prototype.updateBranchDescription = [
 		vi.fn(),
@@ -120,8 +113,6 @@ export function getStackServiceMock() {
 	StackServiceMock.prototype.applyBranchIntegration = vi.fn();
 	StackServiceMock.prototype.previewBranchIntegration = vi.fn();
 	StackServiceMock.prototype.fetchInitialBranchIntegration = vi.fn();
-	StackServiceMock.prototype.branchApply = vi.fn();
-	StackServiceMock.prototype.reviewApply = vi.fn();
 	StackServiceMock.prototype.legacyUnapplyLines = vi.fn();
 	StackServiceMock.prototype.legacyUnapplyHunk = vi.fn();
 	StackServiceMock.prototype.legacyUnapplyFiles = vi.fn();

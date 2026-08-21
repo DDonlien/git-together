@@ -5,6 +5,32 @@ mod without_workspace {
     use crate::utils::read_only_in_memory_scenario_named;
 
     #[test]
+    fn works_without_a_project_target() -> anyhow::Result<()> {
+        let repo =
+            read_only_in_memory_scenario_named("with-remotes-no-workspace", "nothing-to-push")?;
+        let meta = InMemoryRefMetadata::default();
+
+        let details = but_workspace::branch_details(
+            &repo,
+            "refs/heads/A".try_into()?,
+            &meta,
+            &ProjectMeta::default(),
+        )?;
+
+        assert_eq!(
+            details.base_commit,
+            repo.rev_parse_single("refs/heads/main")?.detach(),
+            "without integration metadata, the first-parent root is the display base"
+        );
+        assert_eq!(
+            details.commits.len(),
+            3,
+            "ordinary Git mode shows the branch's complete first-parent history"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn uses_the_project_target_as_the_traversal_boundary() -> anyhow::Result<()> {
         let repo =
             read_only_in_memory_scenario_named("with-remotes-no-workspace", "nothing-to-push")?;

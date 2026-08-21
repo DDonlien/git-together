@@ -1,66 +1,8 @@
 import { FileChangeDropData, FolderChangeDropData, HunkDropDataV3 } from "$lib/dragging/draggables";
 import { UNCOMMITTED_SERVICE } from "$lib/selection/uncommittedService.svelte";
-import { normalizeReferenceSubject } from "$lib/stacks/commitMovePlacement";
-import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 import { UI_STATE } from "$lib/state/uiState.svelte";
 import { inject } from "@gitbutler/core/context";
-import type { DropResult } from "$lib/dragging/dropResult";
 import type { DropzoneHandler } from "$lib/dragging/handler";
-
-export class BranchDropData {
-	constructor(
-		readonly stackId: string,
-		readonly branchName: string,
-		readonly hasConflicts: boolean,
-		readonly numberOfBranchesInStack: number,
-		readonly numberOfCommits: number,
-		readonly prNumber: number | undefined,
-		readonly allOtherPrNumbersInStack: number[],
-	) {}
-
-	print(): string {
-		return `BranchDropData(${this.stackId}, ${this.branchName}, ${this.hasConflicts})`;
-	}
-}
-
-export function acceptsSameStackBranchDrop(
-	data: BranchDropData,
-	targetBranchName: string,
-): boolean {
-	return data.branchName !== targetBranchName;
-}
-
-export class MoveBranchDzHandler implements DropzoneHandler {
-	private readonly stackService = inject(STACK_SERVICE);
-
-	constructor(
-		private readonly projectId: string,
-		private readonly stackId: string,
-		private readonly branchName: string,
-	) {}
-
-	print(): string {
-		return `MoveBranchDzHandler(${this.projectId}, ${this.stackId}, ${this.branchName})`;
-	}
-
-	accepts(data: unknown): boolean {
-		if (!(data instanceof BranchDropData) || data.hasConflicts) {
-			return false;
-		}
-		// Dropping a (non-empty) branch onto a different stack merges it into that stack.
-		if (data.stackId !== this.stackId) {
-			return data.numberOfCommits > 0;
-		}
-		return acceptsSameStackBranchDrop(data, this.branchName);
-	}
-	async ondrop(data: BranchDropData): Promise<DropResult | void> {
-		await this.stackService.moveBranch({
-			projectId: this.projectId,
-			subjectBranch: normalizeReferenceSubject(data.branchName),
-			targetBranch: normalizeReferenceSubject(this.branchName),
-		});
-	}
-}
 
 export class StartCommitDzHandler implements DropzoneHandler {
 	private readonly uiState = inject(UI_STATE);

@@ -122,6 +122,7 @@ Change
 - Feature：workspace 可以围绕四类可组合区域组织：左侧 Repository，仓库内的 Threads/Tasks，中间主要 Chat，最右侧 Context Panel；区域可以展开、收起和重新排列。
 - Context Panel 至少包含 Files、Diff、Preview、Terminal、Git Graph 和 Git Details；Git Graph 从下往上展示历史和 branch 关系。
 - 用户价值：repository、任务/对话、Agent 和 Git 上下文在一个页面内相互关联，而不是分别散落在 Git GUI、终端、Agent 工具和文件浏览器中。
+- 视觉一致性：Work Trees 页面与 Overview、原 Repository Workspace 和 Settings 共享 GitButler 既有的字号层级、控件高度、圆角、边框和间距密度，不在该页面单独放大字号或另建 GUI scale。
 - 当前状态：修正中。Repositories、Threads/Tasks、Chat、Context 四个区域继续作为 Work Trees 试验视图的一部分，可独立折叠并用方向按钮重新排列；Context 提供 Files、Diff、Preview、Terminal、Git Graph、Git Details 和 Branch Workspace。该试验视图必须复用 GitButler App Shell、共享组件和视觉状态。
 - 边界：这是一项 GUI Feature 设计，不把每个面板或每种状态拆成独立的 implementation task；具体布局可在设计阶段继续收敛。
 
@@ -134,7 +135,7 @@ Change
 - 当前状态：已实现通用 HTTPS 连接基线。用户可创建、替换、撤销连接，按 scheme、host、port 和路径段限定凭据作用域，把连接绑定到 repository，并用于 clone、fetch、Get Latest 和 push；界面与后端不会返回或显示已保存 secret。
 - 边界：第一阶段以通用 Git over HTTPS 和服务器支持的账号/密码认证为基础；GitHub、GitLab 等服务商专属的 Pull Request、CI 和高级 API 仍然是可选的 provider-specific 能力，不能假设所有自托管服务器都提供这些 API。
 - 安全：密码或等效的访问 secret 必须进入操作系统凭据存储，不写入 repository 配置、远程 URL、Feature 文档、日志或终端输出；用户可以查看、替换和撤销已保存的连接配置。
-- 交互：添加 repository、Home 空状态、repository Settings 和远程操作失败提示都应能引导用户选择或创建服务器连接配置，并明确显示当前操作使用的服务器和账号。
+- 交互：Global Settings 将原有 `Git stuff` 与 `Integrations` 合并为单一 `Git Integrations` 页面；Gitea 等自托管 HTTPS Git 连接在这里统一创建、编辑和撤销，repository Settings 只负责绑定已有连接。添加 repository、Home 空状态和远程操作失败提示都应引导用户进入该页面或选择已有连接，并明确显示当前操作使用的服务器和账号。
 
 ## Version line - 0.3.x - Git Presence Server 心跳功能
 

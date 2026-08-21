@@ -6,11 +6,7 @@
 	import CreateReviewBox from "$components/forge/CreateReviewBox.svelte";
 	import Dropzone from "$components/shared/Dropzone.svelte";
 	import DropzoneOverlay from "$components/shared/DropzoneOverlay.svelte";
-	import {
-		BranchDropData,
-		StartCommitDzHandler,
-	} from "$lib/dragging/dropHandlers/branchDropHandler";
-	import { MoveCommitDzHandler } from "$lib/dragging/dropHandlers/commitDropHandler";
+	import { StartCommitDzHandler } from "$lib/dragging/dropHandlers/branchDropHandler";
 	import { ReorderCommitDzHandler } from "$lib/dragging/stackingReorderDropzoneManager";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { PR_SERVICE } from "$lib/forge/prService.svelte";
@@ -18,7 +14,6 @@
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import { ReviewBadge, TestId } from "@gitbutler/ui";
-	import { isDefined } from "@gitbutler/ui/utils/typeguards";
 	import type { BranchIconName } from "$lib/branches/branchIcon";
 	import type { DropzoneHandler } from "$lib/dragging/handler";
 	import type { PushStatus, Segment } from "@gitbutler/but-sdk";
@@ -165,7 +160,6 @@
 	}
 
 	function getDropzoneOverlayLabel(handler: DropzoneHandler | undefined): string {
-		if (handler instanceof MoveCommitDzHandler) return "Move here";
 		if (handler instanceof ReorderCommitDzHandler) return "Reorder here";
 		if (handler instanceof StartCommitDzHandler) return "Start commit";
 		return "Drop here";
@@ -180,13 +174,7 @@
 	style:overflow={overflowHidden ? "hidden" : undefined}
 >
 	{#if args.type === "stack-branch"}
-		{@const moveHandler = args.stackId
-			? new MoveCommitDzHandler(args.stackId, projectId, branchName)
-			: undefined}
-
-		<Dropzone
-			handlers={args.first ? [moveHandler, ...args.dropzones].filter(isDefined) : args.dropzones}
-		>
+		<Dropzone handlers={args.dropzones}>
 			{#snippet overlay({ hovered, activated, handler })}
 				{@const label = getDropzoneOverlayLabel(handler)}
 				<DropzoneOverlay {hovered} {activated} {label} />
@@ -223,29 +211,12 @@
 				conflicts={args.isConflicted}
 				{showPrCreation}
 				changedFiles={args.changedFiles}
-				dragArgs={{
-					disabled: args.isConflicted || (args.type === "stack-branch" && args.applied === false),
-					label: branchName,
-					pushStatus: args.pushStatus,
-					data:
-						args.type === "stack-branch" && args.stackId
-							? new BranchDropData(
-									args.stackId,
-									branchName,
-									args.isConflicted,
-									args.numberOfBranchesInStack,
-									args.numberOfCommits,
-									args.prNumber,
-									args.allOtherPrNumbersInStack,
-								)
-							: undefined,
-				}}
 			>
 				{#snippet emptyState()}
 					<span class="branch-header__empty-state-span">This is an empty branch.</span>
 					<span class="branch-header__empty-state-span">Click for details.</span>
 					<br />
-					Create or drag & drop commits here.
+					Create commits here.
 				{/snippet}
 
 				{#snippet content()}

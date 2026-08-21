@@ -42,29 +42,18 @@ import type {
 	CommitRewordResult,
 	CommitSquashResult,
 	CommitInsertBlankResult,
-	ApplyOutcome,
-	MoveBranchResult,
 	RejectionReason,
 	UncommitResult,
 	InsertSide,
 	RelativeTo,
 	RefInfo,
-	StackEntryNoOpt,
 	BottomUpdate,
 	WorkspaceIntegrateUpstreamOutcome,
-	BranchCreatePlacement,
-	BranchCreateResult,
-	BranchRemoveResult,
 	UncommitChangesFromCommitsResult,
 	UncommitChangesSource,
 	BranchRenameResult,
 	PushResult,
 } from "@gitbutler/but-sdk";
-
-export type BranchParams = {
-	name?: string;
-	order?: number;
-};
 
 export type CreateCommitRequest = {
 	message: string;
@@ -238,36 +227,10 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				];
 			},
 		}),
-		createStack: build.mutation<StackEntryNoOpt, { projectId: string; branch: BranchParams }>({
-			extraOptions: {
-				command: "create_virtual_branch",
-				actionName: "Create Stack",
-			},
-			query: (args) => args,
-			invalidatesTags: (result, _error) => [
-				invalidatesItem(ReduxTag.StackDetails, result?.id || "undefined"),
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
-		updateStackOrder: build.mutation<
-			void,
-			{ projectId: string; stacks: { id: string; order: number }[] }
-		>({
-			extraOptions: {
-				command: "update_stack_order",
-				actionName: "Update Stack Order",
-			},
-			query: (args) => args,
-			// This invalidation causes the order to jump back and forth
-			// on save, and it's a bit unclear why. It's not important to
-			// reload, however, so leaving it like this for now.
-			// invalidatesTags: [invalidatesList(ReduxTag.Stacks)]
-		}),
 		/**
 		 * Note: This is specifically for looking up branches outside of
-		 * a stacking context. Stacked workspace branches should be read from
-		 * the `head_info`-backed workspace details query.
+		 * a stacking context. Stacked branches should be read from the
+		 * `head_info`-backed details query.
 		 */
 		unstackedBranchDetails: build.query<
 			{
@@ -439,50 +402,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.BranchChanges),
 				invalidatesList(ReduxTag.WorktreeChanges),
 				...(stackId ? [invalidatesItem(ReduxTag.StackDetails, stackId)] : []),
-			],
-		}),
-		newBranch: build.mutation<
-			void,
-			{ projectId: string; stackId: string; request: { targetPatch?: string; name: string } }
-		>({
-			extraOptions: {
-				command: "create_branch",
-				actionName: "Create Branch",
-			},
-			query: (args) => args,
-			invalidatesTags: (_result, _error, args) => [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesItem(ReduxTag.StackDetails, args.stackId),
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
-		branchCreate: build.mutation<
-			BranchCreateResult,
-			{ projectId: string; newRef: string | null; placement: BranchCreatePlacement }
-		>({
-			extraOptions: {
-				command: "branch_create",
-				actionName: "Create Branch",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
-		branchRemove: build.mutation<BranchRemoveResult, { projectId: string; refName: number[] }>({
-			extraOptions: {
-				command: "branch_remove",
-				actionName: "Remove Branch",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.Stacks), // Removing a branch can remove a stack
-				invalidatesList(ReduxTag.StackDetails),
-				invalidatesList(ReduxTag.BranchListing),
 			],
 		}),
 		branchRename: build.mutation<
@@ -669,19 +588,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.BranchListing),
 			],
 		}),
-		unapply: build.mutation<void, { projectId: string; stackId: string }>({
-			extraOptions: {
-				command: "unapply_stack",
-				actionName: "Unapply Stack",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.BranchListing),
-				invalidatesList(ReduxTag.Stacks),
-			],
-		}),
 		updateBranchName: build.mutation<
 			BranchReference,
 			{
@@ -764,59 +670,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 				invalidatesList(ReduxTag.StackDetails),
 			],
 		}),
-		moveBranch: build.mutation<
-			MoveBranchResult,
-			{
-				projectId: string;
-				subjectBranch: string;
-				targetBranch: string;
-			}
-		>({
-			extraOptions: {
-				command: "move_branch",
-				actionName: "Move Branch",
-			},
-			query: ({ projectId, subjectBranch, targetBranch }) => ({
-				projectId,
-				subjectBranch,
-				targetBranch,
-				dryRun: false,
-			}),
-			invalidatesTags: [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.WorktreeChanges), // Moving commits can cause conflicts
-				invalidatesList(ReduxTag.BranchChanges),
-				// Reordering empty branches in single-branch mode is metadata-only and doesn't move
-				// HEAD, so the stack/branch list must be invalidated explicitly to reflect the new order.
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-			],
-		}),
-		tearOffBranch: build.mutation<
-			MoveBranchResult,
-			{
-				projectId: string;
-				sourceStackId?: string;
-				subjectBranchName: string;
-			}
-		>({
-			extraOptions: {
-				command: "tear_off_branch",
-				actionName: "Tear Off Branch",
-			},
-			query: ({ projectId, subjectBranchName }) => ({
-				projectId,
-				subjectBranch: normalizeReferenceSubject(subjectBranchName),
-				dryRun: false,
-			}),
-			invalidatesTags: (_result, _error, args) => [
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.WorktreeChanges), // Moving commits can cause conflicts
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.BranchChanges),
-				...(args.sourceStackId ? [invalidatesItem(ReduxTag.StackDetails, args.sourceStackId)] : []),
-			],
-		}),
 		landBranch: build.mutation<
 			BranchLandResult,
 			{ projectId: string; branch: string; noFf: boolean; wholeStack: boolean }
@@ -877,37 +730,6 @@ export function buildStackEndpoints(build: BackendEndpointBuilder) {
 							invalidatesList(ReduxTag.StackDetails),
 							invalidatesList(ReduxTag.BranchListing),
 						],
-		}),
-		branchApply: build.mutation<ApplyOutcome, { projectId: string; existingBranch: string }>({
-			extraOptions: {
-				command: "apply",
-				actionName: "Apply Branch",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.HeadMetadata),
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-				invalidatesList(ReduxTag.BranchListing),
-			],
-		}),
-		reviewApply: build.mutation<ApplyOutcome, { projectId: string; reviewId: number }>({
-			extraOptions: {
-				command: "review_apply",
-				actionName: "Apply Review",
-			},
-			query: (args) => args,
-			invalidatesTags: [
-				invalidatesList(ReduxTag.HeadMetadata),
-				invalidatesList(ReduxTag.HeadSha),
-				invalidatesList(ReduxTag.WorktreeChanges),
-				invalidatesList(ReduxTag.Stacks),
-				invalidatesList(ReduxTag.StackDetails),
-				invalidatesList(ReduxTag.BranchListing),
-				invalidatesList(ReduxTag.PullRequests),
-			],
 		}),
 		deleteLocalBranch: build.mutation<
 			void,

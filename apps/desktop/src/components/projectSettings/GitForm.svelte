@@ -34,8 +34,7 @@
 			{/snippet}
 			{#snippet caption()}
 				Replace the "Create PR" button with a "Land" button that integrates the branch straight into
-				the target branch, without opening a pull request. Shown on the bottom branch of a stack;
-				works without a forge integration.
+				the target branch without opening a pull request. Works without a forge integration.
 			{/snippet}
 			{#snippet actions()}
 				<Toggle id="landDirectly" bind:checked={$landDirectly} />

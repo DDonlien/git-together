@@ -3,7 +3,7 @@
 	import FullviewLoading from "$components/shared/FullviewLoading.svelte";
 	import ReduxResult from "$components/shared/ReduxResult.svelte";
 	import MainViewport from "$components/views/MainViewport.svelte";
-	import MultiStackView from "$components/views/MultiStackView.svelte";
+	import BranchWorkspaceView from "$components/views/BranchWorkspaceView.svelte";
 	import UnassignedView from "$components/views/UnassignedView.svelte";
 	import { FILE_SELECTION_MANAGER } from "$lib/selection/fileSelectionManager.svelte";
 	import { createWorktreeSelection } from "$lib/selection/key";
@@ -33,7 +33,7 @@
 	const lastAdded = $derived(worktreeSelection.lastAdded);
 	const previewOpen = $derived(!!$lastAdded?.key);
 
-	// Transform unassigned changes to SelectedFile[] format
+	// Transform working-tree changes to SelectedFile[] format.
 	const unassignedChanges = $derived(uncommittedService.getChangesByStackId(null));
 	const projectState = $derived(uiState.project(projectId));
 	const exclusiveAction = $derived(projectState.exclusiveAction.current);
@@ -92,7 +92,7 @@
 				<FullviewLoading />
 			{/snippet}
 			{#snippet children(stacks, { projectId })}
-				<MultiStackView {projectId} {stacks} {selectionId} {scrollToStackId} {onScrollComplete} />
+				<BranchWorkspaceView {projectId} {stacks} {scrollToStackId} {onScrollComplete} />
 			{/snippet}
 		</ReduxResult>
 	{/snippet}

@@ -1,5 +1,4 @@
 import { key, type SelectionId } from "$lib/selection/key";
-import type { BranchDropData } from "$lib/dragging/dropHandlers/branchDropHandler";
 import type { CommitDropData } from "$lib/dragging/dropHandlers/commitDropHandler";
 import type { FileSelectionManager } from "$lib/selection/fileSelectionManager.svelte";
 import type { HunkAssignment, HunkHeader } from "@gitbutler/but-sdk";
@@ -88,4 +87,4 @@ export class FolderChangeDropData {
 
 export type ChangeDropData = FileChangeDropData | FolderChangeDropData;
 
-export type DropData = CommitDropData | ChangeDropData | HunkDropDataV3 | BranchDropData;
+export type DropData = CommitDropData | ChangeDropData | HunkDropDataV3;

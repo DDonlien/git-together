@@ -18,6 +18,8 @@ export function createBranchRef(branchName: string, remote: string | undefined):
 export function getBranchNameFromRef(ref: string, remote?: string): string | undefined {
 	if (ref.startsWith(REF_REMOTES_PREFIX)) {
 		ref = ref.replace(REF_REMOTES_PREFIX, "");
+	} else if (ref.startsWith(REF_HEADS_PREFIX)) {
+		ref = ref.replace(REF_HEADS_PREFIX, "");
 	}
 
 	if (remote !== undefined) {

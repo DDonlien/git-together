@@ -108,7 +108,7 @@ pub(super) fn decide_land_outcome(
     let merged_tree = merge.tree.write()?.detach();
 
     // Build the 2-parent merge commit. Parent order is `[target, feature]` so `--first-parent`
-    // mainline walks stay correct. `commit_signatures()` honors `gitbutler.gitbutlerCommitter`.
+    // mainline walks stay correct. Signatures always come from the user's Git configuration.
     let (author, committer) = repo.commit_signatures()?;
     let mut commit = gix::objs::Commit {
         tree: merged_tree,

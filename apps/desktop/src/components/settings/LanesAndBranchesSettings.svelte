@@ -5,10 +5,8 @@
 		stagingBehaviorFeature,
 		type StagingBehavior,
 	} from "$lib/config/uiFeatureFlags";
-	import { persisted } from "@gitbutler/shared/persisted";
-	import { CardGroup, RadioButton, Toggle, Spacer } from "@gitbutler/ui";
+	import { CardGroup, RadioButton, Spacer, Toggle } from "@gitbutler/ui";
 
-	const addToLeftmost = persisted<boolean>(false, "branch-placement-leftmost");
 	function onStagingBehaviorFormChange(form: HTMLFormElement) {
 		const formData = new FormData(form);
 		const selectedStagingBehavior = formData.get("stagingBehaviorType") as StagingBehavior | null;
@@ -16,23 +14,6 @@
 		stagingBehaviorFeature.set(selectedStagingBehavior);
 	}
 </script>
-
-<CardGroup.Item standalone labelFor="add-leftmost">
-	{#snippet title()}
-		Place new lanes on the left side
-	{/snippet}
-	{#snippet caption()}
-		By default, new lanes are added to the rightmost position. Enable this to add them to the
-		leftmost position instead.
-	{/snippet}
-	{#snippet actions()}
-		<Toggle
-			id="add-leftmost"
-			checked={$addToLeftmost}
-			onclick={() => ($addToLeftmost = !$addToLeftmost)}
-		/>
-	{/snippet}
-</CardGroup.Item>
 
 <CardGroup>
 	<CardGroup.Item labelFor="auto-select-creation">
@@ -56,8 +37,8 @@
 			Auto-select text on branch rename
 		{/snippet}
 		{#snippet caption()}
-			Automatically select the text when renaming a branch or lane, making it easier to replace the
-			entire name.
+			Automatically select the text when renaming a branch, making it easier to replace the entire
+			name.
 		{/snippet}
 		{#snippet actions()}
 			<Toggle
@@ -84,11 +65,10 @@
 	<form class="stack-v" onchange={(e) => onStagingBehaviorFormChange(e.currentTarget)}>
 		<CardGroup.Item labelFor="stage-all">
 			{#snippet title()}
-				Auto-select all assigned files
+				Auto-select all changed files
 			{/snippet}
 			{#snippet caption()}
-				Pre-selects all files assigned to this branch. Falls back to unassigned files if none are
-				assigned.
+				Pre-selects every changed file in the working tree.
 			{/snippet}
 			{#snippet actions()}
 				<RadioButton
@@ -105,8 +85,8 @@
 				Auto-select only your picked files
 			{/snippet}
 			{#snippet caption()}
-				Pre-selects only the files you have already picked. Falls back to assigned files, then
-				unassigned, if nothing is picked.
+				Pre-selects only the files you have already picked. If nothing is picked, no files are
+				pre-selected.
 			{/snippet}
 			{#snippet actions()}
 				<RadioButton

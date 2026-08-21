@@ -204,6 +204,12 @@ pub fn get_base_branch_data(
     ctx: &but_ctx::Context,
     perm: &mut RepoExclusive,
 ) -> Result<Option<BaseBranch>> {
+    // An integration target is optional in ordinary Git mode. Avoid invoking
+    // the legacy target-only resolver (and logging an error) when none exists.
+    if ctx.project_meta()?.target_ref.is_none() {
+        return Ok(None);
+    }
+
     if let Ok(base_branch) =
         gitbutler_branch_actions::base::get_base_branch_data(ctx, perm.read_permission())
     {

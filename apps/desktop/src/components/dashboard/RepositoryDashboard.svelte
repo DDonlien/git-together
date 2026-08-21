@@ -8,6 +8,7 @@
 	import { handleAddProjectOutcome } from "$lib/project/project";
 	import { PROJECTS_SERVICE } from "$lib/project/projectsService";
 	import { projectPath } from "$lib/routes/routes.svelte";
+	import { useSettingsModal } from "$lib/settings/settingsModal.svelte";
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import { persisted } from "@gitbutler/shared/persisted";
@@ -17,7 +18,6 @@
 	import { get } from "svelte/store";
 	import type {
 		BranchSummary,
-		ConnectionProfile,
 		ConnectionState,
 		FileDiff,
 		FilePreview,
@@ -62,6 +62,7 @@
 	const backend = inject(BACKEND);
 	const projectsService = inject(PROJECTS_SERVICE);
 	const uiState = inject(UI_STATE);
+	const { openGeneralSettings } = useSettingsModal();
 	const gitTogether = new GitTogetherService(backend);
 	const projectsQuery = projectsService.projects();
 	const serverCapabilitiesQuery = projectsService.serverCapabilities();
@@ -114,13 +115,6 @@
 
 	let connections = $state<ConnectionState>({ profiles: [], bindings: {} });
 	let connectionsLoading = $state(false);
-	let connectionSaving = $state(false);
-	let connectionId = $state<string>();
-	let connectionLabel = $state("");
-	let connectionBaseUrl = $state("");
-	let connectionUsername = $state("");
-	let connectionSecret = $state("");
-	let pendingConnectionDelete = $state<string>();
 	let cloneProfileId = $state("");
 	let cloneUrl = $state("");
 	let cloneDestination = $state("");
@@ -392,7 +386,7 @@
 			setOperation(projectId, {
 				state: "failed",
 				kind: action,
-				detail: `${errorMessage(error)} Open Connections if this repository needs a saved HTTPS account.`,
+				detail: `${errorMessage(error)} Open Git Integrations if this repository needs a saved HTTPS account.`,
 			});
 			return false;
 		} finally {
@@ -682,46 +676,9 @@
 		}
 	}
 
-	function editConnection(profile?: ConnectionProfile) {
-		connectionId = profile?.id;
-		connectionLabel = profile?.label ?? "";
-		connectionBaseUrl = profile?.baseUrl ?? "";
-		connectionUsername = profile?.username ?? "";
-		connectionSecret = "";
-	}
-
-	async function saveConnection() {
-		connectionSaving = true;
-		try {
-			await gitTogether.saveConnection({
-				id: connectionId,
-				label: connectionLabel,
-				baseUrl: connectionBaseUrl,
-				username: connectionUsername,
-				secretValue: connectionSecret || undefined,
-			});
-			editConnection();
-			await loadConnections();
-			chipToasts.success("Connection metadata saved; secret stored in the system Keychain");
-		} catch (error: unknown) {
-			showError("Unable to save connection", error);
-		} finally {
-			connectionSaving = false;
-		}
-	}
-
-	async function deleteConnection(id: string) {
-		if (pendingConnectionDelete !== id) {
-			pendingConnectionDelete = id;
-			return;
-		}
-		try {
-			connections = await gitTogether.deleteConnection(id);
-			pendingConnectionDelete = undefined;
-			await refreshProjects();
-		} catch (error: unknown) {
-			showError("Unable to revoke connection", error);
-		}
+	function openGitIntegrations() {
+		activeModal = null;
+		openGeneralSettings("git-integrations");
 	}
 
 	async function bindFocusedConnection(profileId: string) {
@@ -790,7 +747,7 @@
 <main
 	class:dashboard--embedded={embedded}
 	class:dashboard--overview={view === "overview"}
-	class="dashboard"
+	class="dashboard text-13"
 	aria-label={view === "overview" ? "GitTogether overview" : "GitTogether work trees"}
 >
 	<header class="dashboard-header">
@@ -799,8 +756,8 @@
 				<Icon name={view === "overview" ? "repo" : "split"} size={18} />
 			</div>
 			<div>
-				<h1>{view === "overview" ? "Overview" : "Work Trees"}</h1>
-				<p>
+				<h1 class="text-18 text-bold">{view === "overview" ? "Overview" : "Work Trees"}</h1>
+				<p class="text-12">
 					{view === "overview"
 						? "All registered repositories and their real Git state"
 						: "Parallel worktrees, local sessions, threads, and repository context"}
@@ -808,18 +765,11 @@
 			</div>
 		</div>
 		<div class="dashboard-header__actions">
-			<span class="connection-state"><i></i>Local Git mode · Presence unavailable until 0.3.x</span>
+			<span class="connection-state text-12"
+				><i></i>Local Git mode · Presence unavailable until 0.3.x</span
+			>
 			{#if view === "overview"}
-				<Button
-					kind="outline"
-					icon="link"
-					onclick={() => {
-						activeModal = "connections";
-						void loadConnections();
-					}}
-				>
-					Connections
-				</Button>
+				<Button kind="outline" icon="puzzle" onclick={openGitIntegrations}>Git Integrations</Button>
 				{#if canAddProjects}
 					<Button style="pop" icon="plus" onclick={addProject}>Add repository</Button>
 				{/if}
@@ -902,33 +852,37 @@
 			>
 				<div class="panel-header">
 					<div>
-						{#if view === "worktrees"}<span class="panel-kicker"
+						{#if view === "worktrees"}<span class="panel-kicker text-11 text-bold"
 								>{String(index + 1).padStart(2, "0")}</span
 							>{/if}
-						<h2>{panelTitles[panel]}</h2>
+						<h2 class="text-14 text-semibold">{panelTitles[panel]}</h2>
 					</div>
 					{#if view === "worktrees"}<div class="panel-header__actions">
-							<button
-								type="button"
-								aria-label={`Move ${panelTitles[panel]} left`}
+							<Button
+								size="tag"
+								kind="ghost"
+								icon="arrow-left"
+								tooltip={`Move ${panelTitles[panel]} left`}
 								onclick={() => movePanel(panel, -1)}
-								disabled={index === 0}>←</button
-							>
-							<button
-								type="button"
-								aria-label={`Move ${panelTitles[panel]} right`}
+								disabled={index === 0}
+							/>
+							<Button
+								size="tag"
+								kind="ghost"
+								icon="arrow-right"
+								tooltip={`Move ${panelTitles[panel]} right`}
 								onclick={() => movePanel(panel, 1)}
-								disabled={index === visiblePanels.length - 1}>→</button
-							>
-							<button
-								type="button"
-								aria-label={isCollapsed(panel)
+								disabled={index === visiblePanels.length - 1}
+							/>
+							<Button
+								size="tag"
+								kind="ghost"
+								icon={isCollapsed(panel) ? "plus" : "minus"}
+								tooltip={isCollapsed(panel)
 									? `Expand ${panelTitles[panel]}`
 									: `Collapse ${panelTitles[panel]}`}
 								onclick={() => togglePanel(panel)}
-							>
-								{isCollapsed(panel) ? "+" : "−"}
-							</button>
+							/>
 						</div>{/if}
 				</div>
 
@@ -954,15 +908,16 @@
 									</p>
 									{#if projects.length === 0}
 										<div class="empty-actions">
-											{#if canAddProjects}<button
-													type="button"
-													class="button button--primary"
-													onclick={addProject}>Add local repository</button
+											{#if canAddProjects}<Button style="pop" icon="plus" onclick={addProject}
+													>Add local repository</Button
 												>{/if}
-											<button
-												type="button"
-												class="button"
-												onclick={() => (activeModal = "connections")}>Connect &amp; clone</button
+											<Button
+												kind="outline"
+												icon="link"
+												onclick={() => {
+													activeModal = "connections";
+													void loadConnections();
+												}}>Connect &amp; clone</Button
 											>
 										</div>
 									{/if}
@@ -993,10 +948,11 @@
 							{#if focusedOverview}
 								<div class="subsection-heading">
 									<div><span class="eyebrow">Protected</span><strong>Work Sessions</strong></div>
-									<button
-										type="button"
-										class="mini-button"
-										onclick={() => (activeModal = "session")}>+ Session</button
+									<Button
+										size="tag"
+										kind="outline"
+										icon="plus"
+										onclick={() => (activeModal = "session")}>Session</Button
 									>
 								</div>
 								<div class="session-list">
@@ -1013,28 +969,33 @@
 												><span>{session.touchedRoots.length} roots</span>
 											</div>
 											<div class="session-actions">
-												<button
-													type="button"
+												<Button
+													size="tag"
+													kind="outline"
 													onclick={() => {
 														selectedWorktreePaths = {
 															...selectedWorktreePaths,
 															[focusedProject!.id]: session.worktreePath,
 														};
-													}}>Focus</button
+													}}>Focus</Button
 												>
-												<button
-													type="button"
-													onclick={() => void openTerminal(session.worktreePath)}>Terminal</button
+												<Button
+													size="tag"
+													kind="outline"
+													icon="terminal"
+													onclick={() => void openTerminal(session.worktreePath)}>Terminal</Button
 												>
-												<button
-													type="button"
+												<Button
+													size="tag"
+													kind="outline"
 													onclick={() => void assessSession(session)}
-													disabled={sessionBusy[session.id]}>Assess</button
+													disabled={sessionBusy[session.id]}>Assess</Button
 												>
-												<button
-													type="button"
+												<Button
+													size="tag"
+													kind="outline"
 													onclick={() => void snapshotSession(session)}
-													disabled={sessionBusy[session.id]}>Snapshot</button
+													disabled={sessionBusy[session.id]}>Snapshot</Button
 												>
 											</div>
 											{#if sessionAssessments[session.id]}
@@ -1066,11 +1027,13 @@
 									}}
 								>
 									<input
+										class="text-input text-13"
 										bind:value={newThreadTitle}
 										placeholder="New thread title"
 										aria-label="New thread title"
 									/>
 									<select
+										class="text-input text-12"
 										bind:value={newThreadSessionId}
 										aria-label="Attach thread to Work Session"
 									>
@@ -1079,8 +1042,11 @@
 												>{session.title}</option
 											>{/each}
 									</select>
-									<button type="submit" disabled={threadCreating || !newThreadTitle.trim()}
-										>Add</button
+									<Button
+										type="submit"
+										size="tag"
+										style="pop"
+										disabled={threadCreating || !newThreadTitle.trim()}>Add</Button
 									>
 								</form>
 								<div class="thread-list">
@@ -1138,7 +1104,7 @@
 									{/each}
 									{#if !threadLoading && threadMessages.length === 0}
 										<div class="chat-empty">
-											<span>◌</span><strong>Thread is empty</strong>
+											<span><Icon name="chat" size={24} /></span><strong>Thread is empty</strong>
 											<p>
 												Messages stay local and scoped to this repository. No remote AI reply is
 												implied.
@@ -1154,20 +1120,24 @@
 									}}
 								>
 									<textarea
+										class="text-input text-13"
 										bind:value={messageDraft}
 										rows="3"
 										placeholder="Record a decision, instruction, or hand-off…"
 									></textarea>
 									<div>
-										<span>Local project log · secrets should never be pasted here</span><button
+										<span>Local project log · secrets should never be pasted here</span><Button
 											type="submit"
-											disabled={messageSending || !messageDraft.trim()}>Save message</button
+											style="pop"
+											disabled={messageSending || !messageDraft.trim()}>Save message</Button
 										>
 									</div>
 								</form>
 							{:else}
 								<div class="panel-empty">
-									<span class="empty-symbol">◌</span><strong>No thread selected</strong>
+									<span class="empty-symbol"><Icon name="chat" size={24} /></span><strong
+										>No thread selected</strong
+									>
 									<p>Choose or create a repository-scoped thread in Threads / Tasks.</p>
 								</div>
 							{/if}
@@ -1181,6 +1151,7 @@
 										role="tab"
 										aria-selected={detailTab === tab.id}
 										class:detail-tab--active={detailTab === tab.id}
+										class="text-12"
 										onclick={() => (detailTab = tab.id)}>{tab.label}</button
 									>
 								{/each}
@@ -1211,19 +1182,22 @@
 														<span>{branch.worktreeName ?? "Stored ref"}</span>
 													</div>
 													<div class="branch-column__order">
-														<button
-															type="button"
-															aria-label={`Move ${branch.name} left`}
+														<Button
+															size="tag"
+															kind="ghost"
+															icon="arrow-left"
+															tooltip={`Move ${branch.name} left`}
 															onclick={() => moveBranch(branch.refName, -1)}
-															disabled={branchIndex === 0}>←</button
-														>
-														<button
-															type="button"
-															aria-label={`Move ${branch.name} right`}
+															disabled={branchIndex === 0}
+														/>
+														<Button
+															size="tag"
+															kind="ghost"
+															icon="arrow-right"
+															tooltip={`Move ${branch.name} right`}
 															onclick={() => moveBranch(branch.refName, 1)}
 															disabled={branchIndex === focusedOverview.branches.length - 1}
-															>→</button
-														>
+														/>
 													</div>
 												</div>
 												<div class="branch-column__commits">
@@ -1256,13 +1230,14 @@
 															? `Session ${branch.sessionId.slice(0, 8)}`
 															: branch.owner}</span
 													>
-													<button
-														type="button"
+													<Button
+														size="tag"
+														kind="outline"
 														onclick={() => selectBranch(focusedProject.id, branch)}
 														disabled={!branch.worktreePath}
 														>{focusedBranch?.refName === branch.refName
 															? "Focused"
-															: "Focus"}</button
+															: "Focus"}</Button
 													>
 												</footer>
 											</article>
@@ -1342,14 +1317,12 @@
 										{:else}<div class="context-empty">Select a changed file.</div>{/if}
 									{:else if detailTab === "terminal"}
 										<div class="terminal-card">
-											<span class="terminal-prompt">❯</span><strong
+											<span class="terminal-prompt"><Icon name="terminal" size={22} /></span><strong
 												>{uiState.global.defaultTerminal.current.displayName}</strong
 											><code>{focusedWorktreePath}</code>
 											<p>The external terminal opens at the exact selected real worktree.</p>
-											<button
-												type="button"
-												class="button button--primary"
-												onclick={() => void openTerminal()}>Open terminal here</button
+											<Button style="pop" icon="terminal" onclick={() => void openTerminal()}
+												>Open terminal here</Button
 											>
 										</div>
 									{:else if detailTab === "graph"}
@@ -1402,6 +1375,7 @@
 											<div><span>Presence</span><strong>Unavailable (0.3.x)</strong></div>
 											<div class="connection-binding">
 												<span>HTTPS connection</span><select
+													class="text-input text-12"
 													value={connections.bindings[focusedProject.id] ?? ""}
 													onchange={(event) =>
 														void bindFocusedConnection(event.currentTarget.value)}
@@ -1411,11 +1385,11 @@
 														>{/each}</select
 												>
 											</div>
-											<button
-												type="button"
-												class="mini-button"
-												onclick={() => (activeModal = "connections")}
-												>Manage server connections</button
+											<Button
+												size="tag"
+												kind="outline"
+												icon="settings"
+												onclick={openGitIntegrations}>Manage in Git Integrations</Button
 											>
 											<h3>Remotes</h3>
 											{#each focusedOverview.remotes as remote}<div>
@@ -1469,7 +1443,13 @@
 						{commitTargetIds.length === 1 ? "worktree" : "worktrees"}
 					</h2>
 				</div>
-				<button type="button" onclick={() => (activeModal = null)}>×</button>
+				<Button
+					size="tag"
+					kind="ghost"
+					icon="cross"
+					tooltip="Close"
+					onclick={() => (activeModal = null)}
+				/>
 			</header>
 			<p>
 				Each selected checkout creates its own real commit and keeps an independent success or
@@ -1483,13 +1463,11 @@
 				></textarea></label
 			>
 			<footer>
-				<button type="button" class="button" onclick={() => (activeModal = null)}>Cancel</button
-				><button
-					type="button"
-					class="button button--primary"
+				<Button kind="outline" onclick={() => (activeModal = null)}>Cancel</Button><Button
+					style="pop"
 					onclick={() => void submitCommit()}
 					disabled={commitSubmitting || !commitMessage.trim()}
-					>{commitSubmitting ? "Committing…" : "Commit independently"}</button
+					>{commitSubmitting ? "Committing…" : "Commit independently"}</Button
 				>
 			</footer>
 		</div>
@@ -1502,9 +1480,14 @@
 					<span class="eyebrow">Fetch → review → apply</span>
 					<h2 id="latest-title">Get Latest safety review</h2>
 				</div>
-				<button type="button" onclick={() => (activeModal = null)} disabled={latestApplying}
-					>×</button
-				>
+				<Button
+					size="tag"
+					kind="ghost"
+					icon="cross"
+					tooltip="Close"
+					onclick={() => (activeModal = null)}
+					disabled={latestApplying}
+				/>
 			</header>
 			<p>
 				Fetch only updated remote refs. The rows below preview whether the selected worktree can be
@@ -1542,21 +1525,17 @@
 				{/each}
 			</div>
 			<footer>
-				<button
-					type="button"
-					class="button"
-					onclick={() => (activeModal = null)}
-					disabled={latestApplying}>Close</button
-				><button
-					type="button"
-					class="button button--primary"
+				<Button kind="outline" onclick={() => (activeModal = null)} disabled={latestApplying}
+					>Close</Button
+				><Button
+					style="pop"
 					onclick={() => void applyLatest()}
 					disabled={latestLoading || latestApplying}
 					>{latestApplying
 						? "Applying…"
 						: latestSafeCount > 0
 							? `Apply ${latestSafeCount} safe fast-forward${latestSafeCount === 1 ? "" : "s"}`
-							: "No update to apply"}</button
+							: "No update to apply"}</Button
 				>
 			</footer>
 		</div>
@@ -1575,7 +1554,13 @@
 					<span class="eyebrow">Real branch + linked worktree</span>
 					<h2 id="session-title">New Protected Work Session</h2>
 				</div>
-				<button type="button" onclick={() => (activeModal = null)}>×</button>
+				<Button
+					size="tag"
+					kind="ghost"
+					icon="cross"
+					tooltip="Close"
+					onclick={() => (activeModal = null)}
+				/>
 			</header>
 			<p>
 				The session starts from the focused branch HEAD, records its base and scope, and never
@@ -1594,13 +1579,11 @@
 				></label
 			>
 			<footer>
-				<button type="button" class="button" onclick={() => (activeModal = null)}>Cancel</button
-				><button
-					type="button"
-					class="button button--primary"
+				<Button kind="outline" onclick={() => (activeModal = null)}>Cancel</Button><Button
+					style="pop"
 					onclick={() => void createSession()}
 					disabled={sessionCreating || !sessionTitle.trim()}
-					>{sessionCreating ? "Creating…" : "Create protected worktree"}</button
+					>{sessionCreating ? "Creating…" : "Create protected worktree"}</Button
 				>
 			</footer>
 		</div>
@@ -1615,123 +1598,65 @@
 		>
 			<header>
 				<div>
-					<span class="eyebrow">Generic Git over HTTPS</span>
-					<h2 id="connections-title">Server connections &amp; clone</h2>
+					<span class="eyebrow">Saved Git Integrations account</span>
+					<h2 id="connections-title">Clone repository</h2>
 				</div>
-				<button type="button" onclick={() => (activeModal = null)}>×</button>
+				<Button
+					size="tag"
+					kind="ghost"
+					icon="cross"
+					tooltip="Close"
+					onclick={() => (activeModal = null)}
+				/>
 			</header>
 			<p>
-				Passwords and PATs are stored in the operating-system Keychain. Repository config, remote
-				URLs, UI responses, and operation logs only receive non-secret metadata.
+				Choose a saved Gitea or other self-hosted HTTPS account. Add, edit, and revoke accounts in
+				Git Integrations.
 			</p>
 			{#if connectionsLoading}<div class="modal-loading">
 					<span class="loading-orb"></span>Reading connection metadata…
 				</div>{/if}
-			<div class="connection-grid">
-				<div class="connection-column">
-					<h3>{connectionId ? "Update connection" : "Add connection"}</h3>
-					<label>Label<input bind:value={connectionLabel} placeholder="Studio Gitea" /></label>
-					<label
-						>HTTPS server root<input
-							bind:value={connectionBaseUrl}
-							placeholder="https://git.example.com"
-						/></label
-					>
-					<label
-						>Username<input
-							bind:value={connectionUsername}
-							autocomplete="username"
-							placeholder="account name"
-						/></label
-					>
-					<label
-						>{connectionId ? "Replace password / PAT (optional)" : "Password / PAT"}<input
-							bind:value={connectionSecret}
-							type="password"
-							autocomplete="new-password"
-							placeholder={connectionId
-								? "Leave empty to keep Keychain secret"
-								: "Stored only in Keychain"}
-						/></label
-					>
-					<div class="form-actions">
-						{#if connectionId}<button type="button" class="button" onclick={() => editConnection()}
-								>Cancel edit</button
-							>{/if}<button
-							type="button"
-							class="button button--primary"
-							onclick={() => void saveConnection()}
-							disabled={connectionSaving ||
-								!connectionLabel.trim() ||
-								!connectionBaseUrl.trim() ||
-								!connectionUsername.trim() ||
-								(!connectionId && !connectionSecret)}
-							>{connectionSaving ? "Saving…" : "Save to Keychain"}</button
-						>
-					</div>
-					<div class="profile-list">
-						{#each connections.profiles as profile (profile.id)}
-							<article>
-								<div>
-									<strong>{profile.label}</strong><span>{profile.username} · {profile.baseUrl}</span
-									>
-								</div>
-								<button type="button" onclick={() => editConnection(profile)}>Edit</button><button
-									type="button"
-									class:danger-button={pendingConnectionDelete === profile.id}
-									onclick={() => void deleteConnection(profile.id)}
-									>{pendingConnectionDelete === profile.id ? "Confirm revoke" : "Revoke"}</button
-								>
-							</article>
-						{/each}
-						{#if connections.profiles.length === 0}<p class="inline-empty">
-								No HTTPS connections saved yet.
-							</p>{/if}
-					</div>
+			<div class="connection-column connection-column--clone">
+				<div class="clone-heading">
+					<h3>Saved connection</h3>
+					<Button kind="outline" icon="puzzle" onclick={openGitIntegrations}>
+						Manage in Git Integrations
+					</Button>
 				</div>
-				<div class="connection-column connection-column--clone">
-					<h3>Clone repository</h3>
-					<label
-						>Connection<select bind:value={cloneProfileId}
-							><option value="">Choose a saved connection</option
-							>{#each connections.profiles as profile}<option value={profile.id}
-									>{profile.label} · {profile.username}</option
-								>{/each}</select
-						></label
-					>
-					<label
-						>Repository HTTPS URL<input
-							bind:value={cloneUrl}
-							placeholder="https://git.example.com/team/project.git"
-						/></label
-					>
-					<label
-						>Empty destination
-						<div class="path-picker">
-							<input
-								bind:value={cloneDestination}
-								placeholder="/Users/you/Projects/project"
-							/><button type="button" onclick={() => void chooseCloneDestination()}>Browse…</button>
-						</div></label
-					>
-					<div class="security-note">
-						<strong>Credential scope</strong>
-						<p>
-							GitTogether sends this account only when the repository URL matches the selected
-							profile's HTTPS host, port, and path prefix. Inline URL credentials are rejected.
-						</p>
-					</div>
-					<button
-						type="button"
-						class="button button--primary"
-						onclick={() => void cloneWithConnection()}
-						disabled={cloneLoading ||
-							!cloneProfileId ||
-							!cloneUrl.trim() ||
-							!cloneDestination.trim()}
-						>{cloneLoading ? "Cloning…" : "Clone and add repository"}</button
-					>
+				<label
+					>Connection<select bind:value={cloneProfileId}
+						><option value="">Choose a saved connection</option
+						>{#each connections.profiles as profile}<option value={profile.id}
+								>{profile.label} · {profile.username}</option
+							>{/each}</select
+					></label
+				>
+				<label
+					>Repository HTTPS URL<input
+						bind:value={cloneUrl}
+						placeholder="https://git.example.com/team/project.git"
+					/></label
+				>
+				<label
+					>Empty destination
+					<div class="path-picker">
+						<input bind:value={cloneDestination} placeholder="/Users/you/Projects/project" />
+						<Button kind="outline" onclick={() => void chooseCloneDestination()}>Browse…</Button>
+					</div></label
+				>
+				<div class="security-note">
+					<strong>Credential scope</strong>
+					<p>
+						GitTogether sends this account only when the repository URL matches the selected
+						profile's HTTPS host, port, and path prefix. Inline URL credentials are rejected.
+					</p>
 				</div>
+				<Button
+					style="pop"
+					onclick={() => void cloneWithConnection()}
+					disabled={cloneLoading || !cloneProfileId || !cloneUrl.trim() || !cloneDestination.trim()}
+					>{cloneLoading ? "Cloning…" : "Clone and add repository"}</Button
+				>
 			</div>
 		</div>
 	</div>
@@ -1790,8 +1715,7 @@
 	.artifact-heading,
 	.latest-row > div:first-child,
 	.latest-stats,
-	.form-actions,
-	.profile-list article,
+	.clone-heading,
 	.path-picker,
 	.operation-row > div {
 		display: flex;
@@ -1801,7 +1725,8 @@
 	.dashboard-toolbar,
 	.panel-header,
 	.subsection-heading,
-	.chat-header {
+	.chat-header,
+	.clone-heading {
 		justify-content: space-between;
 	}
 	.dashboard-header {
@@ -1821,7 +1746,7 @@
 		background: var(--bg-1);
 		color: var(--text-2);
 		font-weight: 800;
-		font-size: 13px;
+		font-size: 14px;
 		letter-spacing: -0.06em;
 	}
 	.dashboard-brand h1,
@@ -1833,13 +1758,13 @@
 		margin: 0;
 	}
 	.dashboard-brand h1 {
-		font-size: 19px;
+		font-size: 18px;
 		letter-spacing: -0.03em;
 	}
 	.dashboard-brand p {
 		margin-top: 2px;
 		color: var(--text-3);
-		font-size: 10px;
+		font-size: 12px;
 	}
 	.dashboard-header__actions {
 		flex-wrap: wrap;
@@ -1850,7 +1775,7 @@
 		margin-right: 5px;
 		gap: 6px;
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 12px;
 	}
 	.connection-state i {
 		width: 7px;
@@ -1859,46 +1784,9 @@
 		background: var(--clr-warning-50);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--clr-warning-50) 14%, transparent);
 	}
-	.button,
-	.toolbar-link,
-	.panel-header__actions button,
-	.mini-button,
-	.session-actions button,
-	.thread-create button,
-	.composer button,
-	.profile-list button,
-	.path-picker button {
-		border: 0;
-		background: transparent;
-		color: var(--text-2);
-		font: inherit;
-		cursor: pointer;
-	}
-	.button {
-		padding: 7px 11px;
-		border: 1px solid var(--border-2);
-		border-radius: 8px;
-		background: var(--bg-1);
-		font-weight: 600;
-		font-size: 10px;
-	}
-	.button:hover:not(:disabled),
-	.toolbar-link:hover:not(:disabled),
-	.panel-header__actions button:hover:not(:disabled),
-	.mini-button:hover:not(:disabled) {
-		color: var(--text-1);
-	}
-	.button:disabled,
-	.toolbar-link:disabled,
-	.panel-header__actions button:disabled,
 	button:disabled {
 		cursor: default;
 		opacity: 0.45;
-	}
-	.button--primary {
-		border-color: var(--fill-pop-bg);
-		background: var(--fill-pop-bg);
-		color: var(--bg-1);
 	}
 	.dashboard-toolbar {
 		padding: 8px 0 12px;
@@ -1913,34 +1801,9 @@
 	.panel-kicker {
 		color: var(--text-3);
 		font-weight: 700;
-		font-size: 8px;
+		font-size: 11px;
 		letter-spacing: 0.11em;
 		text-transform: uppercase;
-	}
-	.search-box {
-		display: flex;
-		align-items: center;
-		width: min(290px, 24vw);
-		padding: 0 9px;
-		gap: 6px;
-		border: 1px solid var(--border-2);
-		border-radius: 8px;
-		background: var(--bg-1);
-		color: var(--text-3);
-	}
-	.search-box input {
-		width: 100%;
-		padding: 7px 0;
-		border: 0;
-		outline: 0;
-		background: transparent;
-		color: var(--text-1);
-		font: inherit;
-		font-size: 10px;
-	}
-	.toolbar-link {
-		min-width: max-content;
-		font-size: 9px;
 	}
 	.batch-actions {
 		gap: 4px;
@@ -1963,7 +1826,7 @@
 		overflow: hidden;
 		border: 1px solid var(--border-2);
 		border-radius: var(--radius-ml);
-		background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+		background: var(--bg-1);
 	}
 	.dashboard-panel.panel-collapsed {
 		align-self: start;
@@ -1976,20 +1839,11 @@
 	}
 	.panel-header h2 {
 		margin-top: 3px;
-		font-size: 11px;
+		font-size: 14px;
 		letter-spacing: -0.01em;
 	}
 	.panel-header__actions {
 		gap: 1px;
-	}
-	.panel-header__actions button {
-		width: 23px;
-		height: 23px;
-		border-radius: 6px;
-		font-size: 13px;
-	}
-	.panel-header__actions button:hover:not(:disabled) {
-		background: var(--bg-2);
 	}
 	.panel-content,
 	.chat-panel,
@@ -2020,13 +1874,13 @@
 	}
 	.panel-empty strong {
 		color: var(--text-1);
-		font-size: 11px;
+		font-size: 14px;
 	}
 	.panel-empty p {
 		max-width: 420px;
 		margin: 0;
 		color: var(--text-3);
-		font-size: 10px;
+		font-size: 13px;
 		line-height: 1.5;
 	}
 	.empty-actions {
@@ -2062,18 +1916,12 @@
 		gap: 2px;
 	}
 	.subsection-heading strong {
-		font-size: 10px;
+		font-size: 13px;
 	}
 	.subsection-heading--threads {
 		margin-top: 6px;
 		padding-top: 12px;
 		border-top: 1px solid var(--border-2);
-	}
-	.mini-button {
-		padding: 5px 7px;
-		border: 1px solid var(--border-2);
-		border-radius: 7px;
-		font-size: 8px;
 	}
 	.session-list,
 	.thread-list {
@@ -2086,7 +1934,7 @@
 		padding: 9px;
 		gap: 6px;
 		border: 1px solid var(--border-2);
-		border-radius: 9px;
+		border-radius: var(--radius-m);
 		background: var(--bg-2);
 	}
 	.session-card__title {
@@ -2095,19 +1943,19 @@
 	}
 	.session-card__title strong {
 		overflow: hidden;
-		font-size: 10px;
+		font-size: 13px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.session-card__title span {
 		color: var(--fill-pop-bg);
-		font-size: 8px;
+		font-size: 12px;
 		text-transform: uppercase;
 	}
 	.session-card code {
 		overflow: hidden;
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 		text-overflow: ellipsis;
 	}
 	.session-meta {
@@ -2119,25 +1967,18 @@
 		border-radius: 999px;
 		background: var(--bg-1);
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.session-actions {
 		flex-wrap: wrap;
 		gap: 3px;
-	}
-	.session-actions button {
-		padding: 4px 6px;
-		border: 1px solid var(--border-2);
-		border-radius: 6px;
-		background: var(--bg-1);
-		font-size: 8px;
 	}
 	.assessment {
 		padding: 7px;
 		border-left: 2px solid #d4a64f;
 		border-radius: 4px;
 		background: color-mix(in srgb, #d4a64f 8%, var(--bg-1));
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.assessment--blocked {
 		border-left-color: #e56b6f;
@@ -2157,7 +1998,7 @@
 	.inline-empty {
 		margin: 4px 0;
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 13px;
 		text-align: center;
 	}
 	.thread-create {
@@ -2172,21 +2013,19 @@
 	.modal select,
 	.connection-binding select {
 		min-width: 0;
+		min-height: var(--size-button);
 		padding: 6px 7px;
 		border: 1px solid var(--border-2);
-		border-radius: 7px;
+		border-radius: var(--radius-s);
 		outline: 0;
 		background: var(--bg-1);
 		color: var(--text-1);
 		font: inherit;
-		font-size: 8px;
+		font-size: 13px;
 	}
-	.thread-create button {
-		padding: 5px 7px;
-		border-radius: 7px;
-		background: var(--fill-pop-bg);
-		color: var(--bg-1);
-		font-size: 8px;
+	.thread-create select,
+	.connection-binding select {
+		font-size: 12px;
 	}
 	.thread-item {
 		display: flex;
@@ -2195,7 +2034,7 @@
 		padding: 8px;
 		gap: 2px;
 		border: 1px solid var(--border-2);
-		border-radius: 8px;
+		border-radius: var(--radius-m);
 		background: transparent;
 		color: var(--text-2);
 		font: inherit;
@@ -2208,12 +2047,12 @@
 		background: color-mix(in srgb, var(--fill-pop-bg) 7%, var(--bg-1));
 	}
 	.thread-item strong {
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.thread-item span {
 		overflow: hidden;
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -2233,13 +2072,13 @@
 		gap: 2px;
 	}
 	.chat-header strong {
-		font-size: 11px;
+		font-size: 14px;
 	}
 	.chat-header > span {
 		max-width: 45%;
 		overflow: hidden;
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -2258,7 +2097,7 @@
 		justify-content: center;
 		gap: 6px;
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.message {
 		align-self: flex-end;
@@ -2275,7 +2114,7 @@
 	}
 	.message strong,
 	.message time {
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.message time {
 		color: var(--text-3);
@@ -2283,7 +2122,7 @@
 	.message p {
 		margin: 6px 0 0;
 		color: var(--text-1);
-		font-size: 10px;
+		font-size: 13px;
 		line-height: 1.5;
 		white-space: pre-wrap;
 	}
@@ -2303,12 +2142,12 @@
 	}
 	.chat-empty strong {
 		color: var(--text-1);
-		font-size: 10px;
+		font-size: 13px;
 	}
 	.chat-empty p {
 		max-width: 280px;
 		margin: 0;
-		font-size: 9px;
+		font-size: 13px;
 		line-height: 1.45;
 	}
 	.composer {
@@ -2320,12 +2159,12 @@
 		width: 100%;
 		padding: 8px;
 		border: 1px solid var(--border-2);
-		border-radius: 8px;
+		border-radius: var(--radius-s);
 		outline: 0;
 		background: var(--bg-2);
 		color: var(--text-1);
 		font: inherit;
-		font-size: 9px;
+		font-size: 13px;
 		line-height: 1.4;
 		resize: vertical;
 	}
@@ -2336,14 +2175,7 @@
 	}
 	.composer span {
 		color: var(--text-3);
-		font-size: 7px;
-	}
-	.composer button {
-		padding: 6px 8px;
-		border-radius: 7px;
-		background: var(--fill-pop-bg);
-		color: var(--bg-1);
-		font-size: 8px;
+		font-size: 11px;
 	}
 	.context-panel {
 		display: flex;
@@ -2365,7 +2197,7 @@
 		background: transparent;
 		color: var(--text-3);
 		font: inherit;
-		font-size: 8px;
+		font-size: 12px;
 		cursor: pointer;
 	}
 	.detail-tabs button:hover,
@@ -2382,18 +2214,18 @@
 		border-bottom: 1px solid var(--border-2);
 	}
 	.context-heading strong {
-		font-size: 10px;
+		font-size: 13px;
 	}
 	.context-heading code {
 		color: var(--fill-pop-bg);
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.context-heading span {
 		min-width: 0;
 		margin-left: auto;
 		overflow: hidden;
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -2424,11 +2256,11 @@
 		gap: 2px;
 	}
 	.branch-workspace > header strong {
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.branch-workspace > header small {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.branch-columns {
 		display: flex;
@@ -2444,7 +2276,7 @@
 		padding: 8px;
 		gap: 7px;
 		border: 1px solid var(--border-2);
-		border-radius: 9px;
+		border-radius: var(--radius-m);
 		background: var(--bg-1);
 		scroll-snap-align: start;
 	}
@@ -2469,30 +2301,16 @@
 		white-space: nowrap;
 	}
 	.branch-column__heading strong {
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.branch-column__heading span,
 	.branch-column__commits,
 	.branch-column footer {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.branch-column__order {
 		gap: 1px;
-	}
-	.branch-column__order button,
-	.branch-column footer button {
-		border: 0;
-		border-radius: 5px;
-		background: var(--bg-2);
-		color: var(--text-2);
-		font: inherit;
-		font-size: 7px;
-		cursor: pointer;
-	}
-	.branch-column__order button {
-		width: 18px;
-		height: 18px;
 	}
 	.branch-column__commits,
 	.branch-column__state {
@@ -2507,7 +2325,7 @@
 		border-radius: 999px;
 		background: var(--bg-2);
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.branch-column__changes {
 		display: grid;
@@ -2521,7 +2339,7 @@
 		overflow: hidden;
 		gap: 4px;
 		color: var(--text-2);
-		font-size: 7px;
+		font-size: 11px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -2533,7 +2351,7 @@
 	}
 	.branch-column__changes small {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.branch-column footer {
 		justify-content: space-between;
@@ -2544,9 +2362,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	.branch-column footer button {
-		padding: 4px 6px;
 	}
 	.context-body {
 		flex: 1;
@@ -2584,7 +2399,7 @@
 		background: var(--bg-2);
 		color: var(--fill-pop-bg);
 		font-weight: 700;
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.file-item > span:nth-child(2) {
 		display: flex;
@@ -2601,11 +2416,11 @@
 	}
 	.file-item strong {
 		color: var(--text-1);
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.file-item small {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.file-item i {
 		padding: 3px 5px;
@@ -2613,7 +2428,7 @@
 		background: var(--bg-2);
 		color: var(--text-3);
 		font-style: normal;
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.file-item i.risk {
 		color: #d4a64f;
@@ -2628,7 +2443,7 @@
 		padding: 20px;
 		gap: 7px;
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 13px;
 		text-align: center;
 	}
 	.context-error {
@@ -2642,13 +2457,13 @@
 	}
 	.artifact-heading strong {
 		overflow: hidden;
-		font-size: 9px;
+		font-size: 13px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.artifact-heading span {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.diff-view,
 	.text-preview {
@@ -2658,7 +2473,7 @@
 		overflow: auto;
 		background: var(--bg-2);
 		color: var(--text-2);
-		font-size: 8px;
+		font-size: 12px;
 		line-height: 1.45;
 		font-family: var(--font-mono);
 		white-space: pre;
@@ -2684,7 +2499,7 @@
 		padding: 15px;
 		gap: 7px;
 		border: 1px solid var(--border-2);
-		border-radius: 10px;
+		border-radius: var(--radius-ml);
 		background: var(--bg-2);
 	}
 	.terminal-prompt {
@@ -2692,19 +2507,19 @@
 		font-size: 18px;
 	}
 	.terminal-card strong {
-		font-size: 10px;
+		font-size: 13px;
 	}
 	.terminal-card code {
 		max-width: 100%;
 		overflow: hidden;
 		color: var(--text-2);
-		font-size: 8px;
+		font-size: 12px;
 		text-overflow: ellipsis;
 	}
 	.terminal-card p {
 		margin: 0;
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 		line-height: 1.4;
 	}
 	.git-graph {
@@ -2748,14 +2563,14 @@
 		display: block;
 		overflow: hidden;
 		color: var(--text-1);
-		font-size: 9px;
+		font-size: 13px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 	.graph-commit span,
 	.graph-commit p {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.graph-commit p {
 		margin: 4px 0 0;
@@ -2773,7 +2588,7 @@
 		padding: 6px 0;
 		gap: 8px;
 		border-bottom: 1px solid var(--border-2);
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.git-details > div span {
 		color: var(--text-3);
@@ -2782,13 +2597,13 @@
 		max-width: 70%;
 		overflow: hidden;
 		color: var(--text-2);
-		font-size: 7px;
+		font-size: 11px;
 		text-overflow: ellipsis;
 	}
 	.git-details h3 {
 		margin-top: 7px;
 		color: var(--text-1);
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.connection-binding select {
 		max-width: 65%;
@@ -2803,17 +2618,17 @@
 		border-left-color: #e56b6f;
 	}
 	.operation-row strong {
-		font-size: 8px;
+		font-size: 12px;
 		text-transform: capitalize;
 	}
 	.operation-row time {
 		color: var(--text-3);
-		font-size: 7px;
+		font-size: 11px;
 	}
 	.operation-row p {
 		margin: 4px 0 0;
 		color: var(--text-2);
-		font-size: 8px;
+		font-size: 12px;
 		line-height: 1.35;
 	}
 	.modal-backdrop {
@@ -2835,7 +2650,7 @@
 		overflow: auto;
 		gap: 13px;
 		border: 1px solid var(--border-3);
-		border-radius: 14px;
+		border-radius: var(--radius-l);
 		background: var(--bg-1);
 		box-shadow: 0 24px 80px #0008;
 	}
@@ -2843,7 +2658,7 @@
 		width: min(760px, 96vw);
 	}
 	.modal--connections {
-		width: min(960px, 96vw);
+		width: min(620px, 96vw);
 	}
 	.modal > header {
 		display: flex;
@@ -2853,21 +2668,11 @@
 	}
 	.modal > header h2 {
 		margin-top: 4px;
-		font-size: 16px;
-	}
-	.modal > header > button {
-		width: 28px;
-		height: 28px;
-		border: 0;
-		border-radius: 7px;
-		background: var(--bg-2);
-		color: var(--text-2);
-		font-size: 17px;
-		cursor: pointer;
+		font-size: 18px;
 	}
 	.modal > p {
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 13px;
 		line-height: 1.5;
 	}
 	.modal > label,
@@ -2876,13 +2681,13 @@
 		flex-direction: column;
 		gap: 5px;
 		color: var(--text-2);
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.modal input,
 	.modal textarea,
 	.modal select {
 		padding: 8px 9px;
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.modal textarea {
 		resize: vertical;
@@ -2904,7 +2709,7 @@
 		padding: 10px;
 		border: 1px solid var(--border-2);
 		border-left: 3px solid var(--border-3);
-		border-radius: 8px;
+		border-radius: var(--radius-m);
 		background: var(--bg-2);
 	}
 	.latest-row--safe {
@@ -2918,12 +2723,12 @@
 		gap: 10px;
 	}
 	.latest-row strong {
-		font-size: 10px;
+		font-size: 13px;
 	}
 	.latest-row span,
 	.latest-row p {
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 	}
 	.latest-row p {
 		margin: 6px 0 0;
@@ -2940,12 +2745,7 @@
 	}
 	.latest-stats strong {
 		margin-left: auto;
-		font-size: 8px;
-	}
-	.connection-grid {
-		display: grid;
-		grid-template-columns: 1.2fr 0.8fr;
-		gap: 16px;
+		font-size: 12px;
 	}
 	.connection-column {
 		display: flex;
@@ -2953,58 +2753,9 @@
 		min-width: 0;
 		gap: 9px;
 	}
-	.connection-column + .connection-column {
-		padding-left: 16px;
-		border-left: 1px solid var(--border-2);
-	}
 	.connection-column h3 {
 		margin: 0 0 2px;
-		font-size: 11px;
-	}
-	.form-actions {
-		justify-content: flex-end;
-		gap: 5px;
-	}
-	.profile-list {
-		display: grid;
-		margin-top: 5px;
-		gap: 5px;
-	}
-	.profile-list article {
-		padding: 7px;
-		gap: 5px;
-		border: 1px solid var(--border-2);
-		border-radius: 8px;
-		background: var(--bg-2);
-	}
-	.profile-list article > div {
-		display: flex;
-		flex: 1;
-		flex-direction: column;
-		min-width: 0;
-		gap: 2px;
-	}
-	.profile-list strong,
-	.profile-list span {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.profile-list strong {
-		font-size: 9px;
-	}
-	.profile-list span {
-		color: var(--text-3);
-		font-size: 7px;
-	}
-	.profile-list button {
-		padding: 4px 5px;
-		font-size: 7px;
-	}
-	.danger-button {
-		border-radius: 5px;
-		background: #e56b6f !important;
-		color: white !important;
+		font-size: 14px;
 	}
 	.path-picker {
 		gap: 5px;
@@ -3012,26 +2763,20 @@
 	.path-picker input {
 		flex: 1;
 	}
-	.path-picker button {
-		padding: 7px;
-		border: 1px solid var(--border-2);
-		border-radius: 7px;
-		font-size: 8px;
-	}
 	.security-note {
 		margin-top: 6px;
 		padding: 10px;
 		border: 1px solid color-mix(in srgb, var(--fill-pop-bg) 35%, var(--border-2));
-		border-radius: 8px;
+		border-radius: var(--radius-m);
 		background: color-mix(in srgb, var(--fill-pop-bg) 6%, var(--bg-2));
 	}
 	.security-note strong {
-		font-size: 9px;
+		font-size: 13px;
 	}
 	.security-note p {
 		margin: 5px 0 0;
 		color: var(--text-3);
-		font-size: 8px;
+		font-size: 12px;
 		line-height: 1.45;
 	}
 	@keyframes spin {
@@ -3056,18 +2801,8 @@
 			flex-wrap: wrap;
 			align-items: flex-start;
 		}
-		.search-box {
-			order: 5;
-			width: 100%;
-		}
-		.dashboard-grid,
-		.connection-grid {
+		.dashboard-grid {
 			grid-template-columns: minmax(0, 1fr);
-		}
-		.connection-column + .connection-column {
-			padding: 14px 0 0;
-			border-top: 1px solid var(--border-2);
-			border-left: 0;
 		}
 	}
 </style>

@@ -29,6 +29,7 @@
 		selectedOption: BranchFilterOption;
 		sidebarEntry: Snippet<[SidebarEntrySubject]>;
 		baseBranch?: BaseBranch;
+		currentBranchName?: string;
 	};
 	let {
 		projectId,
@@ -36,6 +37,7 @@
 		selectedOption = $bindable(),
 		sidebarEntry,
 		baseBranch,
+		currentBranchName,
 	}: Props = $props();
 
 	const searchEngine = new Fuse([] as SidebarEntrySubject[], {
@@ -44,7 +46,6 @@
 			"subject.name",
 			"subject.lastCommiter.email",
 			"subject.lastCommiter.name",
-			"subject.stack.branches",
 			// Subject is pull request
 			"subject.number",
 			"subject.title",
@@ -90,7 +91,7 @@
 		combineBranchesAndPrs(prs?.response || [], branchesQuery.response || [], selectedOption),
 	);
 
-	const groupedBranches = $derived(groupBranches(combined, forgeUser));
+	const groupedBranches = $derived(groupBranches(combined, forgeUser, currentBranchName));
 	const searchedBranches = $derived.by(() => {
 		if (searchTerm.length >= 2 && combined.length > 0) {
 			searchEngine.setCollection(combined);
@@ -229,7 +230,7 @@
 							{/each}
 						</div>
 					{:else}
-						{@render branchGroup({ title: "Applied", children: groupedBranches.applied })}
+						{@render branchGroup({ title: "Current", children: groupedBranches.current })}
 
 						{#if groupedBranches.authored.length > 0}
 							{@render branchGroup({ title: "Mine", children: groupedBranches.authored })}

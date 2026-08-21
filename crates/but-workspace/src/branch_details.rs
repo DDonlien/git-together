@@ -29,14 +29,15 @@ pub fn branch_details(
     meta: &impl RefMetadata,
     project_meta: &ProjectMeta,
 ) -> anyhow::Result<ui::BranchDetails> {
-    let integration_branch_name = project_meta
-        .target_ref
-        .clone()
-        .context("TODO: a target to integrate with is currently needed for a workspace commit")?;
-    let mut integration_branch = repo
-        .find_reference(&integration_branch_name)
-        .context("The branch to integrate with must be present")?;
-    let integration_branch_id = integration_branch.peel_to_id()?;
+    let integration_branch_name = project_meta.target_ref.clone();
+    let integration_branch_id = if let Some(name) = integration_branch_name.as_ref() {
+        let mut integration_branch = repo
+            .find_reference(name)
+            .context("The branch to integrate with must be present")?;
+        Some(integration_branch.peel_to_id()?.detach())
+    } else {
+        None
+    };
 
     let mut branch = repo.find_reference(name)?;
     let branch_id = branch.peel_to_id()?;
@@ -55,12 +56,11 @@ pub fn branch_details(
 
     let cache = repo.commit_graph_if_enabled()?;
     let mut graph = repo.revision_graph(cache.as_ref());
-    let base_commit = {
-        let merge_bases = repo.merge_bases_many_with_graph(
-            branch_id,
-            &[integration_branch_id.detach()],
-            &mut graph,
-        )?;
+    let base_commit = if let (Some(integration_branch_name), Some(integration_branch_id)) =
+        (integration_branch_name.as_ref(), integration_branch_id)
+    {
+        let merge_bases =
+            repo.merge_bases_many_with_graph(branch_id, &[integration_branch_id], &mut graph)?;
         // TODO: have a test that shows why this must/should be last. Then maybe make it easy to do
         //       the right thing whenever the mergebase with the integration branch is needed.
         merge_bases.last().map(|id| id.detach()).unwrap_or_else(|| {
@@ -69,18 +69,24 @@ pub fn branch_details(
             // TODO: we should probably indicate that there is no merge-base instead of just glossing over it.
             branch_id.detach()
         })
+    } else {
+        let mut root = branch_id.detach();
+        for info in branch_id.ancestors().first_parent_only().all()? {
+            root = info?.id;
+        }
+        root
     };
 
     let mut authors = HashSet::new();
     let (mut commits, upstream_commits) = {
-        let commits = local_commits_gix(branch_id, integration_branch_id.detach(), &mut authors)?;
+        let commits = local_commits_gix(branch_id, integration_branch_id, &mut authors)?;
 
         let upstream_commits = if let Some(remote_tracking_branch) = remote_tracking_branch.as_mut()
         {
             let remote_id = remote_tracking_branch.peel_to_id()?;
             upstream_commits_gix(
                 remote_id,
-                integration_branch_id.detach(),
+                integration_branch_id,
                 branch_id.detach(),
                 &mut authors,
             )?
@@ -164,13 +170,16 @@ fn compute_is_conflicted<'a>(
 /// TODO: can we use the Graph for this?
 fn upstream_commits_gix(
     upstream_id: gix::Id<'_>,
-    integration_branch_id: gix::ObjectId,
+    integration_branch_id: Option<gix::ObjectId>,
     branch_id: gix::ObjectId,
     authors: &mut HashSet<ui::Author>,
 ) -> anyhow::Result<Vec<UpstreamCommit>> {
+    let hidden = [Some(branch_id), integration_branch_id]
+        .into_iter()
+        .flatten();
     let traversal = upstream_id
         .ancestors()
-        .with_hidden([branch_id, integration_branch_id])
+        .with_hidden(hidden)
         .first_parent_only()
         .all()?;
 
@@ -202,12 +211,12 @@ fn upstream_commits_gix(
 /// commit authors and committers in `authors` while at it.
 fn local_commits_gix(
     branch_id: gix::Id<'_>,
-    integration_branch_id: gix::ObjectId,
+    integration_branch_id: Option<gix::ObjectId>,
     authors: &mut HashSet<ui::Author>,
 ) -> anyhow::Result<Vec<ui::Commit>> {
     let traversal = branch_id
         .ancestors()
-        .with_hidden(Some(integration_branch_id))
+        .with_hidden(integration_branch_id)
         .first_parent_only()
         .all()?;
 
@@ -245,5 +254,5 @@ pub fn local_commits_for_branch(
     integration_branch_id: gix::ObjectId,
 ) -> anyhow::Result<Vec<ui::Commit>> {
     let mut authors = HashSet::new();
-    local_commits_gix(branch_id, integration_branch_id, &mut authors)
+    local_commits_gix(branch_id, Some(integration_branch_id), &mut authors)
 }

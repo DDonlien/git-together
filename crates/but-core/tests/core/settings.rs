@@ -263,4 +263,26 @@ mod git {
         );
         Ok(())
     }
+
+    #[test]
+    fn commit_signatures_ignore_legacy_gitbutler_committer_credit() -> anyhow::Result<()> {
+        let tmp = gix_testtools::tempfile::TempDir::new()?;
+        gix::init(tmp.path())?;
+        let repo = gix::open_opts(tmp.path(), gix::open::Options::isolated())?;
+
+        let mut config = std::fs::OpenOptions::new()
+            .append(true)
+            .open(repo.path().join("config"))?;
+        writeln!(config, "\n[gitbutler]\n\tgitbutlerCommitter = true")?;
+        drop(config);
+
+        let repo = but_testsupport::open_repo(repo.path())?;
+        let (author, committer) = repo.commit_signatures()?;
+
+        assert_eq!(author.name, "Author (Memory Override)");
+        assert_eq!(author.email, "author@example.com");
+        assert_eq!(committer.name, "Committer (Memory Override)");
+        assert_eq!(committer.email, "committer@example.com");
+        Ok(())
+    }
 }

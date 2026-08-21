@@ -1,27 +1,18 @@
 <script lang="ts">
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
-	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
-	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { inject } from "@gitbutler/core/context";
 	import { Button, CardGroup, InfoMessage, Select, SelectItem } from "@gitbutler/ui";
 
 	const { projectId }: { projectId: string } = $props();
 
-	const stackService = inject(STACK_SERVICE);
 	const baseBranchService = inject(BASE_BRANCH_SERVICE);
-	const settingsStore = inject(SETTINGS_SERVICE).appSettings;
 	const baseBranchQuery = $derived(baseBranchService.baseBranch(projectId));
 	const baseBranch = $derived(baseBranchQuery.response);
 	const remoteBranchesQuery = $derived(baseBranchService.remoteBranches(projectId));
-	const [setBaseBranchTarget, targetBranchSwitch] = baseBranchService.setTarget;
 	const [setBaseBranchTargetRef, targetRefSwitch] = baseBranchService.setTargetRef;
 
 	let selectedBranch = $derived(baseBranch?.branchName);
 	let selectedRemote = $derived(baseBranch?.pushRemoteName);
-
-	const stacksQuery = $derived(stackService.stacks(projectId));
-	const stackCount = $derived(stacksQuery.response?.length);
-	const targetChangeDisabled = $derived(!!(stackCount && stackCount > 0));
 
 	function uniqueRemotes(remoteBranches: { name: string }[]): { name: string }[] {
 		return Array.from(new Set(remoteBranches.map((b) => b.name.split("/")[0])))
@@ -31,22 +22,10 @@
 			}));
 	}
 
-	const switching = $derived(
-		targetBranchSwitch.current.isLoading || targetRefSwitch.current.isLoading,
-	);
-	// With the singleBranch feature flag, only the target metadata is rewritten
-	// and no branch is checked out, so avoid claiming a branch switch.
-	const switchingLabel = $derived(
-		$settingsStore?.featureFlags.singleBranch ? "Updating target..." : "Switching branches...",
-	);
+	const switching = $derived(targetRefSwitch.current.isLoading);
 
 	async function switchTarget(branch: string, pushRemote?: string) {
-		if ($settingsStore?.featureFlags.singleBranch) {
-			// Only update the target; the user keeps working on their current branch.
-			await setBaseBranchTargetRef({ projectId, targetRef: `refs/remotes/${branch}`, pushRemote });
-		} else {
-			await setBaseBranchTarget({ projectId, branch, pushRemote });
-		}
+		await setBaseBranchTargetRef({ projectId, targetRef: `refs/remotes/${branch}`, pushRemote });
 	}
 
 	async function onSetBaseBranchClick() {
@@ -88,7 +67,6 @@
 					onselect={(value) => {
 						selectedBranch = value;
 					}}
-					disabled={targetChangeDisabled}
 					label="Current target branch"
 					searchable
 				>
@@ -107,7 +85,6 @@
 						onselect={(value) => {
 							selectedRemote = value;
 						}}
-						disabled={targetChangeDisabled}
 						label="Create branches on remote"
 					>
 						{#snippet itemSnippet({ item, highlighted })}
@@ -118,26 +95,16 @@
 					</Select>
 				{/if}
 
-				{#if targetChangeDisabled}
-					<InfoMessage filled outlined={false} icon="info">
-						{#snippet content()}
-							You have {stackCount === 1 ? "1 active branch" : `${stackCount} active branches`} in your
-							workspace. Please clear the workspace before switching the base branch.
-						{/snippet}
-					</InfoMessage>
-				{:else}
-					<Button
-						kind="outline"
-						onclick={onSetBaseBranchClick}
-						id="set-base-branch"
-						loading={switching}
-						disabled={(selectedBranch === baseBranch?.branchName &&
-							selectedRemote === baseBranch?.pushRemoteName) ||
-							targetChangeDisabled}
-					>
-						{switching ? switchingLabel : "Update configuration"}
-					</Button>
-				{/if}
+				<Button
+					kind="outline"
+					onclick={onSetBaseBranchClick}
+					id="set-base-branch"
+					loading={switching}
+					disabled={selectedBranch === baseBranch?.branchName &&
+						selectedRemote === baseBranch?.pushRemoteName}
+				>
+					{switching ? "Updating target..." : "Update configuration"}
+				</Button>
 			</CardGroup.Item>
 		</CardGroup>
 	{/if}

@@ -5,7 +5,7 @@
 
 	Usage:
 	```svelte
-	<StackPanel {segments} {topBranchName} {onFoldStack} />
+	<StackPanel {segments} {topBranchName} />
 	```
 -->
 <script lang="ts">
@@ -13,7 +13,6 @@
 	import WorktreeChanges from "$components/files/WorktreeChanges.svelte";
 	import Resizer from "$components/shared/Resizer.svelte";
 	import SashLayer from "$components/shared/SashLayer.svelte";
-	import StackDragHandle from "$components/stack/StackDragHandle.svelte";
 	import BranchList from "$components/views/BranchList.svelte";
 	import { stagingBehaviorFeature } from "$lib/config/uiFeatureFlags";
 	import { FILE_SELECTION_MANAGER } from "$lib/selection/fileSelectionManager.svelte";
@@ -27,10 +26,9 @@
 	type Props = {
 		segments: Segment[];
 		topBranchName?: string;
-		onFoldStack?: () => void;
 	};
 
-	const { segments, topBranchName, onFoldStack }: Props = $props();
+	const { segments, topBranchName }: Props = $props();
 
 	const controller = getStackContext();
 	const uncommittedService = inject(UNCOMMITTED_SERVICE);
@@ -132,14 +130,6 @@
 </script>
 
 <div class="stack-v stack-view__inner">
-	<StackDragHandle
-		stackId={controller.stackId}
-		projectId={controller.projectId}
-		disabled={controller.isCommitting}
-		onFold={onFoldStack}
-		branchName={topBranchName}
-	/>
-
 	<div
 		class="assignments-wrap"
 		class:assignments__empty={changes.current.length === 0 && !controller.isCommitting}

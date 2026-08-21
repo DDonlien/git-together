@@ -1,48 +1,5 @@
-import { showWarning } from "$lib/notifications/toasts";
-import { TestId } from "@gitbutler/ui";
 import type { BranchIconName } from "$lib/branches/branchIcon";
-import type { DropResult } from "$lib/dragging/dropResult";
-import type { ApplyOutcome, PushStatus, Segment, Stack as RefInfoStack } from "@gitbutler/but-sdk";
-
-function stackCount(numStacks: number): string {
-	if (numStacks === 1) {
-		return "one stack";
-	} else {
-		return "some stacks";
-	}
-}
-
-function prettyNamedListIfPossible(expectedNames: number, names: string[]): string {
-	// It could happen that not all stacks had names, for now we don't deal with that.
-	// Also, the old codepath doesn't produce names.
-	if (expectedNames !== names.length) {
-		return stackCount(expectedNames);
-	}
-	if (names.length === 0) {
-		return "";
-	} else if (names.length === 1) {
-		return `stack ${names[0]}`;
-	} else if (names.length === 2) {
-		return `stack ${names[0]} and stack ${names[1]}`;
-	}
-
-	const allButLast = names.slice(0, -1);
-	const last = names[names.length - 1];
-
-	return `${allButLast.map((n) => `stack ${n}`).join(", ")}, and stack ${last}`;
-}
-
-export function handleApplyOutcome(outcome: ApplyOutcome) {
-	if (outcome.status !== "conflictAborted") return;
-	const names = outcome.conflictingStacks.map((stack) => stack.shortName);
-	const single = names.length === 1;
-	showWarning(
-		"Couldn't apply branch due to conflicts",
-		`It conflicts with ${prettyNamedListIfPossible(names.length, names) || "another applied stack"}. Unapply ${single ? "it" : "them"} first, then try applying again.`,
-		undefined,
-		TestId.BranchApplyConflictToast,
-	);
-}
+import type { PushStatus, Segment, Stack as RefInfoStack } from "@gitbutler/but-sdk";
 
 export type Stack = RefInfoStack;
 
@@ -64,26 +21,6 @@ export function getStackName(stack: Stack): string {
 		return "Unnamed segment";
 	}
 	return firstSegment.refName.displayName;
-}
-
-/** A stack a commit can be cherry-picked onto, identified by its top branch. */
-export type CherryPickTarget = {
-	branchName: string;
-	branchCount: number;
-};
-
-/**
- * Returns the stacks a commit can be cherry-picked onto.
- *
- * A cherry-pick is placed relative to the top branch's reference, so stacks
- * whose top segment lost its name are not targetable and are left out.
- */
-export function cherryPickTargets(stacks: Stack[]): CherryPickTarget[] {
-	return stacks.flatMap((stack) => {
-		const branchName = stack.segments.at(0)?.refName?.displayName;
-		if (!branchName) return [];
-		return [{ branchName, branchCount: stack.segments.length }];
-	});
 }
 
 export function getStackBranchNames(stack: Stack): string[] {
@@ -155,18 +92,4 @@ export function requiresPush(status: PushStatus): boolean {
 		status === "unpushedCommitsRequiringForce" ||
 		status === "completelyUnpushed"
 	);
-}
-
-/**
- * Converts an unapplied-stack count into a `DropResult` warning if stacks were unapplied.
- */
-export function toMoveBranchWarning(unappliedStackCount: number): DropResult | undefined {
-	if (unappliedStackCount === 0) return undefined;
-	return {
-		type: "warning",
-		title: "Heads up: We had to unapply some stacks to move this branch",
-		message: `It seems that the branch moved couldn't be applied cleanly alongside your other ${unappliedStackCount} ${unappliedStackCount === 1 ? "stack" : "stacks"}.
-You can always re-apply them later from the branches page.`,
-		testId: TestId.StacksUnappliedToast,
-	};
 }

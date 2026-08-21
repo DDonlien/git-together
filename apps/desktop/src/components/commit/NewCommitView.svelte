@@ -43,7 +43,6 @@
 	const topBranchQuery = $derived(stackId ? stackService.branches(projectId, stackId) : undefined);
 	const topBranchName = $derived(topBranchQuery?.response?.at(0)?.refName?.displayName);
 
-	const draftBranchName = $derived(uiState.global.draftBranchName.current);
 	const canCommit = $derived(selectedLines.current.length > 0);
 
 	let input = $state<ReturnType<typeof CommitMessageEditor>>();
@@ -58,27 +57,13 @@
 		isCooking = true;
 		await tick();
 		try {
-			let finalStackId = stackId;
-			let finalBranchName = commitAction?.branchName || draftBranchName || topBranchName;
-			// TODO: Refactor this awkward fallback somehow.
-			if (!finalBranchName) {
-				finalBranchName = await stackService.fetchNewBranchName(projectId);
-			}
+			const finalStackId = stackId;
+			const finalBranchName = commitAction?.branchName || topBranchName;
 			const parentId = commitAction?.parentCommitId;
 			const insertBelow = commitAction?.insertBelow;
 
 			if (!finalStackId) {
-				const stack = await createNewStack({
-					projectId,
-					branch: { name: finalBranchName, order: 0 },
-				});
-				finalStackId = stack.id ?? undefined;
-				finalBranchName = stack.heads[0]?.name; // Updated to access the name property
-				uiState.global.draftBranchName.set(undefined);
-			}
-
-			if (!finalStackId) {
-				throw new Error("No stack selected!");
+				throw new Error("No checked-out branch selected!");
 			}
 
 			if (!finalBranchName) {
@@ -170,8 +155,6 @@
 		}
 	}
 
-	const [createNewStack, newStackQuery] = stackService.newStack;
-
 	async function handleCommitCreation(title: string, description: string) {
 		laneState.newCommitMessage.set({ title, description });
 
@@ -229,7 +212,7 @@
 		onChange={({ title, description }) => handleMessageUpdate(title, description)}
 		onCancel={cancel}
 		disabledAction={!canCommit}
-		loading={commitCreation.current.isLoading || newStackQuery.current.isLoading || isCooking}
+		loading={commitCreation.current.isLoading || isCooking}
 		title={laneState.newCommitMessage.current.title}
 		description={laneState.newCommitMessage.current.description}
 	/>

@@ -84,10 +84,7 @@
 		<div class="links__section">
 			<p class="links__title text-14 text-bold">Quick start</p>
 			<div class="education-links">
-				<IconLink
-					icon="docs"
-					href="https://docs.gitbutler.com/features/virtual-branches/branch-lanes"
-				>
+				<IconLink icon="docs" href="https://git-scm.com/docs/gittutorial">
 					Git workflow docs
 				</IconLink>
 				<IconLink icon="youtube" href="https://www.youtube.com/@gitbutlerapp">

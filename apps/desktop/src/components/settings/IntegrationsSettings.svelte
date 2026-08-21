@@ -1,7 +1,9 @@
 <script lang="ts">
 	import BitbucketIntegration from "$components/settings/BitbucketIntegration.svelte";
+	import GitSettings from "$components/settings/GitSettings.svelte";
 	import GithubIntegration from "$components/settings/GithubIntegration.svelte";
 	import GitlabIntegration from "$components/settings/GitlabIntegration.svelte";
+	import SelfHostedGitIntegration from "$components/settings/SelfHostedGitIntegration.svelte";
 	import { SETTINGS_SERVICE } from "$lib/settings/appSettings";
 	import { inject } from "@gitbutler/core/context";
 	import { CardGroup, Spacer, Toggle } from "@gitbutler/ui";
@@ -16,9 +18,12 @@
 	}
 </script>
 
+<GitSettings />
+<Spacer dotted margin={8} />
 <GithubIntegration />
 <GitlabIntegration />
 <BitbucketIntegration />
+<SelfHostedGitIntegration />
 <Spacer />
 <CardGroup>
 	<CardGroup.Item labelFor="autoFillPrDescription">

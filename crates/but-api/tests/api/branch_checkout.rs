@@ -37,9 +37,10 @@ fn checkout_branch_rejects_remote_refs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn branch_checkout_new_creates_named_branch_at_target_and_checks_it_out() -> anyhow::Result<()> {
+fn branch_checkout_new_creates_named_branch_at_head_and_checks_it_out() -> anyhow::Result<()> {
     let (repo, _tmp) = repo_with_feature_branch()?;
-    let target_commit_id = set_project_target_to_feature(&repo)?;
+    set_project_target_to_feature(&repo)?;
+    let head_commit_id = repo.head_id()?.detach();
     let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
 
     let result = but_api::branch::branch_checkout_new(&mut ctx, Some("new branch".into()))?;
@@ -48,7 +49,7 @@ fn branch_checkout_new_creates_named_branch_at_target_and_checks_it_out() -> any
     let head_name = repo.head_name()?.expect("HEAD is symbolic after checkout");
     assert_eq!(head_name.as_bstr(), "refs/heads/new-branch");
     let mut created = repo.find_reference("refs/heads/new-branch")?;
-    assert_eq!(created.peel_to_id()?.detach(), target_commit_id);
+    assert_eq!(created.peel_to_id()?.detach(), head_commit_id);
     assert_workspace_ref(&result.workspace, "refs/heads/new-branch");
 
     Ok(())
@@ -221,7 +222,8 @@ RefInfo {
 #[test]
 fn checkout_new_returns_head_info_matching_fresh_head_info() -> anyhow::Result<()> {
     let (repo, _tmp) = crate::support::writable_scenario("checkout-head-info");
-    let target_commit_id = crate::support::persist_default_target(&repo)?;
+    crate::support::persist_default_target(&repo)?;
+    let head_commit_id = repo.head_id()?.detach();
 
     let mut ctx = but_ctx::Context::from_repo_for_testing(repo)?.with_memory_app_cache();
     let result = but_api::branch::branch_checkout_new(&mut ctx, Some("new branch".into()))?;
@@ -234,8 +236,8 @@ fn checkout_new_returns_head_info_matching_fresh_head_info() -> anyhow::Result<(
         let mut created = repo.find_reference("refs/heads/new-branch")?;
         assert_eq!(
             created.peel_to_id()?.detach(),
-            target_commit_id,
-            "new branch should be created at the configured project target"
+            head_commit_id,
+            "new branch should be created at the current HEAD"
         );
 
         snapbox::assert_data_eq!(

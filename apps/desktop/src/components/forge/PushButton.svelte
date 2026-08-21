@@ -12,10 +12,8 @@
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
 	import { UI_STATE } from "$lib/state/uiState.svelte";
 	import { inject } from "@gitbutler/core/context";
-	import { persisted } from "@gitbutler/shared/persisted";
 	import {
 		Button,
-		Checkbox,
 		Modal,
 		TestId,
 		SimpleCommitRow,
@@ -32,21 +30,9 @@
 		branchName: string;
 		segment: Segment;
 		withForce: boolean;
-		multipleBranches: boolean;
-		isLastBranchInStack?: boolean;
-		isFirstBranchInStack?: boolean;
 	};
 
-	const {
-		projectId,
-		branchName,
-		stackId,
-		segment,
-		withForce,
-		multipleBranches,
-		isFirstBranchInStack,
-		isLastBranchInStack,
-	}: Props = $props();
+	const { projectId, branchName, stackId, segment, withForce }: Props = $props();
 
 	const stackService = inject(STACK_SERVICE);
 	const projectsService = inject(PROJECTS_SERVICE);
@@ -57,15 +43,12 @@
 	const urlService = inject(URL_SERVICE);
 	const clipboardService = inject(CLIPBOARD_SERVICE);
 
-	// Get current project to check gerrit_mode
 	const projectResponse = $derived(projectsService.getProject(projectId));
 	const isGerritMode = $derived(projectResponse.response?.gerrit_mode ?? false);
 	const runHooks = $derived(projectRunCommitHooks(projectId));
-
-	// Component is read-only when stackId is undefined
 	const isReadOnly = $derived(!stackId);
 
-	const [pushStack, pushQuery] = stackService.pushStack;
+	const [pushBranch, pushQuery] = stackService.pushStack;
 
 	const hasThingsToPush = $derived(branchHasUnpushedCommits(segment));
 	const hasConflicts = $derived(branchHasConflicts(segment));
@@ -77,22 +60,13 @@
 	);
 	const buttonDisabled = $derived(isReadOnly || !hasThingsToPush || hasConflicts);
 
-	function handleClick(args: {
-		withForce: boolean;
-		skipForcePushProtection: boolean;
-		gerritFlags: GerritPushFlag[];
-	}) {
+	function handleClick() {
 		if (isGerritMode) {
 			gerritModal?.show();
 			return;
 		}
 
-		if (multipleBranches && !isLastBranchInStack && !$doNotShowPushBelowWarning) {
-			confirmationModal?.show();
-			return;
-		}
-
-		push(args);
+		push({ withForce, skipForcePushProtection: false, gerritFlags: [] });
 	}
 
 	async function push(args: {
@@ -104,7 +78,7 @@
 
 		const { withForce, skipForcePushProtection, gerritFlags } = args;
 		try {
-			const pushResult = await pushStack({
+			const pushResult = await pushBranch({
 				projectId,
 				stackId,
 				withForce,
@@ -120,14 +94,10 @@
 			if (upstreamBranchNames.length === 0) return;
 			uiState.project(projectId).branchesToPoll.add(...upstreamBranchNames);
 
-			// Show success notification
-			const branchText =
-				multipleBranches && !isLastBranchInStack
-					? `${branchName} and all branches below it`
-					: branchName;
-			chipToasts.success(`Pushed ${branchText} successfully`);
+			chipToasts.success(`Pushed ${branchName} successfully`);
 		} catch (error: any) {
 			if (error?.code === "GitForcePushProtection") {
+				pendingGerritFlags = gerritFlags;
 				forcePushProtectionModal?.show();
 				return;
 			}
@@ -135,34 +105,20 @@
 		}
 	}
 
-	const loading = $derived(pushQuery.current.isLoading);
-
 	function getButtonTooltip(
 		hasThingsToPush: boolean,
 		hasConflicts: boolean,
 		withForce: boolean,
 		remoteTrackingBranch: string | null,
 	): string | undefined {
-		if (isReadOnly) {
-			return "Read-only mode";
-		}
-
-		if (!hasThingsToPush) {
-			return "No commits to push";
-		}
-
-		if (hasConflicts) {
-			return "In order to push, please resolve any conflicted commits.";
-		}
-
-		if (multipleBranches && !isLastBranchInStack) {
-			return "Push this and all branches below";
-		}
+		if (isReadOnly) return "Read-only mode";
+		if (!hasThingsToPush) return "No commits to push";
+		if (hasConflicts) return "Resolve conflicted commits before pushing.";
 
 		if (withForce) {
 			return remoteTrackingBranch
-				? "Force push this branch"
-				: `Force push this branch to ${remoteTrackingBranch}`;
+				? `Force push this branch to ${remoteTrackingBranch}`
+				: "Force push this branch";
 		}
 
 		return remoteTrackingBranch
@@ -170,8 +126,8 @@
 			: "Push this branch";
 	}
 
-	const doNotShowPushBelowWarning = persisted<boolean>(false, "doNotShowPushBelowWarning");
-	let confirmationModal = $state<ReturnType<typeof Modal>>();
+	const loading = $derived(pushQuery.current.isLoading);
+
 	let forcePushProtectionModal = $state<ReturnType<typeof Modal>>();
 	let gerritModal = $state<GerritPushModal>();
 	let pendingGerritFlags = $state<GerritPushFlag[]>([]);
@@ -179,60 +135,17 @@
 
 <Button
 	testId={TestId.StackPushButton}
-	kind={isFirstBranchInStack ? "solid" : "outline"}
+	kind="solid"
 	size="tag"
 	style="gray"
 	{loading}
 	disabled={buttonDisabled}
 	tooltip={getButtonTooltip(hasThingsToPush, hasConflicts, withForce, remoteTrackingBranch)}
-	onclick={() => handleClick({ withForce, skipForcePushProtection: false, gerritFlags: [] })}
-	icon={multipleBranches && !isLastBranchInStack ? "push-all" : "push"}
+	onclick={handleClick}
+	icon="push"
 >
 	{isGerritMode ? "Push" : withForce ? "Force push" : "Push"}
 </Button>
-
-<Modal
-	title="Push with dependencies"
-	width="small"
-	bind:this={confirmationModal}
-	onSubmit={async (close) => {
-		close();
-		push({
-			withForce,
-			skipForcePushProtection: false,
-			gerritFlags: pendingGerritFlags,
-		});
-		pendingGerritFlags = [];
-	}}
->
-	<p>
-		You're about to push <span class="text-bold">{branchName}</span>. To maintain the correct
-		history, GitButler will also push all branches below this branch in the stack.
-	</p>
-
-	{#snippet controls(close)}
-		<div class="modal-footer">
-			<div class="flex flex-1">
-				<label for="dont-show-again" class="modal-footer__checkbox">
-					<Checkbox name="dont-show-again" small bind:checked={$doNotShowPushBelowWarning} />
-					<span class="text-12"> Don’t show again</span>
-				</label>
-			</div>
-			<Button
-				kind="outline"
-				onclick={() => {
-					$doNotShowPushBelowWarning = false;
-					close();
-				}}
-			>
-				Cancel
-			</Button>
-			<Button testId={TestId.StackConfirmPushModalButton} style="pop" type="submit" width={90}>
-				Push
-			</Button>
-		</div>
-	{/snippet}
-</Modal>
 
 <Modal
 	title="Protected force push"
@@ -289,45 +202,25 @@
 	{projectId}
 	{stackId}
 	{branchName}
-	{multipleBranches}
-	{isFirstBranchInStack}
-	{isLastBranchInStack}
+	multipleBranches={false}
+	isFirstBranchInStack
+	isLastBranchInStack
 	onPush={(gerritFlags) => {
-		if (multipleBranches && !isLastBranchInStack && !$doNotShowPushBelowWarning) {
-			// Store all gerrit flags for later use when confirmation modal completes
-			pendingGerritFlags = gerritFlags;
-			confirmationModal?.show();
-		} else {
-			push({ withForce, skipForcePushProtection: false, gerritFlags });
-		}
+		push({ withForce, skipForcePushProtection: false, gerritFlags });
 	}}
 />
 
 <style>
-	/* MODAL */
-	.modal-footer {
-		display: flex;
-		width: 100%;
-		gap: 6px;
-	}
-
-	/* CONTROLS */
 	.controls {
 		display: flex;
 		width: 100%;
 		gap: 6px;
 	}
 
-	.modal-footer__checkbox {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	/* COMMITS SCROLL CONTAINER */
 	.description {
 		margin: 0 0 16px;
 	}
+
 	.scroll-wrap {
 		overflow: hidden;
 		border: 1px solid var(--border-2);

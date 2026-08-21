@@ -56,7 +56,7 @@
 
 	{#if !hasAccounts}
 		<div class="flex">
-			<Button onclick={() => openGeneralSettings("integrations")} style="pop" icon="link"
+			<Button onclick={() => openGeneralSettings("git-integrations")} style="pop" icon="link"
 				>Set up in General Settings</Button
 			>
 		</div>

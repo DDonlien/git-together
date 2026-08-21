@@ -108,16 +108,16 @@
 
 			// BRANCH
 			case "ApplyBranch":
-				return { text: `Apply branch "${entryTrailer("name")}"`, icon: "branch" };
+				return { text: `Activate branch "${entryTrailer("name")}"`, icon: "branch" };
 			case "UnapplyBranch":
-				return { text: `Unapply branch "${trailer("branch")}"`, icon: "branch" };
+				return { text: `Deactivate branch "${trailer("branch")}"`, icon: "branch" };
 			case "ReorderBranches":
 				return {
 					text: `Reorder branches "${trailer("before")}" and "${trailer("after")}"`,
 					icon: "branch",
 				};
 			case "SelectDefaultVirtualBranch":
-				return { text: `Select default virtual branch "${trailer("after")}"`, icon: "branch" };
+				return { text: `Select default branch "${trailer("after")}"`, icon: "branch" };
 			case "SetBaseBranch":
 				return { text: "Set base branch", icon: "branch" };
 			case "GenericBranchUpdate":

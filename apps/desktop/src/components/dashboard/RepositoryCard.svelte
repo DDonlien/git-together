@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Button, Icon } from "@gitbutler/ui";
 	import type {
 		BranchSummary,
 		ProjectOperationState,
@@ -6,7 +7,6 @@
 		RepositoryOverview,
 	} from "$lib/gittogether/types";
 	import type { Project } from "$lib/project/project";
-	import { Button, Icon } from "@gitbutler/ui";
 
 	type Props = {
 		project: Project;
@@ -293,12 +293,12 @@
 	}
 
 	.repository-card__name-wrap strong {
-		font-size: 12px;
+		font-size: 14px;
 	}
 
 	.repository-card__name-wrap span {
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 12px;
 		font-family: var(--font-mono);
 	}
 
@@ -315,7 +315,7 @@
 		border-radius: 999px;
 		background: var(--bg-2);
 		color: var(--text-3);
-		font-size: 9px;
+		font-size: 12px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -344,7 +344,7 @@
 		gap: 8px;
 		border-bottom: 1px solid var(--border-2);
 		background: color-mix(in srgb, #63c18b 9%, var(--bg-1));
-		font-size: 9px;
+		font-size: 12px;
 	}
 
 	.operation--running {
@@ -372,7 +372,7 @@
 		min-height: 76px;
 		gap: 8px;
 		color: var(--text-3);
-		font-size: 10px;
+		font-size: 13px;
 	}
 
 	.repository-state--error {
@@ -409,7 +409,7 @@
 		background: transparent;
 		color: var(--text-2);
 		font: inherit;
-		font-size: 9px;
+		font-size: 12px;
 		text-align: left;
 		cursor: pointer;
 	}
@@ -450,7 +450,7 @@
 	.branch-name strong {
 		overflow: hidden;
 		color: var(--text-1);
-		font-size: 10px;
+		font-size: 13px;
 		text-overflow: ellipsis;
 	}
 
@@ -480,7 +480,7 @@
 	.branch-empty {
 		padding: 18px;
 		color: var(--text-3);
-		font-size: 10px;
+		font-size: 13px;
 		text-align: center;
 	}
 

@@ -23,7 +23,14 @@ fn remove_deprecated_settings(customizations: &mut serde_json::Value) -> bool {
         .get_mut("featureFlags")
         .and_then(serde_json::Value::as_object_mut)
     {
-        for deprecated in ["apply3", "unapplyV3", "undo", "rules", "cv3"] {
+        for deprecated in [
+            "apply3",
+            "unapplyV3",
+            "undo",
+            "rules",
+            "cv3",
+            "singleBranch",
+        ] {
             if feature_flags.remove(deprecated).is_some() {
                 removed = true;
             }
@@ -46,6 +53,18 @@ fn remove_deprecated_settings(customizations: &mut serde_json::Value) -> bool {
     }
 
     removed
+}
+
+fn enforce_product_invariants(settings: &mut serde_json::Value) {
+    if let Some(feature_flags) = settings
+        .get_mut("featureFlags")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        // GitTogether always works on the checked-out Git branch. Keep this
+        // internal compatibility flag enabled even when an older settings file
+        // contains the former experimental-mode override.
+        feature_flags.insert("singleBranch".into(), json!(true));
+    }
 }
 
 impl AppSettings {
@@ -91,6 +110,8 @@ impl AppSettings {
             merge_json_value(legacy_overrides, &mut settings);
         }
 
+        enforce_product_invariants(&mut settings);
+
         Ok(serde_json::from_value(settings)?)
     }
 
@@ -111,7 +132,8 @@ impl AppSettings {
         let current = serde_json::to_value(AppSettings::load(config_path, customization)?)?;
 
         // Derive changed values only compared to the current settings
-        let update = serde_json::to_value(self)?;
+        let mut update = serde_json::to_value(self)?;
+        enforce_product_invariants(&mut update);
         let diff = json_difference(current, &update);
 
         // Load the existing customizations only
@@ -216,7 +238,7 @@ mod tests {
                     "undo": true,
                     "rules": true,
                     "cv3": true,
-                    "singleBranch": true
+                    "singleBranch": false
                 }
             }"#,
         )
@@ -228,12 +250,39 @@ mod tests {
         let saved: serde_json::Value =
             serde_json_lenient::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
 
-        assert_eq!(saved["featureFlags"]["singleBranch"], json!(true));
+        assert!(settings.feature_flags.single_branch);
+        assert_eq!(saved["featureFlags"].get("singleBranch"), None);
         assert_eq!(saved["featureFlags"].get("apply3"), None);
         assert_eq!(saved["featureFlags"].get("unapplyV3"), None);
         assert_eq!(saved["featureFlags"].get("undo"), None);
         assert_eq!(saved["featureFlags"].get("rules"), None);
         assert_eq!(saved["featureFlags"].get("cv3"), None);
+    }
+
+    #[test]
+    fn legacy_virtual_workspace_override_cannot_disable_real_git_mode() {
+        let (_temp_dir, config_path, _legacy_path) = create_test_env();
+
+        std::fs::write(
+            &config_path,
+            r#"{
+                "telemetry": {
+                    "migratedFromLegacy": true
+                },
+                "featureFlags": {
+                    "singleBranch": false
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let settings = AppSettings::load(&config_path, None).unwrap();
+        assert!(settings.feature_flags.single_branch);
+
+        settings.save(&config_path, None).unwrap();
+        let saved: serde_json::Value =
+            serde_json_lenient::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(saved.get("featureFlags"), None);
     }
 
     #[test]

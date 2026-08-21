@@ -589,14 +589,14 @@ mod config_feature {
 
     #[test]
     fn parses_feature_update() {
-        let args = Args::try_parse_from(["but", "config", "feature", "single-branch", "enable"])
+        let args = Args::try_parse_from(["but", "config", "feature", "unapply-v3-pgm", "enable"])
             .expect("parse feature update");
 
         assert!(matches!(
             args.cmd,
             Some(Subcommands::Config(ConfigPlatform {
                 cmd: Some(ConfigCmd::Feature {
-                    flag: Some(FeatureFlag::SingleBranch),
+                    flag: Some(FeatureFlag::UnapplyV3Pgm),
                     status: Some(FeatureStatus::Enable),
                 }),
             }))
@@ -614,7 +614,14 @@ mod config_feature {
     #[test]
     fn json_keys_use_snake_case() {
         assert_eq!(FeatureFlag::UnapplyV3Pgm.as_json_key(), "unapply_v3_pgm");
-        assert_eq!(FeatureFlag::SingleBranch.as_json_key(), "single_branch");
+    }
+
+    #[test]
+    fn rejects_removed_single_branch_feature_flag() {
+        let err = Args::try_parse_from(["but", "config", "feature", "single-branch", "disable"])
+            .expect_err("the removed virtual-workspace toggle must not parse");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
     }
 }
 

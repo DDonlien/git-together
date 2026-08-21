@@ -1,25 +1,10 @@
-<script lang="ts" module>
-	export type DragableBranchData = {
-		disabled: boolean;
-		label: string;
-		pushStatus: PushStatus | undefined;
-		data: BranchDropData | undefined;
-	};
-</script>
-
 <script lang="ts">
 	import BranchHeaderIcon from "$components/branch/BranchHeaderIcon.svelte";
 	import BranchLabel from "$components/branch/BranchLabel.svelte";
 	import CommitPositionIndicator from "$components/commit/CommitPositionIndicator.svelte";
-	import { draggableBranch, type DraggableConfig } from "$lib/dragging/draggable";
-	import { BranchDropData } from "$lib/dragging/dropHandlers/branchDropHandler";
-	import { DROPZONE_REGISTRY } from "$lib/dragging/registry";
-	import { inject } from "@gitbutler/core/context";
-	import { Badge, TestId, Icon } from "@gitbutler/ui";
-	import { DRAG_STATE_SERVICE } from "@gitbutler/ui/drag/dragStateService.svelte";
+	import { Badge, TestId } from "@gitbutler/ui";
 	import { focusable } from "@gitbutler/ui/focus/focusable";
 	import { slide } from "svelte/transition";
-	import type { PushStatus } from "@gitbutler/but-sdk";
 	import type { Snippet } from "svelte";
 	import type { ComponentProps } from "svelte";
 
@@ -50,7 +35,6 @@
 		prCreation?: Snippet;
 		changedFiles?: Snippet;
 		showPrCreation?: boolean;
-		dragArgs?: DragableBranchData;
 	};
 
 	const {
@@ -80,11 +64,7 @@
 		prCreation,
 		changedFiles,
 		showPrCreation,
-		dragArgs,
 	}: Props = $props();
-
-	const dropzoneRegistry = inject(DROPZONE_REGISTRY);
-	const dragStateService = inject(DRAG_STATE_SERVICE);
 
 	let rightClickTrigger = $state<HTMLDivElement>();
 	let active = $state(false);
@@ -97,21 +77,6 @@
 	const showCommitGoesHere = $derived(
 		isCommitting && (draft || (isEmpty && onCommitGoesHereClick)),
 	);
-
-	const draggableBranchConfig = $derived.by<DraggableConfig>(() => {
-		if (!dragArgs) {
-			return {
-				disabled: true,
-				dropzoneRegistry,
-				dragStateService,
-			};
-		}
-		return {
-			...dragArgs,
-			dropzoneRegistry,
-			dragStateService,
-		};
-	});
 </script>
 
 <div
@@ -137,14 +102,7 @@
 		onkeypress={onclick}
 		tabindex="0"
 		data-remove-from-panning
-		use:draggableBranch={draggableBranchConfig}
 	>
-		{#if dragArgs && !dragArgs.disabled && !conflicts}
-			<div class="branch-header__drag-handle" data-no-drag>
-				<Icon name="drag-vertical" />
-			</div>
-		{/if}
-
 		<div class="branch-header__content">
 			{#if selected && !draft}
 				<div
@@ -263,11 +221,6 @@
 		/* Selected but NOT in focus */
 		&:not(.disable-hover):hover {
 			--branch-selected-bg: var(--hover-bg-1);
-
-			& .branch-header__drag-handle {
-				width: 16px;
-				opacity: 0.4;
-			}
 		}
 
 		/* &:not(:focus-within).selected {
@@ -341,21 +294,6 @@
 		&.active {
 			background-color: var(--focus-fg);
 		}
-	}
-
-	.branch-header__drag-handle {
-		display: flex;
-		position: absolute;
-		top: 6px;
-		right: 4px;
-		align-items: center;
-		justify-content: flex-end;
-		width: 10px;
-		color: var(--text-1);
-		opacity: 0;
-		transition:
-			width var(--transition-fast),
-			opacity var(--transition-fast);
 	}
 
 	.changed-files-container {

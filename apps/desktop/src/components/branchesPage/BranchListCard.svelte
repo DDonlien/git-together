@@ -1,6 +1,5 @@
 <script lang="ts">
 	import BranchesCardLayout from "$components/branchesPage/BranchesCardLayout.svelte";
-	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
 	import { GIT_CONFIG_SERVICE } from "$lib/config/gitConfigService";
 	import { getPrStatus } from "$lib/forge/interface/prUtils";
 	import { useUserAvatarUrl } from "$lib/user/userAvatar.svelte";
@@ -8,38 +7,34 @@
 
 	import { AvatarGroup, ReviewBadge, SeriesLabelsRow, TestId, TimeAgo } from "@gitbutler/ui";
 	import { gravatarUrlFromEmail } from "@gitbutler/ui/components/avatar/gravatar";
+	import type { GitBranchListing } from "$lib/branches/branchListing";
 	import type { PullRequest } from "$lib/forge/interface/types";
-	import type { BranchListing, BranchListingDetails, ForgeUnitInfo } from "@gitbutler/but-sdk";
+	import type { ForgeUnitInfo } from "@gitbutler/but-sdk";
 
 	interface Props {
 		reviewUnit: ForgeUnitInfo | undefined;
 		forge?: string;
-		projectId: string;
-		branchListing: BranchListing;
+		branchListing: GitBranchListing;
+		currentBranchName?: string;
 		prs: PullRequest[];
 		selected: boolean;
-		onclick: (args: { listing: BranchListing; pr?: PullRequest }) => void;
+		onclick: (args: { listing: GitBranchListing; pr?: PullRequest }) => void;
 	}
 
-	const { reviewUnit, forge, projectId, branchListing, prs, selected, onclick }: Props = $props();
+	const { reviewUnit, forge, branchListing, currentBranchName, prs, selected, onclick }: Props =
+		$props();
 	const userAvatarUrl = useUserAvatarUrl();
 
 	const unknownName = "unknown";
 	const unknownEmail = "example@example.com";
 
 	const gitConfigService = inject(GIT_CONFIG_SERVICE);
-	const branchService = inject(BRANCH_SERVICE);
-
-	// TODO: Use information from all PRs in a stack?
 	const pr = $derived(prs.at(0));
 
-	const branchDetailsQuery = $derived(branchService.get(projectId, branchListing.name));
-
 	let lastCommitDetails = $state<{ authorName: string; lastCommitAt?: Date }>();
-	let branchListingDetails = $derived(branchDetailsQuery?.response);
 
 	// If there are zero commits we should not show the author
-	const ownedByUser = $derived(branchListingDetails?.numberOfCommits === 0);
+	const ownedByUser = $derived(branchListing.commitCount === 0);
 
 	$effect(() => {
 		let canceled = false;
@@ -60,15 +55,19 @@
 				lastCommitAt: new Date(branchListing.updatedAt),
 			};
 		}
+
+		return () => {
+			canceled = true;
+		};
 	});
 
 	let avatars = $state<{ username: string; srcUrl: string }[]>([]);
 
 	$effect(() => {
-		setAvatars(ownedByUser, branchListingDetails);
+		setAvatars(ownedByUser);
 	});
 
-	async function setAvatars(ownedByUser: boolean, branchListingDetails?: BranchListingDetails) {
+	async function setAvatars(ownedByUser: boolean) {
 		if (ownedByUser) {
 			const name = (await gitConfigService.get("user.name")) || unknownName;
 			const email = (await gitConfigService.get<string>("user.email")) || unknownEmail;
@@ -79,29 +78,24 @@
 					srcUrl: userAvatarUrl(email) ?? (await gravatarUrlFromEmail(email)),
 				},
 			];
-		} else if (branchListingDetails) {
-			avatars = branchListingDetails.authors
-				? await Promise.all(
-						branchListingDetails.authors.map(async (author) => {
-							return {
-								username: author.name || unknownName,
-								srcUrl:
-									userAvatarUrl(author.email) ??
-									author.gravatarUrl ??
-									(await gravatarUrlFromEmail(author.email || unknownEmail)),
-							};
-						}),
-					)
-				: [];
+		} else if (branchListing.lastCommiter.email || branchListing.lastCommiter.name) {
+			const name = branchListing.lastCommiter.name || unknownName;
+			const email = branchListing.lastCommiter.email || unknownEmail;
+			avatars = [
+				{
+					username: name,
+					srcUrl:
+						userAvatarUrl(email) ??
+						branchListing.lastCommiter.gravatarUrl ??
+						(await gravatarUrlFromEmail(email)),
+				},
+			];
 		} else {
 			avatars = [];
 		}
 	}
 
-	const stackBranches = $derived(branchListing.stack?.branches);
-	const filteredStackBranches = $derived(
-		stackBranches && stackBranches.length > 0 ? stackBranches : [branchListing.name],
-	);
+	const isCurrentBranch = $derived(branchListing.name === currentBranchName);
 </script>
 
 <BranchesCardLayout
@@ -111,10 +105,10 @@
 >
 	{#snippet content()}
 		<div class="sidebar-entry__header">
-			<SeriesLabelsRow series={filteredStackBranches} />
-			{#if branchListing.stack?.inWorkspace}
-				<div class="sidebar-entry__applied-tag">
-					<span class="text-10 text-semibold">Workspace</span>
+			<SeriesLabelsRow series={[branchListing.name]} />
+			{#if isCurrentBranch}
+				<div class="sidebar-entry__current-tag">
+					<span class="text-10 text-semibold">Current</span>
 				</div>
 			{/if}
 		</div>
@@ -131,7 +125,7 @@
 				<span class="sidebar-entry__divider">•</span>
 			{/if}
 
-			{#if avatars}
+			{#if avatars.length > 0}
 				<AvatarGroup {avatars} />
 				<span class="sidebar-entry__divider">•</span>
 			{/if}
@@ -160,19 +154,8 @@
 				{/if}
 			</span>
 
-			{#if branchListingDetails}
+			{#if branchListing.commitCount !== null}
 				<div class="sidebar-entry__details-item">
-					{#if branchListingDetails.linesAdded}
-						<span>
-							+{branchListingDetails.linesAdded}
-						</span>
-					{/if}
-					{#if branchListingDetails.linesRemoved}
-						<span>
-							-{branchListingDetails.linesRemoved}
-						</span>
-					{/if}
-
 					<svg
 						width="14"
 						height="12"
@@ -186,7 +169,7 @@
 						/>
 					</svg>
 
-					<span>{branchListingDetails?.numberOfCommits}</span>
+					<span>{branchListing.commitCount}</span>
 				</div>
 			{/if}
 		</div>
@@ -215,7 +198,7 @@
 		}
 	}
 
-	.sidebar-entry__applied-tag {
+	.sidebar-entry__current-tag {
 		display: flex;
 		padding: 2px 4px;
 		border-radius: 10px;

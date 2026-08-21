@@ -31,25 +31,6 @@
 		{/snippet}
 	</CardGroup.Item>
 
-	<CardGroup.Item labelFor="single-branch">
-		{#snippet title()}
-			Git mode
-		{/snippet}
-		{#snippet caption()}
-			Work directly on real Git branches instead of being forced onto a virtual workspace branch.
-		{/snippet}
-		{#snippet actions()}
-			<Toggle
-				id="single-branch"
-				checked={$settingsStore?.featureFlags.singleBranch}
-				onclick={() =>
-					settingsService.updateFeatureFlags({
-						singleBranch: !$settingsStore?.featureFlags.singleBranch,
-					})}
-			/>
-		{/snippet}
-	</CardGroup.Item>
-
 	<CardGroup.Item labelFor="worktree-manipulation">
 		{#snippet title()}
 			Worktree manipulation

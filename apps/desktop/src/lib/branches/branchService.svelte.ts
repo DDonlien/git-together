@@ -26,8 +26,12 @@ export class BranchService {
 		);
 	}
 
-	get(projectId: string, branchName: string) {
-		return this.backendApi.endpoints.branchListingDetails.useQuery({ projectId, branchName });
+	get checkout() {
+		return this.backendApi.endpoints.checkoutBranch.useMutation();
+	}
+
+	get checkoutNew() {
+		return this.backendApi.endpoints.checkoutNewBranch.useMutation();
 	}
 
 	async refresh(): Promise<void> {

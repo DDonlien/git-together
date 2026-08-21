@@ -2,6 +2,12 @@ import * as BranchUtils from "$lib/branches/branchUtils";
 import { expect, test, describe } from "vitest";
 
 describe.concurrent("getBranchNameFromRef", () => {
+	test("When provided a local ref, it returns the short branch name", () => {
+		const ref = "refs/heads/feature/cool-thing";
+
+		expect(BranchUtils.getBranchNameFromRef(ref)).toBe("feature/cool-thing");
+	});
+
 	test("When provided a ref with a remote prefix, it returns the branch name", () => {
 		const ref = "refs/remotes/origin/main";
 		const remote = "origin";

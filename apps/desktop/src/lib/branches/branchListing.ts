@@ -1,22 +1,34 @@
 import { msSinceDaysAgo } from "$lib/utils/time";
 import { isDefined } from "@gitbutler/ui/utils/typeguards";
 import type { ForgeUser, PullRequest } from "$lib/forge/interface/types";
-import type { BranchListing } from "@gitbutler/but-sdk";
+
+export type GitBranchListing = {
+	name: string;
+	remotes: string[];
+	updatedAt: number;
+	lastCommiter: {
+		name: string | null;
+		email: string | null;
+		gravatarUrl: string | null;
+	};
+	hasLocal: boolean;
+	commitCount: number | null;
+};
 
 export type GroupedSidebarEntries = Record<
-	"applied" | "authored" | "review" | "today" | "yesterday" | "lastWeek" | "older",
+	"current" | "authored" | "review" | "today" | "yesterday" | "lastWeek" | "older",
 	SidebarEntrySubject[]
 >;
 
 type PullRequestEntrySubject = {
 	type: "pullRequest";
 	subject: PullRequest;
-	branchListing?: BranchListing;
+	branchListing?: GitBranchListing;
 };
 
 type BranchListingEntrySubject = {
 	type: "branchListing";
-	subject: BranchListing;
+	subject: GitBranchListing;
 	prs: PullRequest[];
 };
 
@@ -41,8 +53,9 @@ function getEntryName(entry: SidebarEntrySubject) {
 	return entry.type === "branchListing" ? entry.subject.name : entry.subject.title;
 }
 
-function getEntryWorkspaceStatus(entry: SidebarEntrySubject) {
-	return entry.type === "branchListing" ? entry.subject.stack?.inWorkspace : undefined;
+function isCurrentBranch(entry: SidebarEntrySubject, currentBranchName: string | undefined) {
+	if (entry.type !== "branchListing") return false;
+	return currentBranchName !== undefined && entry.subject.name === currentBranchName;
 }
 
 function isReviewerOfEntry(login: string | undefined, entry: SidebarEntrySubject): boolean {
@@ -63,7 +76,7 @@ function isAuthorOfEntry(login: string | undefined, entry: SidebarEntrySubject):
 
 export function combineBranchesAndPrs(
 	pullRequests: PullRequest[],
-	branchList: BranchListing[],
+	branchList: GitBranchListing[],
 	selectedOption: BranchFilterOption,
 ) {
 	const prMap = Object.fromEntries(pullRequests.map((pr) => [pr.sourceBranch, pr]));
@@ -116,9 +129,7 @@ function filterSidebarEntries(
 		}
 		case "local": {
 			return sidebarEntries.filter(
-				(sidebarEntry) =>
-					sidebarEntry.type === "branchListing" &&
-					(sidebarEntry.subject.hasLocal || sidebarEntry.subject.stack),
+				(sidebarEntry) => sidebarEntry.type === "branchListing" && sidebarEntry.subject.hasLocal,
 			);
 		}
 		default: {
@@ -127,15 +138,17 @@ function filterSidebarEntries(
 	}
 }
 
-function containsPullRequestBranch(branchListing: BranchListing, sourceBranch: string): boolean {
-	if (sourceBranch === branchListing.name) return true;
-	if (branchListing.stack?.branches.includes(sourceBranch)) return true;
-	return false;
+function containsPullRequestBranch(branchListing: GitBranchListing, sourceBranch: string): boolean {
+	return sourceBranch === branchListing.name;
 }
 
-export function groupBranches(branches: SidebarEntrySubject[], user: ForgeUser | undefined) {
+export function groupBranches(
+	branches: SidebarEntrySubject[],
+	user: ForgeUser | undefined,
+	currentBranchName?: string,
+) {
 	const grouped: GroupedSidebarEntries = {
-		applied: [],
+		current: [],
 		authored: [],
 		review: [],
 		today: [],
@@ -157,8 +170,8 @@ export function groupBranches(branches: SidebarEntrySubject[], user: ForgeUser |
 
 		const msSinceLastCommit = now - getEntryUpdatedDate(b).getTime();
 
-		if (getEntryWorkspaceStatus(b)) {
-			grouped.applied.push(b);
+		if (isCurrentBranch(b, currentBranchName)) {
+			grouped.current.push(b);
 			continue;
 		}
 
@@ -193,11 +206,7 @@ export function groupBranches(branches: SidebarEntrySubject[], user: ForgeUser |
 	return grouped;
 }
 
-/** All branch names associated with listing. */
-function getBranchNames(branchListing: BranchListing) {
-	if (branchListing.stack) {
-		return branchListing.stack.branches;
-	} else {
-		return [branchListing.name];
-	}
+/** The real Git branch represented by this listing. */
+function getBranchNames(branchListing: GitBranchListing) {
+	return [branchListing.name];
 }

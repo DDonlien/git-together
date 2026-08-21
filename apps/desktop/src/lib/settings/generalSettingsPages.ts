@@ -19,18 +19,13 @@ export const generalSettingsPages = [
 		icon: "appearance",
 	},
 	{
-		id: "lanes-and-branches",
-		label: "Lanes & branches",
-		icon: "lanes",
+		id: "branches-and-commits",
+		label: "Branches & commits",
+		icon: "branch",
 	},
 	{
-		id: "git",
-		label: "Git stuff",
-		icon: "git",
-	},
-	{
-		id: "integrations",
-		label: "Integrations",
+		id: "git-integrations",
+		label: "Git Integrations",
 		icon: "puzzle",
 	},
 	{

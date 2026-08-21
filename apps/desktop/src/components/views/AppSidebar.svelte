@@ -196,7 +196,6 @@
 		</div>
 
 		<div class="project-settings">
-			<Spacer margin={8} />
 			<Button
 				testId={TestId.ChromeSideBarProjectSettingsButton}
 				kind="outline"

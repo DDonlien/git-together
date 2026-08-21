@@ -232,7 +232,6 @@
 				parent={selectedContext.parent}
 				child={selectedContext.child}
 				withForce={selectedContext.withForce}
-				stackLength={segments.length}
 				onclose={() => controller.closePreview()}
 				rounded
 				onpopout={() => controller.openFloatingDiff()}

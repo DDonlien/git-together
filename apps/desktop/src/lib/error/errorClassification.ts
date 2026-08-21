@@ -97,7 +97,7 @@ const CLASSIFICATIONS: Partial<Record<Code, Classification>> = {
 		userMessage: `
 Commit signing failed and has now been disabled. You can configure commit signing in the project settings.
 
-Please check our [documentation](https://docs.gitbutler.com/features/virtual-branches/signing-commits) on setting up commit signing and verification.
+See the [Git documentation](https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work) for commit-signing setup and verification.
 		`,
 	},
 	RepoOwnership: {

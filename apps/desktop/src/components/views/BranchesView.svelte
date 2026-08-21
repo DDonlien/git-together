@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
 	import BranchExplorer from "$components/branchesPage/BranchExplorer.svelte";
 	import BranchListCard from "$components/branchesPage/BranchListCard.svelte";
 	import BranchesListGroup from "$components/branchesPage/BranchesListGroup.svelte";
 	import BranchesViewPr from "$components/branchesPage/BranchesViewPR.svelte";
-	import BranchesViewStack from "$components/branchesPage/BranchesViewStack.svelte";
 	import CurrentOriginCard from "$components/branchesPage/CurrentOriginCard.svelte";
 	import PRListCard from "$components/branchesPage/PRListCard.svelte";
 	import UnappliedCommitView from "$components/commit/UnappliedCommitView.svelte";
@@ -17,16 +15,15 @@
 	import BranchesViewBranch from "$components/views/BranchesViewBranch.svelte";
 	import TargetCommitList from "$components/views/TargetCommitList.svelte";
 	import { BASE_BRANCH_SERVICE } from "$lib/baseBranch/baseBranchService.svelte";
+	import { getBranchNameFromRef } from "$lib/branches/branchUtils";
 	import { BRANCH_SERVICE } from "$lib/branches/branchService.svelte";
 	import { isNormalizedError } from "$lib/error/normalizedError";
 	import { useBitbucketForgeUser } from "$lib/forge/bitbucket/hooks.svelte";
 	import { FORGE_INFO_SERVICE } from "$lib/forge/forgeInfo.svelte";
 	import { useGitHubForgeUser } from "$lib/forge/github/hooks.svelte";
 	import { useGitLabForgeUser } from "$lib/forge/gitlab/hooks.svelte";
-	import { workspacePath } from "$lib/routes/routes.svelte";
-	import { handleApplyOutcome } from "$lib/stacks/stack";
+	import { MODE_SERVICE } from "$lib/mode/modeService";
 	import { STACK_SERVICE } from "$lib/stacks/stackService.svelte";
-	import { combineResults } from "$lib/state/helpers";
 	import { inject } from "@gitbutler/core/context";
 	import { persisted } from "@gitbutler/shared/persisted";
 	import { reactive } from "@gitbutler/shared/reactiveUtils.svelte";
@@ -46,18 +43,17 @@
 				type: "branch";
 				branchName: string;
 				remote?: string;
-				stackId?: string;
 				commitId?: string;
 		  }
 		| { type: "pr"; prNumber: number }
 		| { type: "target"; commitId?: string };
 
 	const stackService = inject(STACK_SERVICE);
+	const modeService = inject(MODE_SERVICE);
 	const baseBranchService = inject(BASE_BRANCH_SERVICE);
 	const forgeInfoService = inject(FORGE_INFO_SERVICE);
 	const forgeInfoQuery = $derived(forgeInfoService.get(projectId));
 	const forgeInfo = $derived(forgeInfoQuery.response);
-	const reviewUnitAbbr = $derived(forgeInfo?.unit.abbr ?? "PR");
 	// Call both hooks at init (they inject()/getContext(), which must not
 	// run inside a $derived re-computation); select reactively by forge.
 	const projectIdRef = reactive(() => projectId);
@@ -78,6 +74,12 @@
 	});
 	const prUnit = $derived(forgeInfo?.unit);
 	const branchService = inject(BRANCH_SERVICE);
+	const modeQuery = $derived(modeService.mode(projectId));
+	const currentBranchName = $derived(
+		modeQuery.response?.type === "OutsideWorkspace"
+			? getBranchNameFromRef(modeQuery.response.subject.branchName ?? "")
+			: undefined,
+	);
 
 	const baseBranchQuery = $derived(baseBranchService.baseBranch(projectId));
 	const selectedOption = persisted<BranchFilterOption>(
@@ -102,23 +104,14 @@
 		defaultValue: 20,
 	};
 
-	async function applyBranchToWorkspace(args: {
-		branchName: string;
-		remote?: string;
-		hasLocal: boolean;
-	}) {
-		const { remote, hasLocal, branchName } = args;
-		const remoteRef = remote ? `refs/remotes/${remote}/${branchName}` : undefined;
-		const branchRef = hasLocal ? `refs/heads/${branchName}` : remoteRef;
-		if (branchRef) {
-			const outcome = await stackService.branchApply({
-				projectId,
-				existingBranch: branchRef,
-			});
-			handleApplyOutcome(outcome);
-			await baseBranchService.refreshBaseBranch(projectId);
-		}
-		goto(workspacePath(projectId));
+	const [checkoutBranch] = branchService.checkout;
+
+	async function checkoutLocalBranch(branchName: string) {
+		await checkoutBranch({
+			projectId,
+			branch: Array.from(new TextEncoder().encode(`refs/heads/${branchName}`)),
+		});
+		await baseBranchService.refreshBaseBranch(projectId);
 	}
 
 	async function deleteLocalBranch(branchName: string) {
@@ -129,12 +122,6 @@
 		});
 		// Unselect branch
 		await baseBranchService.refreshBaseBranch(projectId);
-	}
-
-	let prBranch = $state<BranchesViewPr>();
-
-	async function applyFromFork() {
-		await prBranch?.applyPr();
 	}
 
 	let deleteLocalBranchModal = $state<Modal>();
@@ -154,21 +141,17 @@
 	let multiDiffView = $state<MultiDiffView>();
 </script>
 
-{#snippet branchActions(branchName: string, remote: string | undefined, hasLocal: boolean)}
+{#snippet branchActions(branchName: string, _remote: string | undefined, hasLocal: boolean)}
 	<div class="branch-actions">
 		<AsyncButton
-			testId={TestId.BranchesViewApplyBranchButton}
-			icon="workbench"
+			testId={TestId.BranchesViewCheckoutBranchButton}
+			icon="branch"
 			shrinkable
-			action={async () => {
-				await applyBranchToWorkspace({
-					remote,
-					branchName,
-					hasLocal,
-				});
-			}}
+			disabled={!hasLocal}
+			tooltip={hasLocal ? undefined : "Create a local branch before checking it out"}
+			action={async () => await checkoutLocalBranch(branchName)}
 		>
-			Apply to workspace
+			Checkout
 		</AsyncButton>
 		<Button
 			testId={TestId.BranchesViewDeleteLocalBranchButton}
@@ -228,56 +211,51 @@
 			>
 				<ReduxResult {projectId} result={baseBranchQuery.result}>
 					{#snippet children(baseBranch)}
-						{@const lastCommit = baseBranch.recentCommits.at(0)}
-						<BranchesListGroup title="Current workspace target">
-							<!-- TODO: We need an API for `commitsCount`! -->
-							<CurrentOriginCard
-								originName={baseBranch.branchName}
-								lastCommit={lastCommit
-									? {
-											author: lastCommit.author,
-											ago: getTimeAgo(new Date(lastCommit.committedAt), true),
-											branch: baseBranch.shortName,
-											sha: lastCommit.id.slice(0, 7),
-										}
-									: undefined}
-								onclick={() => {
-									selection = { type: "target" };
-								}}
-								selected={selection.type === "target"}
-							/>
-						</BranchesListGroup>
+						{#if baseBranch}
+							{@const lastCommit = baseBranch.recentCommits.at(0)}
+							<BranchesListGroup title="Integration target">
+								<!-- TODO: We need an API for `commitsCount`! -->
+								<CurrentOriginCard
+									originName={baseBranch.branchName}
+									lastCommit={lastCommit
+										? {
+												author: lastCommit.author,
+												ago: getTimeAgo(new Date(lastCommit.committedAt), true),
+												branch: baseBranch.shortName,
+												sha: lastCommit.id.slice(0, 7),
+											}
+										: undefined}
+									onclick={() => {
+										selection = { type: "target" };
+									}}
+									selected={selection.type === "target"}
+								/>
+							</BranchesListGroup>
+						{/if}
 						<BranchExplorer
 							{projectId}
 							bind:selectedOption={$selectedOption}
 							{forgeUser}
-							{baseBranch}
+							baseBranch={baseBranch ?? undefined}
+							{currentBranchName}
 						>
 							{#snippet sidebarEntry(sidebarEntrySubject: SidebarEntrySubject)}
 								{#if sidebarEntrySubject.type === "branchListing"}
 									<BranchListCard
 										reviewUnit={prUnit}
 										forge={forgeInfo?.name}
-										{projectId}
 										branchListing={sidebarEntrySubject.subject}
+										{currentBranchName}
 										prs={sidebarEntrySubject.prs}
 										selected={selection.type === "branch"
 											? selection.branchName === sidebarEntrySubject.subject.name
 											: false}
 										onclick={({ listing }) => {
-											if (listing.stack) {
-												selection = {
-													type: "branch",
-													branchName: listing.name,
-													stackId: listing.stack.id,
-												};
-											} else {
-												selection = {
-													type: "branch",
-													branchName: listing.name,
-													remote: listing.remotes.at(0),
-												};
-											}
+											selection = {
+												type: "branch",
+												branchName: listing.name,
+												remote: listing.remotes.at(0),
+											};
 										}}
 									/>
 								{:else}
@@ -320,112 +298,55 @@
 		<div class="branches-view__right">
 			<div class="right-wrapper dotted-pattern">
 				{#if selection.type === "target"}
-					<div class="branch-column" bind:this={branchColumn} use:focusable={{ vertical: true }}>
-						<TargetCommitList
-							{projectId}
-							onclick={(commitId) => (selection = { type: "target", commitId })}
-							onFileClick={(index) => {
-								multiDiffView?.jumpToIndex(index);
-							}}
-						/>
-						<Resizer
-							viewport={branchColumn}
-							persistId="branches-branch-column-1"
-							direction="right"
-							defaultValue={BRANCH_COLUMN_RESIZER.defaultValue}
-							minWidth={BRANCH_COLUMN_RESIZER.minWidth}
-							maxWidth={BRANCH_COLUMN_RESIZER.maxWidth}
-						/>
-					</div>
+					{#if baseBranchQuery.response}
+						<div class="branch-column" bind:this={branchColumn} use:focusable={{ vertical: true }}>
+							<TargetCommitList
+								{projectId}
+								onclick={(commitId) => (selection = { type: "target", commitId })}
+								onFileClick={(index) => {
+									multiDiffView?.jumpToIndex(index);
+								}}
+							/>
+							<Resizer
+								viewport={branchColumn}
+								persistId="branches-branch-column-1"
+								direction="right"
+								defaultValue={BRANCH_COLUMN_RESIZER.defaultValue}
+								minWidth={BRANCH_COLUMN_RESIZER.minWidth}
+								maxWidth={BRANCH_COLUMN_RESIZER.maxWidth}
+							/>
+						</div>
+					{:else}
+						<div class="branch-selection-placeholder text-13 clr-text-2">
+							Select a branch to inspect its commits.
+						</div>
+					{/if}
 				{:else}
 					<AppScrollableContainer>
 						<div class="branch-column" bind:this={branchColumn} use:focusable={{ vertical: true }}>
 							{#if selection.type === "branch"}
-								{@const { stackId, branchName, remote } = selection}
-								{@const selectedBranch = branchService.get(projectId, selection.branchName)}
+								{@const { branchName, remote } = selection}
 								{@const listing = branchService.listingByName(projectId, selection.branchName)}
 
-								<ReduxResult
-									{projectId}
-									result={combineResults(selectedBranch.result, listing.result)}
-								>
-									{#snippet children([branch, listing])}
-										{@const inWorkspace = branch.stack?.inWorkspace}
+								<ReduxResult {projectId} result={listing.result}>
+									{#snippet children(listing)}
 										{@const hasLocal = listing.hasLocal}
 
-										{#if stackId}
-											{@const selectedStack = stackService.stackById(projectId, stackId)}
-											<ReduxResult result={selectedStack.result} {projectId} {stackId} {onerror}>
-												{#snippet children(liveStack)}
-													{@const stackIsLive = liveStack !== null}
-													{@const isAppliedInCurrentWorkspace = inWorkspace === true && stackIsLive}
-													{#if branchName && !isAppliedInCurrentWorkspace}
-														{@render branchActions(branchName, remote, hasLocal)}
-													{/if}
-
-													{#if stackIsLive}
-														<BranchesViewStack
-															{projectId}
-															{stackId}
-															isTarget={false}
-															inWorkspace={inWorkspace ?? false}
-															selectedCommitId={selection.type === "branch"
-																? selection.commitId
-																: undefined}
-															onCommitClick={(commitId) => {
-																selection = {
-																	type: "branch",
-																	branchName,
-																	remote,
-																	stackId,
-																	commitId,
-																};
-															}}
-															onFileClick={(index) => {
-																multiDiffView?.jumpToIndex(index);
-															}}
-															{onerror}
-														/>
-													{:else if branchName}
-														<BranchesViewBranch
-															{projectId}
-															{branchName}
-															{remote}
-															inWorkspace={false}
-															selectedCommitId={selection.type === "branch"
-																? selection.commitId
-																: undefined}
-															onCommitClick={(commitId) => {
-																selection = {
-																	type: "branch",
-																	branchName,
-																	remote,
-																	stackId,
-																	commitId,
-																};
-															}}
-															onFileClick={(index) => {
-																multiDiffView?.jumpToIndex(index);
-															}}
-															{onerror}
-														/>
-													{/if}
-												{/snippet}
-											</ReduxResult>
-										{:else if branchName}
-											{#if inWorkspace !== true}
+										{#if branchName}
+											{@const isCurrentBranch = branchName === currentBranchName}
+											{#if !isCurrentBranch}
 												{@render branchActions(branchName, remote, hasLocal)}
 											{/if}
 											<BranchesViewBranch
 												{projectId}
 												{branchName}
 												{remote}
-												inWorkspace={inWorkspace ?? false}
+												inWorkspace={isCurrentBranch}
 												selectedCommitId={selection.type === "branch"
 													? selection.commitId
 													: undefined}
 												onCommitClick={(commitId) => {
-													selection = { type: "branch", branchName, remote, stackId, commitId };
+													selection = { type: "branch", branchName, remote, commitId };
 												}}
 												onFileClick={(index) => {
 													multiDiffView?.jumpToIndex(index);
@@ -437,16 +358,7 @@
 								</ReduxResult>
 							{:else if selection.type === "pr"}
 								{@const prNumber = selection.prNumber}
-								<div class="branch-actions">
-									<AsyncButton
-										testId={TestId.BranchesViewApplyFromForkButton}
-										icon="workbench"
-										action={applyFromFork}
-									>
-										Apply {reviewUnitAbbr} to workspace
-									</AsyncButton>
-								</div>
-								<BranchesViewPr bind:this={prBranch} {projectId} {prNumber} {onerror} />
+								<BranchesViewPr {projectId} {prNumber} {onerror} />
 							{/if}
 							<Resizer
 								viewport={branchColumn}
@@ -547,6 +459,13 @@
 		flex-direction: column;
 		max-height: 100%;
 		padding: 12px;
+	}
+
+	.branch-selection-placeholder {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.commit-column {

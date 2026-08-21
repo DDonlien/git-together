@@ -14,7 +14,6 @@
 		projectId: string;
 		stack: Stack;
 		laneId: string;
-		onFoldStack?: () => void;
 		onVisible: (visible: boolean) => void;
 		clientWidth?: number;
 		clientHeight?: number;
@@ -24,7 +23,6 @@
 		projectId,
 		stack,
 		laneId,
-		onFoldStack,
 		clientHeight = $bindable(),
 		clientWidth = $bindable(),
 		onVisible,
@@ -131,7 +129,7 @@
 			}}
 			bind:this={stackViewEl}
 		>
-			<StackPanel {segments} {topBranchName} {onFoldStack} />
+			<StackPanel {segments} {topBranchName} />
 
 			<!-- RESIZE PANEL 1 -->
 			{#if stackViewEl}

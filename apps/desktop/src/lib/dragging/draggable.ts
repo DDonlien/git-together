@@ -559,25 +559,6 @@ function setupDragHandlers(
 }
 
 /////////////////////////////
-//// BRANCH DRAGGABLE ///////
-/////////////////////////////
-
-export function draggableBranch(node: HTMLElement, initialOpts: DraggableConfig) {
-	function createClone(opts: DraggableConfig) {
-		if (opts.disabled) return;
-		return createSvelteDragClone({
-			type: "branch",
-			label: opts.label,
-			pushStatus: opts.pushStatus,
-			dragStateService: opts.dragStateService,
-		});
-	}
-	return setupDragHandlers(node, initialOpts, createClone, {
-		handlerWidth: false,
-	});
-}
-
-/////////////////////////////
 //// COMMIT DRAGGABLE V3 ////
 /////////////////////////////
 
