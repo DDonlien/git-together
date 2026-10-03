@@ -4,7 +4,7 @@
 
 这是独立的 `codex/standalone-ts` 分支，与原 GitButler fork 没有共同历史。当前可运行版本使用本地演示数据：页面操作会改变演示状态并保存到本机，尚未连接真实 Git、AI 或 Presence。
 
-界面参照用户提供的 Wireframes v0.1，采用系统字体、清晰的内容区和 Liquid Glass 导航层；Electron 在受支持的 macOS 上使用原生玻璃窗口，浏览器预览使用 React 玻璃组件。
+界面参照用户提供的 Wireframes v0.1 和系统设置截图：共享窗口背景、四周内缩的悬浮导航、无阴影的平面内容分组。采用系统字体与统一 OpenGlass UI 控件；Electron 在受支持的 macOS 上使用原生玻璃背景，React 控件本身不是 AppKit 原生控件。
 
 ```bash
 cd macos

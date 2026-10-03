@@ -8,14 +8,15 @@
 
 本机 macOS 26.6.2 可以验证原生 Liquid Glass 插件；macOS 27 原生运行需在该系统另行验证。浏览器版本呈现同一 TS UI 的玻璃效果，不能称为 AppKit 原生控件。
 
-## 当前验证结果
+## 当前验证结果（0.1.2，2026-10-03 至 10-04）
 
 - `npm run check`：TypeScript strict 通过。
 - `npm test`：11 项业务测试通过。
 - `npm run test:sites`：4 项静态服务/构建产物测试通过；没有部署到 Sites。
 - `npm run build`：生成生产客户端与 bootstrap 所需的服务包装。
-- 浏览器：33 项检查通过，含 13 个场景、提交失败保留、成功移除选中项、工作目录隔离、取消、复制、搜索/筛选、创建演示分支/工作目录/仓库和刷新持久化。
-- Electron 39.8.10：实际窗口启动，输出 `native Liquid Glass: enabled` 和 `renderer mounted; native bridge connected`。桌面目视检查被锁屏限制，未声称 macOS 27 兼容验收。
+- 浏览器：本轮打开并审查全部13个场景，检查亮暗色、减少透明度、1600×900、920×640/740及390×844。复查平面分组、Split Diff、Graph/Tree、详情收起、Commit预览、AI生成时禁用、失败保留、菜单方向键/Escape、弹窗关闭焦点恢复和Cmd+K。前一版33项业务流程检查是历史证据，不冒称全部已在本轮重跑。
+- Electron 39.8.10：实际窗口重启，输出 `native Liquid Glass: enabled` 和 `renderer mounted; native bridge connected`。本轮前段已截图确认悬浮导航与平面内容；最后重启后Mac已锁屏，最终桌面截图及原生最小窗口尺寸尚未复查。未声称macOS 27兼容验收。
+- 本轮截图与修复记录见根目录 `design-qa.md`；没有接入真实Git/AI/Presence，也未提交、推送或部署。
 
 界面、菜单内的“演示场景”按钮会加载新的示例数据并取消旧任务。刷新同一个场景会保留草稿与选择，不再次重置。运行中的结果不写入历史。浏览器和 Electron 使用各自独立的存储空间。
 

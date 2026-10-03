@@ -385,7 +385,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 ## 技术栈与命令
 
-- React / TypeScript / Vite；Electron TypeScript 桌面外壳；Phosphor 图标；第三方 MIT `electron-liquid-glass` 原生窗口材料与 `simple-liquid-glass` React 控件。
+- React / TypeScript / Vite；Electron TypeScript 桌面外壳；Phosphor 图标；第三方 MIT `electron-liquid-glass` 原生窗口材料与 `open-glass-ui` React 控件。LiqUIdify 仅作为语义令牌与组件状态参考，不混装两套组件库。
 - `macos/` 是同一客户端的开发与浏览器预览入口；业务状态在 `macos/src/`；桌面桥在 `macos/electron/`。
 - `npm run dev` 启动预览；`npm run desktop` 启动桌面窗口；`npm run check`、`npm test`、`npm run build` 分别验证类型、业务与构建。
 - 页面应有真实的内部状态变化，失败保留输入，可取消异步动作，各 worktree 状态与表单隔离，刷新后本地保存可恢复。
@@ -401,4 +401,8 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - `reference/GitTogether_Wireframes/`：用户的只读设计来源。
 - `agent-log/system/`：本次实现与验证记录。
 - 根目录是此独立客户端的唯一需求/设计维护范围，`macos/AGENTS.md` 只补充运行规则。
+
+## 用户确认的视觉约定
+
+- 2026-10-03：统一窗口背景；全局左侧导航必须是四周内缩的悬浮圆角容器，不贴边铺满。右侧内容按语义采用无阴影、无折射、无立体描边的平面分组，不用整页大面板外壳。亮暗色与窄窗口保持这个层级；详细尺寸与材料以 `DESIGN.md` 为准。
  

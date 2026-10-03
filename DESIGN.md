@@ -1,25 +1,35 @@
 # GitTogether 视觉规范
 
-## 材质与层次
+## 窗口层级
 
-参照 [Apple Materials](https://developer.apple.com/design/human-interface-guidelines/materials)：Liquid Glass 用于侧栏、顶部导航、浮动操作栏、菜单和控件。表格、文件列表、Diff、表单使用稳定、近乎不透明的内容材料。避免把每个数据单元做成玻璃卡片。
+以用户 2026-10-03 的 macOS 系统设置截图为容器层级参考：整个窗口共享一层背景；最左侧导航四周内缩，位于独立悬浮圆角容器内；右侧按语义使用平面填充分组。这是本应用的设计选择，不把单个参考应用概括成所有 macOS 应用的强制布局。
 
-桌面窗口以 Electron 的隐藏标题栏和原生 traffic lights 呈现。支持的系统使用 [electron-liquid-glass](https://github.com/Meridius-Labs/electron-liquid-glass)；浏览器控制组使用 [simple-liquid-glass](https://github.com/lucaperullo/simple-liquid-glass)。第三方效果用于本地预览；不调用 unstable variant API。
+窗口内缩8px、导航与工作区间距16px；侧栏22px圆角，有完整细边缘和轻投影。右侧内容组16px圆角、纯填充、无投影、无背景模糊/折射、无外部立体描边；组内细分隔线保留。顶栏和各页外壳直接位于共享背景，不包一整页立体面板，也不把每一行做成浮动卡片。
+
+## 材料与组件
+
+参照 [Apple Materials](https://developer.apple.com/design/human-interface-guidelines/materials) 和 [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)：材料服务导航和控制，不覆盖或折射密集内容。玻璃只用于悬浮导航、独立控件、菜单等控制层；右侧批量工具栏本身是平面内容分组，其按钮可保留控件层次。
+
+浏览器统一使用 [OpenGlass UI](https://github.com/moekoelueker/open-glass-ui) 0.4.0；[LiqUIdify](https://github.com/tuliopc23/LiqUIdify) 仅为对照，不混装另一套控件。`ui.tsx` 适配公共契约，`theme.ts` 定义公共令牌；尺寸修正使用公开属性/样式类，不访问私有光学 DOM。小控件不叠加第二层背景模糊，内容分组明确关闭库默认 elevation。
+
+Electron 使用隐藏标题栏、真实窗口按钮和 [electron-liquid-glass](https://github.com/Meridius-Labs/electron-liquid-glass) 系统背景视图。窗口按钮位于悬浮侧栏内，随图标栏调整位置。React 控件不是 AppKit 原生控件；没有 macOS 27 运行验收。
 
 ## 字体与颜色
 
-字体使用 `-apple-system / BlinkMacSystemFont / SF Pro Text`，不下载替代字体。等宽采用 `SFMono-Regular / Menlo`。导航与正文 13px，辅助文字 11–12px，页标题 29px/600；数字采用 tabular figures。
+系统字体 `-apple-system / BlinkMacSystemFont / SF Pro Text`，等宽 `SFMono-Regular / Menlo`，不下载替代字体。导航/正文13px、仓库表与文件12px、辅助信息10–12px、Diff等宽11px，页面标题26px，指南标题28px。数字使用 tabular figures。
 
-正文深灰，次要文字低饱和灰；系统蓝用于选择和 Commit，紫色用于 Submit，青绿色用于 Get Latest。成功、警告和错误同时提供文字与图标，不仅用颜色。密集文件/仓库文字为 11px；Diff 片段为 9px 等宽，可滚动查看。
+亮色窗口 `#eef0f2`、内容 `#fff`、次级填充 `#f5f5f7`；暗色窗口 `#24292c`、悬浮导航深色半透明、内容 `#2b3033`、次级填充 `#33393c`。选中态清晰但不增加阴影。蓝/紫/青绿区分选择与操作；成功、失败、警告同时显示文字/图标，不能只靠颜色表达。
 
 ## 布局
 
-桌面全窗口三层：全局 sidebar 208px、仓库上下文 190px、可伸缩中央内容；详情栏 300px。Dashboard 保留四个统计卡片、筛选栏和对齐的仓库列表。Repo 保留 Files/Commit，底部 Summary/Description 表单和 AI Gen/Commit，右侧 Graph/文件夹。收起详情栏释放中央宽度。
+全局导航216px、上下文224px、详情300px；1350px以下分别为196/204/270px。Dashboard统计与仓库表、Repo上下文/文件/Diff/提交表单/详情、Guide说明与入口分别按语义分组。收起详情释放中央宽度。
 
-基本间距 4px，主要节奏 8/12/16/24/32px；仓库行 44px、worktree 行 37px，控件 28–34px；玻璃控制组为圆润 capsule，内容列表不堆叠大圆角卡片。920px 窗口收紧全局导航，移动视口将仓库上下文横排并允许内容纵向滚动。
+基本间距4px，主要节奏8/12/16/24px；仓库行48px、worktree行42px、文件行36px，常规控件32px、图标按钮28px。
+
+1150px以下导航变为68px图标栏，保留8px外边距；920×640桌面最小尺寸下内部滚动，提交表单与固定入口可达，表格只在自身容器横向滚动。760px以下导航56px、内缩6px、侧栏18px圆角；上下文横排，Diff/详情纵向排列，属于浏览器回退布局。
 
 ## 可访问性与动效
 
 按钮有清晰名称，列表 checkbox 具有 indeterminate；键盘焦点可见，菜单 Escape 关闭，弹窗包含焦点圈，Cmd+K 搜索，Cmd+Enter 提交。支持 dark、system 和 light，减少透明度与 prefers-reduced-motion。交互状态动画 120–180ms，不用持续装饰动效。
 
-参考图定义信息布局；Liquid Glass 材质、字体、间距是本次用户明确授权的视觉更新，不做旧线框的逐像素主题复制。
+用户ZIP定义页面与交互，系统设置截图定义本次共享背景/浮动导航/平面内容的关系。不复制系统设置内容、个人账号照片或系统图标，不声称跨应用逐像素一致。调整前规范保存在 `archive/design/DESIGN-20261003231645.md`。

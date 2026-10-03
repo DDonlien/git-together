@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { accountImportPlugin } from "./server/http-api.ts";
 
 export default defineConfig({
   build: {
@@ -9,11 +10,11 @@ export default defineConfig({
     include: ["react", "react-dom/client"],
   },
   server: {
-    host: "0.0.0.0",
+    host: "127.0.0.1",
     allowedHosts: ["terminal.local"],
     warmup: {
       clientFiles: ["./src/main.tsx"],
     },
   },
-  plugins: [react()],
+  plugins: [react(), accountImportPlugin()],
 });
