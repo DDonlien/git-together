@@ -1,0 +1,34 @@
+{
+  "name": "gittogether-standalone",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/prepare-sites-build.mjs",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/domain.test.ts",
+    "desktop": "tsx electron/launch.ts",
+    "test:sites": "node --test tests/sites-worker.test.mjs"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "@vitejs/plugin-react": "5.0.4",
+    "electron-liquid-glass": "1.1.1",
+    "open-glass-ui": "0.4.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "vite": "6.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "electron": "^39.2.7",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "main": "dist-electron/main.cjs"
+}
