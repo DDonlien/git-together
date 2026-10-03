@@ -80,7 +80,7 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .remote-account-heading > .muted { font-size: 11px; white-space: nowrap; }
 .provider-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; color: var(--blue); background: var(--blue-bg); }
 .provider-mark.gitea { color: var(--teal); background: color-mix(in srgb,var(--teal) 9%,var(--content)); }
-.remote-table-scroll { overflow-x: auto; }
+.remote-table-scroll { position: relative; overflow-x: auto; }
 .remote-repo-table { width: 100%; min-width: 720px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 .remote-repo-table th { height: 30px; font-size: 11px; font-weight: 500; text-align: left; color: var(--muted); border-bottom: 1px solid var(--line); }
 .remote-repo-table th:nth-child(1) { width: 34%; }
@@ -664,6 +664,19 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
   .ogui-overlay__header { padding: 18px 18px 14px; }
   .ogui-overlay__body { padding: 0 18px 18px; }
   .setting-row { gap: 12px; }
+}
+/* Account names must remain readable at the native minimum window size. */
+@media (min-width: 761px) and (max-width: 1150px) {
+  .global-sidebar { width: 196px; padding-inline: 12px; }
+  .traffic-lights { gap: 8px; padding-left: 8px; }
+  .brand { padding-inline: 10px; }
+  .brand > span { font-size: 16px; }
+  .global-sidebar .nav-item, .global-sidebar .nav-item > span { font-size: 13px; }
+  .global-sidebar .nav-item { justify-content: flex-start; gap: 10px; padding-inline: 10px; }
+  .sidebar-account-toggle { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; padding-inline: 9px; }
+  .sidebar-account-toggle > span { flex: 1; font-size: 11px; text-align: left; }
+  .sidebar-account-repositories .repository-item > span:not(.repository-logo) { display: block; }
+  .sidebar-account-empty, .sidebar-no-accounts { font-size: 11px; text-align: left; padding-inline: 10px; }
 }
 @media (pointer: coarse) {
   .icon-button.ogui-control--small { width: 32px; min-width: 32px; min-height: 32px; height: 32px; }

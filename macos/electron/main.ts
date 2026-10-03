@@ -25,12 +25,12 @@ function createWindow() {
     width, height: Math.min(1000, display.height - 60),
     minWidth: 920, minHeight: 640,
     transparent: true, backgroundColor: '#00000000', titleBarStyle: 'hidden',
-    trafficLightPosition: { x: width <= 1150 ? 15 : 29, y: 32 }, show: false,
+    trafficLightPosition: { x: width <= 760 ? 15 : 29, y: 32 }, show: false,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   window.setWindowButtonVisibility(true);
   window.on('resize', () => {
-    if (process.platform === 'darwin') window?.setWindowButtonPosition({ x: window.getContentSize()[0] <= 1150 ? 15 : 29, y: 32 });
+    if (process.platform === 'darwin') window?.setWindowButtonPosition({ x: window.getContentSize()[0] <= 760 ? 15 : 29, y: 32 });
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('console-message', details => { if (details.level === 'error') console.error('Renderer:', details.message); });
