@@ -401,3 +401,4 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - `reference/GitTogether_Wireframes/`：用户的只读设计来源。
 - `agent-log/system/`：本次实现与验证记录。
 - 根目录是此独立客户端的唯一需求/设计维护范围，`macos/AGENTS.md` 只补充运行规则。
+ 
