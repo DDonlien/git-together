@@ -1,4 +1,20 @@
-# GitTogether 0.1.2 design QA
+# GitTogether 0.2.0 account import QA
+
+结果：账号导入六项交互实现及浏览器检查通过；原生最新目视/目录选择器/实际钥匙串持久化未验收（Mac 锁屏）。以下测试账号与目录均为本轮临时 fixture，不是内置演示功能或用户真实账号。
+
+- 设置从左下角进入独立页面，账号维度与本地目录维度分离；GitHub/Gitea 服务切换与 Gitea 域名字段实际检查。无头像、REPOSITORIES 标签、全局 Presence/指南、右上角添加仓库、演示场景或 Dashboard 大标题/本地演示行。
+- 用 loopback 假 Gitea 服务实际输入无效域名、无效令牌、有效令牌；两个同 host 的账号各读出两页仓库，重复账号得到明确错误。账号只通过设置添加；未关联远端仓库不出现在侧栏中。
+- 仓库 popup 先拒绝错误 checkout，再成功关联含空格路径的正确 checkout。侧栏计数/折叠/展开/导航实际检查，仓库图标空心角标表示 Presence 未连接，不虚构在线连接。
+- 临时仓库的 Git status、README.md 真实 Diff 与最近 log 显示正确。未跟踪文件没有伪造差异。没有模拟 AI/提交/推送动作。测试后解除关联与移除账号不会删除 Git 文件；随后只删除本轮创建的临时测试目录。
+- HTTP 503 时保留上次列表、只影响该账号；重新加载恢复。账号/本地关联筛选、搜索快捷键、弹窗 Escape 和关闭后焦点恢复实际检查。亮暗色与减少透明度均检查，减少透明度时导航 computed backdropFilter 为 none。
+- 默认 1201×853、920×640、390×844 检查；修复小视口表格表头隐藏文本绝对定位导致的根页面溢出，最终页面 scrollWidth 不超过视口。920px 保留可读的196px账号导航，表格自身横向滚动。临时 viewport 已重置。
+- 最终 strict、22/22测试、4/4静态包装、生产构建通过；控制台 error/warn 为空。静态服务包装不实现本地账号 API，不表示已部署或上线。
+- Electron 实际重启，日志报告 native Liquid Glass enabled、renderer bridge connected；Mac 锁屏阻止最新原生截图。没有真实用户令牌，因此真实服务授权/SSO和系统钥匙串持久化尚未验证。
+- 交付截图 `artifacts/import-settings-clean.jpg`：同一默认视口的新 DOM 与截图核对，测试账号已移除；浏览器和桌面保持运行。浏览器账号是服务会话存储，桌面实现是系统加密存储，两者不共享账号。
+
+代码执行期间出现外部 WIP checkpoint：`32c96362dd`、`26a0e32e41`（HEAD与本地origin跟踪引用一致）。本轮未主动调用源码仓库 commit/push；不回滚该外部状态，最终文档更新仍为本地修改。
+
+# 历史 GitTogether 0.1.2 design QA
 
 final result: passed
 
