@@ -6,6 +6,7 @@ declare global {
       setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
       import: (method: string, input: unknown) => Promise<unknown>;
       chooseDirectory: () => Promise<string | null>;
+      openGithubAuthorization: () => Promise<void>;
     };
   }
 }

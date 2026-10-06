@@ -3,7 +3,10 @@ import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { isCatalog, isRecord, type Account, type ApiMethod, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository } from '../src/import-model';
+import { isCatalog, isRecord, type Account, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository } from '../src/import-model';
+import { GitHubDeviceAuthorization } from './github-authorization';
+import { RemoteRepositoryReader } from './remote-repository-reader';
+import pkg from '../package.json';
 
 const execute = promisify(execFile);
 type SavedAccount = { account: Account; token: string };
@@ -40,27 +43,31 @@ export function remoteIdentity(raw: string): string | null {
 }
 
 export class AccountService {
+  private instanceId = randomUUID();
+  private githubAuthorization: GitHubDeviceAuthorization;
   private state: SavedState = { version: 2, accounts: [], repositories: [], links: [] };
   private ready: Promise<void>;
   private mutation: Promise<void> = Promise.resolve();
   private refreshes = new Map<string, Promise<Catalog>>();
+  private remoteReaders = new Map<string, { reader: RemoteRepositoryReader; valid: () => boolean }>();
   private revision = 0;
   private restoreError = '';
-  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch) {
+  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number } = {}) {
     this.ready = this.restore().catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
+    this.githubAuthorization = new GitHubDeviceAuthorization(options.githubClientId ?? process.env.GITTOGETHER_GITHUB_CLIENT_ID ?? '', credential => this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, credential), request, options.now);
   }
   private async restore() {
     const saved = await this.store.load();
     if (saved === null) return;
     if (!isRecord(saved) || saved.version !== 2 || !Array.isArray(saved.accounts) ||
       !saved.accounts.every(a => isRecord(a) && typeof a.token === 'string' && isRecord(a.account)) ||
-      !isCatalog({ ...saved, revision: 0, accounts: saved.accounts.map(a => a.account), credentialStorage: this.store.kind })) {
+      !isCatalog({ ...saved, instanceId: this.instanceId, revision: 0, accounts: saved.accounts.map(a => a.account), credentialStorage: this.store.kind })) {
       throw new Error('账号存储格式无效；未覆盖原始文件。');
     }
     this.state = saved as SavedState;
   }
   private catalog(): Catalog {
-    return structuredClone({ revision: this.revision, accounts: this.state.accounts.map(a => a.account), repositories: this.state.repositories, links: this.state.links, credentialStorage: this.store.kind });
+    return structuredClone({ instanceId: this.instanceId, revision: this.revision, accounts: this.state.accounts.map(a => a.account), repositories: this.state.repositories, links: this.state.links, credentialStorage: this.store.kind });
   }
   private async mutate(change: (next: SavedState) => void): Promise<Catalog> {
     const task = this.mutation.then(async () => {
@@ -68,21 +75,26 @@ export class AccountService {
       change(next);
       await this.store.save(next);
       this.state = next;
+      for (const [id, entry] of this.remoteReaders) if (!entry.valid()) this.remoteReaders.delete(id);
       this.revision++;
     });
     this.mutation = task.catch(() => {}); // A failed write must not poison later independent operations.
     await task;
     return this.catalog();
   }
-  private async getJSON(url: URL, provider: Provider, token: string): Promise<{ value: unknown; headers: Headers }> {
+  private async getJSON(url: URL, provider: Provider, token: string, signal?: AbortSignal, format: 'json' | 'text' = 'json'): Promise<{ value: unknown; headers: Headers }> {
+    signal?.throwIfAborted();
     let response: Response;
     try {
-      response = await this.request(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(15000), headers: {
-        Accept: provider === 'github' ? 'application/vnd.github+json' : 'application/json',
+      response = await this.request(url, { method: 'GET', redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), headers: {
+        Accept: format === 'text' ? 'text/plain' : provider === 'github' ? 'application/vnd.github+json' : 'application/json',
         Authorization: `${provider === 'github' ? 'Bearer' : 'token'} ${token}`,
-        'User-Agent': 'GitTogether/0.2.0', ...(provider === 'github' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
+        'User-Agent': `GitTogether/${pkg.version}`, ...(provider === 'github' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
       } });
-    } catch { throw new Error('无法连接账号服务，请检查域名、网络、证书或稍后重试（不跟随登录重定向）。'); }
+    } catch {
+      signal?.throwIfAborted();
+      throw new Error('无法连接账号服务，请检查域名、网络、证书或稍后重试（不跟随登录重定向）。');
+    }
     if (response.status === 401) throw new Error('令牌无效或已过期，请在设置中重新连接账号。');
     if (response.status === 403 || response.status === 429) throw new Error('没有读取权限或已触发访问频率限制；请检查令牌权限后重试。');
     if (!response.ok) throw new Error(`账号服务返回 HTTP ${response.status}；请检查服务与令牌权限。`);
@@ -93,19 +105,22 @@ export class AccountService {
     const chunks: Uint8Array[] = []; let size = 0;
     try {
       while (true) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 8_000_000) { await reader.cancel(); throw new Error('账号服务响应过大。'); } chunks.push(part.value); }
-      return { value: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown, headers: response.headers };
-    } catch { throw new Error('账号服务返回了无效或过大的 JSON 数据。'); }
+      signal?.throwIfAborted();
+      const text = Buffer.concat(chunks).toString('utf8');
+      return { value: format === 'text' ? text : JSON.parse(text) as unknown, headers: response.headers };
+    } catch { signal?.throwIfAborted(); throw new Error(`账号服务返回了无效或过大的 ${format === 'text' ? '文本' : 'JSON'} 数据。`); }
   }
   private apiBase(provider: Provider, host: string) { return provider === 'github' ? 'https://api.github.com' : `${host}/api/v1`; }
-  private async repositories(account: Account, token: string): Promise<RemoteRepository[]> {
+  private async repositories(account: Account, token: string, signal?: AbortSignal): Promise<RemoteRepository[]> {
     const output = new Map<number, RemoteRepository>();
     const endpoint = `${this.apiBase(account.provider, account.host)}/user/repos`;
     // Page parameters are constructed locally; never forward credentials to a Link URL.
     for (let page = 1; page <= 10000; page++) {
+      signal?.throwIfAborted();
       const url = new URL(endpoint); url.searchParams.set('page', String(page));
       url.searchParams.set(account.provider === 'github' ? 'per_page' : 'limit', '100');
       if (account.provider === 'github') { url.searchParams.set('visibility', 'all'); url.searchParams.set('affiliation', 'owner,collaborator,organization_member'); }
-      const { value, headers } = await this.getJSON(url, account.provider, token);
+      const { value, headers } = await this.getJSON(url, account.provider, token, signal);
       if (!Array.isArray(value)) throw new Error('仓库列表返回格式不正确。');
       for (const raw of value) {
         if (!isRecord(raw) || !Number.isSafeInteger(raw.id) || typeof raw.id !== 'number' || typeof raw.name !== 'string' || typeof raw.full_name !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(raw.full_name)) throw new Error('仓库列表中包含无效的记录。');
@@ -121,22 +136,64 @@ export class AccountService {
     }
     return [];
   }
-  private async connect(input: Record<string, unknown>) {
+  private async connect(input: Record<string, unknown>, authorization?: { expiresAt?: string; signal: AbortSignal; commit: () => void }) {
     const provider = input.provider;
     if (provider !== 'github' && provider !== 'gitea') throw new Error('不支持该账号服务。');
     const host = normalizeHost(provider, field(input, 'host', 512));
     const token = field(input, 'token', 4096); const name = field(input, 'name', 120);
     if (!token || /\s/.test(token)) throw new Error('请输入有效的访问令牌。');
-    const { value: user } = await this.getJSON(new URL(`${this.apiBase(provider, host)}/user`), provider, token);
+    let user: unknown;
+    try { ({ value: user } = await this.getJSON(new URL(`${this.apiBase(provider, host)}/user`), provider, token, authorization?.signal)); }
+    catch (problem) { if (authorization?.signal.aborted) throw new Error('授权已取消或过期。'); throw problem; }
     if (!isRecord(user) || typeof user.login !== 'string' || !user.login || /[\s/]/.test(user.login)) throw new Error('无法识别账号身份。');
-    if (this.state.accounts.some(a => a.account.provider === provider && a.account.host === host && a.account.login.toLowerCase() === String(user.login).toLowerCase())) throw new Error('这个账号已经添加。同一服务可以添加其他账号。');
-    const account: Account = { id: randomUUID(), provider, host, login: user.login, name: name || (typeof user.name === 'string' && user.name ? user.name : user.login), updatedAt: '' };
+    const existing = this.state.accounts.find(a => a.account.provider === provider && a.account.host === host && a.account.login.toLowerCase() === String(user.login).toLowerCase());
+    if (existing && !authorization) throw new Error('这个账号已经添加。同一服务可以添加其他账号。');
+    const account: Account = { id: existing?.account.id || randomUUID(), provider, host, login: user.login, name: name || existing?.account.name || (typeof user.name === 'string' && user.name ? user.name : user.login), updatedAt: '', ...(authorization?.expiresAt ? { authorizationExpiresAt: authorization.expiresAt } : {}) };
     let repositories: RemoteRepository[] = [];
-    try { repositories = await this.repositories(account, token); account.updatedAt = new Date().toISOString(); }
+    try { repositories = await this.repositories(account, token, authorization?.signal); account.updatedAt = new Date().toISOString(); }
     catch (error) { account.error = error instanceof Error ? error.message : '读取仓库失败。'; }
     return this.mutate(next => {
-      if (next.accounts.some(a => a.account.provider === provider && a.account.host === host && a.account.login.toLowerCase() === account.login.toLowerCase())) throw new Error('这个账号已经添加。同一服务可以添加其他账号。');
-      next.accounts.push({ account, token }); next.repositories.push(...repositories);
+      const duplicate = next.accounts.find(a => a.account.provider === provider && a.account.host === host && a.account.login.toLowerCase() === account.login.toLowerCase());
+      if (duplicate && (!authorization || duplicate.account.id !== existing?.account.id)) throw new Error('这个账号已经添加。同一服务可以添加其他账号。');
+      authorization?.commit();
+      if (!duplicate) { next.accounts.push({ account, token }); next.repositories.push(...repositories); return; }
+      duplicate.account = account; duplicate.token = token;
+      if (account.error) return; // Keep the previous repository list on a failed reload.
+      const linked = new Set(next.links.map(link => link.repositoryId));
+      const found = new Set(repositories.map(repository => repository.id));
+      const unavailable = next.repositories.filter(repository => repository.accountId === account.id && linked.has(repository.id) && !found.has(repository.id)).map(repository => ({ ...repository, available: false }));
+      next.repositories = [...next.repositories.filter(repository => repository.accountId !== account.id), ...repositories, ...unavailable];
+    });
+  }
+  private async updateAccount(input: Record<string, unknown>): Promise<Catalog> {
+    if (Object.keys(input).some(key => !['accountId', 'name', 'token'].includes(key))) throw new Error('编辑只能修改账号名称和访问令牌。');
+    const accountId = field(input, 'accountId', 100);
+    const name = field(input, 'name', 120);
+    const token = input.token === undefined ? '' : field(input, 'token', 4096);
+    if (!name) throw new Error('请输入账号名称。');
+    if (/\s/.test(token)) throw new Error('请输入有效的访问令牌。');
+    const saved = this.state.accounts.find(a => a.account.id === accountId);
+    if (!saved) throw new Error('账号不存在，请重新加载列表。');
+    let repositories: RemoteRepository[] | undefined;
+    if (token) {
+      const { account } = saved;
+      const { value: user } = await this.getJSON(new URL(`${this.apiBase(account.provider, account.host)}/user`), account.provider, token);
+      if (!isRecord(user) || typeof user.login !== 'string' || !user.login || /[\s/]/.test(user.login)) throw new Error('无法识别账号身份。');
+      if (user.login.toLowerCase() !== account.login.toLowerCase()) throw new Error('新令牌不属于这个账号。请使用该账号的令牌，或添加另一个账号。');
+      repositories = await this.repositories(account, token);
+    }
+    return this.mutate(next => {
+      const current = next.accounts.find(a => a.account.id === accountId);
+      if (!current) throw new Error('账号已移除，没有保存更改。');
+      if (current.token !== saved.token) throw new Error('账号凭据已更新，请重新打开编辑。');
+      current.account.name = name;
+      if (!token || !repositories) return; // A rename does not contact the provider or replace credentials.
+      current.token = token; current.account.updatedAt = new Date().toISOString();
+      delete current.account.error; delete current.account.authorizationExpiresAt;
+      const linked = new Set(next.links.map(link => link.repositoryId));
+      const found = new Set(repositories.map(repository => repository.id));
+      const unavailable = next.repositories.filter(repository => repository.accountId === accountId && linked.has(repository.id) && !found.has(repository.id)).map(repository => ({ ...repository, available: false }));
+      next.repositories = [...next.repositories.filter(repository => repository.accountId !== accountId), ...repositories, ...unavailable];
     });
   }
   private refresh(accountId: string): Promise<Catalog> {
@@ -146,9 +203,9 @@ export class AccountService {
       if (!saved) throw new Error('账号不存在。');
       let repositories: RemoteRepository[];
       try { repositories = await this.repositories(saved.account, saved.token); }
-      catch (error) { return this.mutate(next => { const current = next.accounts.find(a => a.account.id === accountId); if (current) current.account.error = error instanceof Error ? error.message : '读取仓库失败。'; }); }
+      catch (error) { return this.mutate(next => { const current = next.accounts.find(a => a.account.id === accountId); if (current && current.token === saved.token) current.account.error = error instanceof Error ? error.message : '读取仓库失败。'; }); }
       return this.mutate(next => {
-        const current = next.accounts.find(a => a.account.id === accountId); if (!current) return;
+        const current = next.accounts.find(a => a.account.id === accountId); if (!current || current.token !== saved.token) return;
         current.account.updatedAt = new Date().toISOString(); delete current.account.error;
         const linked = new Set(next.links.map(l => l.repositoryId));
         const found = new Set(repositories.map(r => r.id));
@@ -170,6 +227,54 @@ export class AccountService {
     const repository = this.state.repositories.find(r => r.id === id);
     if (!repository) throw new Error('仓库不存在，请重新加载列表。');
     return repository;
+  }
+  private remoteReader(id: string) {
+    const repository = this.repository(id);
+    if (!repository.available) throw new Error('该账号目前无法访问这个仓库，请在设置中检查账号权限。');
+    const saved = this.state.accounts.find(item => item.account.id === repository.accountId);
+    if (!saved) throw new Error('访问账号已移除。');
+    const valid = () => {
+      const current = this.state.accounts.find(item => item.account.id === saved.account.id);
+      const currentRepository = this.state.repositories.find(item => item.id === id);
+      return current?.token === saved.token && current.account.provider === saved.account.provider && current.account.host === saved.account.host &&
+        !!currentRepository?.available && currentRepository.accountId === repository.accountId && currentRepository.fullName === repository.fullName && currentRepository.defaultBranch === repository.defaultBranch;
+    };
+    let entry = this.remoteReaders.get(id);
+    if (!entry?.valid()) {
+      const base = this.apiBase(saved.account.provider, saved.account.host);
+      entry = { valid, reader: new RemoteRepositoryReader(saved.account.provider, repository, async (path, format, signal) => {
+        signal?.throwIfAborted();
+        if (!valid()) throw new Error('访问账号或仓库已更新，已取消旧的远端读取。');
+        // The reader builds repository-relative paths; callers cannot provide a host, token or Link URL.
+        if (!path.startsWith('/repos/') || path.includes('://') || path.includes('#')) throw new Error('无效的远端读取路径。');
+        const result = await this.getJSON(new URL(base + path), saved.account.provider, saved.token, signal, format);
+        if (!valid()) throw new Error('访问账号或仓库已更新，已取消旧的远端读取。');
+        return result;
+      }) };
+      this.remoteReaders.set(id, entry);
+      if (this.remoteReaders.size > 16) this.remoteReaders.delete(this.remoteReaders.keys().next().value!);
+    }
+    return entry;
+  }
+  private async remoteRead(method: 'remoteWorkspace' | 'remoteCommit' | 'remoteFile', input: Record<string, unknown>, signal?: AbortSignal) {
+    const allowed = method === 'remoteWorkspace' ? ['repositoryId'] : method === 'remoteCommit' ? ['repositoryId', 'commitId'] : ['repositoryId', 'commitId', 'path'];
+    if (Object.keys(input).some(key => !allowed.includes(key))) throw new Error('远端读取仅接受仓库、提交和文件身份。');
+    const entry = this.remoteReader(field(input, 'repositoryId', 160));
+    signal?.throwIfAborted();
+    let result: unknown;
+    if (method === 'remoteWorkspace') result = await entry.reader.workspace(signal);
+    else {
+      const commitId = field(input, 'commitId', 64);
+      if (method === 'remoteCommit') result = await entry.reader.commit(commitId, signal);
+      else {
+        // Git file paths are literal; trimming them would change which file is read.
+        if (typeof input.path !== 'string') throw new Error('无效的文件路径。');
+        result = await entry.reader.file(commitId, input.path, signal);
+      }
+    }
+    signal?.throwIfAborted();
+    if (!entry.valid()) throw new Error('访问账号或仓库已更新，已取消旧的远端读取。');
+    return result;
   }
   private async validatePath(repository: RemoteRepository, input: string): Promise<string> {
     const expanded = input === '~' ? homedir() : input.startsWith('~/') ? resolve(homedir(), input.slice(2)) : input;
@@ -206,13 +311,18 @@ export class AccountService {
     }
     return { path, branch: branch.trim(), files, commits: history.trim().split('\n').filter(Boolean).map(line => { const [id, summary, author, time] = line.split('\0'); return { id, summary, author, time }; }) };
   }
-  async handle(method: unknown, value: unknown): Promise<unknown> {
+  async handle(method: unknown, value: unknown, signal?: AbortSignal): Promise<unknown> {
+    if (!isRecord(value)) throw new Error('无效的请求。');
+    if (method === 'status') return { instanceId: this.instanceId, version: pkg.version, githubWebAuth: this.githubAuthorization.configured };
     await this.ready;
     if (this.restoreError) throw new Error(this.restoreError);
-    if (!isRecord(value)) throw new Error('无效的请求。');
-    switch (method as ApiMethod) {
+    switch (method) {
       case 'catalog': return this.catalog();
       case 'connect': return this.connect(value);
+      case 'updateAccount': return this.updateAccount(value);
+      case 'githubAuthStart': return this.githubAuthorization.start(field(value, 'name', 120));
+      case 'githubAuthPoll': return this.githubAuthorization.poll(field(value, 'sessionId', 100));
+      case 'githubAuthCancel': return this.githubAuthorization.cancel(field(value, 'sessionId', 100));
       case 'refresh': return this.refresh(field(value, 'accountId', 100));
       case 'removeAccount': {
         const id = field(value, 'accountId', 100);
@@ -226,6 +336,7 @@ export class AccountService {
       }
       case 'unlink': { const id = field(value, 'repositoryId', 160); return this.mutate(next => { next.links = next.links.filter(l => l.repositoryId !== id); }); }
       case 'snapshot': return this.snapshot(field(value, 'repositoryId', 160));
+      case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
       case 'diff': {
         const id = field(value, 'repositoryId', 160); const file = field(value, 'path'); const snapshot = await this.snapshot(id);
         const changed = snapshot.files.find(f => f.path === file);

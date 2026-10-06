@@ -1,0 +1,103 @@
+import type { LocalFile, LocalSnapshot } from './import-model';
+
+export type RepositoryCommit = LocalSnapshot['commits'][number] & { parents: string[]; refs: string[] };
+export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean };
+export type RepositoryWorkspace = { tasks: RepositoryTask[]; commits: RepositoryCommit[]; complete: boolean; source?: 'local' | 'remote' | 'mixed' };
+
+export function topologicalCommits(commits: RepositoryCommit[]): RepositoryCommit[] {
+  const byId = new Map(commits.map(commit => [commit.id, commit]));
+  const children = new Map(commits.map(commit => [commit.id, 0]));
+  for (const commit of commits) for (const parent of commit.parents) if (children.has(parent)) children.set(parent, children.get(parent)! + 1);
+  const ready = commits.filter(commit => children.get(commit.id) === 0);
+  const result: RepositoryCommit[] = [];
+  while (ready.length) {
+    ready.sort((a, b) => Date.parse(b.time) - Date.parse(a.time) || a.id.localeCompare(b.id));
+    const next = ready.shift()!; result.push(next);
+    for (const parent of next.parents) if (children.has(parent)) { const count = children.get(parent)! - 1; children.set(parent, count); if (!count) ready.push(byId.get(parent)!); }
+  }
+  if (result.length !== commits.length) throw new Error('提交关系不合法。');
+  return result;
+}
+
+export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string | null): RepositoryCommit[] {
+  const task = workspace.tasks.find(task => task.id === taskId);
+  if (!task || (!workspace.complete && !task.remote)) return workspace.commits;
+  const commits = new Map(workspace.commits.map(commit => [commit.id, commit]));
+  const reachable = new Set<string>();
+  const pending = [task.head];
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (reachable.has(id)) continue;
+    reachable.add(id);
+    const commit = commits.get(id);
+    if (commit) pending.push(...commit.parents);
+  }
+  return workspace.commits.filter(commit => reachable.has(commit.id));
+}
+
+export function combineRepositoryWorkspaces(remote: RepositoryWorkspace, local?: RepositoryWorkspace): RepositoryWorkspace {
+  if (!local) return remote;
+  const commits = new Map(remote.commits.map(commit => [commit.id, commit]));
+  for (const commit of local.commits) {
+    const previous = commits.get(commit.id);
+    commits.set(commit.id, previous ? { ...previous, refs: [...new Set([...previous.refs, ...commit.refs])] } : commit);
+  }
+  return { source: 'mixed', tasks: [...remote.tasks, ...local.tasks], commits: topologicalCommits([...commits.values()]), complete: remote.complete && local.complete };
+}
+
+// Keep the existing preview session until its service can be updated. Missing
+// branch/tree/ancestry data must not be fabricated from the old snapshot.
+export function snapshotWorkspace(snapshot: LocalSnapshot): RepositoryWorkspace {
+  return {
+    complete: false,
+    tasks: [{ id: `worktree:${snapshot.branch}:${snapshot.path}`, branch: snapshot.branch, head: snapshot.commits[0]?.id || '', path: snapshot.path, files: snapshot.files, tree: snapshot.files.map(file => file.path), error: '' }],
+    commits: snapshot.commits.map(commit => ({ ...commit, parents: [], refs: [] })),
+  };
+}
+
+export type FileTreeNode = { name: string; path: string; children: FileTreeNode[]; directory: boolean };
+export function buildFileTree(paths: string[]): FileTreeNode[] {
+  const root: FileTreeNode = { name: '', path: '', children: [], directory: true };
+  for (const path of new Set(paths)) {
+    const parts = path.split('/');
+    let parent = root;
+    parts.forEach((name, index) => {
+      const fullPath = parts.slice(0, index + 1).join('/');
+      let node = parent.children.find(child => child.path === fullPath);
+      if (!node) { node = { name, path: fullPath, children: [], directory: index < parts.length - 1 }; parent.children.push(node); }
+      parent = node;
+    });
+  }
+  const sort = (nodes: FileTreeNode[]) => {
+    nodes.sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+    nodes.forEach(node => sort(node.children));
+  };
+  sort(root.children);
+  return root.children;
+}
+
+export type GraphEdge = { from: number; to: number; node: boolean };
+export type GraphRow = { commit: RepositoryCommit; lane: number; edges: GraphEdge[]; width: number };
+// Git supplies topological order. Only actual parent IDs create edges, never
+// neighboring rows or descending timestamps.
+export function layoutCommitGraph(commits: RepositoryCommit[]): GraphRow[] {
+  let lanes: (string | null)[] = [];
+  return commits.map(commit => {
+    let lane = lanes.indexOf(commit.id);
+    if (lane < 0) { lane = lanes.indexOf(null); if (lane < 0) lane = lanes.length; lanes[lane] = commit.id; }
+    const before = [...lanes];
+    lanes[lane] = null;
+    commit.parents.forEach((parent, index) => {
+      if (lanes.includes(parent)) return;
+      let slot = index === 0 && lanes[lane] === null ? lane : lanes.indexOf(null);
+      if (slot < 0) slot = lanes.length;
+      lanes[slot] = parent;
+    });
+    const edges: GraphEdge[] = [];
+    before.forEach((id, from) => { if (id && id !== commit.id) edges.push({ from, to: lanes.indexOf(id), node: false }); });
+    commit.parents.forEach(parent => edges.push({ from: lane, to: lanes.indexOf(parent), node: true }));
+    const width = Math.max(before.length, lanes.length, 1);
+    while (lanes.length && lanes[lanes.length - 1] === null) lanes.pop();
+    return { commit, lane, edges, width };
+  });
+}

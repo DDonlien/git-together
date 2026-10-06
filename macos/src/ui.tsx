@@ -20,6 +20,7 @@ import { SidebarSimpleIcon } from '@phosphor-icons/react/dist/csr/SidebarSimple'
 import { GearSixIcon } from '@phosphor-icons/react/dist/csr/GearSix';
 import { SparkleIcon } from '@phosphor-icons/react/dist/csr/Sparkle';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/csr/CheckCircle';
+import { CheckIcon } from '@phosphor-icons/react/dist/csr/Check';
 import { WarningCircleIcon } from '@phosphor-icons/react/dist/csr/WarningCircle';
 import { SpinnerGapIcon } from '@phosphor-icons/react/dist/csr/SpinnerGap';
 import { RobotIcon } from '@phosphor-icons/react/dist/csr/Robot';
@@ -39,7 +40,7 @@ import { SunIcon } from '@phosphor-icons/react/dist/csr/Sun';
 import { GitCommitIcon } from '@phosphor-icons/react/dist/csr/GitCommit';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/csr/ListBullets';
 
-const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon };
+const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon };
 export type IconName = keyof typeof icons;
 export function Icon({ name, size = 18, className = '', style }: { name: IconName | 'squares'; size?: number; className?: string; style?: CSSProperties }) { const Component = name === 'squares' ? SquaresFourIcon : icons[name]; return <Component size={size} weight="regular" className={className} style={style} aria-hidden="true" />; }
 export function Button({ className = '', size = 'small', variant = 'secondary', ...props }: ButtonProps) { return <GlassButton {...props} className={`app-button ${className}`} size={size} variant={variant} />; }
