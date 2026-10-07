@@ -243,7 +243,7 @@ test('unlinked repository browsing does not claim a local association is require
   assert.match(markup, /aria-label="Diff 与提交"/);
   assert.match(markup, /aria-label="文件树"/);
   assert.match(markup, /远端内容接口等待服务更新/);
-  assert.match(markup, /尚未读取提交内容/);
+  assert.match(markup, /选择一个提交查看差异/);
   assert.doesNotMatch(markup, /正在浏览已提交内容|远端仓库尚无提交/);
   assert.doesNotMatch(markup, /关联本地目录后(?:显示分支图|查看更改|显示文件树)/);
   assert.doesNotMatch(markup, /正在读取本地 Git 仓库|readonly-tabs|当前为真实仓库只读视图/);

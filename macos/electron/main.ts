@@ -81,7 +81,10 @@ ipcMain.handle('gittogether:github-authorization', async event => {
   await shell.openExternal(githubVerificationURL);
 });
 app.whenReady().then(() => {
-  accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch);
+  accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch, { openFile: async target => {
+    if (target.source === 'remote') await shell.openExternal(target.value);
+    else if (await shell.openPath(target.value)) throw new Error('无法用系统默认应用打开此文件，请检查是否有可用应用。');
+  } });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'GitTogether', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },

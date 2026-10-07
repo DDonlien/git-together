@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const execute = promisify(execFile);
-export async function createRepositoryFixture() {
+export async function createRepositoryFixture({ treeChanges = false, denseChanges = false, longBranch = false }: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-three-column-qa-')));
   const directory = join(root, 'main');
   const feature = join(root, 'feature task');
@@ -29,11 +29,24 @@ export async function createRepositoryFixture() {
   await writeFile(join(directory, 'docs/layout.md'), '# Three column layout\n');
   await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Document workspace layout']);
   await git(directory, ['merge', '--no-ff', 'task/search', '-m', 'Merge search task']);
+  if (treeChanges) {
+    await git(directory, ['rm', 'docs/notes.md']);
+    await writeFile(join(directory, 'docs/status.md'), '# Status annotations\n');
+    await writeFile(join(directory, 'src/app.ts'), 'export const value = 1;\n');
+    if (denseChanges) {
+      await mkdir(join(directory, 'src/dense'));
+      await Promise.all(Array.from({ length: 96 }, (_, index) => writeFile(join(directory, `src/dense/file-${String(index).padStart(3, '0')}.ts`), `export const value = ${index};\n`)));
+    }
+    await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Update project files']);
+    await writeFile(join(directory, 'src/later.ts'), 'export const later = true;\n');
+    await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Add later file']);
+  }
   await writeFile(join(directory, 'src/app.ts'), 'export const value = 10;\n');
   await writeFile(join(directory, 'src/:(top)all.ts'), 'export const literal = 1;\n');
   await writeFile(join(directory, 'src/new.ts'), 'export const local = true;\n');
   await writeFile(join(directory, 'ignored.txt'), 'test-only ignored\n');
   await writeFile(join(feature, 'src/app.ts'), 'export const value = 20;\n');
+  if (longBranch) await git(directory, ['branch', '-m', 'task/review', 'task/review-file-tree-identity-with-a-very-long-branch-name-that-must-fade-without-wrapping']);
   const before = await Promise.all([directory, feature].map(async path => ({
     path, head: (await git(path, ['rev-parse', 'HEAD'])).stdout,
     branch: (await git(path, ['symbolic-ref', 'HEAD'])).stdout,

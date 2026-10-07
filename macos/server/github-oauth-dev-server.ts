@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { isRecord, isCatalog, type Catalog } from '../src/import-model';
 import { githubDevClientId, githubOAuthCallback } from '../src/github-web-model';
 import { GitHubWebAuthorization, type WebCredential, type WebConnector } from './github-web-authorization';
+import { callbackContent, callbackScript, callbackStyles } from './github-callback-page';
+import pkg from '../package.json';
 
 export const previewOrigin = 'http://127.0.0.1:4173';
 type PreviewStatus = { instanceId: string; version: string };
@@ -64,21 +66,19 @@ export function previewConnector(expected: PreviewStatus, remoteRequest: typeof 
 }
 
 const escaped = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
-function page(res: ServerResponse, title: string, content: string, script = '', streaming = false) {
+function page(res: ServerResponse, title: string, content: string, script = '', extraStyles = '') {
   const nonce = randomBytes(24).toString('base64');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`);
-  const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaped(title)}</title><style>
+  const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaped(title)}</title><style>
     :root{color-scheme:light dark;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:light-dark(#eef0f2,#24292c);color:light-dark(#222,#eee)}body{margin:0;padding:40px 24px}main{max-width:600px;margin:0 auto}h1{font-size:22px;margin:0 0 24px}section{background:light-dark(#fff,#2b3033);border-radius:16px;padding:24px}p{line-height:1.6;color:light-dark(#686970,#b0b5b8)}label{display:block;margin:20px 0 8px}input[type=password],input[type=text]{box-sizing:border-box;width:100%;font:inherit;border:1px solid light-dark(#d1d3d6,#565b60);border-radius:8px;padding:10px 12px;background:transparent;color:inherit;outline:none}input:focus{border-color:light-dark(#8c9096,#979ba1)}button,.button{border:0;border-radius:20px;padding:10px 18px;font:inherit;background:#0670e9;color:white;cursor:pointer;text-decoration:none}button:disabled{opacity:.55;cursor:default}.actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}.check{display:flex;gap:8px;line-height:1.5}.check input{margin-top:4px}code{word-break:break-all;font-size:12px}.detail{margin:16px 0}#result{min-height:24px;color:light-dark(#b12d26,#ff8c84)}a{color:light-dark(#066bd9,#7ab6ff)}
-    </style><main><h1 id="page-title">${escaped(title)}</h1>${content}</main>${script ? `<script nonce="${nonce}">${script}</script>` : ''}`;
-  if (streaming) { res.write(html); res.flushHeaders(); } else res.end(`${html}</html>`);
-  return nonce;
+    ${extraStyles}</style></head><body><main><h1 id="page-title">${escaped(title)}</h1>${content}</main>${script ? `<script nonce="${nonce}">${script}</script>` : ''}</body></html>`;
+  // Finish navigation before any remote work: native browser popups must not
+  // depend on painting an unfinished streamed document to show progress.
+  res.end(html);
 }
-function finishCallback(res: ServerResponse, nonce: string, complete: boolean, message: string) {
-  const title = complete ? 'GitHub 授权完成' : 'GitHub 授权未完成';
-  // Script data is never interpolated as HTML, even when a connector fails.
-  const safeJSON = (value: string) => JSON.stringify(value).replaceAll('<', '\\u003c');
-  res.end(`<script nonce="${nonce}">document.title=${safeJSON(title)};document.getElementById('page-title').textContent=${safeJSON(title)};document.getElementById('oauth-status').textContent=${safeJSON(message)};document.documentElement.setAttribute('data-status',${safeJSON(complete ? 'complete' : 'failed')});${complete ? 'window.close();' : ''}</script></html>`);
+function callbackPage(res: ServerResponse, sessionId: string) {
+  page(res, '正在完成 GitHub 授权', callbackContent(previewOrigin), callbackScript(sessionId), callbackStyles);
 }
 async function jsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new Error('仅支持 JSON 请求。');
@@ -94,10 +94,14 @@ export function createGitHubOAuthServer(options: {
   bind?: () => Promise<WebConnector>;
   configuration?: { secret: string | null; save(secret: string): Promise<void> };
   request?: typeof fetch; now?: () => number;
+  onCallback?: (stage: 'received' | 'accepted' | 'complete' | 'rejected' | 'failed') => void;
 }) {
   const flow = new GitHubWebAuthorization(options.connect, options.request, options.now);
   if (options.configuration?.secret) flow.configure(options.configuration.secret);
   const setupKey = randomBytes(32).toString('base64url');
+  // A finite stage only: never forward request URLs, query values, identities or
+  // provider bodies to diagnostics. Observer errors cannot alter authorization.
+  const report = (stage: Parameters<NonNullable<typeof options.onCallback>>[0]) => { try { options.onCallback?.(stage); } catch { /* Non-authoritative observer. */ } };
   const server = createServer(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY');
@@ -121,16 +125,16 @@ export function createGitHubOAuthServer(options: {
         `); return;
       }
       if (req.method === 'GET' && url.pathname === '/oauth/github/callback') {
-        let nonce: string | undefined;
+        report('received');
         try {
-          await flow.callback(url.searchParams, () => {
-            nonce = page(res, '正在完成 GitHub 授权', `<section><p id="oauth-status" role="status">正在连接 GitHub 并读取账号，请稍候…</p><a class="button" href="${previewOrigin}/">返回 GitTogether</a></section>`, "history.replaceState(null,'','/oauth/github/callback');", true);
-          });
-          finishCallback(res, nonce!, true, '账号已添加到 GitTogether。你可以关闭这个窗口。');
+          await flow.callback(url.searchParams, sessionId => { report('accepted'); callbackPage(res, sessionId); });
+          report('complete');
         } catch (problem) {
+          report(res.writableEnded ? 'failed' : 'rejected');
           const message = problem instanceof Error ? problem.message : '请返回 GitTogether 重新开始。';
-          if (nonce) finishCallback(res, nonce, false, message);
-          else {
+          // Accepted callbacks already have a complete document. Their result
+          // is read through the minimal same-origin endpoint, not appended HTML.
+          if (!res.writableEnded) {
             res.statusCode = 400;
             page(res, 'GitHub 授权未完成', `<section><p>${escaped(message)}</p><a href="${previewOrigin}/">返回 GitTogether</a></section>`, "history.replaceState(null,'','/oauth/github/callback');");
           }
@@ -139,8 +143,11 @@ export function createGitHubOAuthServer(options: {
       }
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       if (req.method !== 'POST') { res.statusCode = 405; throw new Error('仅支持 POST 请求。'); }
+      const callbackAPI = url.pathname === '/api/callback-status';
       if (applicationAPI) {
         if (req.headers.origin !== previewOrigin || req.headers['x-gittogether-client'] !== '1') { res.statusCode = 403; throw new Error('仅允许 GitTogether 预览发起授权。'); }
+      } else if (callbackAPI) {
+        if (req.headers.origin !== origin || req.headers['x-gittogether-client'] !== '1' || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) { res.statusCode = 403; throw new Error('仅允许本机授权回调页查询结果。'); }
       } else if (url.pathname === '/api/config') {
         if (req.headers.origin !== origin || req.headers['x-gittogether-setup'] !== setupKey || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) { res.statusCode = 403; throw new Error('请从本机开发配置页输入。'); }
       } else { res.statusCode = 404; throw new Error('接口不存在。'); }
@@ -151,7 +158,7 @@ export function createGitHubOAuthServer(options: {
         if (options.configuration) await flow.configureAndSave(secret, next => options.configuration!.save(next));
         else flow.configure(secret);
         value = { configured: true };
-      } else if (url.pathname === '/api/status') value = { configured: flow.configured };
+      } else if (url.pathname === '/api/status') value = { configured: flow.configured, version: pkg.version, clientId: githubDevClientId };
       else if (url.pathname === '/api/start') {
         // Each new login captures its own main-service instance; old callbacks
         // retain their original connector instead of following a mutable binding.
@@ -160,7 +167,8 @@ export function createGitHubOAuthServer(options: {
       }
       else {
         if (typeof input.sessionId !== 'string' || !/^[\w-]{36}$/.test(input.sessionId)) throw new Error('授权会话格式无效。');
-        value = url.pathname === '/api/poll' ? flow.poll(input.sessionId) : await flow.cancel(input.sessionId);
+        value = callbackAPI ? flow.callbackProgress(input.sessionId)
+          : url.pathname === '/api/poll' ? flow.poll(input.sessionId) : await flow.cancel(input.sessionId);
       }
       res.end(JSON.stringify({ ok: true, value }));
     } catch (problem) {

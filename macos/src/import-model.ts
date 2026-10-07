@@ -1,6 +1,8 @@
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
 
 export type Provider = 'github' | 'gitea';
+export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
+export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
   id: string; provider: Provider; host: string; login: string; name: string;
   updatedAt: string; error?: string; authorizationExpiresAt?: string;
@@ -9,6 +11,8 @@ export type RemoteRepository = {
   id: string; remoteId: number; accountId: string; name: string; fullName: string;
   description: string; defaultBranch: string; private: boolean; url: string;
   available: boolean;
+  ownerType?: 'user' | 'organization'; fork?: boolean; collaborator?: boolean;
+  permissions?: RepositoryPermissions; metadataError?: string;
 };
 export type LocalLink = { repositoryId: string; path: string };
 export type Catalog = {
@@ -49,6 +53,7 @@ export type ApiInputs = {
   remoteWorkspace: { repositoryId: string };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
+  openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
 };
 export type ApiOutputs = {
   status: ServiceInfo;
@@ -58,6 +63,7 @@ export type ApiOutputs = {
   githubAuthCancel: GitHubAuthorizationCancellation;
   link: Catalog; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
+  openFile: { opened: true };
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };
@@ -74,7 +80,11 @@ export function isCatalog(value: unknown): value is Catalog {
       ['github', 'gitea'].includes(String(a.provider))) &&
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
-      typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean') &&
+      typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&
+      (r.ownerType === undefined || r.ownerType === 'user' || r.ownerType === 'organization') &&
+      (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
+      (r.metadataError === undefined || typeof r.metadataError === 'string') &&
+      (r.permissions === undefined || (isRecord(r.permissions) && Object.entries(r.permissions).every(([key, flag]) => repositoryPermissionKeys.some(allowed => allowed === key) && typeof flag === 'boolean')))) &&
     Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string');
 }
 

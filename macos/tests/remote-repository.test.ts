@@ -126,9 +126,10 @@ test('the unlinked three-column view renders remote branches, history and trees 
     const repository = { id: 'qa:1', remoteId: 1, accountId: 'qa', name: 'project', fullName: 'qa/project', description: '', defaultBranch: 'main', private: true, url: 'https://fixture.example.test/qa/project', available: true };
     const markup = renderToStaticMarkup(createElement(RepositoryView, { repository, account, remoteState: { workspace, loading: false, error: '' }, globalSearch: '', onConfigure: () => {} }));
     assert.match(markup, /Merge search task/); assert.match(markup, /task\/search/); assert.match(markup, /src/); assert.match(markup, /3 个任务/); assert.match(markup, /远端提交：main/);
-    assert.doesNotMatch(markup, /关联本地目录后|正在读取本地|没有未提交的更改/);
+    assert.match(markup, /选择一个提交查看差异/);
+    assert.doesNotMatch(markup, /正在读取本地|没有未提交的更改|<textarea/);
     const details = await remote.commit(workspace.tasks[0].head);
-    const pane = renderToStaticMarkup(createElement(RepositoryRemoteChanges, { task: workspace.tasks[0], commitId: details.commit.id, state: { id: details.commit.id, details, error: '' }, onSelect: () => {}, search: '', focused: false, onFocus: () => {}, showFocus: true }));
-    assert.match(pane, /src\/search.ts/); assert.match(pane, /正在浏览已提交内容/); assert.match(pane, /<button disabled=""/); assert.doesNotMatch(pane, /repository-inline-diff|<pre\b|export const search = true/);
+    const pane = renderToStaticMarkup(createElement(RepositoryRemoteChanges, { task: workspace.tasks[0], commitId: details.commit.id, state: { id: details.commit.id, details, error: '' }, onSelect: () => {}, search: '' }));
+    assert.match(pane, /src\/search.ts/); assert.doesNotMatch(pane, /<textarea|>Commit<|repository-inline-diff|<pre\b|export const search = true/);
   } finally { await fixture.cleanup(); }
 });

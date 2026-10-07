@@ -4,8 +4,8 @@ import type { Provider } from '../src/import-model';
 import { attachDiffPatches, type RemoteTransport } from '../server/remote-repository-reader';
 import { createRepositoryFixture } from './repository-fixture';
 
-export async function createGitRemoteFixture(provider: Provider) {
-  const fixture = await createRepositoryFixture();
+export async function createGitRemoteFixture(provider: Provider, options: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean } = {}) {
+  const fixture = await createRepositoryFixture(options);
   const calls: string[] = [];
   const git = async (...args: string[]) => (await fixture.git(fixture.directory, ['--no-optional-locks', ...args])).stdout;
   const metadata = async (id: string) => {

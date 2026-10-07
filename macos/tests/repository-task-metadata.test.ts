@@ -13,10 +13,10 @@ const details: RemoteCommitDetails = {
   commit: { id: task.head, summary: 'Existing graph summary', author: 'Existing author', time: '2026-10-07T00:00:00Z', parents: [], refs: ['origin/main'] },
   files: [{ path: 'src/app.ts', status: 'modified', patch: '+real-content' }], diff: '+real-content', tree: task.tree, treeComplete: true, warnings: ['Existing warning'],
 };
-const props = { task, commitId: task.head, state: { id: task.head, details, error: '' }, onSelect() {}, search: '', focused: false, onFocus() {}, showFocus: false };
+const props = { task, commitId: task.head, state: { id: task.head, details, error: '' }, onSelect() {}, search: '' };
 const render = (changes: Partial<Parameters<typeof RepositoryRemoteChanges>[0]> = {}) => renderToStaticMarkup(createElement(RepositoryRemoteChanges, { ...props, ...changes }));
 
-test('remote HEAD and history start with the file list without duplicate branch, SHA or commit metadata', () => {
+test('explicit remote commit reads start with the file list without duplicate branch, SHA or commit metadata', () => {
   for (const selectedCommit of [undefined, details.commit]) {
     const html = render({ selectedCommit, selected: 'src/app.ts' });
     assert.doesNotMatch(html, /repository-remote-commit|repository-task-header|repository-task-path|class="branch-label"|repository-inline-diff|<pre\b/);
@@ -24,19 +24,31 @@ test('remote HEAD and history start with the file list without duplicate branch,
     if (selectedCommit) {
       assert.match(html, /提交详情：main/); assert.equal((html.match(/Existing graph summary/g) || []).length, 1); assert.equal((html.match(/Existing author/g) || []).length, 1);
     } else {
-      assert.doesNotMatch(html, /Existing graph summary|Existing author/); assert.match(html, /提交说明：main/); assert.match(html, /Commit/);
+      assert.doesNotMatch(html, /Existing graph summary|Existing author|提交说明：main|<textarea|>Commit</);
     }
   }
 });
 
-test('multiple remote tasks keep distinct focus controls without restoring their removed metadata', () => {
-  for (const branch of ['main', 'task/search']) for (const focused of [false, true]) {
-    const html = render({ task: { ...task, id: `remote:${branch}`, branch }, showFocus: true, focused });
-    assert.match(html, /class="repository-task-header repository-task-controls"/);
-    assert.ok(html.includes(`aria-label="${focused ? '退出聚焦' : '聚焦'}远端任务：${branch}"`));
-    assert.match(html, new RegExp(`aria-pressed="${focused}"`));
-    assert.doesNotMatch(html, /repository-task-path|class="branch-label"|repository-remote-commit/);
+test('multiple remote tasks have no focus button or empty controls header', () => {
+  for (const branch of ['main', 'task/search']) for (const selectedCommit of [undefined, details.commit]) {
+    const html = render({ task: { ...task, id: `remote:${branch}`, branch }, selectedCommit });
+    assert.doesNotMatch(html, /repository-task-header|repository-task-controls|退出聚焦|聚焦远端任务|repository-task-path|class="branch-label"|repository-remote-commit/);
+    assert.ok(html.includes(`aria-label="远端提交：${branch}"`));
+    assert.match(html, /已提交文件：|src\/app.ts|Existing warning/);
   }
+});
+
+test('removing remote focus wiring preserves the overview exit and persistent local task state', async () => {
+  const view = await readFile(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
+  const column = await readFile(new URL('../src/RepositoryChangesColumn.tsx', import.meta.url), 'utf8');
+  const remote = column.split('<RepositoryRemoteChanges ')[1]?.split(' />')[0];
+  assert.ok(remote); assert.doesNotMatch(remote, /focused=|onFocus=|showFocus=/);
+  assert.match(view, /显示全部任务/); assert.match(view, /onClick=\{\(\) => setFocusedTask\(null\)\}/);
+  assert.match(view, /key=\{task.id\} className="repository-task-slot" hidden=/);
+  const local = column.split('<RepositoryChanges ')[1]?.split(' />')[0];
+  assert.ok(local); assert.match(local, /onFocus=/);
+  const component = await readFile(new URL('../src/RepositoryRemoteChanges.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(component, /focused|onFocus|showFocus|repository-task-controls|useEffect/);
 });
 
 test('metadata removal preserves remote loading, failure and search notices plus local task identity', async () => {
@@ -47,5 +59,5 @@ test('metadata removal preserves remote loading, failure and search notices plus
   const local = renderToStaticMarkup(createElement(RepositoryChanges, { task: { ...task, id: 'local:main', remote: false, path: '/isolated/qa' }, onSelect() {}, search: '', focused: false, onFocus() {}, readDiff: async () => '', loading: false, linked: true, active: true, showFocus: false }));
   assert.match(local, /class="branch-label"/); assert.match(local, /repository-task-path/); assert.match(local, /\/isolated\/qa/); assert.match(local, /填写提交说明/);
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.doesNotMatch(css, /\.repository-remote-commit/); assert.match(css, /\.repository-task-header\.repository-task-controls\s*\{\s*justify-content:\s*flex-end/);
+  assert.doesNotMatch(css, /\.repository-remote-commit|\.repository-task-controls/);
 });

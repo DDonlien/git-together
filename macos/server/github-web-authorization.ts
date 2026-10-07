@@ -4,10 +4,13 @@ import { githubDevClientId, githubOAuthCallback, type GitHubWebSession, type Git
 
 export type WebCredential = { token: string; name: string; expiresAt?: string; signal: AbortSignal; commit: () => void };
 export type WebConnector = (credential: WebCredential) => Promise<Catalog>;
+export type CallbackPhase = 'waiting' | 'exchanging' | 'verifying' | 'importing';
+export type CallbackProgress = { status: 'pending'; phase: CallbackPhase } | { status: 'complete' };
 type Session = {
   public: GitHubWebSession; state: string; verifier: string; secret: string; name: string;
   connect: WebConnector;
   controller: AbortController; used: boolean; committing: boolean;
+  phase: CallbackPhase;
   pending?: Promise<void>; catalog?: Catalog; failure?: string;
 };
 const lifetimeMs = 10 * 60_000;
@@ -61,7 +64,7 @@ export class GitHubWebAuthorization {
     authorization.search = new URLSearchParams({ client_id: githubDevClientId, redirect_uri: githubOAuthCallback, state,
       code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account' }).toString();
     const result = { id: randomUUID(), authorizationURL: authorization.href, expiresAt: this.now() + lifetimeMs };
-    this.sessions.set(result.id, { public: result, state, verifier, secret: this.secret, name: name.trim(), connect, controller: new AbortController(), used: false, committing: false });
+    this.sessions.set(result.id, { public: result, state, verifier, secret: this.secret, name: name.trim(), connect, controller: new AbortController(), used: false, committing: false, phase: 'waiting' });
     return { ...result };
   }
   poll(id: string): GitHubWebProgress {
@@ -70,6 +73,14 @@ export class GitHubWebAuthorization {
     if (session.catalog) return { status: 'complete', catalog: structuredClone(session.catalog) };
     this.active(session);
     return { status: 'pending' };
+  }
+  callbackProgress(id: string): CallbackProgress {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error('授权会话已失效，请重新开始。');
+    if (session.catalog) return { status: 'complete' };
+    this.active(session);
+    // Only actual work changes this finite phase; no token, catalog or identity.
+    return { status: 'pending', phase: session.phase };
   }
   async cancel(id: string): Promise<GitHubWebCancellation> {
     const session = this.sessions.get(id);
@@ -80,7 +91,7 @@ export class GitHubWebAuthorization {
     session.controller.abort(); session.secret = ''; session.verifier = ''; this.sessions.delete(id);
     return { cancelled: true };
   }
-  async callback(parameters: URLSearchParams, accepted?: () => void): Promise<void> {
+  async callback(parameters: URLSearchParams, accepted?: (sessionId: string) => void): Promise<void> {
     const state = parameters.get('state');
     if (!state || parameters.getAll('state').length !== 1) throw new Error('授权回调无法验证，请从 GitTogether 重新开始。');
     const session = [...this.sessions.values()].find(item => item.state === state);
@@ -96,7 +107,8 @@ export class GitHubWebAuthorization {
     if (!code || parameters.getAll('code').length !== 1 || !/^[\w.-]{1,512}$/.test(code)) {
       session.failure = '授权回调格式无效，请重新开始。'; session.secret = ''; session.verifier = ''; throw new Error(session.failure);
     }
-    accepted?.();
+    session.phase = 'exchanging';
+    accepted?.(session.public.id);
     const pending = this.exchange(session, code);
     session.pending = pending;
     try { await pending; }
@@ -126,8 +138,9 @@ export class GitHubWebAuthorization {
     if (typeof body.access_token !== 'string' || !body.access_token || body.access_token.length > 4096 || /\s/.test(body.access_token) || body.token_type !== 'bearer') throw new Error('GitHub 授权凭据格式无效。');
     if (body.expires_in !== undefined && (typeof body.expires_in !== 'number' || !Number.isSafeInteger(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000)) throw new Error('GitHub 授权有效期无效。');
     const expiresAt = typeof body.expires_in === 'number' ? new Date(this.now() + body.expires_in * 1000).toISOString() : undefined;
+    session.phase = 'verifying';
     session.catalog = await session.connect({ token: body.access_token, name: session.name, expiresAt, signal: session.controller.signal,
-      commit: () => { this.active(session); session.committing = true; } });
+      commit: () => { this.active(session); session.committing = true; session.phase = 'importing'; } });
     // Refresh tokens are deliberately not retained without an approved renewal/store design.
   }
 }

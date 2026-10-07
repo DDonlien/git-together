@@ -22,13 +22,14 @@ test('file-tree source control is inside the right column heading with public pr
   assert.match(heading, /aria-pressed="false"[^>]*>.*?<span>本地<\/span>/);
 });
 
-test('mixed tree defaults to remote, hides local without unmounting, and does not hide either Diff card', () => {
+test('mixed tree defaults to remote, independently of the one active local Diff context', () => {
   const markup = render({ source: 'mixed', complete: true, tasks: [remote, local], commits: [] });
   const tree = markup.split('id="repository-file-trees"')[1];
   assert.match(tree, /repository-task-slot"><section.*?remote-only\.md/);
   assert.match(tree, /repository-task-slot" hidden=""><section.*?local-only\.md/);
   const changes = markup.split('aria-label="Diff 与提交"')[1].split('aria-label="文件树"')[0];
-  assert.doesNotMatch(changes, /hidden=""/);
+  assert.match(changes, /repository-task-slot" hidden=""><section.*?aria-label="远端提交：main"/);
+  assert.match(changes, /repository-task-slot"><section.*?aria-label="更改任务：main"/);
   assert.match(changes, /aria-label="远端提交：main"/);
   assert.match(changes, /aria-label="更改任务：main"/);
 });

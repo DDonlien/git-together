@@ -19,6 +19,7 @@ app.whenReady().then(async () => {
   const configuration = oauthConfigurationStore(configurationPath);
   const secret = await configuration.load();
   const server = createGitHubOAuthServer({
+    onCallback: stage => process.stdout.write(`GitHub callback: ${stage}\n`),
     ...previewConnector(initial, remoteRequest, localRequest), request: remoteRequest,
     configuration: { secret, save: configuration.save },
     bind: async () => previewConnector(await readPreviewStatus(localRequest), remoteRequest, localRequest).connect,

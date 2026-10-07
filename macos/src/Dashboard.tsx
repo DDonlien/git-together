@@ -1,23 +1,29 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import { accountLabel, providerName, type RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { Button, Icon, Notice, SearchInput } from './ui';
 import { RepositoryActions } from './RepositoryActions';
 import { FilterMenu } from './FilterMenu';
+import { MultiFilterMenu } from './MultiFilterMenu';
+import { matchesRepositoryFilters, organizationGroups, repositoryClassification, repositorySources, repositoryTypes, toggleFilter, type FilterSelection } from './dashboard-filters';
 
 export function Dashboard({ controller, globalSearch, onSearchChange, searchRef, onSettings, onConfigure, onOpen }: { controller: WorkspaceController; globalSearch: string; onSearchChange: (value: string) => void; searchRef?: RefObject<HTMLInputElement | null>; onSettings: () => void; onConfigure: (repository: RemoteRepository) => void; onOpen: (id: string) => void }) {
   const [accountId, setAccountId] = useState('all');
-  const [filter, setFilter] = useState('all');
+  const [organization, setOrganization] = useState<FilterSelection>(null);
+  const [source, setSource] = useState<FilterSelection>(null);
+  const [type, setType] = useState<FilterSelection>(null);
   const { accounts, repositories, links } = controller.catalog;
-  useEffect(() => { if (accountId !== 'all' && !accounts.some(account => account.id === accountId)) setAccountId('all'); }, [accounts, accountId]);
-  const visibleAccounts = accounts.filter(a => accountId === 'all' || a.id === accountId);
+  const selectedAccountId = accounts.some(account => account.id === accountId) ? accountId : 'all';
+  const visibleAccounts = accounts.filter(a => selectedAccountId === 'all' || a.id === selectedAccountId);
+  const organizations = organizationGroups(accounts, repositories);
+  const organizationOptions = organizations.flatMap(group => group.options);
   const accountsById = new Map(accounts.map(account => [account.id, account]));
   const mapped = new Map(links.map(link => [link.repositoryId, link.path]));
   const filtered = repositories.filter(repo => {
     const account = accountsById.get(repo.accountId)!;
-    return (accountId === 'all' || repo.accountId === accountId) &&
+    return (selectedAccountId === 'all' || repo.accountId === selectedAccountId) &&
       `${repo.fullName} ${repo.description} ${accountLabel(account)} ${repo.defaultBranch} ${mapped.get(repo.id) || ''}`.toLowerCase().includes(globalSearch.toLowerCase()) &&
-      (filter === 'all' || (filter === 'linked') === mapped.has(repo.id));
+      matchesRepositoryFilters(repo, mapped.has(repo.id), { organization, source, type }, organizationOptions);
   });
   const lastChecked = visibleAccounts.map(account => account.updatedAt).filter(Boolean).sort()[0];
   return <main className="dashboard-view import-dashboard" aria-label="仓库总览">
@@ -25,8 +31,9 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
     {controller.loading ? <div className="import-empty flat-group" role="status"><Icon name="spinner" className="spin" size={26} /><h2>正在读取账号…</h2></div> : !accounts.length ? <div className="import-empty flat-group"><Icon name="users" size={34} /><h2>先连接你的账号</h2><p>在设置中添加 GitHub 或 Gitea，仓库会自动显示在左侧和列表中。<br />需要查看本地更改时，再关联已有目录。</p><Button variant="primary" onClick={onSettings}>打开设置，添加账号</Button></div> : <>
       <div className="import-filterbar" role="search" aria-label="搜索与筛选仓库">
         <div className="dashboard-search"><SearchInput inputRef={searchRef} value={globalSearch} onChange={onSearchChange} placeholder="搜索仓库、账号或本地目录…" />{!globalSearch && <kbd className="search-shortcut">⌘ K</kbd>}</div>
-        <FilterMenu label="筛选账号" value={accountId} onChange={setAccountId} options={[{ value: 'all', label: '全部账号' }, ...accounts.map(account => ({ value: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}` }))]} />
-        <FilterMenu label="本地关联状态" value={filter} onChange={setFilter} options={[{ value: 'all', label: '全部仓库' }, { value: 'linked', label: '已关联本地' }, { value: 'unlinked', label: '未关联本地' }]} />
+        <FilterMenu label="筛选账号" value={selectedAccountId} onChange={setAccountId} options={[{ value: 'all', label: '全部账号' }, ...accounts.map(account => ({ value: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}` }))]} />
+        <MultiFilterMenu label="组织" groups={organizations} selections={Object.fromEntries(organizations.map(group => [group.id, organization]))} onToggle={(_groupId, value) => setOrganization(current => toggleFilter(current, value, organizationOptions))} />
+        <MultiFilterMenu label="仓库" groups={[{ id: 'source', label: '位置', options: repositorySources }, { id: 'type', label: '类型', options: repositoryTypes }]} selections={{ source, type }} onToggle={(groupId, value) => groupId === 'source' ? setSource(current => toggleFilter(current, value, repositorySources)) : setType(current => toggleFilter(current, value, repositoryTypes))} note={repositories.some(repo => repo.fork === undefined || repo.collaborator === undefined) ? '未确认的分类不会参与单项筛选；全选仍保留这些仓库。' : undefined} />
         <span className="repository-count muted" title={controller.error || visibleAccounts.some(account => account.error) ? '部分数据检查失败，正在自动重试；显示上次成功读取的列表。' : lastChecked ? `远端最近检查：${new Date(lastChecked).toLocaleString()}；前台自动检查` : '正在自动检查仓库列表'}>{filtered.length} 个仓库</span>
       </div>
       {visibleAccounts.filter(account => account.error).map(account => <Notice kind="error" key={account.id}>{account.name}：{account.error}{account.updatedAt && ' 已保留上次读取的仓库列表。'} 正在自动重试。</Notice>)}
@@ -41,11 +48,11 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
             <td><div className="remote-account-cell" title={accountLabel(account)}><div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login}@{new URL(account.host).host}</small></div></div></td>
             <td><span className="branch-label"><Icon name="branch" size={13} /><span>{repo.defaultBranch || '—'}</span></span></td>
             <td><button className={`local-path local-path-action ${mapped.has(repo.id) ? '' : 'muted'}`} title={mapped.get(repo.id) || '选择已有 Git 目录'} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !mapped.has(repo.id)} onClick={() => onConfigure(repo)}>{mapped.get(repo.id) || '尚未关联'}</button></td>
-            <td><span title={local?.error || (local?.checkedAt ? `本地最近检查：${new Date(local.checkedAt).toLocaleString()}` : undefined)} className={`mapping-status ${!repo.available || local?.error ? 'unavailable' : mapped.has(repo.id) ? 'linked' : ''}`}>{!repo.available ? '失去访问权限' : local?.error ? '本地不可用' : mapped.has(repo.id) ? '已关联' : '未关联本地'}</span></td>
+            <td><span title={[repositoryClassification(repo), local?.error || (local?.checkedAt ? `本地最近检查：${new Date(local.checkedAt).toLocaleString()}` : '')].filter(Boolean).join(' · ')} className={`mapping-status ${!repo.available || local?.error ? 'unavailable' : mapped.has(repo.id) ? 'linked' : ''}`}>{!repo.available ? '失去访问权限' : local?.error ? '本地不可用' : mapped.has(repo.id) ? '已关联' : '未关联本地'}</span></td>
             <td><RepositoryActions label={`仓库操作：${repo.fullName} · ${accountLabel(account)}`} repository={repo} hasLocalDirectory={mapped.has(repo.id)} onOpen={onOpen} onConfigure={onConfigure} /></td>
           </tr>;
         })}</tbody></table></div>
-        {!filtered.length && <div className="account-repos-empty">{repositories.some(repo => accountId === 'all' || repo.accountId === accountId) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
+        {!filtered.length && <div className="account-repos-empty">{repositories.some(repo => selectedAccountId === 'all' || repo.accountId === selectedAccountId) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
       </section>
     </>}
   </main>;

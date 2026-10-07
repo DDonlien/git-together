@@ -3,12 +3,18 @@ import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { isCatalog, isRecord, type Account, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository } from '../src/import-model';
+import { isCatalog, isRecord, repositoryPermissionKeys, type Account, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository, type RepositoryPermissions } from '../src/import-model';
 import { GitHubDeviceAuthorization } from './github-authorization';
 import { RemoteRepositoryReader } from './remote-repository-reader';
+import { repositoryFileURL } from '../src/repository-file-url';
+import { repositoryTaskFile } from './repository-reader';
+import { openSystemFile, type FileOpener } from './system-file-open';
 import pkg from '../package.json';
 
 const execute = promisify(execFile);
+class ProviderReadError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
 type SavedAccount = { account: Account; token: string };
 export type SavedState = { version: 2; accounts: SavedAccount[]; repositories: RemoteRepository[]; links: Catalog['links'] };
 export interface CredentialStore {
@@ -52,7 +58,9 @@ export class AccountService {
   private remoteReaders = new Map<string, { reader: RemoteRepositoryReader; valid: () => boolean }>();
   private revision = 0;
   private restoreError = '';
-  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number } = {}) {
+  private openFile: FileOpener;
+  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener } = {}) {
+    this.openFile = options.openFile || openSystemFile;
     this.ready = this.restore().catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
     this.githubAuthorization = new GitHubDeviceAuthorization(options.githubClientId ?? process.env.GITTOGETHER_GITHUB_CLIENT_ID ?? '', credential => this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, credential), request, options.now);
   }
@@ -82,7 +90,7 @@ export class AccountService {
     await task;
     return this.catalog();
   }
-  private async getJSON(url: URL, provider: Provider, token: string, signal?: AbortSignal, format: 'json' | 'text' = 'json'): Promise<{ value: unknown; headers: Headers }> {
+  private async getJSON(url: URL, provider: Provider, token: string, signal?: AbortSignal, format: 'json' | 'text' | 'status' = 'json'): Promise<{ value: unknown; headers: Headers }> {
     signal?.throwIfAborted();
     let response: Response;
     try {
@@ -95,9 +103,10 @@ export class AccountService {
       signal?.throwIfAborted();
       throw new Error('无法连接账号服务，请检查域名、网络、证书或稍后重试（不跟随登录重定向）。');
     }
-    if (response.status === 401) throw new Error('令牌无效或已过期，请在设置中重新连接账号。');
-    if (response.status === 403 || response.status === 429) throw new Error('没有读取权限或已触发访问频率限制；请检查令牌权限后重试。');
-    if (!response.ok) throw new Error(`账号服务返回 HTTP ${response.status}；请检查服务与令牌权限。`);
+    if (response.status === 401) throw new ProviderReadError('令牌无效或已过期，请在设置中重新连接账号。', response.status);
+    if (response.status === 403 || response.status === 429) throw new ProviderReadError('没有读取权限或已触发访问频率限制；请检查令牌权限后重试。', response.status);
+    if (!response.ok) throw new ProviderReadError(`账号服务返回 HTTP ${response.status}；请检查服务与令牌权限。`, response.status);
+    if (format === 'status') { await response.body?.cancel(); return { value: response.status, headers: response.headers }; }
     if (Number(response.headers.get('content-length')) > 8_000_000) throw new Error('账号服务响应过大。');
     // Bound streamed responses as well as Content-Length. Never log the provider payload.
     const reader = response.body?.getReader();
@@ -111,7 +120,7 @@ export class AccountService {
     } catch { signal?.throwIfAborted(); throw new Error(`账号服务返回了无效或过大的 ${format === 'text' ? '文本' : 'JSON'} 数据。`); }
   }
   private apiBase(provider: Provider, host: string) { return provider === 'github' ? 'https://api.github.com' : `${host}/api/v1`; }
-  private async repositories(account: Account, token: string, signal?: AbortSignal): Promise<RemoteRepository[]> {
+  private async repositoryList(account: Account, token: string, signal?: AbortSignal, affiliation = 'owner,collaborator,organization_member'): Promise<RemoteRepository[]> {
     const output = new Map<number, RemoteRepository>();
     const endpoint = `${this.apiBase(account.provider, account.host)}/user/repos`;
     // Page parameters are constructed locally; never forward credentials to a Link URL.
@@ -119,14 +128,18 @@ export class AccountService {
       signal?.throwIfAborted();
       const url = new URL(endpoint); url.searchParams.set('page', String(page));
       url.searchParams.set(account.provider === 'github' ? 'per_page' : 'limit', '100');
-      if (account.provider === 'github') { url.searchParams.set('visibility', 'all'); url.searchParams.set('affiliation', 'owner,collaborator,organization_member'); }
+      if (account.provider === 'github') { url.searchParams.set('visibility', 'all'); url.searchParams.set('affiliation', affiliation); }
       const { value, headers } = await this.getJSON(url, account.provider, token, signal);
       if (!Array.isArray(value)) throw new Error('仓库列表返回格式不正确。');
       for (const raw of value) {
         if (!isRecord(raw) || !Number.isSafeInteger(raw.id) || typeof raw.id !== 'number' || typeof raw.name !== 'string' || typeof raw.full_name !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(raw.full_name)) throw new Error('仓库列表中包含无效的记录。');
+        const permissions: RepositoryPermissions = {};
+        if (isRecord(raw.permissions)) for (const key of repositoryPermissionKeys) if (typeof raw.permissions[key] === 'boolean') permissions[key] = raw.permissions[key];
+        const ownerType = account.provider === 'github' && isRecord(raw.owner) ? raw.owner.type === 'Organization' ? 'organization' : raw.owner.type === 'User' ? 'user' : undefined : undefined;
         output.set(raw.id, { id: `${account.id}:${raw.id}`, remoteId: raw.id, accountId: account.id, name: raw.name, fullName: raw.full_name,
           description: typeof raw.description === 'string' ? raw.description : '', defaultBranch: typeof raw.default_branch === 'string' ? raw.default_branch : '',
-          private: raw.private === true, url: `${account.host}/${raw.full_name.split('/').map(encodeURIComponent).join('/')}`, available: true });
+          private: raw.private === true, url: `${account.host}/${raw.full_name.split('/').map(encodeURIComponent).join('/')}`, available: true,
+          ...(ownerType ? { ownerType } : {}), ...(typeof raw.fork === 'boolean' ? { fork: raw.fork } : {}), ...(Object.keys(permissions).length ? { permissions } : {}) });
       }
       const link = headers.get('link');
       const total = Number(headers.get('x-total-count'));
@@ -135,6 +148,56 @@ export class AccountService {
       if (page === 10000) throw new Error('仓库分页超出安全上限，未覆盖已有列表。');
     }
     return [];
+  }
+  private async repositories(account: Account, token: string, signal?: AbortSignal): Promise<RemoteRepository[]> {
+    const repositories = await this.repositoryList(account, token, signal);
+    if (!repositories.length) return repositories;
+    if (account.provider === 'github') {
+      try {
+        // Permissions do not identify collaboration. Ask the provider's explicit affiliation filter.
+        const collaborators = new Set((await this.repositoryList(account, token, signal, 'collaborator')).map(repo => repo.remoteId));
+        return repositories.map(repo => ({ ...repo, collaborator: collaborators.has(repo.remoteId) }));
+      } catch (error) {
+        signal?.throwIfAborted();
+        return repositories.map(repo => ({ ...repo, metadataError: error instanceof Error ? `协作分类未能读取：${error.message}` : '协作分类未能读取。' }));
+      }
+    }
+    // Gitea's owner DTO has no organization flag. Confirm organizations and direct
+    // collaborators using read-only endpoints, not names, admin rights or team access.
+    // Four workers and a shared 15s deadline bound extra lookups for large catalogs.
+    const metadataSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
+    const owners = new Map<string, Promise<{ ownerType?: 'organization'; error?: string }>>();
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, repositories.length) }, async () => {
+      while (cursor < repositories.length) {
+        const repo = repositories[cursor++]; const owner = repo.fullName.split('/')[0];
+        if (owner.toLowerCase() === account.login.toLowerCase()) { repo.ownerType = 'user'; repo.collaborator = false; continue; }
+        let pending = owners.get(owner.toLowerCase());
+        if (!pending) {
+          pending = (async () => {
+            try {
+              const { value } = await this.getJSON(new URL(`${account.host}/api/v1/orgs/${encodeURIComponent(owner)}`), 'gitea', token, metadataSignal);
+              if (!isRecord(value) || typeof value.username !== 'string' || value.username.toLowerCase() !== owner.toLowerCase()) throw new Error('组织信息返回格式不正确。');
+              return { ownerType: 'organization' as const };
+            } catch (error) { signal?.throwIfAborted(); return { error: error instanceof Error ? `归属分类未能读取：${error.message}` : '归属分类未能读取。' }; }
+          })(); owners.set(owner.toLowerCase(), pending);
+        }
+        const organization = await pending;
+        if (organization.ownerType) repo.ownerType = organization.ownerType;
+        if (organization.error) repo.metadataError = organization.error;
+        try {
+          const path = repo.fullName.split('/').map(encodeURIComponent).join('/');
+          const { value } = await this.getJSON(new URL(`${account.host}/api/v1/repos/${path}/collaborators/${encodeURIComponent(account.login)}`), 'gitea', token, metadataSignal, 'status');
+          if (value !== 204) throw new Error('协作信息返回格式不正确。');
+          repo.collaborator = true;
+        } catch (error) {
+          signal?.throwIfAborted();
+          // A hidden/unsupported endpoint can also return 404, so do not fabricate a negative.
+          repo.metadataError = [repo.metadataError, error instanceof ProviderReadError && error.status === 404 ? '协作关系未确认。' : error instanceof Error ? `协作分类未能读取：${error.message}` : '协作分类未能读取。'].filter(Boolean).join(' ');
+        }
+      }
+    }));
+    return repositories;
   }
   private async connect(input: Record<string, unknown>, authorization?: { expiresAt?: string; signal: AbortSignal; commit: () => void }) {
     const provider = input.provider;
@@ -337,6 +400,31 @@ export class AccountService {
       case 'unlink': { const id = field(value, 'repositoryId', 160); return this.mutate(next => { next.links = next.links.filter(l => l.repositoryId !== id); }); }
       case 'snapshot': return this.snapshot(field(value, 'repositoryId', 160));
       case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
+      case 'openFile': {
+        const source = value.source;
+        if (source !== 'remote' && source !== 'local') throw new Error('无效的文件来源。');
+        const allowed = ['repositoryId', 'source', 'path', source === 'remote' ? 'commitId' : 'taskId'];
+        if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error('打开文件仅接受仓库、任务或提交、字面文件路径。');
+        const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
+        if (!repository.available) throw new Error('该账号目前无法访问这个仓库。');
+        const account = this.state.accounts.find(item => item.account.id === repository.accountId)?.account;
+        if (!account) throw new Error('访问账号已移除。');
+        if (typeof value.path !== 'string') throw new Error('无效的仓库文件路径。');
+        let target: string;
+        if (source === 'remote') {
+          const url = repositoryFileURL(account, repository, field(value, 'commitId', 64), value.path);
+          if (!url) throw new Error('无效的远端文件身份。');
+          target = url;
+        } else {
+          const link = this.state.links.find(item => item.repositoryId === id);
+          const root = await this.linkedPath(id);
+          target = await repositoryTaskFile(root, field(value, 'taskId'), value.path);
+          if (this.state.links.find(item => item.repositoryId === id)?.path !== link?.path || !this.state.accounts.some(item => item.account.id === account.id) || !this.repository(id).available || this.repository(id).fullName !== repository.fullName) throw new Error('仓库关联或访问账号已更新，请重试。');
+        }
+        signal?.throwIfAborted();
+        await this.openFile({ source, value: target });
+        return { opened: true };
+      }
       case 'diff': {
         const id = field(value, 'repositoryId', 160); const file = field(value, 'path'); const snapshot = await this.snapshot(id);
         const changed = snapshot.files.find(f => f.path === file);

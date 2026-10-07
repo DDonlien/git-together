@@ -75,29 +75,3 @@ export function buildFileTree(paths: string[]): FileTreeNode[] {
   sort(root.children);
   return root.children;
 }
-
-export type GraphEdge = { from: number; to: number; node: boolean };
-export type GraphRow = { commit: RepositoryCommit; lane: number; edges: GraphEdge[]; width: number };
-// Git supplies topological order. Only actual parent IDs create edges, never
-// neighboring rows or descending timestamps.
-export function layoutCommitGraph(commits: RepositoryCommit[]): GraphRow[] {
-  let lanes: (string | null)[] = [];
-  return commits.map(commit => {
-    let lane = lanes.indexOf(commit.id);
-    if (lane < 0) { lane = lanes.indexOf(null); if (lane < 0) lane = lanes.length; lanes[lane] = commit.id; }
-    const before = [...lanes];
-    lanes[lane] = null;
-    commit.parents.forEach((parent, index) => {
-      if (lanes.includes(parent)) return;
-      let slot = index === 0 && lanes[lane] === null ? lane : lanes.indexOf(null);
-      if (slot < 0) slot = lanes.length;
-      lanes[slot] = parent;
-    });
-    const edges: GraphEdge[] = [];
-    before.forEach((id, from) => { if (id && id !== commit.id) edges.push({ from, to: lanes.indexOf(id), node: false }); });
-    commit.parents.forEach(parent => edges.push({ from: lane, to: lanes.indexOf(parent), node: true }));
-    const width = Math.max(before.length, lanes.length, 1);
-    while (lanes.length && lanes[lanes.length - 1] === null) lanes.pop();
-    return { commit, lane, edges, width };
-  });
-}

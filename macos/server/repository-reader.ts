@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { realpath } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
+import { isRepositoryFilePath } from '../src/repository-file-url';
 import type { LocalFile } from '../src/import-model';
 import type { RepositoryCommit, RepositoryTask, RepositoryWorkspace } from '../src/repository-model';
 
@@ -103,4 +105,22 @@ export async function readRepositoryTaskDiff(root: string, taskId: string, path:
     git(task.path, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '--', literalPath]),
   ]);
   return [staged && `# 已暂存\n${staged}`, working && `# 工作目录\n${working}`].filter(Boolean).join('\n') || '没有文本差异（可能是二进制文件、权限或重命名）。';
+}
+
+export async function repositoryTaskFile(root: string, taskId: string, path: string): Promise<string> {
+  if (!isRepositoryFilePath(path)) throw new Error('无效的仓库文件路径。');
+  const task = parseWorktrees(await git(root, ['worktree', 'list', '--porcelain', '-z'])).find(task => `worktree:${task.branch}:${task.path}` === taskId);
+  if (!task || task.bare || task.prunable) throw new Error('这个任务没有可打开的工作目录。');
+  await sameRepository(root, task.path);
+  // Literal enumeration includes tracked and non-ignored untracked files, but
+  // not arbitrary ignored files, Git metadata, directories or submodules.
+  const files = (await git(task.path, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', `:(literal)${path}`])).split('\0');
+  if (!files.includes(path)) throw new Error('文件不在这个任务的文件树中。');
+  const directory = await realpath(task.path);
+  let file: string;
+  try { file = await realpath(resolve(directory, path)); }
+  catch { throw new Error('文件已不存在或不可访问，请刷新文件树。'); }
+  if (!file.startsWith(`${directory}${sep}`)) throw new Error('不能打开指向工作目录外的文件。');
+  if (!(await stat(file)).isFile()) throw new Error('这里只能打开实际文件，不能打开目录或子模块。');
+  return file;
 }

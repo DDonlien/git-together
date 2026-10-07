@@ -5,7 +5,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RepositoryView } from '../src/RepositoryView';
 import { RepositoryGraph } from '../src/RepositoryGraph';
-import { buildFileTree, layoutCommitGraph, snapshotWorkspace, taskCommitHistory, type RepositoryCommit, type RepositoryWorkspace } from '../src/repository-model';
+import { buildFileTree, snapshotWorkspace, taskCommitHistory, type RepositoryCommit, type RepositoryWorkspace } from '../src/repository-model';
+import { layoutCommitGraph } from '../src/commit-graph';
 import { readRepositoryWorkspace, readRepositoryTaskDiff, parseWorktrees } from '../server/repository-reader';
 import { createRepositoryFixture } from './repository-fixture';
 import type { Account, RemoteRepository } from '../src/import-model';
@@ -22,13 +23,13 @@ test('commit graph starts with records without a header row and retains dynamic 
     assert.doesNotMatch(markup, /<thead|<th[ >]|作者 \/ 日期|>说明<|>图</);
     assert.match(markup, /<table class="repository-graph-table" aria-label="提交历史"><colgroup>/);
     assert.match(markup, new RegExp(`<col style="width:${lanes * 14 + 20}px"/>`));
-    assert.match(markup, /<col style="width:74px"\/><\/colgroup><tbody>/);
+    assert.match(markup, /<col style="width:66px"\/><\/colgroup><tbody>/);
     assert.equal((markup.match(/<tr[ >]/g) || []).length, commits.length);
     assert.equal((markup.match(/class="graph-node /g) || []).length, commits.length);
     assert.equal((markup.match(/aria-pressed="false"/g) || []).length, commits.length);
-    assert.match(markup, /class="commit-ref">origin\/main<\/span>/);
-    assert.match(markup, /<span title="QA">QA<\/span><time dateTime="2026-10-06T01:00:00Z"/);
-    for (const item of commits) assert.ok(markup.includes(`<strong>${item.summary}</strong><code>${item.id.slice(0, 8)}</code>`));
+    assert.match(markup, /class="commit-ref graph-color-0 graph-remote-ref"[^>]*title="origin\/main"/);
+    assert.match(markup, /class="repository-graph-byline" title="QA"><span>QA<\/span><time dateTime="2026-10-06T01:00:00Z"/);
+    for (const item of commits) { assert.ok(markup.includes(`<strong>${item.summary}</strong>`)); assert.ok(markup.includes(`<code>${item.id.slice(0, 8)}</code>`)); }
   }
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /\.repository-graph-table th/);
@@ -39,8 +40,8 @@ test('three persistent columns follow graph, changes/composer, tree after a span
   assert.equal((markup.match(/<h1>/g) || []).length, 1);
   const positions = ['aria-label="仓库信息"', 'aria-label="分支图"', 'aria-label="Diff 与提交"', 'aria-label="文件树"'].map(value => markup.indexOf(value));
   assert.ok(positions.every((position, index) => position >= 0 && (!index || position > positions[index - 1])));
-  assert.match(markup, /repository-commit-composer/);
-  assert.match(markup, /<button disabled=""[^>]*title="远端浏览不会修改仓库/);
+  assert.match(markup, /选择一个提交查看差异/);
+  assert.doesNotMatch(markup, /repository-commit-composer|<textarea|>Commit</);
   assert.doesNotMatch(markup, /readonly-tabs|topbar/);
   assert.match(markup, /<legend class="ogui-sr-only">文件树来源<\/legend>/);
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
@@ -60,12 +61,12 @@ test('overview shows the provider remote URL and access account without associat
   }
 });
 
-test('local file-tree configuration remains available even when remote access has been lost', () => {
+test('linked local file trees omit the removed bottom actions even when remote access has been lost', () => {
   const workspace: RepositoryWorkspace = { source: 'local', complete: true, tasks: [{ id: 'main', branch: 'main', head: 'a', path: '/qa/main', files: [], tree: ['README.md'], error: '' }], commits: [] };
   const markup = renderToStaticMarkup(createElement(RepositoryView, { repository: { ...repository, available: false }, account, localPath: '/qa/main', workspace, globalSearch: '', onConfigure: () => {} }));
   const tree = markup.split('aria-label="文件树"')[1];
-  assert.match(tree, /repository-tree-actions"><button(?![^>]*disabled)[^>]*>.*?配置本地目录/);
-  assert.equal((markup.match(/配置本地目录/g) || []).length, 1);
+  assert.match(tree, /aria-label="文件树：main"/);
+  assert.doesNotMatch(tree, /repository-tree-actions|配置本地目录/);
   assert.doesNotMatch(markup.split('aria-label="仓库信息"')[1].split('</section>')[0], /<button/);
 });
 
@@ -85,7 +86,7 @@ test('overview layout has two shrinking metadata columns and no stale path or id
   assert.doesNotMatch(css, /\.repository-overview-path|\.repository-overview dd small/);
 });
 
-test('all worktree and branch cards render simultaneously with independent draft labels', () => {
+test('all worktree cards stay mounted with independent drafts while only one change context is visible', () => {
   const workspace: RepositoryWorkspace = { complete: true, commits: [], tasks: [
     { id: 'a', branch: 'main', head: 'a', path: '/qa/main', files: [], tree: ['src/app.ts'], error: '' },
     { id: 'b', branch: 'task/search', head: 'b', path: '/qa/search', files: [], tree: ['docs/search.md'], error: '' },
@@ -98,7 +99,7 @@ test('all worktree and branch cards render simultaneously with independent draft
     assert.match(markup, new RegExp(`>提交说明：${branch}<`));
   }
   assert.equal((markup.match(/<textarea/g) || []).length, 3);
-  assert.equal((markup.match(/hidden=""/g) || []).length, 0);
+  assert.equal((markup.match(/repository-task-slot" hidden=""/g) || []).length, 2);
   assert.match(markup, /未检出 · 分支快照/);
   assert.doesNotMatch(markup, /完整目录等待服务更新/);
   const source = readFileSync(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
@@ -110,7 +111,9 @@ test('focused and single task panes constrain Diff content so the composer stays
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.repository-task-slot:only-child, \.repository-task-stack\.is-focused > \.repository-task-slot \{ flex: 1 1 0; \}/);
   assert.match(css, /\.repository-change-task \{[^}]*min-height: 0;/);
-  assert.match(css, /\.repository-task-body \{[^}]*min-height: 0;[^}]*overflow: auto;/);
+  assert.match(css, /\.repository-task-body \{[^}]*min-height: 0;[^}]*overflow: hidden;/);
+  assert.match(css, /\.repository-changed-files \{[^}]*min-height: 0;[^}]*overflow: auto;/);
+  assert.match(css, /\.repository-change-context > \.repository-task-slot \{ flex: 1 1 0; overflow: hidden; \}/);
   assert.match(css, /\.repository-commit-composer \{[^}]*flex-shrink: 0;/);
   assert.match(css, /\.repository-task-tree \{[^}]*min-height: 0;[^}]*overflow: auto;/);
 });

@@ -5,8 +5,14 @@ import { emptyCatalog } from '../src/import-model';
 
 // Isolated browser QA only: no user credentials or live account service calls.
 const held = new Map<string, (response: Response) => void>();
+let identityDone!: () => void, importDone!: () => void;
+const identityGate = new Promise<void>(resolve => { identityDone = resolve; });
+const importGate = new Promise<void>(resolve => { importDone = resolve; });
 const server = createGitHubOAuthServer({
-  verify: async () => {}, connect: async () => ({ ...emptyCatalog, instanceId: 'callback-browser-fixture' }),
+  verify: async () => {}, connect: async credential => {
+    await identityGate; credential.signal.throwIfAborted(); credential.commit();
+    await importGate; return { ...emptyCatalog, instanceId: 'callback-browser-fixture' };
+  },
   request: async (url, init) => {
     if (url !== 'https://github.com/login/oauth/access_token') throw new Error('Unexpected fixture endpoint');
     const code = new URLSearchParams(String(init?.body)).get('code')!;
@@ -26,7 +32,12 @@ for (const result of ['success', 'failure']) {
 }
 const commands = createInterface({ input: process.stdin });
 commands.on('line', line => {
-  if (line === 'success') held.get('fixture-success')?.(Response.json({ access_token: 'ghu_fixture_browser', token_type: 'bearer' }));
+  if (line === 'exchange' || line === 'success') {
+    held.get('fixture-success')?.(Response.json({ access_token: 'ghu_fixture_browser', token_type: 'bearer' }));
+    if (line === 'success') { identityDone(); importDone(); }
+  }
+  else if (line === 'identity') identityDone();
+  else if (line === 'import') importDone();
   else if (line === 'failure') held.get('fixture-failure')?.(Response.json({ error: 'incorrect_client_credentials' }));
   else if (line === 'quit') commands.close();
 });

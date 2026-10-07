@@ -4,12 +4,14 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { request as httpRequest } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { setTimeout as pause } from 'node:timers/promises';
 import { GitHubWebAuthorization, type WebCredential } from '../server/github-web-authorization';
 import { createGitHubOAuthServer, previewConnector, previewOrigin } from '../server/github-oauth-dev-server';
 import { AccountService, type SavedState } from '../server/account-service';
 import { emptyCatalog, isCatalog, type Catalog } from '../src/import-model';
 import { githubDevClientId, githubOAuthCallback, githubOAuthOrigin, isGitHubAuthorizationURL, isGitHubWebSession } from '../src/github-web-model';
 import { cancelGitHubWebAuthorization, navigateGitHubWebWindow, pollGitHubWebAuthorization, reserveGitHubWebWindow, startGitHubWebAuthorization, waitForGitHubWebAuthorization } from '../src/github-web-api';
+import pkg from '../package.json';
 
 test('renderer CSP permits only the exact local authorization API alongside existing connections', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -40,6 +42,15 @@ function fixture(connect?: (credential: WebCredential) => Promise<Catalog>) {
   return { flow, calls, imports, advance: (ms: number) => { time += ms; }, body: (value: unknown) => { body = value; }, response: (value: Promise<Response>) => { response = value; } };
 }
 const callbackFor = (session: ReturnType<GitHubWebAuthorization['start']>, code = 'fixture-code') => new URLSearchParams({ state: new URL(session.authorizationURL).searchParams.get('state')!, code });
+const callbackStatus = async (origin: string, sessionId: string) => (await fetch(`${origin}/api/callback-status`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify({ sessionId }) })).json();
+async function callbackResult(origin: string, sessionId: string) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const result = await callbackStatus(origin, sessionId);
+    if (!result.ok || result.value.status !== 'pending') return result;
+    await pause(10);
+  }
+  throw new Error('Fixture callback did not complete');
+}
 
 test('browser flow uses our own public identity, one-time state, PKCE and a registered fixed callback', async () => {
   const f = fixture(); const session = f.flow.start(' Personal '); const url = new URL(session.authorizationURL);
@@ -145,7 +156,7 @@ test('local bootstrap rejects foreign origins, unconfirmed rotation and wrong ke
   assert.equal((await configure()).status, 200); assert.doesNotMatch(await (await fetch(`${origin}/setup`)).text(), /fixture-only/);
   const post = (path: string, source = previewOrigin) => fetch(`${origin}/api/${path}`, { method: 'POST', headers: { Origin: source, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}' });
   const foreign = await post('start', 'https://foreign.test'); assert.equal(foreign.status, 403); assert.equal(foreign.headers.get('access-control-allow-origin'), null); assert.equal(verifications, 0);
-  const status = await post('status'); assert.deepEqual(await status.json(), { ok: true, value: { configured: true } });
+  const status = await post('status'); assert.deepEqual(await status.json(), { ok: true, value: { configured: true, version: pkg.version, clientId: githubDevClientId } });
   const start = await post('start'); assert.equal(start.headers.get('access-control-allow-origin'), previewOrigin); const envelope = await start.json(); assert.ok(isGitHubWebSession(envelope.value)); assert.equal(verifications, 1);
   const preflight = await fetch(`${origin}/api/poll`, { method: 'OPTIONS', headers: { Origin: previewOrigin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type,x-gittogether-client' } }); assert.equal(preflight.status, 204);
   // Node fetch normalizes Host; use HTTP's public request API to send the actual
@@ -156,7 +167,7 @@ test('local bootstrap rejects foreign origins, unconfirmed rotation and wrong ke
   const invalid = await fetch(`${origin}/api/start`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{bad fixture-only-client-secret' }); assert.equal(invalid.status, 400); assert.doesNotMatch(await invalid.text(), /fixture-only/);
   const callback = await fetch(`${origin}/oauth/github/callback?state=foreign&code=fixture-private-code&error_description=fixture-only-client-secret`); assert.equal(callback.status, 400); assert.doesNotMatch(await callback.text(), /fixture-private-code|fixture-only/);
 });
-test('valid callbacks stream a nonce-protected progress page before exchange, then complete or fail safely', async t => {
+test('valid callbacks finish the entire nonce-protected document before exchange completes, then expose only safe status', async t => {
   for (const succeeds of [true, false]) {
     const held = deferred<Response>(); let imports = 0;
     const server = createGitHubOAuthServer({ connect: async () => { imports++; return fixtureCatalog; }, verify: async () => {}, request: async () => held.promise });
@@ -167,19 +178,22 @@ test('valid callbacks stream a nonce-protected progress page before exchange, th
     await fetch(`${origin}/api/config`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-GitTogether-Setup': key }, body: JSON.stringify({ secret: fixtureSecret, rotated: true }) });
     const start = await fetch(`${origin}/api/start`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}' });
     const { value: session } = await start.json(); assert.ok(isGitHubWebSession(session));
-    // If HTML is held behind the exchange this times out, instead of hanging the test.
+    // The whole response (not only its first chunk) must finish while exchange
+    // is held. This fails against the old streaming callback implementation.
     const response = await fetch(`${origin}/oauth/github/callback?${callbackFor(session)}`, { signal: AbortSignal.timeout(2000) });
     assert.equal(response.status, 200); assert.equal(imports, 0);
-    const reader = response.body!.getReader(); const initial = await reader.read(); const progress = new TextDecoder().decode(initial.value);
+    const progress = await response.text();
     assert.match(progress, /正在完成 GitHub 授权/); assert.match(progress, /role="status"/); assert.match(progress, /history.replaceState/);
+    assert.match(progress, /<head>/); assert.match(progress, /<body>/); assert.match(progress, /<\/body><\/html>$/);
     assert.doesNotMatch(progress, /fixture-code|fixture-only-client-secret|ghu_fixture/);
     const nonce = response.headers.get('content-security-policy')!.match(/script-src 'nonce-([^']+)'/)![1];
     assert.match(progress, new RegExp(`<script nonce="${nonce.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`));
+    assert.deepEqual(await callbackStatus(origin, session.id), { ok: true, value: { status: 'pending', phase: 'exchanging' } });
     held.resolve(Response.json(succeeds ? grant : { error: 'incorrect_client_credentials', error_description: fixtureSecret }));
-    let ending = ''; while (true) { const part = await reader.read(); if (part.done) break; ending += new TextDecoder().decode(part.value); }
-    assert.match(ending, succeeds ? /data-status.*complete/ : /data-status.*failed/);
-    assert.match(ending, succeeds ? /window.close\(\)/ : /应用客户端密钥无效/);
-    assert.doesNotMatch(ending, /fixture-code|fixture-only-client-secret|ghu_fixture/);
+    const result = await callbackResult(origin, session.id);
+    if (succeeds) assert.deepEqual(result, { ok: true, value: { status: 'complete' } });
+    else { assert.equal(result.ok, false); assert.match(result.error, /应用客户端密钥无效/); }
+    assert.doesNotMatch(JSON.stringify(result), /fixture-code|fixture-only-client-secret|ghu_fixture|catalog|instanceId/);
     assert.equal(imports, succeeds ? 1 : 0);
   }
 });
@@ -189,7 +203,8 @@ test('callback progress is only accepted after state, denial and code validation
   const session = f.flow.start(''); const params = callbackFor(session); params.set('error', 'access_denied');
   await assert.rejects(f.flow.callback(params, () => { accepted++; }));
   assert.equal(accepted, 0); assert.equal(f.calls.length, 0);
-  await f.flow.callback(callbackFor(f.flow.start('')), () => { accepted++; assert.equal(f.calls.length, 0); });
+  const next = f.flow.start('');
+  await f.flow.callback(callbackFor(next), sessionId => { accepted++; assert.equal(sessionId, next.id); assert.equal(f.calls.length, 0); });
   assert.equal(accepted, 1);
 });
 test('preview bridge keeps remote identity and protected loopback requests on separate transports', async () => {
@@ -277,7 +292,7 @@ test('browser waiting UI stays token-free and the helper is isolated from the ma
   assert.match(helper, /app.getPath\('appData'\), 'GitTogether Authorization', 'github-oauth-v1.encrypted'/);
   assert.match(helper, /configuration.load\(\)/); assert.match(helper, /save: configuration.save/);
   assert.match(helper, /bind: async \(\) => previewConnector\(await readPreviewStatus\(localRequest\)/);
-  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8'); assert.match(main, /new AccountService\(encryptedStore\([^\n]+systemFetch\)/);
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8'); assert.match(main, /new AccountService\(encryptedStore\([^\n]+systemFetch(?:\)|,\s*\{)/);
 });
 
 test('persistent configuration publishes only after saving, rejects concurrent changes and never exposes storage errors', async () => {
@@ -325,6 +340,7 @@ test('configuration HTTP save is awaited, failure keeps the previous secret, and
   const start = await fetch(`${nextOrigin}/api/start`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}' });
   const { value: session } = await start.json(); assert.ok(isGitHubWebSession(session));
   assert.equal((await fetch(`${nextOrigin}/oauth/github/callback?${callbackFor(session)}`)).status, 200); assert.equal(providerSecret, fixtureSecret);
+  assert.deepEqual(await callbackResult(nextOrigin, session.id), { ok: true, value: { status: 'complete' } });
 });
 
 test('new HTTP authorizations bind the current main instance while earlier callbacks remain pinned across restart', async t => {
@@ -349,10 +365,99 @@ test('new HTTP authorizations bind the current main instance while earlier callb
   };
   const old = await begin(); instanceId = 'fixture-after-restart'; const current = await begin();
   const oldResponse = await fetch(`${origin}/oauth/github/callback?${callbackFor(old)}`); const oldResult = await oldResponse.text();
-  assert.match(oldResult, /重新开始授权/); assert.doesNotMatch(oldResult, /重新启动本机网页授权服务|fixture-only|ghu_/); assert.equal(imports, 0);
-  const currentResult = await (await fetch(`${origin}/oauth/github/callback?${callbackFor(current)}`)).text();
-  assert.match(currentResult, /data-status.*complete/); assert.equal(imports, 1);
+  assert.match(oldResult, /正在完成 GitHub 授权/);
+  const oldStatus = await callbackResult(origin, old.id);
+  assert.match(oldStatus.error, /重新开始授权/); assert.doesNotMatch(JSON.stringify(oldStatus), /重新启动本机网页授权服务|fixture-only|ghu_/); assert.equal(imports, 0);
+  await (await fetch(`${origin}/oauth/github/callback?${callbackFor(current)}`)).text();
+  assert.deepEqual(await callbackResult(origin, current.id), { ok: true, value: { status: 'complete' } }); assert.equal(imports, 1);
   const racing = await begin(); restartDuringLookup = true;
-  const racingResult = await (await fetch(`${origin}/oauth/github/callback?${callbackFor(racing)}`)).text();
-  assert.match(racingResult, /重新开始授权/); assert.equal(imports, 1);
+  await (await fetch(`${origin}/oauth/github/callback?${callbackFor(racing)}`)).text();
+  assert.match((await callbackResult(origin, racing.id)).error, /重新开始授权/); assert.equal(imports, 1);
+});
+
+test('callback status rejects foreign/main origins, missing headers, spoofed hosts and GET without exposing a catalog', async t => {
+  const server = createGitHubOAuthServer({ connect: async () => fixtureCatalog, verify: async () => {}, configuration: { secret: fixtureSecret, save: async () => {} }, request: async () => Response.json(grant) });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => { server.closeAllConnections(); server.close(); });
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const origin = `http://127.0.0.1:${address.port}`;
+  const { value: session } = await (await fetch(`${origin}/api/start`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}' })).json();
+  await (await fetch(`${origin}/oauth/github/callback?${callbackFor(session)}`)).text();
+  assert.deepEqual(await callbackResult(origin, session.id), { ok: true, value: { status: 'complete' } });
+  for (const source of [undefined, 'https://foreign.test', previewOrigin]) {
+    const response = await fetch(`${origin}/api/callback-status`, { method: 'POST', headers: { ...(source ? { Origin: source } : {}), 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify({ sessionId: session.id }) });
+    assert.equal(response.status, 403); assert.equal(response.headers.get('access-control-allow-origin'), null);
+    assert.doesNotMatch(await response.text(), /fixture-only|ghu_|catalog|instanceId/);
+  }
+  const missing = await fetch(`${origin}/api/callback-status`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.id }) });
+  assert.equal(missing.status, 403);
+  const crossSite = await fetch(`${origin}/api/callback-status`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', 'Sec-Fetch-Site': 'cross-site' }, body: JSON.stringify({ sessionId: session.id }) });
+  assert.equal(crossSite.status, 403);
+  assert.equal((await fetch(`${origin}/api/callback-status`)).status, 405);
+  assert.equal((await fetch(`${origin}/api/callback-status`, { method: 'OPTIONS', headers: { Origin: 'https://foreign.test' } })).status, 405);
+  const forged = await new Promise<number>(resolve => { const request = httpRequest(`${origin}/api/callback-status`, { headers: { Host: 'foreign.test' } }, response => { response.resume(); resolve(response.statusCode!); }); request.end(); });
+  assert.equal(forged, 403);
+  assert.equal((await callbackStatus(origin, 'invalid')).ok, false);
+  assert.equal((await callbackStatus(origin, '00000000-0000-0000-0000-000000000000')).ok, false);
+});
+
+test('completed callback documents keep waiting and show safe cancellation, denial, expiry and duplicate outcomes', async t => {
+  let time = 1800000000000; let requests = 0;
+  const held = deferred<Response>();
+  const server = createGitHubOAuthServer({ connect: async () => fixtureCatalog, verify: async () => {}, configuration: { secret: fixtureSecret, save: async () => {} }, request: async () => { requests++; return held.promise; }, now: () => time });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => { server.closeAllConnections(); server.close(); });
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const origin = `http://127.0.0.1:${address.port}`;
+  const post = async (method: string, input: unknown = {}) => (await fetch(`${origin}/api/${method}`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input) })).json();
+  const { value: session } = await post('start');
+  const html = await (await fetch(`${origin}/oauth/github/callback?${callbackFor(session)}`, { signal: AbortSignal.timeout(2000) })).text();
+  assert.match(html, /<\/html>$/); assert.deepEqual(await callbackStatus(origin, session.id), { ok: true, value: { status: 'pending', phase: 'exchanging' } });
+  const duplicate = await fetch(`${origin}/oauth/github/callback?${callbackFor(session)}`);
+  assert.equal(duplicate.status, 400); assert.match(await duplicate.text(), /已处理/); assert.equal(requests, 1);
+  await post('cancel', { sessionId: session.id }); held.resolve(Response.json(grant));
+  assert.match((await callbackStatus(origin, session.id)).error, /失效/);
+  const { value: denied } = await post('start');
+  const parameters = callbackFor(denied); parameters.set('error', 'access_denied');
+  const refusal = await fetch(`${origin}/oauth/github/callback?${parameters}`);
+  assert.equal(refusal.status, 400); assert.match(await refusal.text(), /取消了授权/); assert.equal(requests, 1);
+  const { value: expired } = await post('start'); time += 600001;
+  assert.match((await callbackStatus(origin, expired.id)).error, /过期/);
+});
+
+test('callback diagnostics contain only finite stages and an observer cannot break the login result', async t => {
+  const observed: unknown[][] = [];
+  const server = createGitHubOAuthServer({ connect: async () => fixtureCatalog, verify: async () => {}, configuration: { secret: fixtureSecret, save: async () => {} }, request: async () => Response.json(grant), onCallback: (...args) => { observed.push(args); throw new Error('Fixture diagnostic failure'); } });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => { server.closeAllConnections(); server.close(); });
+  const address = server.address(); assert.ok(address && typeof address === 'object'); const origin = `http://127.0.0.1:${address.port}`;
+  await (await fetch(`${origin}/oauth/github/callback?state=foreign&code=fixture-private-code`)).text();
+  assert.deepEqual(observed, [['received'], ['rejected']]);
+  observed.length = 0;
+  const { value: session } = await (await fetch(`${origin}/api/start`, { method: 'POST', headers: { Origin: previewOrigin, 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}' })).json();
+  await (await fetch(`${origin}/oauth/github/callback?${callbackFor(session)}`)).text();
+  assert.deepEqual(await callbackResult(origin, session.id), { ok: true, value: { status: 'complete' } });
+  assert.deepEqual(observed, [['received'], ['accepted'], ['complete']]);
+  assert.doesNotMatch(JSON.stringify(observed), /fixture-|ghu_|session|code|token/);
+});
+
+test('callback phases follow actual token, identity and import work, never elapsed time or directory data', async () => {
+  const identityEntered = deferred<void>(), identity = deferred<Response>();
+  const importEntered = deferred<void>(), imported = deferred<Response>();
+  const remote: typeof fetch = async url => { assert.equal(String(url), 'https://api.github.com/user'); identityEntered.resolve(); return identity.promise; };
+  const local: typeof fetch = async url => {
+    if (String(url).endsWith('/status')) return Response.json({ ok: true, value: { instanceId: fixtureCatalog.instanceId, version: 'fixture-version' } });
+    if (String(url).endsWith('/catalog')) return Response.json({ ok: true, value: fixtureCatalog });
+    assert.equal(String(url), `${previewOrigin}/api/import/connect`); importEntered.resolve(); return imported.promise;
+  };
+  const bridge = previewConnector({ instanceId: fixtureCatalog.instanceId, version: 'fixture-version' }, remote, local);
+  const f = fixture(bridge.connect), exchanged = deferred<Response>(); f.response(exchanged.promise);
+  const session = f.flow.start('Fixture');
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'pending', phase: 'waiting' });
+  const callback = f.flow.callback(callbackFor(session));
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'pending', phase: 'exchanging' });
+  f.advance(30_000);
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'pending', phase: 'exchanging' });
+  exchanged.resolve(Response.json(grant)); await identityEntered.promise;
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'pending', phase: 'verifying' });
+  identity.resolve(Response.json({ login: 'Fixture' })); await importEntered.promise;
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'pending', phase: 'importing' });
+  imported.resolve(Response.json({ ok: true, value: fixtureCatalog })); await callback;
+  assert.deepEqual(f.flow.callbackProgress(session.id), { status: 'complete' });
+  assert.doesNotMatch(JSON.stringify(f.flow.callbackProgress(session.id)), /catalog|accounts|token|Fixture|ghu_|ghr_/);
 });

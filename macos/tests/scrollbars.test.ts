@@ -24,7 +24,6 @@ test('app scroll containers retain their native scrolling behavior', () => {
     ['repository-workspace-view', 'overflow'],
     ['repository-columns-scroll', 'overflow-x'],
     ['repository-task-stack', 'overflow'],
-    ['repository-task-body', 'overflow'],
     ['repository-changed-files', 'overflow'],
     ['repository-graph-scroll', 'overflow'],
     ['repository-task-tree', 'overflow'],
@@ -33,5 +32,7 @@ test('app scroll containers retain their native scrolling behavior', () => {
     assert.match(css, new RegExp(`\\.${className}\\s*\\{[^}]*${property}:\\s*auto`), className);
   }
   assert.match(css, /\.repository-inline-diff pre\s*\{[^}]*overflow:\s*auto/);
+  assert.match(css, /\.repository-task-body \{[^}]*overflow: hidden;/);
+  assert.match(css, /\.repository-change-context \{ overflow: hidden; \}/);
   assert.match(css, /button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible\s*\{\s*outline: 2px solid var\(--blue\)/);
 });

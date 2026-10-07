@@ -41,18 +41,20 @@ test('production workspaces expose three distinct disclosure targets with all ta
   assert.equal((markup.match(/<textarea/g) || []).length, 3);
   assert.equal((markup.match(/aria-label="文件树：/g) || []).length, 3);
   assert.match(markup, /<legend class="ogui-sr-only">文件树来源<\/legend>/);
-  assert.doesNotMatch(markup, /hidden=""/);
+  assert.equal((markup.match(/repository-task-slot" hidden=""/g) || []).length, 2);
 });
 
 test('each heading owns functional disclosure state without effects, service calls or conditional task rendering', () => {
   const heading = readFileSync(new URL('../src/RepositoryColumnHeading.tsx', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
+  const graph = readFileSync(new URL('../src/RepositoryGraph.tsx', import.meta.url), 'utf8');
+  const changes = readFileSync(new URL('../src/RepositoryChangesColumn.tsx', import.meta.url), 'utf8');
   assert.match(heading, /const \[collapsed, setCollapsed\] = useState\(false\)/);
   assert.match(heading, /onClick=\{\(\) => setCollapsed\(value => !value\)\}/);
   assert.match(heading, /aria-expanded=\{!collapsed\} aria-controls=\{controls\}/);
   assert.match(heading, /collapsed \? '展开' : '收起'/);
   assert.doesNotMatch(heading, /useEffect|importAPI|localStorage|children.*collapsed/);
-  assert.equal((view.match(/<RepositoryColumnHeading /g) || []).length, 3);
+  assert.equal((`${view}\n${graph}\n${changes}`.match(/<RepositoryColumnHeading /g) || []).length, 3);
   assert.doesNotMatch(view, /setCollapsed|collapsed &&|!collapsed &&|@refresh reset/);
   assert.match(view, /key=\{task.id\}[^>]*hidden=/);
 });
@@ -67,6 +69,6 @@ test('independent grid minima release width for every disclosure combination and
   assert.match(css, /grid-template-columns: var\(--graph-width\) var\(--changes-width\) var\(--tree-width\)/);
   assert.match(css, /\.repository-column:has\(> \.repository-column-heading.is-collapsed\) > :not\(\.repository-column-heading\) \{ display: none; \}/);
   assert.match(css, /\.repository-column-heading.is-collapsed > h2 \{[^}]*writing-mode: vertical-rl;/);
-  assert.match(css, /\.repository-column-heading \{ min-height: 44px; padding: 7px 10px;/);
+  assert.match(css, /\.repository-column-heading \{ min-height: 44px; padding: 7px var\(--repository-column-inset\);/);
   assert.doesNotMatch(css, /\.repository-column-disclosure[^}]*display: none/);
 });

@@ -49,6 +49,8 @@ export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs
     if (!isRecord(value) || typeof value.path !== 'string' || typeof value.branch !== 'string' || !Array.isArray(value.files) || !value.files.every(f => isRecord(f) && typeof f.path === 'string' && typeof f.status === 'string' && typeof f.tracked === 'boolean') || !Array.isArray(value.commits) || !value.commits.every(c => isRecord(c) && ['id', 'summary', 'author', 'time'].every(k => typeof c[k] === 'string'))) throw new Error('本地仓库返回格式无效。');
   } else if (method === 'diff') {
     if (!isRecord(value) || typeof value.text !== 'string') throw new Error('Diff 返回格式无效。');
+  } else if (method === 'openFile') {
+    if (!isRecord(value) || value.opened !== true) throw new Error('文件打开结果无效。');
   } else if (method === 'remoteWorkspace') {
     if (!isRemoteWorkspace(value)) throw new Error('远端工作台返回格式无效。');
   } else if (method === 'remoteCommit') {

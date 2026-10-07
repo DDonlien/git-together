@@ -1,6 +1,8 @@
 # 本地开发
 
-客户端位于 `macos/`。`npm run dev -- --port 4173 --strictPort` 启动 Vite 浏览器预览，`npm run desktop` 打开同一界面的 Electron macOS 窗口。先启动 Vite 再启动 Electron；开发窗口只加载 localhost。
+客户端位于 `macos/`。`npm run dev` 是统一开发入口：固定在 `127.0.0.1:4173` 启动页面和账号服务，并检查、复用或启动 `127.0.0.1:4174` 的 GitHub 授权助手。兼容 `npm run dev -- --port 4173 --strictPort`，但不改到其他端口或局域网地址。`npm run desktop` 仍打开同一界面的 Electron macOS 窗口；先启动开发入口再打开桌面窗口。
+
+0.7.1 起启动入口校验主服务版本/实例、助手版本/公开应用身份和配置状态；未知端口占用、状态超时、不匹配或助手退出明确失败，不覆盖未知进程、不把只有页面在线说成全部就绪。已有加密应用配置自动读回，不再要求重复注册 GitHub App 或填写密钥/回调。退出会关闭本入口新建的页面及助手；健康复用的外部助手不归本入口停止。没有安装系统自启动。账号登录/同意仍由用户完成，浏览器账号会话重启后需正常重连；应用开发配置与个人账号是两回事。
 
 ## 独立 macOS 本地包
 
@@ -42,9 +44,15 @@ Apple Silicon macOS 在 `macos/` 运行 `npx tsx scripts/package-desktop.ts`。�
 
 自有 GitHub App `GitTogether-DDonlien-Dev` 已注册，公开 Client ID 已配置在开发入口，不使用其他产品的应用身份。浏览器按 [GitHub 官方网页流程](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-web-application-flow-to-generate-a-user-access-token) 打开登录/同意并返回本机；随机 state、S256 PKCE 和服务端客户端密钥共同保护交换过程。此处是开发者的一次性准备，普通用户不需要创建 GitHub App。
 
-保持 4173 预览在线，在 macos 中运行 `./node_modules/.bin/tsx server/github-oauth-dev.ts`；本轮已启动，无需用户再启动。开发配置页是 `http://127.0.0.1:4174/setup`。在 GitHub 应用后台把 Callback URL 保存为 `http://127.0.0.1:4174/oauth/github/callback`，权限维持当前只读范围。若密钥已贴入聊天或日志，先在 GitHub 撤销旧密钥、生成替代密钥；直接在本机密码字段输入并提交，不发给 agent 或聊天。密钥由系统安全存储加密保存，授权助手重启会自动恢复，不写 .env 文件、网页存储、源码或安装包。macOS 配置文件位于 `~/Library/Application Support/GitTogether Authorization/github-oauth-v1.encrypted`，与桌面账号及临时 Chromium 数据分开；加密不可用或原配置损坏时拒绝使用/覆盖，不降级到明文。旧版仅有内存配置，升级首次需用户直接重新输入一次；不支持提取旧进程密钥迁移。
+使用上面的 `npm run dev` 即可，授权助手随入口检查并恢复；单独的 `tsx server/github-oauth-dev.ts` 只保留为开发诊断入口，不是普通用户操作。开发配置页 `http://127.0.0.1:4174/setup` 只用于开发者首次配置或密钥需要更新时。自有应用已配置固定 Callback URL `http://127.0.0.1:4174/oauth/github/callback`，权限维持当前只读范围；已有配置可用时不要重复配置。若密钥已贴入聊天或日志，应在 GitHub 撤销旧密钥、生成替代密钥；直接在本机密码字段输入并提交，不发给 agent 或聊天。密钥由系统安全存储加密保存，授权助手重启会自动恢复，不写 .env 文件、网页存储、源码或安装包。macOS 配置文件位于 `~/Library/Application Support/GitTogether Authorization/github-oauth-v1.encrypted`，与桌面账号及临时 Chromium 数据分开；加密不可用或原配置损坏时拒绝使用/覆盖，不降级到明文。旧版仅有内存配置，没有安全导出/迁移接口；本机目前已有安全保存的配置，恢复不需要再次填写。
 
 配置完成后返回 GitTogether 设置，点击「通过 GitHub 网页授权」，在官方页面自行登录/同意。回调服务端交换令牌后通过已有账号 API 添加/更新身份；窗口关闭、账号列表和 Dashboard 自动更新。同一身份复用 0.4.0 的编辑接口，ID 与本地关联保留；不同身份独立添加。访问范围仍由 GitHub App 权限、用户同意及个人/组织安装范围共同决定，不能把能登录当作私有仓库已获准访问。
+
+0.7.1 回调页面先返回结束的完整 HTML，不把网页导航绑定在整个网络交换/账号导入的长响应上。后台仍只接受一次有效 state/code；页面清理 URL 参数，再通过同源、专用头和 JSON 保护的最小状态接口查看结果，不拿账号目录或令牌。成功自动关闭，不允许关闭时保留结果与返回按钮；失败、过期、取消或连接中断显示可读提示。诊断只输出收到/接受/完成/拒绝/失败五种阶段，不记录回调网址、参数或身份。隔离回归/页面检查不替代用户这一次真实同意与仓库导入。
+
+0.7.2回调页增加实际阶段、等待动画、秒数及最近状态更新时间；15秒仍在同一阶段时显示慢提示。动画不代表网络已成功，最近状态更新只表示本机接口返回了当前状态；读取中断时明确“结果尚未确认”，返回应用查看，而非再次提交回调。减少动态效果关闭旋转，结果呈现停止轮询和计时。此页由授权助手提供，需要按统一入口恢复新版助手；当前统一入口协调退出会一并关闭主预览，因此必要更新后的浏览器账号需正常重连，加密GitHub App配置自动恢复。
+
+2026-10-07 0.7.2交付检查：完整脚本/HTTP回归、隔离浏览器阶段/慢提示/成功/失败/中断、亮暗色/减少动态效果及窄窗口检查已通过，全套276/276、strict、4/4静态包装与构建通过。默认入口保持运行，主服务与助手均0.7.2，受保护API HTTP200、configured=true；加密配置原文件0600/115bytes保留，未重填或修改密钥。必要重启前为1账号/38仓库，重启后为0账号/0仓库/0关联，Taobe正常授权表单已恢复。真实新popup与重连仍待用户确认，不据此声称账号已自动恢复、原生包更新或生产发布。
 
 本机开发服务不会重启主账号服务。每次新授权绑定当时的主实例，主服务重启后可直接开始新授权，不需要同时重启授权助手；进行中的旧回调仍会要求重新开始，不能自动重放到新实例。它不是已部署的生产授权服务，原生 Electron 的正常浏览器返回仍未接入，不得把客户端密钥打包进去。refresh token 不留存、自动续期未实现；当前通用账号接口不保存网页 OAuth 的有效期元数据，过期通过读取失败提示重新授权。2026-10-06 用户已自行启用本机配置并表示保存回调，configured=true 已读回；这不等于密钥有效性、GitHub 同意或仓库导入已验收，密钥轮换也未完成。普通用户只授权共享的应用，正式对外使用的应用发布与安全授权接入仍待完成，不要求用户各自注册或输入应用密钥。
 
@@ -52,7 +60,7 @@ Apple Silicon macOS 在 `macos/` 运行 `npx tsx scripts/package-desktop.ts`。�
 
 2026-10-07 网络/黑屏修复：启动命令不变，现在使用专属临时目录编译/启动无窗口 Electron 授权进程，不启动第二份主账号服务。GitHub 的交换与身份读取遵循 Chromium 的系统代理/PAC/直连；本机 4173 桥接强制直连。没有硬编码 VPN 端口，不改系统代理或 TLS，不把代理故障隐藏为直连。有效回调立即显示进度并移除 code/state，随后原位更新成功/失败。只重启获准的 4174，4173 原实例及 Gitea 账号保留；用户随后自行在本机密码字段重新配置，configured=true 已读回，从真实应用入口授权并完成 GitHub Continue/同意。用户确认成功，实际读回 GitHub1/Gitea1账号、38+20仓库、0关联；页面已返回并显示新账号仓库。原安装包尚未更新，4173 Node 仓库读取的网络路径仍未替换；生产授权、其他网络环境全流程与完整私有/组织范围仍未验收。
 
-网络测试 `tests/system-network.test.ts` 会在自动清理的临时目录启动隔离 Electron，测试自己的 HTTP/PAC/代理/TLS 服务，不修改系统代理、不关闭用户 VPN。`tests/system-network-fixture.ts` 的 `--live-connectivity` 是额外的无凭据公共端点检查，不进入运行入口，也不作为真实 OAuth。回调浏览器 QA 在交互终端运行 `./node_modules/.bin/tsx tests/github-callback-preview.ts`，输出独立回调网址；输入 `success` / `failure` 结束对应测试等待，`quit` 清理。仅使用虚构凭据与空目录 DTO，不连接实际账号服务，不留测试 API 在生产中。
+网络测试 `tests/system-network.test.ts` 会在自动清理的临时目录启动隔离 Electron，测试自己的 HTTP/PAC/代理/TLS 服务，不修改系统代理、不关闭用户 VPN。`tests/system-network-fixture.ts` 的 `--live-connectivity` 是额外的无凭据公共端点检查，不进入运行入口，也不作为真实 OAuth。回调浏览器 QA 在交互终端运行 `./node_modules/.bin/tsx tests/github-callback-preview.ts`，输出独立回调网址；输入 `exchange` / `identity` / `import` 逐步释放真实测试操作，或 `success` / `failure` 结束对应测试等待，`quit` 清理。仅使用虚构凭据与空目录 DTO，不连接实际账号服务，不留测试 API 在生产中。
 
 随后状态（2026-10-07 00:42–00:47）：主预览4173不再监听，PID75051已退出，授权辅助服务4174仍在线。只读核对「sol_app」任务确认用户另行允许远端内容接入并重启，该任务实际停止了上述主进程且仍在实现/验证。授权修复任务没有再次启动主服务；上面的2账号/58仓库是停止前的成功证据，不能称为当前在线会话。独立任务完成后需要按新实例重新连接账号，授权助手仍会校验主服务实例变化，不能重放旧回调。
 

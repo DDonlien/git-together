@@ -8,7 +8,7 @@ export type RemoteCommitState = { id: string; details: RemoteCommitDetails | nul
 export function useRemoteCommits(tasks: RepositoryTask[], focus: string | null, selected: Record<string, string>, read?: ReadRemoteCommit) {
   const [states, setStates] = useState<Record<string, RemoteCommitState>>({});
   const cache = useRef(new Map<string, RemoteCommitDetails>());
-  const resources = read ? tasks.filter(task => task.remote && task.head && (!focus || focus === task.id)).map(task => JSON.stringify([task.id, selected[task.id] || task.head])) : [];
+  const resources = read ? tasks.filter(task => task.remote && selected[task.id] && (!focus || focus === task.id)).map(task => JSON.stringify([task.id, selected[task.id]])) : [];
   useAutoRefresh({ resources, intervalMs: syncIntervals.remote,
     run: async (resource, signal) => {
       const [taskId, commitId] = JSON.parse(resource) as [string, string];

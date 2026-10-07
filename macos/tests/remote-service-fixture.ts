@@ -3,9 +3,10 @@
 import { AccountService, sessionStore } from '../server/account-service';
 import { isCatalog, type Provider } from '../src/import-model';
 import { createGitRemoteFixture } from './git-remote-fixture';
+import type { FileOpener } from '../server/system-file-open';
 
-export async function createRemoteServiceFixture(provider: Provider) {
-  const git = await createGitRemoteFixture(provider);
+export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean } = {}) {
+  const git = await createGitRemoteFixture(provider, { treeChanges: options.treeChanges });
   const requests: { url: URL; authorization: string; signal?: AbortSignal | null }[] = [];
   let failure = 0;
   let hold: (() => Promise<void>) | undefined;
@@ -22,7 +23,7 @@ export async function createRemoteServiceFixture(provider: Provider) {
     const result = await git.transport(path, format, init?.signal || undefined);
     return format === 'text' ? new Response(String(result.value), { headers: result.headers }) : Response.json(result.value, { headers: result.headers });
   };
-  const service = new AccountService(sessionStore(), request);
+  const service = new AccountService(sessionStore(), request, options);
   const catalog = await service.handle('connect', { provider, host: 'https://git.fixture.test', token: 'fixture-remote-old', name: '隔离测试账号' });
   if (!isCatalog(catalog)) throw new Error('Invalid fixture catalog');
   return { ...git, service, repositoryId: catalog.repositories[0].id, accountId: catalog.accounts[0].id, requests,

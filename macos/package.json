@@ -1,10 +1,10 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.5.0",
+  "version": "0.8.4",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx scripts/dev.ts",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "check": "tsc --noEmit",
