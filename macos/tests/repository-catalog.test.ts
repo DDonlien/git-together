@@ -46,7 +46,7 @@ function dashboard(value = catalog, globalSearch = '') {
 }
 
 function rows(markup: string) {
-  return [...(markup.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] || '').matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(match => match[1]);
+  return [...markup.matchAll(/<tr class="dashboard-repository-row">([\s\S]*?)<\/tr>/g)].map(match => match[1]);
 }
 
 test('zero local links still display every repository and complete counts under its account', () => {
@@ -80,24 +80,28 @@ test('sidebar represents an empty or failed account without asking for a local a
   assert.doesNotMatch(sidebar(emptyAccount), /关联仓库/);
 });
 
-test('Dashboard has one repository table with owner, account, branch and directory as sibling columns', () => {
+test('Dashboard has six repository columns and independent disclosures, not a default-branch column', () => {
   const markup = dashboard();
   assert.equal((markup.match(/<table\b/g) || []).length, 1);
-  assert.deepEqual([...markup.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(match => match[1]), ['仓库', '组织 / 用户', '账号', '默认分支', '本地目录', '状态', '<span class="sr-only">仓库操作</span>']);
+  assert.deepEqual([...markup.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(match => match[1]), ['仓库', '组织 / 用户', '账号', '本地目录', '状态', '<span class="sr-only">仓库操作</span>']);
   assert.doesNotMatch(markup, /remote-account-heading|remote-account-group/);
   const repositories = rows(markup);
   assert.equal(repositories.length, 3);
   for (const row of repositories) {
-    assert.equal((row.match(/<td>/g) || []).length, 7);
+    assert.equal((row.match(/<td>/g) || []).length, 6);
     assert.match(row, /<button class="repository-link"/);
     assert.match(row, /尚未关联/);
   }
   assert.match(repositories[0], /<strong>Personal<\/strong>/);
   assert.match(repositories[0], /GitHub · personal-login@github.com/);
-  assert.match(repositories[0], /main/);
+  assert.match(repositories[0], /aria-label="展开分支：org\/shared · Personal/);
   assert.match(repositories[2], /<strong>Work<\/strong>/);
   assert.match(repositories[2], /Gitea · work-login@git.example.test:10443/);
-  assert.match(repositories[2], /develop/);
+  assert.match(repositories[2], /aria-label="展开分支：org\/shared · Work/);
+  assert.doesNotMatch(markup, />main<|>develop<|默认分支/);
+  const controlled = [...markup.matchAll(/<button([^>]*)>/g)].filter(match => match[1].includes('repository-disclosure')).map(match => match[1].match(/aria-expanded="false" aria-controls="([^"]+)"/)![1]);
+  assert.equal(controlled.length, 3); assert.equal(new Set(controlled).size, 3);
+  for (const id of controlled) assert.ok(markup.includes(`<tbody id="${id}" class="dashboard-repository-branches"`) && markup.includes('hidden=""'));
   assert.match(repositories[1], /失去访问权限/);
 });
 
@@ -146,7 +150,7 @@ test('same-name repositories remain searchable by their separate ownership witho
 test('each repository centers a decorative folder in a tile beside two text lines without restoring account icons', () => {
   for (const row of rows(dashboard())) {
     const cells = [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(match => match[1]);
-    assert.match(cells[0], /class="remote-name"><span class="repository-icon-tile" aria-hidden="true"><svg[^>]*width="19"[^>]*height="19"[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/span><div><button class="repository-link"[\s\S]*?<\/button><small><span class="repository-visibility">(?:私有|公开)<\/span>/);
+    assert.match(cells[0], /class="remote-name"><button[^>]*repository-disclosure[\s\S]*?<\/button><span class="repository-icon-tile" aria-hidden="true"><svg[^>]*width="19"[^>]*height="19"[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/span><div><button class="repository-link"[\s\S]*?<\/button><small><span class="repository-visibility">(?:私有|公开)<\/span>/);
     assert.equal((cells[0].match(/class="repository-icon-tile"/g) || []).length, 1);
     assert.equal((cells[0].match(/<small>/g) || []).length, 1);
     assert.doesNotMatch(cells[1], /<svg|provider-mark/);
@@ -183,7 +187,7 @@ test('same-host accounts with the same display name and shared remote repository
 
 test('the unlinked directory text itself is the association button without a separate row button', () => {
   const markup = dashboard();
-  const directories = rows(markup).map(row => [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)][4][1]);
+  const directories = rows(markup).map(row => [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)][3][1]);
   for (const directory of directories) {
     assert.equal((directory.match(/<button\b/g) || []).length, 1);
     assert.match(directory, /class="local-path local-path-action muted"/);
@@ -199,7 +203,7 @@ test('the unlinked directory text itself is the association button without a sep
 
 test('a linked directory remains a text configuration button even if remote access is lost', () => {
   const linked = { ...catalog, links: [{ repositoryId: 'personal:2', path: '/projects/personal/archive' }, { repositoryId: 'work:1', path: '/projects/work/shared' }] };
-  const directories = rows(dashboard(linked)).map(row => [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)][4][1]);
+  const directories = rows(dashboard(linked)).map(row => [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)][3][1]);
   for (const index of [1, 2]) {
     assert.match(directories[index], /class="local-path local-path-action "/);
     assert.match(directories[index], /title="\/projects\//);

@@ -67,7 +67,7 @@ test('Dashboard annotation styles scope the 2px reduction and share the 10px ico
   assert.match(css, /\.nav-item\s*\{[^}]*gap:\s*var\(--icon-label-gap\)/);
   assert.doesNotMatch(dashboard, /provider-mark/);
   assert.match(dashboard, /className="repository-visibility"/);
-  assert.match(dashboard, /className="branch-label"><Icon[^>]*\/><span>/);
+  assert.match(dashboard, /className="branch-label" title=\{task.branch\}><Icon[^>]*\/><span>/);
   assert.match(dashboard, /aria-label=\{`配置本地目录：/);
 });
 

@@ -9,6 +9,11 @@ import { importMiddleware } from '../server/http-api';
 import type { RemoteRepository } from '../src/import-model';
 
 const repository = (id: number, accountId: string, fullName: string, ownerType: 'organization' | 'user' | undefined, fork: boolean | undefined, collaborator: boolean | undefined): RemoteRepository => ({ id: `${accountId}:${id}`, accountId, remoteId: id, name: fullName.split('/')[1], fullName, description: '隔离筛选验证，不是你的仓库', defaultBranch: 'main', private: false, available: true, url: `https://github.com/${fullName}`, ownerType, fork, collaborator, permissions: { push: collaborator === true, pull: true } });
+const branchQA = process.argv.includes('--branches');
+let branchFailure = false; let branchEmpty = false; let holdNextBranch = false;
+let releaseBranch: (() => void) | undefined;
+let cancelledBranches = 0;
+const branchReads: string[] = [];
 let state: SavedState = { version: 2, accounts: ['alice', 'bob'].map(login => ({ account: { id: login, name: 'Team', login, provider: 'github', host: 'https://github.com', updatedAt: '2026-10-07T12:00:00Z' }, token: `fixture-only-${login}` })), repositories: [
   repository(1, 'alice', 'studio/source', 'organization', false, false),
   repository(2, 'alice', 'studio/fork', 'organization', true, false),
@@ -21,6 +26,26 @@ let state: SavedState = { version: 2, accounts: ['alice', 'bob'].map(login => ({
 const service = new AccountService({ kind: 'session', load: async () => structuredClone(state), save: async next => { state = structuredClone(next); } }, async (url, init) => {
   const endpoint = new URL(String(url)); const login = new Headers(init?.headers).get('Authorization')?.endsWith('bob') ? 'bob' : 'alice';
   if (endpoint.pathname === '/user') return Response.json({ login });
+  if (branchQA && endpoint.pathname.startsWith('/repos/')) {
+    if (endpoint.pathname.endsWith('/branches')) {
+      branchReads.push(`${login}:${endpoint.pathname}`);
+      if (holdNextBranch) {
+        holdNextBranch = false;
+        await new Promise<void>((done, reject) => {
+          const signal = init?.signal;
+          const abort = () => { cancelledBranches++; releaseBranch = undefined; reject(signal?.reason); };
+          signal?.throwIfAborted(); signal?.addEventListener('abort', abort, { once: true });
+          releaseBranch = () => { signal?.removeEventListener('abort', abort); releaseBranch = undefined; done(); };
+        });
+      }
+      if (branchFailure) return new Response('Synthetic permission failure', { status: 403 });
+      if (branchEmpty || endpoint.searchParams.get('page') !== '1') return Response.json([]);
+      return Response.json(['main', `feature/${login}-search`].map(name => ({ name, commit: { sha: (login === 'alice' ? 'a' : 'b').repeat(40) } })));
+    }
+    if (endpoint.pathname.endsWith('/commits')) return Response.json([{ sha: (login === 'alice' ? 'a' : 'b').repeat(40), commit: { message: 'Synthetic branch fixture, not user Git', author: { name: login, date: '2026-10-08T12:00:00Z' }, tree: { sha: 'c'.repeat(40) } }, parents: [] }]);
+    if (endpoint.pathname.includes('/git/trees/')) return Response.json({ tree: [], truncated: false });
+    return new Response('Unknown synthetic endpoint', { status: 404 });
+  }
   const selected = state.repositories.filter(repo => repo.accountId === login && (endpoint.searchParams.get('affiliation') !== 'collaborator' || repo.collaborator === true));
   return Response.json(endpoint.searchParams.get('page') === '1' ? selected.map(repo => ({ id: repo.remoteId, name: repo.name, full_name: repo.fullName, description: repo.description, default_branch: repo.defaultBranch, fork: repo.fork, owner: repo.ownerType ? { login: repo.fullName.split('/')[0], type: repo.ownerType === 'organization' ? 'Organization' : 'User' } : undefined, permissions: repo.permissions })) : []);
 });
@@ -40,6 +65,11 @@ const terminal = createInterface({ input: process.stdin });
 terminal.on('line', line => { void (async () => {
   if (line === 'refresh') { await service.handle('refresh', { accountId: 'alice' }); console.log('QA_CATALOG_REFRESHED'); }
   if (line === 'add-org') { state.repositories.push(repository(6, 'alice', 'new-studio/new-source', 'organization', false, false)); await service.handle('refresh', { accountId: 'alice' }); console.log('QA_ORGANIZATION_ADDED'); }
-  if (line === 'state') { const catalog = await service.handle('catalog', {}) as { revision: number; repositories: unknown[] }; console.log(JSON.stringify({ fixtureOnly: true, revision: catalog.revision, repositories: catalog.repositories.length })); }
+  if (line === 'state') { const catalog = await service.handle('catalog', {}) as { revision: number; repositories: unknown[] }; console.log(JSON.stringify({ fixtureOnly: true, revision: catalog.revision, repositories: catalog.repositories.length, ...(branchQA ? { branchReads, cancelledBranches, holdingBranch: !!releaseBranch } : {}) })); }
+  if (branchQA && line === 'branch-fail') { branchFailure = true; console.log('QA_BRANCH_FAILURE'); }
+  if (branchQA && line === 'branch-recover') { branchFailure = false; branchEmpty = false; console.log('QA_BRANCH_RECOVERED'); }
+  if (branchQA && line === 'branch-empty') { branchEmpty = true; console.log('QA_BRANCH_EMPTY'); }
+  if (branchQA && line === 'branch-hold') { holdNextBranch = true; console.log('QA_BRANCH_HOLD_NEXT'); }
+  if (branchQA && line === 'branch-release') { releaseBranch?.(); console.log('QA_BRANCH_RELEASED'); }
   if (line === 'quit') { terminal.close(); server.closeAllConnections(); await new Promise<void>(done => server.close(() => done())); console.log('ISOLATED_QA_STOPPED'); }
 })().catch(error => console.error(error instanceof Error ? error.message : 'QA failed')); });

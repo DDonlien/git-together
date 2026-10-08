@@ -6,8 +6,9 @@ import type { RemoteRepository } from './import-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import { preserveRemoteWorkspace } from './remote-repository-model';
 
-// Only the open repository owns a HEAD heartbeat. Immutable SHA-based content
-// is cached by the service; switching repositories cancels the old HTTP read.
+// Only an open workspace or visible expanded Dashboard repository owns a HEAD
+// heartbeat. SHA-based content is cached by the service; disabling or unmounting
+// a reader cancels its HTTP read without discarding its last successful state.
 export function useRemoteRepository(repository: RemoteRepository | undefined, instanceId: string, enabled: boolean) {
   const resource = repository && instanceId ? JSON.stringify([instanceId, repository.id, repository.fullName, repository.defaultBranch]) : '';
   const active = enabled && !!repository?.available && !!resource;

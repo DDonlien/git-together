@@ -211,6 +211,17 @@
 
 final result: passed
 
+## 2026-10-08 侧栏矩形点击区与选中描线（UI-04-sidebar-icon-buttons-hit-area）
+
+- 最新补充取代上一轮非固定按钮选中仅有底色的表现；保持色板/字体/容器/层级，只把紧凑账号和仓库的完整按钮统一为40×40/12px圆角。默认没有边框或阴影，仓库选中沿整个按钮画1px中性内描线，保留原选中底色；内描线不占布局空间。展开保持172×34的全宽行、8px圆角和9.5px子级内容缩进。账号展开不是选中状态，键盘聚焦另有2px焦点边。
+- 隔离生产App/AccountService页面的暗色收起与亮色展开390/769/1201×853均无根横向溢出。收起图标x/y中心误差均0，账号控件40×40无常驻线，仓库未选中shadow为none，选中线亮色#d4d4d8、暗色#505a60。完整侧栏亮暗截图已目视核对，字体和Presence均未移动。
+- 点击按钮左内侧6px、图标以外的空白区可打开仓库或折叠账号；Enter/Tab/Space选中另一个仓库后原描线消失。展开/收起和账号折叠保留选中，聚焦描线与选中描线共存。390×400亮色紧凑栏纵滚到222px，scrollbar none且设置固定可达。隔离目录fixture未提供有效远端内容，因此仍显示实际格式错误；仅验证侧栏交互，不声称Git成功。
+- 截图：[暗色完整选中侧栏](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-hit-area-selected.png)、[暗色图标栏](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-hit-area-dark-rail.png)、[亮色展开](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-hit-area-light-expanded.png)、[真实主页面](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-hit-area-main.png)。前两轮局部截图切到了品牌行顶部，最终完整截图按实际侧栏bounds x8/y48/196×664重新采集，未编辑像素。
+- 新增1项选中边界回归并更新紧凑几何回归；strict、314/314、4/4静态包装和构建通过，差异检查通过。首次回归使用了简写selected而源码是selectedRepositoryId，修正断言后全套通过；fixture首次载入旧dist，构建完成后仅刷新隔离页，再验证新CSS。主/隔离console无warn/error。
+- 主页面未执行导航/主题/账号操作，最终保持用户当前的Dashboard、收起侧栏和折叠账号；统计仍1/38/0，CSS热更新的选中规则已读回。主实例fead0bc8-c050-4969-a84e-46b9b8491305不变，主/助手HTTP200同0.8.7，助手configured=true。临时viewport重置，隔离标签关闭、78562服务正常quit，主服务继续运行；不改版本依赖、不重启、不重放凭据、不写Git或打包。仅本次浏览器样式/交互通过，不扩大到真实远端或原生包验收。
+
+final result for UI-04-sidebar-icon-buttons-hit-area: passed
+
 本轮验收范围：UI-04 的容器层级修正，以及 UI-03 统一控件的前端回归。结果只覆盖独立 TS 演示客户端；不表示真实 Git/AI/Presence、AppKit 原生控件或 macOS 27 运行通过。
 
 ## 本轮来源、环境与对照方法
@@ -340,3 +351,126 @@ final result: passed
 - 独立真实临时Git的6任务浏览器：main/search输入不同草稿、选择src/app.ts后聚焦本地main；选Document workspace layout后输入不在辅助树、DOM中的原草稿仍在，历史信息位于中栏，工作目录Diff与文件选择保留。中栏Enter收起/Space展开保持详情；再次Space取消提交选择恢复原草稿。显示全部任务后两份草稿逐字段不变；亮暗色均保留状态，warn/error为空。该工作目录Diff仍是未提交内容，不冒充历史Diff。
 - 新增5项组件/样式回归，strict、200/200测试、4/4静态包装、生产构建与git diff --check通过。窄视口覆盖未作用到本次详情标签（实际仍1280×720），因此仅确认换行样式回归，不声称新详情的窄尺寸视觉验收；临时覆盖已reset。隔离标签关闭、测试服务退出，报告HEAD/index未变和临时仓库已清理。
 - 主服务PID23078、0.5.0、实例c24d4f14-3f2a-4504-a9e5-32ec0a0f25d1、1账号/38仓库/0关联及授权助手PID31840保持。原用户页在并行热更新期间观察为Dashboard，本轮没有重新加载它；实际仓库验证在独立标签进行，不声称原热更新前仓库选择已保留。结果截图：`/Users/taobe/.codex/visualizations/2026/10/06/01a1103e-9b92-79b3-8d62-61e3c65dc3a2/history-details-middle.png`；本地暗色隔离截图为同目录`history-details-local-dark.png`。未原生打包/验收，未Git提交/推送/发布。
+
+## 最新：JetBrains 外围与内嵌卡片（2026-10-08，0.8.6，IMPORT-18-shell）
+
+### Findings / 对照迭代
+
+1. [P1，已修复] 用户指出只换 Dashboard 控件、仍保留玻璃浮动导航与整页大外壳，缺少附件的「外围包住内部面板」关系。位置为 App / Dashboard。取消侧栏玻璃、阴影和旧22px圆角，使用官方 Ring 主题的不透明外围和8px内嵌导航/统计/仓库面板；工具行和统一七列表格共用一个面板，Dashboard 本身透明、没有大外壳。完整对照中保留8px外围/间隙，外框可在面板之间连续看见，卡片不再叠加悬浮效果。
+2. [P2，已修复] 390×650 的旧6px外框断点会让红绿灯及面板偏移2px，不符合固定控制条与统一边距契约。第一次手机菜单证据 `dashboard-ring-shell-phone-menu.png` 中首点x18/y16。具名 `.app-frame.ring-app-frame` 固定 `--window-inset: 8px`，同尺寸、暗色、56px图标栏、滚到最后一行并打开原操作菜单复拍 `dashboard-ring-shell-phone-final.png`：三个圆点矩形x20/40/60、y18、12×12px，侧栏x8/y48/w56。DOM与前后图共同确认修复。该发现时暂为blocked；修复后再次将源图、最新完整暗色实现和手机前后证据放入同一比较输入，后又用归一化源图+最新亮暗截图复核，无待修P0/P1/P2。
+
+### Source、截图与归一化
+
+- 原视觉来源：`/var/folders/x1/nj8gw6sj3tz36zt026sy8h2m0000gn/T/codex-clipboard-8949b57a-7ca2-4d7f-9584-49d0d1b70ea8.png`，2480×1300px。只按用户明确要求比对外围/卡片关系，功能、账号、仓库内容不复制参考 IDE 的会话、编辑器、应用列表、图标工具条或底部状态栏。
+- 原图实际DPR与CSS视口未知；按2x密度推定做50%等比例副本用于关系对照，未把该推定称为实测DPR或像素级克隆。副本 `/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-ring-shell-reference-normalized.png` 为1240×650px。实现明确CSS视口1240×650、截图1240×650px、实测截图密度1x；无额外浏览器/设备框架。
+- 最新实际生产App暗色：`/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-ring-shell-dark-final.png`；亮色：同目录 `dashboard-ring-shell-light-final.png`。两者1240×650，搜索为空、过滤全选、菜单关闭、表左端/页面顶部，导航展开；数据来自隔离AccountService和实际HTTP，2账号/7仓库/2不可用本地路径，行内明确「隔离筛选验证，不是你的仓库」。自动检查对目录作正常排序，不能把排序时的行序变化当作筛选状态丢失。
+- 响应式补充：`dashboard-ring-shell-narrow-menu.png` 为769×853；`dashboard-ring-shell-phone-menu.png` / `dashboard-ring-shell-phone-final.png` 均390×650、暗色/收起栏/操作菜单打开。手机图是浏览器窄窗口回退，不是原生移动应用或截图中的 IDE 手机版。
+- 当前真实主预览空态：`/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-ring-shell-current-preview.png`，恢复默认视口1235×954、亮色、0账号/0仓库/0关联。不是合成目录，不为让截图填满而连接或写入用户账号。
+- Full-view comparison：源图与第一次1240×650暗色截图同一输入观察；修正手机边距后，源图、最新暗色及手机前后图在同一输入复核；最终1240×650归一化源图和同尺寸最新亮暗实现再次放入同一输入。源图与实现的应用内容/auth状态不同是预期产品范围，评价限于包围层级、平面材料、导航/内容间隙及控件密度，避免虚假精确度。
+- Focused regions：本次要核对的面板边缘、圆角、间隙、导航行与工具行在1240px完整对照中足够清楚；固定圆点、56px栏及菜单边界在390px全图清晰可读，并有对应DOM矩形核对，无需另外放大裁切，也不从源图小字推断未确认的字体型号。
+
+### 五个必查面
+
+- Fonts / typography：官方Ring系统字体与既有系统回退，导航品牌14px、导航主字保持原尺寸、工具/表12px、次行11px、统计28px/500；实际中文与英文都可读。仓库名/路径按既有规则截断且有完整可访问名称，主体不复制参考会话文本或编辑器等宽排版；中性搜索焦点保留，菜单/checkbox键盘焦点可见。
+- Spacing / rhythm：外围/面板间距8px、导航196px或56px、顶部控制条32px+8px间隔；统计独立8px卡片，工具行12px内缩、28px控件，表头36px/行56px。暗色导航与表连续到底部，不留旧纸面外围或额外分割统计条；窄窗统计变2列，表保留880px内部横滚而不是挤掉七列，菜单落在视口内。
+- Colors / tokens：官方外围亮色247/248/250、暗色43/45/48；内容卡片亮色255/255/255、暗色30/31/34，实测无blur/shadow。减少透明度开启仍是同一不透明卡片；未把Ring语义颜色注入整个app-content，设置账号组暗色仍为原OpenGlass 43/48/51。错误/链接/选中使用官方语义颜色，不以颜色单独代替状态文本。
+- Image / asset fidelity：范围不需要新增照片、插图、纹理或参考图会话logo；保留实际Phosphor导航/文件图标与GitTogether品牌，官方Ring控件，无占位资产或装饰性仿制图。原生仍保留系统红绿灯，不画新副本；已有浏览器窗口预览仍遵循原尺寸契约。
+- Copy / content：保留应用自身账号、搜索、来源、目录状态、空态和失败消息；不把用户评论或参考图中的执行指令加入UI。合成仓库清楚标记，不宣称真实provider内容或Git写操作成功；Git四项继续禁用并说明未接入。
+
+### 交互与验证
+
+- 搜索shared得到1行；收起/展开均保留查询、相同按钮DOM与焦点，清空恢复7行。Ctrl-K可从收起栏聚焦实际搜索输入。
+- 官方账号菜单方向键打开、End选择同名Bob身份得到2行，Escape/选择后关闭并恢复触发器焦点；账号全选恢复7行。仓库菜单连续取消本地、Original、Added得到2个远端Fork，连续勾选不关闭，恢复并Escape正常。组织/账号/位置/类型仍用原筛选状态和自动检查路径。
+- 两组仓库操作四个Git入口禁用、工作台/配置可用；配置仍打开原「配置本地仓库」弹窗并可取消，不调用保存或系统授权。设置仍可打开，颜色偏好通过真实设置控件切换。
+- 769×853根无横溢出，内表549/880px，操作菜单右764/下844在边界内；390×650根390px、表310/880px，实际横滚570px、页面纵滚107.5px，公开按钮仍可达。文档、页面、表与侧栏均`scrollbar-width:none`，没有禁用内容滚动。
+- 严格类型检查、313/313完整测试、4/4静态包装、生产构建、差异检查通过。新增两项断言限制外围主题/卡片/8px边距及工具行+七列表格的同卡片结构。最终隔离页console error/warn为空，主页重载后的新error/warn为空。
+- 0.8.6版本同步前已核对主实例74ccf3f5-f8cf-4fe3-910b-a04ee98091c0、目录0/0/0且没有活动弹窗或授权流程，先热更新再按既有测试就绪授权重启自有统一开发入口。新主实例b0b6c04c-c098-44c7-846b-2ef7dd1297f7与授权助手均HTTP200/0.8.6，目录仍0/0/0，助手configured=true并恢复加密应用配置；不声称实例未变，也没有读取/重放账号凭据。
+- 临时隔离服务正常退出、测试标签关闭、viewport覆盖清除；4173主预览与4174依赖保留运行，主标签留给用户。未重打包/替换原生应用，未真实账号/关联验收，未对用户仓库执行Git写操作、提交/推送或线上部署。
+
+### Implementation checklist / 结论
+
+- [x] 外围/卡片层级、主题范围与五个必查面已核对。
+- [x] P2手机边距修复后同状态复拍并完成联合比较。
+- [x] 主交互、窄窗可达性、自动回归和最终控制台已检查。
+- [x] 本机测试依赖恢复并留开，隔离验证已清理。
+- Open questions：用户对新层级的视觉接受待反馈；参考图没有对应亮色/空态，这是基于同一官方令牌体系的补充检查，不声称有源图逐像素验收。
+- Follow-up polish：无阻断性P3任务；未扩展为整个应用内部控件迁移。原生运行验证和重新打包不在此轮范围。
+
+final result: passed
+
+# H5 侧栏背景与卡片层级 QA（2026-10-08，UI-07）
+
+- 参考图：`/var/folders/x1/nj8gw6sj3tz36zt026sy8h2m0000gn/T/codex-clipboard-5955f072-0671-4712-8b70-d6af7d05cb77.png`，原图 2660×1540px（用户消息中缩放展示为 2048×1186px）。目标是 GitTogether 首页与仓库页的整体层级，不复制截图里的其他产品文案或工具项。
+- 实现范围：只给非桌面 H5 预览增加连续背景上的透明侧栏，以及首页统计/仓库列表和仓库页顶部信息/三栏内容组的细边缘与轻阴影；不改变 Electron 材料、数据、交互、侧栏手动收起和仓库三栏的窄窗横向滚动行为。
+- 自动验证：`npm run check` 通过；`npm test` 310/310；`npm run build` 通过并生成 client、worker 与 hosting metadata；`npm run test:sites` 4/4；`git diff --check` 通过。现有 4173 预览 HTTP 200，Vite 返回的样式模块包含 H5 规则；未重启预览或账号服务。
+- 目视证据：实现截图未捕获，视口、页面状态和设备密度未记录；H5 首页/仓库页的五个保真面（字体、间距布局、颜色令牌、图片资产、文案）及主要交互未作浏览器实测。Codex 本机浏览器安全策略拒绝检查 `127.0.0.1`，现有标签也不可读取；没有尝试其他浏览器、Playwright 或协议绕行。HTTP 200、构建和源码测试不替代截图对照。
+- 比较：无法把参考图与同视口实现截图放在一起比较；Focused region 比较同样未进行。当前没有足够视觉证据列出或排除 P0/P1/P2 差异，需用户复核预览并补充可见截图后完成。
+- 原生应用未打包/替换，未提交、推送或部署，未触碰账号凭据或 Git 写操作。
+
+final result: blocked
+
+## 2026-10-08 OpenGlass 回退（IMPORT-18-revert）
+
+- 用户要求撤回 Ring UI 试用，恢复0.8.4外观；此次新交付版本0.8.7。四个入口/组件与HEAD b5ce18cb0e逐字节一致，依赖和样式入口不再包含Ring；试用文件已移出运行目录并备份，当前设计已另行归档。
+- 基线 strict、307/307测试、生产构建、4/4静态包装、git diff --check通过。并行变更出现后再跑 strict、310/310测试通过，但不据此接受另项视觉试验。
+- 隔离生产App仍为2个合成账号/7仓库/2关联，截图保留原悬浮侧栏、平面统计/统一表与表外工具行。亮暗外观、搜索fork得到2项/清空恢复7项、同名访问账号选择bob得到2项/位置仅远端得到1项、原两组操作菜单（4项Git禁用）、原目录弹窗取消、设置0.8.7和侧栏收起/展开完成。
+- 769×853收起栏56px；表视区641px/内容840px。769×480访问最后一行操作后，内部横滚199px、页面纵滚217px；两轴scrollbar-width=none，根无水平溢出。QA console无error/warn，临时viewport恢复，隔离标签/服务正常退出。
+- 预览在版本热更新时主服务自动变为0.8.7、助手仍0.8.6；确认主目录0/0/0和无活动弹窗后按已有测试授权重启自有统一入口。最终主实例fead0bc8-c050-4969-a84e-46b9b8491305，主/助手HTTP200同0.8.7、configured=true。主页面设置版本匹配，未修改用户主题或授权配置。
+- 主页console留有14:20:23移动Ring文件触发的两条旧HMR错误；统一重启/重载后未观察到新错误。实际空态截图为dashboard-openglass-restored-current.png；隔离亮/暗截图为dashboard-openglass-restored-light.png和dashboard-openglass-restored-dark.png，均位于项目容器_builds/qa，不是实际用户仓库。
+- 收尾时发现并行UI-07 H5试验已写入styles.css、AGENTS/DESIGN/REQUIREMENTS和独立测试，使浏览器侧栏透明、主要内容加边缘/阴影；我没有写这些样式，也没有覆盖。四个回退文件仍等同基线。上面的生产截图早于该试验，不能代表当前浏览器已完整恢复原外观。
+- 用户随后进入真实GitHub授权等待弹窗；不取消、不导航、不再重启。主预览保留，真实授权结果未代验。
+- Ring UI回退代码与基线检查已完成；当前外观与原版本完全一致的验收因并行H5覆盖而待用户选择。未提交/推送、原生打包、生产发布或真实远端新验收。
+
+final result: Ring rollback verified; exact live appearance awaits the user's choice about concurrent UI-07.
+
+## 2026-10-08 侧栏图标按钮（UI-04-sidebar-icon-buttons）
+
+- 范围：用户明确要求只借鉴附件侧栏的按钮形态，保持应用整体设计。当前H5透明导航/卡片与原生外壳规则保留，不对参考图的主内容、棕色色板或额外入口做复刻；不是前述H5整体风格或Ring完整恢复的验收。
+- 原参考图与最新真实主页面截图在同一次比较输入中打开，检查整体侧栏和按钮近处。用户页为849×853暗色、当前1账号/38仓库/0关联；最终截图：[真实主预览](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-icon-buttons-main-dark.png)、[展开与键盘聚焦](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-icon-buttons-main-expanded.png)。
+- 隔离生产App由现有AccountService/HTTP承载，2个合成身份/7仓库/2不存在的测试路径，不使用用户账号。截图：[亮色图标栏](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-icon-buttons-qa-light.png)、[390px展开](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-icon-buttons-qa-light-390-expanded.png)、[暗色选中文件夹](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-icon-buttons-qa-dark-selected.png)。最后一图的远端格式错误是此目录fixture不提供Git内容的真实错误反馈，未伪造成功，不作为远端功能验收。
+- 字体/文字：沿用系统13px导航，展开后保留名称与长名截断，收起不挤入文字；原title与可访问名称保留。文案/内容：没有引入参考应用的Rules/History等入口，原Dashboard/设置/账号/仓库含义不变，图标装饰不重复朗读。
+- 间距/布局：收起栏56px，三个常驻按钮40×40、12px圆角、1px细边，同一中心；文件夹40×34点击区域的19px图标中心偏差0，无常驻边框。展开按钮槽32×32、10px圆角，补偿内边距后Dashboard中心与账号箭头同列，仓库保持9.5px子级缩进；品牌与开关不碰撞。保留上下常驻入口和独立可滚动账号列表。
+- 颜色/令牌：使用原strong-line、muted、selection、blue、surface-hover；不使用参考图棕色/青绿色。亮暗模式中的边缘、选中和焦点可辨，参考配色差异属于用户明确允许的保留设计。
+- 图片质量/图标：没有需要复刻的图片资产；全部沿用已有Phosphor标准矢量与Presence状态点，无自绘图标/位图缩放。19px图标无拉伸，轮廓和中心一致。
+- 交互/响应式：390/769/1201×853两态均无根横向溢出、开关/设置可达；Enter展开、Space收起保留焦点，Dashboard与设置操作可用。隔离账号折叠后保留另一个账号的2仓库，侧栏展开后账号折叠状态仍保留；搜索fork的2行在收起后不丢失，点击对应仓库显示原工作区并选中无框文件夹。390×400侧栏scrollTop从0到160、scrollbar-width为none，设置仍固定可达。
+- 新增3项回归；strict、313/313测试、4/4静态包装和生产构建通过，差异检查通过。主/隔离console检查无error/warn；临时viewport已重置，隔离标签/服务正常退出，真实主预览保持运行和保留。
+- 主API与助手HTTP200同0.8.7，实例fead0bc8-c050-4969-a84e-46b9b8491305和1/38/0目录不变。没有服务/凭据/授权重启、Git写操作、提交/推送、部署或原生打包；原生源码样式已共享但旧安装包未更新。
+- 比较历史：首轮实现与附件侧栏对照没有发现本次范围内的P0/P1/P2差异，未进行截图后的二次视觉修补。参考应用入口数量、原字体/色板、展开模式和保留状态点均是明确的产品范围差异，而非遗漏。
+
+final result: passed
+
+## 2026-10-08 收起侧栏不放大矩形（UI-04-sidebar-icon-buttons-shared-size）
+
+- 根据最新明确反馈，删除40px/12px收起覆盖，两态直接共用32px/10px图标框令牌。紧凑常驻按钮本体也32×32并与装饰框同圆角，不保留40px外部点击区；仓库/账号也32×32，默认无描线、选中整块内描线。19px图标、56px栏宽、展开文字/34px全宽仓库行/9.5px缩进和原配色不变。
+- 实际主页面仍为用户当前的收起Dashboard/折叠账号，主按钮和装饰框全部32×32；没有主动切换主页面、主题或账号展开。隔离生产App的亮色1280px展开→收起后，两个常驻框、开关/账号/仓库尺寸32×32、圆角10px，文件夹中心误差0，选择fork保持。展开仓库172×34不变。
+- 暗色390×853同尺寸且根溢出0；32px选中仓库仍显示1px中性内描线与2px键盘焦点。390×400纵滚134px、scrollbar none，设置仍固定可达；Enter/Space收起和仓库导航正常。测试目录的原远端格式错误未伪造成成功，本次仅侧栏尺寸/交互验收。
+- 截图：[实际主预览](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-shared-size-main.png)、[隔离32px图标栏](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-shared-size-32.png)。实际主截图已目视检查，描边/中心/颜色清楚，外部红绿灯与背景不变。
+- 尺寸回归改为明确禁止紧凑态另设size/radius覆盖。strict、314/314、4/4静态包装、构建与差异检查通过；发现常驻外层仍沿用8px圆角后同步到共享10px，局部4/4及新构建再次通过。console隔离无warn/error，主服务/助手HTTP200同0.8.7，实例fead0bc8-c050-4969-a84e-46b9b8491305、1/38/0及助手configured=true保持。
+- 临时viewport重置、标签关闭、自有91098服务quit退出；主预览保留。不修改版本配置或重启账号服务，不读取凭据、不执行Git写入、提交/推送、部署或原生打包。旧40px验收作为历史记录，当前尺寸以本条为准。
+
+final result for UI-04-sidebar-icon-buttons-shared-size: passed
+
+## 2026-10-08 侧栏展开仓库零缩进（UI-04-sidebar-icon-buttons-no-indent）
+
+- 把全局侧栏专用level-indent令牌从9.5px设为0，沿用原逻辑内边距。文件夹及名称与账号对应列对齐；全宽34px行、选择描线、Presence和折叠行为保持。工作区文件树未修改，32px紧凑按钮及原色板不变。
+- 隔离生产App亮色1280px展开的7仓库，相对其所属账号图标中心与名称左边的偏差均为0，行172×34。Enter选中fork、Space收起/Enter展开，账号Enter折叠/Space展开后选中仍在；紧凑栏56px、按钮32×32、图标中心误差0，原1px内描线保留。暗色390×853展开同样7行偏差0、根溢出0。
+- 最终[暗色同列侧栏截图](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-no-indent.png)已目视检查，账号/文件夹中心线与名称左边一致，品牌/常驻框/选中轮廓不变。此图是独立目录fixture的侧栏交互证明，不是用户真实Git内容验收；原远端格式错误仍如实保留。
+- 已更新层级回归为零缩进；strict、314/314、4/4静态包装、生产构建与差异检查通过。隔离console无warn/error，临时viewport重置，标签关闭，51400服务quit退出。
+- 主页面保持用户当前收起Dashboard/折叠账号，仅只读确认热更新令牌0px，不主动操作主导航或账号。主/助手HTTP200同0.8.7，实例fead0bc8-c050-4969-a84e-46b9b8491305、1/38/0及助手configured=true不变。前端热更新未改版本配置、重启、读取/重放凭据、Git写入、提交/推送、部署或原生打包；历史半图标验收保留为旧规则。
+
+final result for UI-04-sidebar-icon-buttons-no-indent: passed
+
+## 2026-10-09 Dashboard 逐仓库分支行（IMPORT-13-branches）
+
+- 范围：依照本次明确要求移除独立默认分支列，保留原统一表、统计、工具行、H5背景/卡片和原生材质。仓库左侧增加独立公开展开按钮，真实远端分支一行一个；默认仅作分支属性，不加入演示或猜测数据。分支行只读，仓库名称仍打开工作区。
+- 布局/文字：仓库父行58px，子行34px，24×28px轻量箭头；六列顺序为仓库、组织/用户、账号、本地目录、状态、仓库操作。分支内容跨六列以保留长名空间，共享10px图标间距，默认标记10px。沿用现有系统字体、原矢量文件夹tile/分支图标、颜色令牌与隐藏滚动条，没有新卡片、色板或图片资产。
+- 实际用户数据：当前GitHub账号、38个仓库、0关联。展开3D_ChineseInkPaintingStyleShader读取main，展开agent-done读取main、codex/create-chrome-extension-for-ai-tab-tracking、codex/create-chrome-extension-for-ai-tab-tracking-p1um8l；两个仓库同时展开，仓库计数仍38。未关联本地仍读取真实分支，主/助手同0.8.7、主实例fead0bc8-c050-4969-a84e-46b9b8491305保持。
+- 实际用户窄窗849×853：根横溢出0，内表840px/视区579px；实际横滚261px后右侧28px操作按钮落在790–818px，恢复到左端后长分支名仍逐行可读，两轴滚动条保持隐藏。最终[真实预览截图](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-branches-main.png)已目视检查。侧栏保持当前展开/账号折叠状态，没有为了QA改动主页面主题或偏好。
+- 隔离生产App/AccountService：2个合成账号同名但身份独立、7仓库、2不可用测试本地路径。展开前无分支读取；Enter/Space分别展开不同身份的仓库，各自main/feature分支不串线。刷新与搜索fork→清空保留展开选择，计数不包含子行。原本地目录弹窗可取消、两组菜单的4项Git写操作禁用，Escape返回触发器焦点。
+- 异步/错误：403显示实际错误而非空分支；恢复后收起/重新展开读取成功；已有数据失败时明确标记保留上次分支。空数组显示真实空态，不补main。延迟读取显示加载状态，收起取消一次请求，释放迟到响应没有发布，重新展开恢复正确分支。自动回归另检查失去账号权限与分页上限只读提示。
+- 真实临时Git/Gitea形状服务：从隔离Git仓库实际读取main、task/review、task/search，与refs一致；Git写状态验证未变。分别生成[临时Git截图](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-branches-isolated-git.png)、[合成目录亮色](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-branches-light.png)、[合成目录暗色](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-branches-dark.png)。这不是用户真实Gitea服务器或原生包验收。
+- 隔离页实际视口1280×720；尝试viewport覆盖390/769后页面仍报告1280×720，已重置覆盖，不将它记录为手机测试通过。窄窗结论只依据上述真实849×853；未修改历史QA的独立尺寸记录。
+- strict、325/325全套、4/4静态包装、生产构建及差异检查通过，新增11项分支回归；最终主/两隔离页无console warn/error。自有57261/57266服务正常quit，测试标签关闭，临时Gitfixture清理时gitUnchanged=true/userDataChanged=false；用户4173和4174依赖继续运行。
+- 当前源码与浏览器预览已更新；未改版本/凭据、重启主或助手、对用户Git写入、提交/推送、生产发布或原生打包。保持0.8.7是防止版本依赖更新触发服务重启清空账号会话的本轮开发例外，不作为新发布版本。
+
+final result for IMPORT-13-branches: passed

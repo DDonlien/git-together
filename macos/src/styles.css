@@ -10,7 +10,7 @@
   --sidebar-edge: rgba(167,176,185,.34); --sidebar-shadow: 0 3px 12px #1d293b0a;
   --window-inset: 8px; --workspace-gap: 16px;
   --control-height: 32px; --compact-height: 28px; --icon-size: 17px; --icon-label-gap: 10px;
-  --sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: calc(var(--sidebar-icon-size) / 2);
+  --sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: 0px;
   --radius-control: 8px; --radius-panel: 16px; --radius-sidebar: 22px;
   background: var(--window-background); color: var(--text);
 }
@@ -112,14 +112,13 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .remote-table-scroll { position: relative; overflow-x: auto; }
 .remote-repo-table { width: 100%; min-width: 840px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 .remote-repo-table th { height: 30px; font-size: 11px; font-weight: 500; text-align: left; color: var(--muted); border-bottom: 1px solid var(--line); }
-.remote-repo-table th:nth-child(1) { width: 26%; }
+.remote-repo-table th:nth-child(1) { width: 32%; }
 .remote-repo-table th:nth-child(2) { width: 12%; }
 .remote-repo-table th:nth-child(3) { width: 22%; }
-.remote-repo-table th:nth-child(4) { width: 10%; }
-.remote-repo-table th:nth-child(6) { width: 96px; }
-.remote-repo-table th:nth-child(7) { width: 40px; }
+.remote-repo-table th:nth-child(5) { width: 96px; }
+.remote-repo-table th:nth-child(6) { width: 40px; }
 .remote-repo-table td { height: 58px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
-.remote-repo-table tbody tr:last-child td { border-bottom: 0; }
+.remote-repo-table tbody:last-child tr:last-child td { border-bottom: 0; }
 .remote-repo-table td:last-child { padding-right: 0; text-align: right; }
 .remote-name {
   --repository-name-size: 12px; --repository-detail-size: 11px;
@@ -128,6 +127,15 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
   display: flex; gap: var(--icon-label-gap); align-items: center; min-width: 0;
 }
 .remote-name .repository-icon-tile { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--repository-icon-size); height: var(--repository-icon-size); border-radius: var(--radius-control); color: var(--blue); background: var(--blue-bg); }
+.remote-name .repository-disclosure { flex: 0 0 24px; width: 24px; height: 28px; min-height: 0; padding: 0; background: transparent; border: 0; box-shadow: none; color: var(--muted); }
+.remote-name .repository-disclosure:hover { background: var(--surface-hover); }
+.remote-repo-table .dashboard-branch-row td, .remote-repo-table .dashboard-branch-message td { height: 34px; padding: 6px 12px 6px 34px; text-align: left; }
+.dashboard-repository-branches { background: color-mix(in srgb, var(--blue-bg) 30%, transparent); }
+.dashboard-branch-content { display: flex; align-items: center; gap: var(--icon-label-gap); min-width: 0; }
+.dashboard-branch-content .branch-label { color: var(--text); }
+.dashboard-default-branch { flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.dashboard-branch-message [role='status'] { display: inline-flex; align-items: center; gap: var(--icon-label-gap); color: var(--muted); font-size: 11px; }
+.dashboard-branch-message .notice { margin: 0; }
 .remote-name > div { min-width: 0; }
 .remote-name strong, .remote-name .repository-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--repository-name-size); line-height: var(--repository-text-leading); font-weight: 550; }
 .remote-name .repository-link:hover { color: var(--blue); }
@@ -859,7 +867,21 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .global-sidebar.is-collapsed .sidebar-disclosure { margin-left: 0; }
 .global-sidebar.is-collapsed .nav-item { justify-content: center; padding: 8px; gap: 0; }
 .global-sidebar.is-collapsed .sidebar-account-toggle { justify-content: center; gap: 0; padding-inline: 0; }
-.global-sidebar.is-collapsed :is(.sidebar-account-name,.sidebar-account-toggle > small,.nav-item > span:not(.repository-logo),.repository-item > svg,.sidebar-account-empty,.sidebar-no-accounts) { display: none; }
+.global-sidebar.is-collapsed :is(.sidebar-account-name,.sidebar-account-toggle > small,.nav-item > span:not(.repository-logo):not(.sidebar-button-icon),.repository-item > svg,.sidebar-account-empty,.sidebar-no-accounts) { display: none; }
+/* Permanent icon slots stay framed; other full button areas frame only selection. */
+.global-sidebar { --sidebar-button-size: 32px; --sidebar-button-radius: 10px; }
+.nav-item.sidebar-permanent { height: 40px; padding: 0 calc(var(--sidebar-row-inset) - (var(--sidebar-button-size) - var(--sidebar-icon-size)) / 2); gap: calc(var(--icon-label-gap) - (var(--sidebar-button-size) - var(--sidebar-icon-size)) / 2); background: transparent; }
+.sidebar-button-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 var(--sidebar-button-size); width: var(--sidebar-button-size); height: var(--sidebar-button-size); border: 1px solid var(--strong-line); border-radius: var(--sidebar-button-radius); color: var(--muted); }
+.sidebar-button-icon > svg { width: var(--sidebar-icon-size); height: var(--sidebar-icon-size); }
+.sidebar-permanent:hover .sidebar-button-icon { background: var(--surface-hover); }
+.sidebar-permanent.active .sidebar-button-icon { background: var(--selection); color: var(--blue); }
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small { width: var(--sidebar-button-size); min-width: var(--sidebar-button-size); height: var(--sidebar-button-size); min-height: var(--sidebar-button-size); padding: 0; border: 1px solid var(--strong-line); border-radius: var(--sidebar-button-radius); background: transparent; box-shadow: none; }
+.global-sidebar .sidebar-disclosure:hover { background: var(--surface-hover); }
+.global-sidebar .sidebar-disclosure > svg { width: var(--sidebar-icon-size); height: var(--sidebar-icon-size); }
+.global-sidebar.is-collapsed .nav-item.sidebar-permanent { width: var(--sidebar-button-size); height: var(--sidebar-button-size); margin-inline: auto; padding: 0; gap: 0; border-radius: var(--sidebar-button-radius); }
+.global-sidebar.is-collapsed :is(.repository-item,.sidebar-account-toggle) { width: var(--sidebar-button-size); height: var(--sidebar-button-size); margin-inline: auto; padding: 0; border: 0; border-radius: var(--sidebar-button-radius); }
+.repository-item { box-shadow: none; }
+.repository-item.active { box-shadow: inset 0 0 0 1px var(--strong-line); }
 @media (pointer: coarse) {
   .icon-button.ogui-control--small { width: 32px; min-width: 32px; min-height: 32px; height: 32px; }
   .selection-checkbox { min-height: 32px; }
@@ -869,4 +891,27 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
+/* H5-only visual review of the GitButler reference: keep the canvas continuous
+   under navigation and lift meaningful content groups, not individual rows. */
+:root:not([data-desktop='true']) {
+  --h5-card-edge: rgba(74, 91, 104, .18);
+  --h5-card-shadow: 0 2px 6px rgba(25, 36, 46, .06), 0 10px 26px rgba(25, 36, 46, .045);
+}
+:root[data-theme='dark']:not([data-desktop='true']) {
+  --h5-card-edge: rgba(255, 255, 255, .065);
+  --h5-card-shadow: 0 2px 6px rgba(0, 0, 0, .12), 0 12px 28px rgba(0, 0, 0, .16);
+}
+:root:not([data-desktop='true']) .global-sidebar.glass-panel {
+  background: transparent !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+:root:not([data-desktop='true']) :is(.import-stats .stat-card, .import-empty, .remote-repository-group, .repository-overview, .repository-column) {
+  border: 1px solid var(--h5-card-edge);
+  box-shadow: var(--h5-card-shadow);
 }

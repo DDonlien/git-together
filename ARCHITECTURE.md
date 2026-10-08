@@ -2,7 +2,9 @@
 
 R-05-tree-identity-row仅调整RepositoryFileTree的应用自有标记与局部CSS：当前task.branch和task.head派生同一行名称/8位SHA，文本渐隐用带透明尾部留白的蒙版，短名称不被淡化，SHA不收缩。本地路径和worktree标签保留；没有新增状态、读取接口或树重建，历史选择不替换树基准。隔离QA可用--long-branch建立真实临时长分支，默认测试数据不变。
 
-React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以账号、默认分支、本地目录等列展示一个统一列表，并支持按账号/关联状态/搜索筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
+React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以归属方、账号、本地目录等六列展示统一列表，实际分支位于可展开的仓库子行，不另设默认分支列；支持原搜索与筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
+
+IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。每个可见仓库行复用 useRemoteRepository，只有展开且服务就绪时启用已有 remoteWorkspace；收起保留该行的最后结果并取消请求，筛选隐藏/离开 Dashboard 卸载读取器。分支名称取返回 tasks，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口会同时读取有限历史/树并缓存SHA；没有新增分支API或服务重启、凭据与Git写入。
 
 `ui.tsx` 是 OpenGlass UI 的薄适配层，统一按钮、字段、分段选择、菜单、弹窗和开关契约；`theme.ts` 管理公共令牌。App shell 只有一个共享窗口 canvas，CSS 区分全局悬浮导航与右侧平面内容组。账号导航在桌面最小宽度仍保留可读名称，760px 以下使用浏览器图标栏回退。仓库图标上的空心角标明确表示 Presence 未连接，不伪造在线数据。
 
@@ -30,7 +32,7 @@ Workspace 每约 10 秒检查服务 instance/version 与 Catalog；每个账号�
 
 R-05 中已选文件退出更改列表时保留树选择，但不再显示旧 Diff，而明确显示没有未提交更改。每个任务卡片独立正常约 5 秒检查自己选中的更改文件；聚焦隐藏的卡片暂停 Diff 请求，重新展示后检查，草稿与选择不清空。
 
-浏览器远端读取的 AbortSignal 通过 HTTP 连接关闭传递到服务端，再传递给提供方请求；监听 response close / request aborted，不把正常 POST 读完误判为取消。既有目录 refresh 不改变去重语义。原生 IPC 本身没有远端执行取消，renderer 的 signal/资源身份阻止卸载后的发布。0.5.0 的 `use-remote-repository.ts` 只为打开且可访问的仓库建立正常约 60 秒的 HEAD 心跳，以服务 instanceId + 仓库身份定位缓存，保留最后成功结果与逐任务 UI 状态；停止旧资源、丢弃迟到结果，隐藏/离线和错误退避沿用共享调度器。这是前台轮询，不是 webhook 推送，不 fetch 或写入本地 refs，不表示零延迟或 API 限流时仍实时。
+浏览器远端读取的 AbortSignal 通过 HTTP 连接关闭传递到服务端，再传递给提供方请求；监听 response close / request aborted，不把正常 POST 读完误判为取消。既有目录 refresh 不改变去重语义。原生 IPC 本身没有远端执行取消，renderer 的 signal/资源身份阻止卸载后的发布。`use-remote-repository.ts` 为打开且可访问的工作区，以及 Dashboard 中可见且展开的仓库建立正常约 60 秒的 HEAD 心跳，以服务 instanceId + 仓库身份定位缓存，保留最后成功结果与逐任务 UI 状态；停止旧资源、丢弃迟到结果，隐藏/离线和错误退避沿用共享调度器。这是前台轮询，不是 webhook 推送，不 fetch 或写入本地 refs，不表示零延迟或 API 限流时仍实时。
 
 ## 文件树打开边界（0.8.0）
 

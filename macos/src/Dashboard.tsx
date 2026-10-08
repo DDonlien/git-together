@@ -1,7 +1,9 @@
-import { useState, type RefObject } from 'react';
-import { accountLabel, providerName, type RemoteRepository } from './import-model';
+import { useId, useState, type RefObject } from 'react';
+import { accountLabel, providerName, type Account, type RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
-import { Button, Icon, Notice, SearchInput } from './ui';
+import { useRemoteRepository } from './use-remote-repository';
+import type { RemoteRepositoryState } from './remote-repository-model';
+import { Button, Icon, IconButton, Notice, SearchInput } from './ui';
 import { RepositoryActions } from './RepositoryActions';
 import { FilterMenu } from './FilterMenu';
 import { MultiFilterMenu } from './MultiFilterMenu';
@@ -12,6 +14,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const [organization, setOrganization] = useState<FilterSelection>(null);
   const [source, setSource] = useState<FilterSelection>(null);
   const [type, setType] = useState<FilterSelection>(null);
+  const [expandedRepositories, setExpandedRepositories] = useState<Set<string>>(new Set());
   const { accounts, repositories, links } = controller.catalog;
   const selectedAccountId = accounts.some(account => account.id === accountId) ? accountId : 'all';
   const visibleAccounts = accounts.filter(a => selectedAccountId === 'all' || a.id === selectedAccountId);
@@ -38,22 +41,48 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
       </div>
       {visibleAccounts.filter(account => account.error).map(account => <Notice kind="error" key={account.id}>{account.name}：{account.error}{account.updatedAt && ' 已保留上次读取的仓库列表。'} 正在自动重试。</Notice>)}
       <section className="remote-repository-group flat-group" aria-label="仓库列表">
-        <div className="remote-table-scroll"><table className="remote-repo-table"><thead><tr><th scope="col">仓库</th><th scope="col">组织 / 用户</th><th scope="col">账号</th><th scope="col">默认分支</th><th scope="col">本地目录</th><th scope="col">状态</th><th scope="col"><span className="sr-only">仓库操作</span></th></tr></thead><tbody>{filtered.map(repo => {
-          const account = accountsById.get(repo.accountId)!;
-          const owner = repo.fullName.split('/')[0];
-          const local = controller.localStates[repo.id];
-          return <tr key={repo.id}>
-            <td><div className="remote-name"><span className="repository-icon-tile" aria-hidden="true"><Icon name="folder" size={19} /></span><div><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
-            <td><span className="repository-owner" title={owner}>{owner}</span></td>
-            <td><div className="remote-account-cell" title={accountLabel(account)}><div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login}@{new URL(account.host).host}</small></div></div></td>
-            <td><span className="branch-label"><Icon name="branch" size={13} /><span>{repo.defaultBranch || '—'}</span></span></td>
-            <td><button className={`local-path local-path-action ${mapped.has(repo.id) ? '' : 'muted'}`} title={mapped.get(repo.id) || '选择已有 Git 目录'} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !mapped.has(repo.id)} onClick={() => onConfigure(repo)}>{mapped.get(repo.id) || '尚未关联'}</button></td>
-            <td><span title={[repositoryClassification(repo), local?.error || (local?.checkedAt ? `本地最近检查：${new Date(local.checkedAt).toLocaleString()}` : '')].filter(Boolean).join(' · ')} className={`mapping-status ${!repo.available || local?.error ? 'unavailable' : mapped.has(repo.id) ? 'linked' : ''}`}>{!repo.available ? '失去访问权限' : local?.error ? '本地不可用' : mapped.has(repo.id) ? '已关联' : '未关联本地'}</span></td>
-            <td><RepositoryActions label={`仓库操作：${repo.fullName} · ${accountLabel(account)}`} repository={repo} hasLocalDirectory={mapped.has(repo.id)} onOpen={onOpen} onConfigure={onConfigure} /></td>
-          </tr>;
-        })}</tbody></table></div>
+        <div className="remote-table-scroll"><table className="remote-repo-table"><thead><tr><th scope="col">仓库</th><th scope="col">组织 / 用户</th><th scope="col">账号</th><th scope="col">本地目录</th><th scope="col">状态</th><th scope="col"><span className="sr-only">仓库操作</span></th></tr></thead>{filtered.map(repo => {
+          const key = JSON.stringify([controller.catalog.instanceId, repo.id]);
+          return <DashboardRepositoryRows key={key} repository={repo} account={accountsById.get(repo.accountId)!} controller={controller} localPath={mapped.get(repo.id)} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} />;
+        })}</table></div>
         {!filtered.length && <div className="account-repos-empty">{repositories.some(repo => selectedAccountId === 'all' || repo.accountId === selectedAccountId) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
       </section>
     </>}
   </main>;
+}
+
+function DashboardRepositoryRows({ repository: repo, account, controller, localPath, expanded, onToggle, onOpen, onConfigure }: {
+  repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string) => void; onConfigure: (repository: RemoteRepository) => void;
+}) {
+  const branchesId = useId();
+  const ready = !controller.loading && !controller.needsReload;
+  // Keep the reader mounted across disclosure, but only visible expanded rows
+  // own a heartbeat. Filtering/unmounting cancels through the shared reader.
+  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, expanded && ready);
+  const owner = repo.fullName.split('/')[0];
+  const local = controller.localStates[repo.id];
+  return <>
+    <tbody><tr className="dashboard-repository-row">
+      <td><div className="remote-name"><IconButton className="repository-disclosure" icon={expanded ? 'down' : 'right'} label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><span className="repository-icon-tile" aria-hidden="true"><Icon name="folder" size={19} /></span><div><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
+      <td><span className="repository-owner" title={owner}>{owner}</span></td>
+      <td><div className="remote-account-cell" title={accountLabel(account)}><div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login}@{new URL(account.host).host}</small></div></div></td>
+      <td><button className={`local-path local-path-action ${localPath ? '' : 'muted'}`} title={localPath || '选择已有 Git 目录'} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !localPath} onClick={() => onConfigure(repo)}>{localPath || '尚未关联'}</button></td>
+      <td><span title={[repositoryClassification(repo), local?.error || (local?.checkedAt ? `本地最近检查：${new Date(local.checkedAt).toLocaleString()}` : '')].filter(Boolean).join(' · ')} className={`mapping-status ${!repo.available || local?.error ? 'unavailable' : localPath ? 'linked' : ''}`}>{!repo.available ? '失去访问权限' : local?.error ? '本地不可用' : localPath ? '已关联' : '未关联本地'}</span></td>
+      <td><RepositoryActions label={`仓库操作：${repo.fullName} · ${accountLabel(account)}`} repository={repo} hasLocalDirectory={!!localPath} onOpen={onOpen} onConfigure={onConfigure} /></td>
+    </tr></tbody>
+    <tbody id={branchesId} className="dashboard-repository-branches" aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} hidden={!expanded}>{expanded && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} />}</tbody>
+  </>;
+}
+
+export function RepositoryBranchRows({ repository, state, blocked = false }: { repository: RemoteRepository; state: RemoteRepositoryState; blocked?: boolean }) {
+  const { workspace, loading } = state;
+  const error = repository.available ? state.error : '访问账号目前无权读取此仓库。';
+  const branchWarnings = workspace?.warnings.filter(warning => warning.startsWith('分支超过')) || [];
+  return <>
+    {error && <tr className="dashboard-branch-message"><td colSpan={6}><Notice kind="error">{error}{workspace ? ' 已保留上次读取的分支。' : ''} 收起后重新展开可重试。</Notice></td></tr>}
+    {!workspace && !error && <tr className="dashboard-branch-message"><td colSpan={6}><span role="status">{blocked ? '账号服务尚未就绪。' : loading ? <><Icon name="spinner" className="spin" size={13} />正在读取远端分支…</> : '正在准备远端读取…'}</span></td></tr>}
+    {workspace && !workspace.tasks.length && !error && <tr className="dashboard-branch-message"><td colSpan={6}><span role="status">此仓库暂无远端分支。</span></td></tr>}
+    {workspace?.tasks.map(task => <tr className="dashboard-branch-row" key={task.id}><td colSpan={6}><div className="dashboard-branch-content"><span className="branch-label" title={task.branch}><Icon name="branch" size={13} /><span>{task.branch}</span></span>{task.branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}</div></td></tr>)}
+    {!!branchWarnings.length && <tr className="dashboard-branch-message"><td colSpan={6}><Notice kind="info">{branchWarnings.join(' ')}</Notice></td></tr>}
+  </>;
 }
