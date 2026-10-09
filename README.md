@@ -16,7 +16,7 @@
 
 分支图左侧标题显示当前查看的分支名，点击名称直接下拉选择，不再有独立「定位分支」按钮。选择更新标题并定位已读取分支头，不检出分支或修改 Git；独立收起和任务草稿保持。
 
-GitTogether 是从零实现的独立 TypeScript 客户端，不继承 GitButler 源码或运行架构。已推送的源码基线和 GitHub 默认分支均为 `main`，仓库 description 已更新，旧 GitButler 官网链接及本地 `upstream` 关联已移除；开发工作区仍在 `codex/standalone-ts`。旧 `git-together/main` 分支及工作区仅作为历史保留，与独立实现没有共同提交历史。GitHub 的 fork 网络标记尚未解除，该操作不可逆且会丢失附属资料，具体状态见 [需求记录](REQUIREMENTS.md)。本次没有更新桌面安装包。
+GitTogether 是从零实现的独立 TypeScript 客户端，不继承 GitButler 源码或运行架构。已推送的源码基线和 GitHub 默认分支均为 `main`，仓库 description 已更新，旧 GitButler 官网链接及本地 `upstream` 关联已移除；开发工作区仍在 `codex/standalone-ts`。GitHub 已解除原 fork 网络关系，仓库现在是独立项目。旧 `git-together/main` 分支及工作区仅作为历史保留，与独立实现没有共同提交历史。本次没有更新桌面安装包。
 
 支持 GitHub、指定域名的 Gitea 和同一 host 的多个账号。账号按令牌权限读取仓库；每个账号下的仓库与本地关联状态无关，未关联目录也能打开查看远端信息。本地目录通过弹窗验证远端是否匹配。
 

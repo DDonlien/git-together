@@ -110,11 +110,11 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
   - [x] \[UI-08-sidebar] 两种视觉方案在宽窄视口均移除侧栏外层底色、描边、阴影和圆角；侧栏内部导航选中态与主内容卡片保持原样。
   - [x] \[UI-08-visual-qa] 在 4175 浏览器预览中逐一目视检查 Material 3 与 Material 3 Expressive 的首页、仓库页：侧栏外层与页面背景融为一体，统计/仓库列表和仓库工作区卡片仍有清楚的浮起层级。未做窄屏截图或逐像素标注对照。
 - [x] \[RUN-01] 新建不含 GitButler 源码的独立分支，类型检查、业务测试、构建、浏览器交互和视觉检查通过，实际启动桌面窗口并留给用户查看。
-  - [ ] \[RUN-01-identity] 按2026-10-09最新要求，将仓库description及Git关系整理为独立GitTogether项目。主页使用已推送的独立main基线，不再宣传GitButler或链接其官网；解除本地GitButler upstream关联，保留旧分支、提交、worktree和现有未提交修改。GitHub正式解除fork网络需先核对不可逆影响，不通过删除重建或强制推送冒充完成。
+  - [x] \[RUN-01-identity] 按2026-10-09最新要求，将仓库description及Git关系整理为独立GitTogether项目。主页使用已推送的独立main基线，不再宣传GitButler或链接其官网；解除本地GitButler upstream及GitHub fork网络关系，保留旧分支、提交和worktree。正式解除已取得用户确认并经GitHub原生流程完成，未通过删除重建或强制推送冒充完成。
     - [x] \[RUN-01-identity-settings] 更新GitHub description、清除旧GitButler homepage、设置main为默认分支，并调整本地origin默认引用和main读取配置，移除仅指向GitButler的upstream remote。API回读description为独立Git任务工作台、homepage为空、default_branch=main。
-    - [ ] \[RUN-01-identity-fork] 使用GitHub支持的解除fork方式移除gitbutlerapp/gitbutler父关系；若会永久丢失附属资料，先取得用户对确切影响的确认，未执行前不能宣称已成为非fork仓库。官方操作会永久脱离网络并丢失issues/PR/wiki/stars/watchers/comments及其他metadata，Git提交保留。已核对issue/PR/star/watcher/子fork计数均为0、wiki关闭，未核对其他附属资料，不据此假定所有配置无损。用户2026-10-09已明确确认解除；设置页已恢复读取并完成两步确认，但GitHub最终转到Confirm access要求本人通行密钥/手机/密码验证，API仍fork=true。验证页面已交给用户，不读取凭据或绕过身份检查；这不是缺少解除许可。#blocked
+    - [x] \[RUN-01-identity-fork] 使用GitHub支持的解除fork方式移除gitbutlerapp/gitbutler父关系。先说明附属metadata不保留且不可重新加入网络、Git提交保留，取得用户2026-10-09明确确认；本人完成身份验证后，13:23设置页显示后台处理中，未重复提交。13:26 API最终回读fork=false、parent/source=null、disabled=false，Git fetch与远端ref恢复成功，独立主页不再显示Forked from，默认main及三个旧分支SHA保持。未读取凭据、绕过身份检查或删除重建仓库；未核对其他附属资料，不承诺所有配置无损。
     - [x] \[RUN-01-identity-main] 按用户2026-10-09明确要求，复核本地已有UI、文档和日志变更，验证后按UI-04、UI-08记录与RUN-01身份说明分别提交，以正常快进推送origin/main至0e17546b6b；fetch、远端ref和GitHub API三者回读与本地一致。保留其他分支/worktree，不使用force push，不上传被忽略的本地安装包、实验样稿、依赖或凭据；解除fork与推送分别回读，不把其中一项成功冒充另一项。收尾需求/日志记录作为独立文档提交同步。
-    - [x] \[RUN-01-identity-test] 已回读GitHub metadata、默认分支SHA、本地远端/引用与worktree；前次设置不改Git提交，本次main正常快进至已复核的本地源码，codex/standalone-ts、desktop/overview-split和git-together/main三个旧远端分支SHA保持，3个worktree不重定位。327/327回归、严格类型检查、生产构建与Sites4/4重新通过，主/助手0.8.7和1账号/38仓库/0关联会话保持。正式fork状态仍为true，待本人验证；不用description、本地remote或main推送替代解除验收。
+    - [x] \[RUN-01-identity-test] 已回读GitHub metadata、默认分支SHA、本地远端/引用与worktree；前次设置不改Git提交，main正常快进至已复核的本地源码，codex/standalone-ts、desktop/overview-split和git-together/main三个旧远端分支SHA保持，3个worktree不重定位。此前提交前327/327回归、严格类型检查、生产构建与Sites4/4重新通过，主/助手0.8.7和1账号/38仓库/0关联会话保持；本轮仅同步身份记录，不冒称重跑应用测试。最终fork=false及父关系为空、Git恢复独立回读，不用description、本地remote或main推送替代解除验收。
 
 ### codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）
 
