@@ -83,12 +83,14 @@ test('repository table icon tile derives its square size from both text lines an
 
 test('rounded repository tile centers the smaller folder and remains scoped to the table', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  const tile = css.match(/\.remote-name \.repository-icon-tile \{([^}]+)\}/)?.[1] || '';
+  const tile = css.match(/\.remote-name \.repository-icon-tile\.repository-disclosure \{([^}]+)\}/)?.[1] || '';
   assert.match(tile, /display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;/);
   assert.match(tile, /width: var\(--repository-icon-size\); height: var\(--repository-icon-size\)/);
   assert.match(tile, /border-radius: var\(--radius-control\)/);
   assert.match(tile, /color: var\(--blue\); background: var\(--blue-bg\)/);
-  assert.doesNotMatch(tile, /box-shadow|border:|transform/);
+  assert.match(tile, /border: 0;/);
+  assert.match(tile, /box-shadow: none;/);
+  assert.doesNotMatch(tile, /transform/);
   assert.doesNotMatch(css, /\.remote-name > svg/);
   assert.match(css, /--sidebar-icon-size: 19px;/);
   assert.match(css, /\.global-sidebar \.nav-item > svg, \.global-sidebar \.repository-logo, \.global-sidebar \.repository-logo > svg \{ width: var\(--sidebar-icon-size\); height: var\(--sidebar-icon-size\); \}/);

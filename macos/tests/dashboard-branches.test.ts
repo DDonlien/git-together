@@ -82,6 +82,17 @@ test('disclosure reuses the finite remote reader, instance-bound identity and in
   assert.doesNotMatch(css, /\.remote-repo-table th:nth-child\(7\)/);
 });
 
+test('the existing folder tile is the only disclosure, without an extra arrow or a changed hit-area size', () => {
+  const source = readFileSync(new URL('../src/Dashboard.tsx', import.meta.url), 'utf8');
+  assert.match(source, /<IconButton className="repository-icon-tile repository-disclosure" icon="folder"/);
+  assert.doesNotMatch(source, /icon=\{expanded \? 'down' : 'right'\}|<span className="repository-icon-tile"/);
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const disclosure = css.match(/\.remote-name \.repository-icon-tile\.repository-disclosure \{([^}]+)\}/)?.[1] || '';
+  assert.match(disclosure, /width: var\(--repository-icon-size\); height: var\(--repository-icon-size\)/);
+  assert.doesNotMatch(disclosure, /(?:width|height): (?:24|28)px/);
+  assert.match(css, /\.remote-name \.repository-disclosure svg \{ width: 19px; height: 19px;/);
+});
+
 for (const provider of ['github', 'gitea'] as const) test(`${provider}: Dashboard branch rows come from the actual AccountService reader over isolated real Git`, async t => {
   const fixture = await createRemoteServiceFixture(provider); t.after(fixture.cleanup);
   const result = await fixture.service.handle('remoteWorkspace', { repositoryId: fixture.repositoryId });

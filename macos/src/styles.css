@@ -126,8 +126,8 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
   --repository-icon-size: calc((var(--repository-name-size) + var(--repository-detail-size)) * var(--repository-text-leading) + var(--repository-text-gap));
   display: flex; gap: var(--icon-label-gap); align-items: center; min-width: 0;
 }
-.remote-name .repository-icon-tile { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--repository-icon-size); height: var(--repository-icon-size); border-radius: var(--radius-control); color: var(--blue); background: var(--blue-bg); }
-.remote-name .repository-disclosure { flex: 0 0 24px; width: 24px; height: 28px; min-height: 0; padding: 0; background: transparent; border: 0; box-shadow: none; color: var(--muted); }
+.remote-name .repository-icon-tile.repository-disclosure { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--repository-icon-size); height: var(--repository-icon-size); min-height: 0; padding: 0; border: 0; border-radius: var(--radius-control); box-shadow: none; color: var(--blue); background: var(--blue-bg); }
+.remote-name .repository-disclosure svg { width: 19px; height: 19px; }
 .remote-name .repository-disclosure:hover { background: var(--surface-hover); }
 .remote-repo-table .dashboard-branch-row td, .remote-repo-table .dashboard-branch-message td { height: 34px; padding: 6px 12px 6px 34px; text-align: left; }
 .dashboard-repository-branches { background: color-mix(in srgb, var(--blue-bg) 30%, transparent); }

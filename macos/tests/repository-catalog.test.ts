@@ -147,11 +147,12 @@ test('same-name repositories remain searchable by their separate ownership witho
   assert.doesNotMatch(repositories[0], /\/projects\/work\/shared/);
 });
 
-test('each repository centers a decorative folder in a tile beside two text lines without restoring account icons', () => {
+test('each repository uses its centered folder tile as the sole disclosure beside two text lines', () => {
   for (const row of rows(dashboard())) {
     const cells = [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(match => match[1]);
-    assert.match(cells[0], /class="remote-name"><button[^>]*repository-disclosure[\s\S]*?<\/button><span class="repository-icon-tile" aria-hidden="true"><svg[^>]*width="19"[^>]*height="19"[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/span><div><button class="repository-link"[\s\S]*?<\/button><small><span class="repository-visibility">(?:私有|公开)<\/span>/);
-    assert.equal((cells[0].match(/class="repository-icon-tile"/g) || []).length, 1);
+    assert.match(cells[0], /class="remote-name"><button[^>]*repository-icon-tile repository-disclosure[^>]*>[\s\S]*?<svg[^>]*aria-hidden="true"[\s\S]*?<\/svg>[\s\S]*?<\/button><div><button class="repository-link"[\s\S]*?<\/button><small><span class="repository-visibility">(?:私有|公开)<\/span>/);
+    assert.equal((cells[0].match(/repository-icon-tile/g) || []).length, 1);
+    assert.equal((cells[0].match(/<svg\b/g) || []).length, 1);
     assert.equal((cells[0].match(/<small>/g) || []).length, 1);
     assert.doesNotMatch(cells[1], /<svg|provider-mark/);
     assert.doesNotMatch(cells[2], /<svg|provider-mark/);

@@ -474,3 +474,13 @@ final result for UI-04-sidebar-icon-buttons-no-indent: passed
 - 当前源码与浏览器预览已更新；未改版本/凭据、重启主或助手、对用户Git写入、提交/推送、生产发布或原生打包。保持0.8.7是防止版本依赖更新触发服务重启清空账号会话的本轮开发例外，不作为新发布版本。
 
 final result for IMPORT-13-branches: passed
+
+## 2026-10-09 文件夹图标直接展开（IMPORT-13-branches-folder）
+
+- 按最新标注移除独立箭头，原文件夹圆角底板直接承接公共按钮的展开/收起与aria状态；名称仍单独导航到仓库工作区。仅有一个文件夹svg，不改变六列、真实分支读取、子行样式、计数、筛选或侧栏。
+- 实际隔离生产App/AccountService从临时Git读取main、task/review、task/search；click展开、Enter收起、Space再展开以及名称导航均通过。实测底板36.34375×36.34375，等于两行文字总高；19×19图标居中，10px间距，父行58px。公共small按钮原先会缩到28px，已通过局部特异性覆盖修正，静态回归同时验证这一边界。
+- 实际849×853主预览的agent-done文件夹展开后读到main及两个codex分支，没有展开错误；38仓库计数不变。[最终主预览截图](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/dashboard-folder-disclosure-main.png)已目视检查，原底板保留，前方多余箭头已消失。未更改用户主题或侧栏偏好。
+- 项目check、直接strict类型检查、326/326回归、生产构建、Sites包装4/4及差异检查通过。旧测试禁止所有border/box-shadow声明不再适用于公共按钮重置，改为验证border:0/box-shadow:none；不存在的check:strict调用失败后已纠正，不冒充有效验证。隔离console无warn/error。
+- 自有测试标签关闭、39917隔离服务quit，fixtureRemoved=true/gitUnchanged=true/userDataChanged=false。主和助手均HTTP200/0.8.7，主实例fead0bc8-c050-4969-a84e-46b9b8491305、1账号/38仓库/0关联/失败账号0保持，助手configured=true。没有服务重启、凭据迁移或原生包更新；源码提交/main推送由IMPORT-13-main单独记录。
+
+final result for IMPORT-13-branches-folder: passed

@@ -4,7 +4,7 @@ R-05-tree-identity-row仅调整RepositoryFileTree的应用自有标记与局部C
 
 React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以归属方、账号、本地目录等六列展示统一列表，实际分支位于可展开的仓库子行，不另设默认分支列；支持原搜索与筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
 
-IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。每个可见仓库行复用 useRemoteRepository，只有展开且服务就绪时启用已有 remoteWorkspace；收起保留该行的最后结果并取消请求，筛选隐藏/离开 Dashboard 卸载读取器。分支名称取返回 tasks，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口会同时读取有限历史/树并缓存SHA；没有新增分支API或服务重启、凭据与Git写入。
+IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。IMPORT-13-branches-folder把原文件夹底板直接复用为公共IconButton展开入口，保留aria-expanded/aria-controls；仓库名称的工作区导航处理器独立，不新增状态或箭头。每个可见仓库行复用 useRemoteRepository，只有展开且服务就绪时启用已有 remoteWorkspace；收起保留该行的最后结果并取消请求，筛选隐藏/离开 Dashboard 卸载读取器。分支名称取返回 tasks，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口会同时读取有限历史/树并缓存SHA；没有新增分支API或服务重启、凭据与Git写入。
 
 `ui.tsx` 是 OpenGlass UI 的薄适配层，统一按钮、字段、分段选择、菜单、弹窗和开关契约；`theme.ts` 管理公共令牌。App shell 只有一个共享窗口 canvas，CSS 区分全局悬浮导航与右侧平面内容组。账号导航在桌面最小宽度仍保留可读名称，760px 以下使用浏览器图标栏回退。仓库图标上的空心角标明确表示 Presence 未连接，不伪造在线数据。
 
