@@ -1,5 +1,7 @@
 # TypeScript 客户端架构
 
+2026-10-10读取状态与计数分离（0.12.2）：auto-refresh的onReading仅覆盖实际在途请求，取消/暂停清除等待状态，失败退避不持续显示忙碌。远端与本地hook沿用原资源身份保护，分别发布loading/error及最后可用workspace；preserveLocalWorkspace在相同映射内保留失败任务的文件、树和历史，按task id/path/branch核对，成功任务更新、删除任务或映射变化不复用。branch-links从已读取数据计算真实数量，独立status/statusDetail表达reading/error，读取失败不短路成count=1，未知仍未知；Commit只依赖本地，Fetch只依赖远端，逐任务错误限定分支。RepositoryActions独立渲染数字和状态，保持禁用执行。账号服务的15秒远端请求限时覆盖头/正文，外部取消仍透传；只将白名单连接/证书代码、超时、HTTP权限与限流转换为安全说明，不返回原始异常、凭据或provider正文。无新API、持久化结构、账号重放或Git写操作。
+
 2026-10-10操作裁切与隐藏修正：Dashboard的显式repository-action-cell固定在表格可见右端，276px容纳七个Git入口和独立Hide/Restore；错误行的colSpan不套用固定列。其他列保持表内横滚与六项排序。RepositoryRowActions复用已有RepositoryActions并追加真实可用的隐藏按钮。useWorkspace沿用v2界面偏好存储，新增可选hiddenEntries字符串数组，旧记录缺省兼容；键为JSON编码的repositoryId和可选branch，不依赖服务instanceId。Dashboard过滤隐藏仓库及分支，显示已隐藏模式提供逐行恢复，分支全部隐藏时显示明确说明。隐藏仅影响列表，不改变Catalog、账号权限、目录关联、Git状态或文件。
 
 2026-10-10行尾操作定义：`RepositoryActions`按Commit/Fetch/Pull/Push/Get Latest/Reconcile/Clear显示7个公共IconButton，移除Ignore专用图标。`branch-links.ts`的`GitSignals`扩展为7个固定键，已有HEAD ancestry与工作目录数用于Pull/Push，未提交文件数用于Commit；Get Latest的空间清理与Reconcile/Clear的文件内容比较没有读取契约时保持数量未知。操作列220px容纳7个28px按钮与6个4px间隔，日期列继续保留。本轮没有新增写API、Git进程或目录删除；保留已有按下反馈和禁用说明。真实操作执行另列未完成需求，后续实现需要先产生账号/仓库/当前分支绑定的影响清单，再处理浅拷贝、当前版本完整性、Git对象与LFS缓存回收、共享worktree和文件覆盖的边界。
@@ -155,3 +157,13 @@ R-05-global-tree 将树基准与提交差异分离：View 始终将原 task、HE
 测试 `git-remote-fixture.ts` 把本轮创建的真实临时 Git 数据转换为有限 provider 响应，覆盖零关联的真实 merge、分支树、Diff、已提交 blob 与本地脏内容隔离；`remote-integration.test.ts` 经过实际 AccountService→HTTP→importAPI，验证两个 provider、有限输入、SHA 缓存、凭据更新/移除竞争、取消和 HTTP 断连。`remote-integration-preview.ts` 在独立临时端口运行生产构建 App 和实际服务，测试账号只有 synthetic token，无测试入口进入生产；`repository-preview.ts --remote` 保留组件隔离 QA。临时 Git 的 HEAD/index 不受应用改动，用户凭据不导出、不重放、不落盘。
 
 文件树来源控制仅为 RepositoryView 内部状态，不新增 API。未选择时优先远端（只有本地任务时显示本地）；用户选择不被心跳重置。按 task.remote 区分来源，按现有 task.id 隐藏而不卸载树，选择与展开仍各任务独立；聚焦任务不属于所选来源时，右栏按同一分支匹配另一来源的任务，不改变聚焦或 checkout。源无任务时显示明确状态，不回退冒充另一源。标题公共分段组件提供具名 fieldset/legend 与 pressed 按钮，复用 Tab、Enter、Space；右栏卡片不重复显示远端文字。隔离 `repository-preview.ts --mixed` 组合同一个新建临时 Git 仓库的 provider 已提交内容与本地脏工作目录，用于来源差异/状态保留验证，不连接用户账号服务。
+
+## 本地诊断日志（IMPORT-14-diagnostics，0.13.0）
+
+`LocalDiagnostics` 写入固定的 `~/Library/Application Support/GitTogether-Standalone-Demo/logs`，与账号加密文件分离；桌面、预览与授权助手共享目录，但按小时、组件和进程会话 UUID 独立 JSONL 文件，避免多进程交错写入。目录权限 0700、文件 0600，拒绝日志目录/写入目标软链接，不扫描或删除非本功能文件。短行同步追加保存最后一次失败，日志 IO 错误不影响原操作结果。启动、每分钟、查询状态/关闭时清理；24 小时边界小时按行时间裁剪，其他过期小时删除，不运行时在下一次启动清理。
+
+总日志空间上限 128 MiB；每分钟及每累计至多 1 MiB 新写入执行空间清理，可短暂超出至多每写入者约 1 MiB。达到上限删除较早日志文件，设置提示当前记录可能不足 24 小时；容量提示在触及上限的进程会话内保留。边界原子改写意外留下的本功能临时副本在超过 5 分钟后清理，不触碰其他文件或尚在改写的副本。日志不是审计保证，进程强制终止、断电、目录不可写或预览服务断开时可能缺失；写入/清理健康在设置明确展示，不静默冒充已记录。
+
+有限协议由 `diagnostics-model.ts` 白名单重建，仅保留时间、版本、事件/结果、方法、provider/端点类别、允许的错误类型/代码、HTTP 状态、Git 退出码/信号、耗时、重试延迟与计数。不保存原始消息、堆栈、输入/响应、URL、凭据、文件内容或明文账号/仓库/分支/目录。资源使用每进程随机盐 HMAC；渲染层不能传入资源标识或服务器跨度。`importAPI` 生成 UUID，经有限 IPC 或同源 HTTP 传给服务；AsyncLocalStorage 关联根请求、provider/存储子跨度与只读 Git 失败。常规本地读取由外层 API 记录开始/成功，内部 Git 仅记录失败，以免高频轮询产生巨量日志。部分任务/目录失败及不完整结果独立记 partial；保留缓存不代表读取成功。
+
+渲染层记录请求结果、实际退避/暂停/恢复、网络/可见性、偏好存储失败及未接入 Git 操作的 blocked；授权只记录安全阶段，更新记录 check/download/install 及终态，不存发布包内容或错误原文。进程异常监视不改变崩溃语义。日志不上传。设置的三个有限操作 status/record/open 由本机同源 HTTP 检查或既有可信主 frame IPC 检查保护；共用 `diagnosticsCommand`，打开固定日志目录而非接受调用者路径。纯静态部署和旧客户端无日志服务时明确提示不可用；不降级到浏览器明文存储。构建加载 Vite 配置不启动日志写入。账户与本地关联格式及安装应用身份保持不变。

@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AccountService } from './account-service';
+import { LocalDiagnostics, diagnosticsDirectory } from './diagnostics';
+import { diagnosticsMiddleware } from './diagnostics-http';
+import { diagnosticFailure } from '../src/diagnostics-model';
 
 export function importMiddleware(service: AccountService) {
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
@@ -25,7 +28,8 @@ export function importMiddleware(service: AccountService) {
       let size = 0; const chunks: Buffer[] = [];
       for await (const part of req) { size += part.length; if (size > 32_768) { res.statusCode = 413; throw new Error('请求过大。'); } chunks.push(Buffer.from(part)); }
       const input: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      const value = await service.handle(endpoint.slice('/api/import/'.length), input, cancellation.signal);
+      const trace = req.headers['x-gittogether-request'];
+      const value = await service.handle(endpoint.slice('/api/import/'.length), input, cancellation.signal, typeof trace === 'string' ? trace : undefined);
       res.end(JSON.stringify({ ok: true, value }));
     } catch (error) {
       if (res.statusCode === 200) res.statusCode = 400;
@@ -35,10 +39,20 @@ export function importMiddleware(service: AccountService) {
 }
 
 export function accountImportPlugin(options: { githubClientId?: string } = {}) {
-  const service = new AccountService(undefined, undefined, options);
+  // Do not create runtime logs merely by loading Vite configuration for a build.
+  const configure = (server: { middlewares: { use: (handler: ReturnType<typeof importMiddleware>) => void }; httpServer?: { once: (event: string, listener: () => void) => unknown } | null }) => {
+    const diagnostics = new LocalDiagnostics(diagnosticsDirectory(), 'preview');
+    diagnostics.record({ event: 'lifecycle', outcome: 'start' });
+    const crash = (problem: Error) => diagnostics.record({ event: 'lifecycle', outcome: 'failure', ...diagnosticFailure(problem) });
+    process.on('uncaughtExceptionMonitor', crash);
+    const service = new AccountService(undefined, undefined, { ...options, diagnostics });
+    server.middlewares.use(diagnosticsMiddleware(diagnostics));
+    server.middlewares.use(importMiddleware(service));
+    server.httpServer?.once('close', () => { process.off('uncaughtExceptionMonitor', crash); diagnostics.record({ event: 'lifecycle', outcome: 'complete' }); diagnostics.close(); });
+  };
   return {
     name: 'gittogether-account-import',
-    configureServer(server: { middlewares: { use: (handler: ReturnType<typeof importMiddleware>) => void } }) { server.middlewares.use(importMiddleware(service)); },
-    configurePreviewServer(server: { middlewares: { use: (handler: ReturnType<typeof importMiddleware>) => void } }) { server.middlewares.use(importMiddleware(service)); },
+    configureServer: configure,
+    configurePreviewServer: configure,
   };
 }

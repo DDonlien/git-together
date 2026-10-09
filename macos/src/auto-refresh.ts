@@ -18,6 +18,8 @@ export function createAutoRefresh(options: {
   maxBackoffMs?: number;
   isActive?: () => boolean;
   onError?: (problem: unknown) => void;
+  onReading?: (reading: boolean) => void;
+  onRetry?: (failures: number, retryMs: number) => void;
   clock?: RefreshClock;
 }) {
   const time = options.clock || clock;
@@ -39,20 +41,24 @@ export function createAutoRefresh(options: {
   async function run() {
     if (stopped || !active() || request) return;
     const current = new AbortController(); request = current; lastStart = time.now();
+    options.onReading?.(true);
     try { await options.run(current.signal); if (!current.signal.aborted) { failures = 0; retryNotBefore = -Infinity; } }
     catch (problem) {
       if (!current.signal.aborted) {
         failures = Math.min(failures + 1, 10);
-        retryNotBefore = time.now() + Math.min(maximum, options.intervalMs * 2 ** failures);
+        const retryMs = Math.min(maximum, options.intervalMs * 2 ** failures);
+        retryNotBefore = time.now() + retryMs;
+        options.onRetry?.(failures, retryMs);
         options.onError?.(problem);
       }
     } finally {
       request = undefined;
+      if (!stopped) options.onReading?.(false);
       if (resumePending) { resumePending = false; schedule(wakeDelay()); }
       else schedule(Math.min(maximum, options.intervalMs * 2 ** failures));
     }
   }
-  function pause() { cancelTimer?.(); cancelTimer = undefined; resumePending = false; request?.abort(); }
+  function pause() { cancelTimer?.(); cancelTimer = undefined; resumePending = false; if (request) { request.abort(); options.onReading?.(false); } }
   function wakeDelay() { return Math.max(0, minimumWake - (time.now() - lastStart), retryNotBefore - time.now()); }
   function wake() {
     if (stopped) return;

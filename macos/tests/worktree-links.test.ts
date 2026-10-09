@@ -107,6 +107,6 @@ test('lamps distinguish equal, ahead, behind, unknown ancestry, changes, unlinke
   }
   state.workspace.commits = []; const unknown = gitSignals([task], remote, state); assert.equal(unknown.pull.tone, 'warning'); assert.match(unknown.pull.detail, /无法确认领先、落后或分叉/);
   assert.equal(gitSignals([{ ...task, files: [{ path: 'file', status: 'M', tracked: true }] }], remote, state).commit.tone, 'warning');
-  assert.equal(gitSignals([{ ...task, error: 'Unreadable' }], remote, state).pull.tone, 'error');
+  assert.equal(gitSignals([{ ...task, error: 'Unreadable' }], remote, state).pull.status, 'error');
   assert.equal(associationStatus(undefined, state, remote).label, '尚未关联');
 });

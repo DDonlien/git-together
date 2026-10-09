@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GitSignals } from './branch-links';
 import { IconButton, type IconName } from './ui';
+import { logDiagnostic } from './diagnostics-api';
 
 type RepositoryActionKey = keyof GitSignals;
 type RepositoryAction = { key: RepositoryActionKey; label: string; icon: IconName; description: string };
@@ -21,9 +22,9 @@ export function RepositoryActions({ label, signals }: { label: string; signals: 
   const press = (key: RepositoryActionKey) => { if (releaseTimer.current) clearTimeout(releaseTimer.current); releaseTimer.current = null; setPressed(key); };
   // Feedback acknowledges input only. The actual Git buttons remain
   // disabled until their execution is implemented; never report fake success.
-  const pulse = (key: RepositoryActionKey) => { press(key); releaseTimer.current = setTimeout(() => { releaseTimer.current = null; setPressed(null); }, 180); };
+  const pulse = (key: RepositoryActionKey) => { logDiagnostic({ event: 'ui-action', outcome: 'blocked', method: key }); press(key); releaseTimer.current = setTimeout(() => { releaseTimer.current = null; setPressed(null); }, 180); };
   useEffect(() => () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); }, []);
-  const describe = (action: RepositoryAction) => `${action.description} ${signals[action.key].detail} 此 Git 操作尚未接入执行，不会修改工作目录。`;
+  const describe = (action: RepositoryAction) => `${action.description} ${signals[action.key].detail} ${signals[action.key].statusDetail || ''} 此 Git 操作尚未接入执行，不会修改工作目录。`;
   return <div className="repository-actions" role="group" aria-label={label}>
     {actions.map(action => {
       const signal = signals[action.key];
@@ -35,6 +36,7 @@ export function RepositoryActions({ label, signals }: { label: string; signals: 
         onKeyUp={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pulse(action.key); } }}>
         <IconButton icon={action.icon} label={action.label} title="" aria-hidden="true" tabIndex={-1} disabled />
         {count !== undefined && <span aria-hidden="true" className={`git-action-badge ${signal.tone}`}>{count}</span>}
+        {signal.status && <span aria-hidden="true" className={`git-action-read-badge ${signal.status}`}>{signal.status === 'reading' ? <span className="git-action-read-spinner" /> : '!'}</span>}
       </span>;
     })}
   </div>;

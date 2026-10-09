@@ -15,6 +15,10 @@ export function useRemoteRepository(repository: RemoteRepository | undefined, in
   const current = useRef(''); current.current = active ? resource : '';
   const [states, setStates] = useState<Record<string, RemoteRepositoryState>>({});
   useAutoRefresh({ resources: active ? [resource] : [], intervalMs: syncIntervals.remote,
+    onReading: (key, loading) => setStates(previous => {
+      const state = previous[key] || { workspace: null, error: '', loading: false };
+      return state.loading === loading ? previous : { ...previous, [key]: { ...state, loading } };
+    }),
     run: async (key, signal) => {
       const [serviceId, repositoryId] = JSON.parse(key) as [string, string];
       try {
@@ -43,5 +47,5 @@ export function useRemoteRepository(repository: RemoteRepository | undefined, in
     return result;
   }, [resource, repositoryId]);
   const state = states[resource] || { workspace: null, loading: active, error: repository && !repository.available ? '访问账号目前无权读取此仓库。' : '' };
-  return { state, readCommit: active ? readCommit : undefined };
+  return { state: !active && state.loading ? { ...state, loading: false } : state, readCommit: active ? readCommit : undefined };
 }

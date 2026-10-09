@@ -9,6 +9,7 @@ import { GitHubBrowserAuthorizationModal } from './GitHubBrowserAuthorizationMod
 import { cancelGitHubWebAuthorization, navigateGitHubWebWindow, openGitHubWebAuthorization, reserveGitHubWebWindow, startGitHubWebAuthorization } from './github-web-api';
 import type { GitHubWebSession } from './github-web-model';
 import { UpdateSettings } from './UpdateSettings';
+import { DiagnosticsSettings } from './DiagnosticsSettings';
 
 export function SettingsView({ controller, onDashboard }: { controller: WorkspaceController; onDashboard: () => void }) {
   const [adding, setAdding] = useState(false);
@@ -63,6 +64,7 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
     </section>
     <section className="settings-section"><h2>外观</h2><div className="settings-group"><div className="setting-row"><span>颜色方案<small>跟随系统，或选择亮色与暗色</small></span><Select label={<span className="sr-only">颜色方案</span>} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '亮色' }, { value: 'dark', label: '暗色' }]} value={controller.preferences.theme} onChange={event => controller.updatePreferences({ theme: event.target.value as 'light' | 'dark' | 'system' })} /></div></div></section>
     <UpdateSettings busy={busy || Object.values(controller.busy).some(Boolean)} />
+    <DiagnosticsSettings />
     </div>
     <footer className="settings-footer">GitTogether {pkg.version}</footer>
     {editing && <Modal title="编辑账号" onClose={() => { if (!controller.busy[editing.id]) setEditing(null); }}><AccountEditForm key={editing.id} account={editing} busy={!!controller.busy[editing.id]} onSubmit={controller.updateAccount} onSaved={() => { setEditing(null); setMessage('账号已更新。'); }} onCancel={() => setEditing(null)} onRemove={() => { setRemoving(editing); setError(''); }} /></Modal>}

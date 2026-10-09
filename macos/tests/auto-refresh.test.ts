@@ -109,3 +109,15 @@ test('account failures and removing one resource do not stop another resource', 
   await clock.advance(15_000); assert.equal(good, 4); assert.equal(bad, 2);
   b.stop(); await clock.advance(10_000); assert.equal(good, 6); assert.equal(bad, 2);
 });
+
+test('reading feedback covers only actual requests, not the retry backoff, and clears on cancellation/stop', async () => {
+  const clock = new ManualClock(); const events: boolean[] = []; let failure = true;
+  const monitor = createAutoRefresh({ clock, intervalMs: 5_000, onReading: reading => events.push(reading), run: async () => { if (failure) throw new Error('HTTP 503'); } });
+  assert.deepEqual(events, []); await clock.advance(0); assert.deepEqual(events, [true, false]);
+  await clock.advance(9_999); assert.deepEqual(events, [true, false]);
+  failure = false; await clock.advance(1); assert.deepEqual(events, [true, false, true, false]); monitor.stop();
+  const pending = deferred(); const cancelled: boolean[] = [];
+  const slow = createAutoRefresh({ clock, intervalMs: 5_000, onReading: reading => cancelled.push(reading), run: async () => pending.promise });
+  await clock.advance(0); assert.equal(cancelled.at(-1), true); slow.pause(); assert.equal(cancelled.at(-1), false);
+  slow.stop(); const length = cancelled.length; pending.resolve(); await flush(); assert.equal(cancelled.length, length);
+});

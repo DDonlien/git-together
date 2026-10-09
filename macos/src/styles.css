@@ -189,6 +189,11 @@ button.repository-count-action:disabled { opacity: .7; }
 .git-action-badge.good { background: var(--teal); }
 .git-action-badge.warning { background: var(--warning); }
 .git-action-badge.error { background: var(--danger); }
+.git-action-read-badge { position: absolute; bottom: -3px; right: -3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; border-radius: 999px; outline: 1px solid var(--content); background: var(--content); color: var(--blue); font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none; }
+.git-action-read-badge.error { background: var(--danger); color: var(--content); }
+.git-action-read-spinner { width: 8px; height: 8px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: git-action-reading 900ms linear infinite; }
+@keyframes git-action-reading { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .git-action-read-spinner { animation: none; } }
 .account-repos-empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 12px; }
 .settings-view { --settings-heading-gap: 22px; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0 12px; }
 .settings-scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 12px; }
@@ -502,7 +507,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .nav-item.active > svg { color: var(--blue); }
 .global-nav { margin-bottom: var(--sidebar-section-gap); }
 .sidebar-label { display: flex; justify-content: space-between; padding: 0 10px 7px; font-size: 11px; font-weight: 550; color: var(--muted); letter-spacing: .1px; }
-.repository-item { height: 34px; }
+.global-sidebar .repository-item { height: var(--sidebar-button-size); padding-block: 0; }
 .repo-sidebar-list { min-height: 0; overflow-y: auto; flex-shrink: 1; }
 .repository-item > span:not(.mini-dot) { overflow: hidden; text-overflow: ellipsis; }
 .repository-item .mini-dot { margin-left: auto; }
@@ -943,3 +948,4 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+.diagnostics-path { padding: 0 16px 12px; margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

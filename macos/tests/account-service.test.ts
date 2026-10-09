@@ -67,6 +67,22 @@ test('authentication failure does not add an account or leak provider payload', 
   await assert.rejects(service.handle('connect', connect('gitea', 'invalid')), /令牌无效/);
   assert.equal((await catalog(service)).accounts.length, 0);
 });
+
+test('read failures distinguish safe transport reasons and HTTP rate limits without exposing raw provider errors', async () => {
+  for (const [code, message] of [['ECONNREFUSED', /拒绝连接/], ['ENOTFOUND', /域名解析/], ['ECONNRESET', /连接中断/], ['CERT_HAS_EXPIRED', /证书验证失败/], ['UND_ERR_CONNECT_TIMEOUT', /连接超时/]] as const) {
+    const service = new AccountService(sessionStore(), async () => { throw new Error('private diagnostic fixture-secret https://private.test', { cause: { code } }); });
+    await assert.rejects(service.handle('connect', connect('gitea')), error => {
+      assert.ok(error instanceof Error); assert.match(error.message, message); assert.match(error.message, new RegExp(code));
+      assert.doesNotMatch(error.message, /fixture-secret|private\.test|private diagnostic/); return true;
+    });
+  }
+  const timeout = new AccountService(sessionStore(), async () => { throw new DOMException('private timeout detail', 'TimeoutError'); });
+  await assert.rejects(timeout.handle('connect', connect('gitea')), /超时（15秒）/);
+  for (const [status, headers, expected] of [[429, {}, /访问频率受限.*HTTP 429/], [403, { 'x-ratelimit-remaining': '0' }, /访问频率受限.*HTTP 403/], [403, {}, /拒绝读取.*HTTP 403/]] as const) {
+    const service = new AccountService(sessionStore(), async () => new Response('fixture-secret private provider detail', { status, headers }));
+    await assert.rejects(service.handle('connect', connect('gitea')), error => { assert.ok(error instanceof Error); assert.match(error.message, expected); assert.doesNotMatch(error.message, /fixture-secret/); return true; });
+  }
+});
 test('repository failure preserves a verified account and supports isolated retries', async () => {
   const f = fixture(); const service = new AccountService(sessionStore(), f.request); f.setFailure(true);
   await service.handle('connect', connect('gitea')); let result = await catalog(service);

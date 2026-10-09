@@ -291,7 +291,7 @@ test('browser waiting UI stays token-free and the helper is isolated from the ma
   assert.match(helper, /server.listen\(4174, '127.0.0.1'/); assert.match(helper, /createLoopbackFetch/);
   assert.doesNotMatch(helper, /BrowserWindow|AccountService|encryptedStore|7890/);
   assert.match(helper, /app.getPath\('appData'\), 'GitTogether Authorization', 'github-oauth-v1.encrypted'/);
-  assert.match(helper, /configuration.load\(\)/); assert.match(helper, /save: configuration.save/);
+  assert.match(helper, /configuration.load\(\)/); assert.match(helper, /save: value => diagnostics.run\('storage', \{\}, \(\) => configuration.save\(value\)\)/);
   assert.match(helper, /bind: async \(\) => previewConnector\(await readPreviewStatus\(localRequest\)/);
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8'); assert.match(main, /new AccountService\(encryptedStore\([^\n]+systemFetch(?:\)|,\s*\{)/);
 });

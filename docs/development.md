@@ -12,6 +12,8 @@
 
 ## 独立 macOS 本地包
 
+0.12.0（2026-10-10）补齐Dashboard隐藏/恢复，并固定列表行尾操作区，解决0.11.0在展开侧栏时只看到前三个图标的问题。已生成Developer ID签名的本地ARM64包并实际打开；设置页版本、仓库/分支隐藏与恢复、重新加载后的隐藏记录、更新日期正反排序及2账号/58仓库/16关联均在该包核对。未公证或发布公共更新；七个Git动作仍禁用，真实执行单独追踪。开发预览与授权助手已恢复为0.12.0，已有加密应用配置正常读回；浏览器0账号会话和原生账号存储保持各自边界。
+
 Apple Silicon macOS在macos/运行 `npm run package:desktop`。脚本从package.json读取版本，在临时快照构建；首次可能从官方npm获取固定Electron Packager。GITTOGETHER_ELECTRON_ZIP_DIR可指定对应Electron ZIP缓存目录。默认使用本机Developer ID；GITTOGETHER_SIGN_IDENTITY可选择已安装证书，必须与已发布版本保持同一身份。缺少证书或签名失败直接报错，不回退ad-hoc。仅保留Electron运行需要的JIT权限，不增加摄像头/位置等权限。
 
 产物在项目容器_builds/gittogether-版本-macos-arm64-随机后缀/：独立.app、ZIP、latest-mac.yml与build-info.json。安装版不需要Node、Vite或4173；建议移到可写的应用程序目录，不从ZIP/只读磁盘运行。脚本不覆盖已安装App。默认Developer ID签名；Apple公证需开发者在本机配置notarytool钥匙串profile，并通过GITTOGETHER_NOTARY_PROFILE传入其名称，不把密码或API私钥放源码/包。没有profile的包notarized=false，不能作为正式公共更新发布；完成公证后仍可能有系统首次启动确认，不关闭Gatekeeper或移除隔离属性冒充验收。profile只需配置一次，每个新的安装包都需提交公证；这是Apple自动扫描，不是App Store人工审核。
@@ -127,3 +129,9 @@ GitHub App 的仓库访问受用户、应用权限与安装范围共同限制；
 上述 0.1.2 场景/模拟操作是历史证据，0.2.0 已移除其运行入口。
 
 若 npm 安装策略未执行 Electron 的安装脚本，需要先完成官方运行时安装。本次环境的自动 ZIP 解压未完整结束，使用官方缓存 ZIP（校验 SHA-256 与包内清单一致）完成依赖解压，没有修改任何用户应用或真实仓库。
+
+## 本地诊断日志（0.13.0）
+
+运行中的桌面 App、预览和授权助手写入 `~/Library/Application Support/GitTogether-Standalone-Demo/logs`，设置可打开该目录。小时/组件/会话隔离的 JSONL 记录安全事件、错误代码、HTTP 状态、Git 退出码、耗时与请求/子跨度 ID；同一请求可从 renderer API 追踪到服务/provider/只读 Git 失败。不写原始消息、堆栈、凭据、响应、文件内容和明文身份/路径；不是上传或遥测。24 小时滚动清理在启动、每分钟、状态读取及关闭时进行；空间达到 128 MiB 时删除较早文件并提示，不保证满 24 小时。停止运行时在下一次启动清理。日志不可写不阻断原操作，但设置明确提示记录不完整。
+
+相关验证：`npx tsx --test tests/diagnostics.test.ts`；`tests/diagnostics-preview.ts` 需构建生产客户端及打包测试入口/真实 preload 后，在一次性 Electron 进程运行，可验证 HTTP 和原生桥接、目录入口及写入故障/恢复。它使用合成凭据、真实临时 Git、独立 profile/logs 和注入的目录打开器，不读取安装版账号。`artifacts/diagnostics-0.13.0/` 是忽略的本地验证证据，不是安装包；源码与实际安装版仍需分别验证。

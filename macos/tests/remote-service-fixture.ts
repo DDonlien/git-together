@@ -4,11 +4,13 @@ import { AccountService, sessionStore } from '../server/account-service';
 import { isCatalog, type Provider } from '../src/import-model';
 import { createGitRemoteFixture } from './git-remote-fixture';
 import type { FileOpener } from '../server/system-file-open';
+import type { LocalDiagnostics } from '../server/diagnostics';
 
-export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean } = {}) {
+export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean; diagnostics?: LocalDiagnostics } = {}) {
   const git = await createGitRemoteFixture(provider, { treeChanges: options.treeChanges });
   const requests: { url: URL; authorization: string; signal?: AbortSignal | null }[] = [];
   let failure = 0;
+  let failWhere: (url: URL) => boolean = () => true;
   let hold: (() => Promise<void>) | undefined;
   const request: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
@@ -17,7 +19,7 @@ export async function createRemoteServiceFixture(provider: Provider, options: { 
     if (url.pathname.endsWith('/user/repos')) return Response.json(url.searchParams.get('page') === '1' ? [{ id: 1, name: 'project', full_name: 'qa/project', default_branch: 'main', private: false, description: '隔离 Git 测试' }] : []);
     if (hold) { const pending = hold; hold = undefined; await pending(); }
     init?.signal?.throwIfAborted();
-    if (failure) return new Response('provider diagnostic and credentials must not leak', { status: failure });
+    if (failure && failWhere(url)) return new Response('provider diagnostic and credentials must not leak', { status: failure });
     const path = url.pathname.replace(/^\/api\/v1/, '') + url.search;
     const format = new Headers(init?.headers).get('Accept') === 'text/plain' ? 'text' : 'json';
     const result = await git.transport(path, format, init?.signal || undefined);
@@ -27,5 +29,5 @@ export async function createRemoteServiceFixture(provider: Provider, options: { 
   const catalog = await service.handle('connect', { provider, host: 'https://git.fixture.test', token: 'fixture-remote-old', name: '隔离测试账号' });
   if (!isCatalog(catalog)) throw new Error('Invalid fixture catalog');
   return { ...git, service, repositoryId: catalog.repositories[0].id, accountId: catalog.accounts[0].id, requests,
-    fail: (status: number) => { failure = status; }, holdNext: (wait: () => Promise<void>) => { hold = wait; } };
+    fail: (status: number, where: (url: URL) => boolean = () => true) => { failure = status; failWhere = where; }, holdNext: (wait: () => Promise<void>) => { hold = wait; } };
 }

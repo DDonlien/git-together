@@ -5,6 +5,7 @@ import { resolve, sep } from 'node:path';
 import { isRepositoryFilePath } from '../src/repository-file-url';
 import type { LocalFile } from '../src/import-model';
 import type { RepositoryCommit, RepositoryTask, RepositoryWorkspace } from '../src/repository-model';
+import { traceOperation, gitDetails } from './diagnostics';
 
 const execute = promisify(execFile);
 function readFailure(problem: unknown): string {
@@ -13,9 +14,9 @@ function readFailure(problem: unknown): string {
 }
 export { readFailure };
 export async function readLocalGit(path: string, args: string[]): Promise<string> {
-  const { stdout } = await execute('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', path, ...args], {
+  const { stdout } = await traceOperation('git-read', gitDetails(path, args), () => execute('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', path, ...args], {
     timeout: 10000, maxBuffer: 8_000_000, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
-  });
+  }), true);
   return stdout;
 }
 const git = readLocalGit;

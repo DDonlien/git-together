@@ -1,9 +1,11 @@
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
+import { logDiagnostic } from './diagnostics-api';
+import { diagnosticFailure } from './diagnostics-model';
 
 export class LocalServiceError extends Error {
-  constructor(readonly code: 'connection' | 'timeout' | 'unsupported' | 'server' | 'version' | 'session', message: string) { super(message); this.name = 'LocalServiceError'; }
+  constructor(readonly code: 'connection' | 'timeout' | 'unsupported' | 'server' | 'version' | 'session', message: string, readonly status?: number) { super(message); this.name = 'LocalServiceError'; }
 }
 export function verifyServiceVersion(version: string, expected: string): void {
   if (version !== expected) throw new LocalServiceError('version', '页面与账号服务版本不一致，请刷新页面后再连接。');
@@ -13,21 +15,33 @@ export async function connectAfterServiceCheck(input: ApiInputs['connect'], chec
   return importAPI('connect', input);
 }
 export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal): Promise<ApiOutputs[M]> {
+  const requestId = crypto.randomUUID(); const started = performance.now();
+  logDiagnostic({ event: 'api', outcome: 'start', method, requestId });
+  try {
+    const value = await readImportAPI(method, input, signal, requestId);
+    logDiagnostic({ event: 'api', outcome: 'success', method, requestId, durationMs: Math.round(performance.now() - started) });
+    return value;
+  } catch (problem) {
+    logDiagnostic({ event: 'api', outcome: signal?.aborted ? 'cancelled' : 'failure', method, requestId, ...diagnosticFailure(problem), durationMs: Math.round(performance.now() - started) });
+    throw problem;
+  }
+}
+async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal, requestId?: string): Promise<ApiOutputs[M]> {
   let envelope: unknown;
   if (typeof window !== 'undefined' && window.gittogether) {
-    try { envelope = await window.gittogether.import(method, input); }
+    try { envelope = await window.gittogether.import(method, input, requestId); }
     catch { throw new LocalServiceError('connection', '桌面账号连接已断开，请重新打开 GitTogether。'); }
   }
   else {
     let response: Response;
     const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : 180000);
-    try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
+    try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
       if (timeout.aborted) throw new LocalServiceError('timeout', '本地账号服务响应超时。请重新连接检查；输入仍保留，不会自动重复提交。');
       throw new LocalServiceError('connection', '无法连接本地账号服务。请点击「重新连接」检查；输入仍保留。');
     }
-    if (response.status >= 500) throw new LocalServiceError('server', `本地账号服务返回 HTTP ${response.status}，请重新连接后重试。`);
+    if (response.status >= 500) throw new LocalServiceError('server', `本地账号服务返回 HTTP ${response.status}，请重新连接后重试。`, response.status);
     try { envelope = await response.json(); }
     catch {
       if (signal?.aborted) throw signal.reason;

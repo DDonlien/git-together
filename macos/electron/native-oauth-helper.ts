@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { createGitHubOAuthServer, previewConnector, readPreviewStatus } from '../server/github-oauth-dev-server';
 import { oauthConfigurationStore } from './oauth-config-store';
 import { systemFetch, createLoopbackFetch } from './system-network';
+import type { LocalDiagnostics } from '../server/diagnostics';
+import { diagnosticCode } from '../src/diagnostics-model';
 
 async function occupied() {
   return new Promise<boolean>((resolve, reject) => {
@@ -44,17 +46,18 @@ export function nativeOAuthHelper() {
   };
 }
 
-export async function runNativeOAuthHelper() {
+export async function runNativeOAuthHelper(diagnostics?: LocalDiagnostics) {
   app.dock?.hide();
   const configuration = oauthConfigurationStore(join(app.getPath('appData'), 'GitTogether Authorization', 'github-oauth-v1.encrypted'));
-  const secret = await configuration.load();
+  const secret = diagnostics ? await diagnostics.run('storage', {}, () => configuration.load()) : await configuration.load();
   const localRequest = await createLoopbackFetch();
   const bind = async () => previewConnector(await readPreviewStatus(localRequest), systemFetch, localRequest).connect;
   const server = createGitHubOAuthServer({ request: systemFetch,
-    configuration: { secret, save: configuration.save }, bind,
+    onCallback: stage => diagnostics?.record({ event: 'authorization', outcome: stage }),
+    configuration: { secret, save: value => diagnostics ? diagnostics.run('storage', {}, () => configuration.save(value)) : configuration.save(value) }, bind,
     verify: async () => { await readPreviewStatus(localRequest); }, connect: async credential => (await bind())(credential),
   });
-  server.on('error', () => { console.error('网页授权服务未能启动；已保存配置未修改。'); app.exit(1); });
+  server.on('error', problem => { diagnostics?.record({ event: 'authorization', outcome: 'failure', code: diagnosticCode(problem) }); diagnostics?.close(); console.error('网页授权服务未能启动；已保存配置未修改。'); app.exit(1); });
   server.listen(4174, '127.0.0.1');
   app.on('before-quit', () => { server.closeAllConnections(); server.close(); });
   process.on('SIGTERM', () => app.quit()); process.on('SIGINT', () => app.quit());

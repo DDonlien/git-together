@@ -50,6 +50,22 @@ export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string
   return workspace.commits.filter(commit => reachable.has(commit.id));
 }
 
+// A failed worktree read is not an empty working directory. Retain only the
+// exact task identity within the same mapping; successful and removed tasks win.
+export function preserveLocalWorkspace(previous: RepositoryWorkspace | undefined, next: RepositoryWorkspace): RepositoryWorkspace {
+  if (!previous) return next;
+  const commits = new Map(next.commits.map(commit => [commit.id, commit]));
+  let retained = false;
+  const tasks = next.tasks.map(task => {
+    const old = task.error && previous.tasks.find(item => item.id === task.id && item.path === task.path && item.branch === task.branch && !item.remote);
+    if (!old) return task;
+    retained = true;
+    for (const commit of taskCommitHistory(previous, old.id)) if (!commits.has(commit.id)) commits.set(commit.id, { ...commit, refs: [] });
+    return { ...old, error: task.error };
+  });
+  return retained ? { ...next, tasks, commits: topologicalCommits([...commits.values()]), complete: false } : next;
+}
+
 export function repositoryCommitTask(workspace: RepositoryWorkspace, commitId: string, focusedTask: string | null): RepositoryTask | undefined {
   const candidates = workspace.tasks.filter(task => taskCommitHistory(workspace, task.id).some(commit => commit.id === commitId));
   return candidates.find(task => task.id === focusedTask) || candidates.find(task => task.remote && task.head === commitId) || candidates.find(task => task.remote) || candidates.find(task => task.head === commitId) || candidates[0];

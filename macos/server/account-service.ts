@@ -14,6 +14,8 @@ import { remoteIdentity } from './git-identity';
 import { topologicalCommits, type RepositoryWorkspace } from '../src/repository-model';
 import { openSystemFile, type FileOpener } from './system-file-open';
 import pkg from '../package.json';
+import { LocalDiagnostics, traceOperation, recordDiagnostic, gitDetails } from './diagnostics';
+import { diagnosticMethods, diagnosticCode, type DiagnosticDetails } from '../src/diagnostics-model';
 
 const execute = promisify(execFile);
 class ProviderReadError extends Error {
@@ -55,9 +57,11 @@ export class AccountService {
   private revision = 0;
   private restoreError = '';
   private openFile: FileOpener;
-  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener } = {}) {
+  private diagnostics?: LocalDiagnostics;
+  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener; diagnostics?: LocalDiagnostics } = {}) {
     this.openFile = options.openFile || openSystemFile;
-    this.ready = this.restore().catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
+    this.diagnostics = options.diagnostics;
+    this.ready = (this.diagnostics ? this.diagnostics.run('storage', {}, () => this.restore()) : this.restore()).catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
     this.githubAuthorization = new GitHubDeviceAuthorization(options.githubClientId ?? process.env.GITTOGETHER_GITHUB_CLIENT_ID ?? '', credential => this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, credential), request, options.now);
   }
   private async restore() {
@@ -77,7 +81,7 @@ export class AccountService {
     const task = this.mutation.then(async () => {
       const next = structuredClone(this.state);
       change(next);
-      await this.store.save(next);
+      await traceOperation('storage', {}, () => this.store.save(next));
       this.state = next;
       for (const [id, entry] of this.remoteReaders) if (!entry.valid()) this.remoteReaders.delete(id);
       this.revision++;
@@ -87,20 +91,39 @@ export class AccountService {
     return this.catalog();
   }
   private async getJSON(url: URL, provider: Provider, token: string, signal?: AbortSignal, format: 'json' | 'text' | 'status' = 'json'): Promise<{ value: unknown; headers: Headers }> {
+    // Only an endpoint category and salted identity are retained, never URLs.
+    const path = url.pathname;
+    const endpoint: DiagnosticDetails['endpoint'] = /\/branches(?:\/|$)/.test(path) ? 'branches' : /\/git\/trees\//.test(path) ? 'tree' : /\/contents(?:\/|$)/.test(path) ? 'file' : /\/commits\//.test(path) ? 'commit' : /\/commits$/.test(path) ? 'history' : /\/repos(?:\/search)?$/.test(path) ? 'repositories' : /\/user$/.test(path) ? 'identity' : 'other';
+    return traceOperation('provider-read', { provider, endpoint, ...(this.diagnostics ? { resource: this.diagnostics.key(url.origin + path) } : {}) }, () => this.readJSON(url, provider, token, signal, format));
+  }
+  private async readJSON(url: URL, provider: Provider, token: string, signal?: AbortSignal, format: 'json' | 'text' | 'status' = 'json'): Promise<{ value: unknown; headers: Headers }> {
     signal?.throwIfAborted();
     let response: Response;
+    const timeout = AbortSignal.timeout(15000);
     try {
-      response = await this.request(url, { method: 'GET', redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000), headers: {
+      response = await this.request(url, { method: 'GET', redirect: 'error', signal: signal ? AbortSignal.any([signal, timeout]) : timeout, headers: {
         Accept: format === 'text' ? 'text/plain' : provider === 'github' ? 'application/vnd.github+json' : 'application/json',
         Authorization: `${provider === 'github' ? 'Bearer' : 'token'} ${token}`,
         'User-Agent': `GitTogether/${pkg.version}`, ...(provider === 'github' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
       } });
-    } catch {
+    } catch (problem) {
       signal?.throwIfAborted();
+      if (timeout.aborted || problem instanceof Error && problem.name === 'TimeoutError') throw new Error('远端账号服务请求超时（15秒）；保留上次结果，等待下次检查。');
+      // Expose only allowlisted transport reasons, never raw errors/URLs that
+      // could contain provider payloads or credentials.
+      const cause = isRecord(problem) && isRecord(problem.cause) ? problem.cause : problem;
+      const code = isRecord(cause) && typeof cause.code === 'string' ? cause.code : '';
+      if (code === 'ECONNREFUSED') throw new Error('远端服务拒绝连接（ECONNREFUSED）；请检查服务是否运行。');
+      if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') throw new Error(`远端域名解析失败（${code}）；请检查域名与 DNS。`);
+      if (code === 'ECONNRESET') throw new Error('远端连接中断（ECONNRESET）；保留上次结果，等待下次检查。');
+      if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') throw new Error(`远端连接超时（${code}）；保留上次结果，等待下次检查。`);
+      if (['CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID'].includes(code)) throw new Error(`远端证书验证失败（${code}）；请检查服务证书，不会绕过验证。`);
       throw new Error('无法连接账号服务，请检查域名、网络、证书或稍后重试（不跟随登录重定向）。');
     }
     if (response.status === 401) throw new ProviderReadError('令牌无效或已过期，请在设置中重新连接账号。', response.status);
-    if (response.status === 403 || response.status === 429) throw new ProviderReadError('没有读取权限或已触发访问频率限制；请检查令牌权限后重试。', response.status);
+    if (response.status === 429 || response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') throw new ProviderReadError(`远端访问频率受限（HTTP ${response.status}）；保留上次结果，等待下次检查。`, response.status);
+    recordDiagnostic({ event: 'provider-read', outcome: 'received', provider, httpStatus: response.status });
+    if (response.status === 403) throw new ProviderReadError('远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。', response.status);
     if (!response.ok) throw new ProviderReadError(`账号服务返回 HTTP ${response.status}；请检查服务与令牌权限。`, response.status);
     if (format === 'status') { await response.body?.cancel(); return { value: response.status, headers: response.headers }; }
     if (Number(response.headers.get('content-length')) > 8_000_000) throw new Error('账号服务响应过大。');
@@ -113,7 +136,7 @@ export class AccountService {
       signal?.throwIfAborted();
       const text = Buffer.concat(chunks).toString('utf8');
       return { value: format === 'text' ? text : JSON.parse(text) as unknown, headers: response.headers };
-    } catch { signal?.throwIfAborted(); throw new Error(`账号服务返回了无效或过大的 ${format === 'text' ? '文本' : 'JSON'} 数据。`); }
+    } catch { signal?.throwIfAborted(); if (timeout.aborted) throw new Error('远端账号服务响应读取超时（15秒）；保留上次结果，等待下次检查。'); throw new Error(`账号服务返回了无效或过大的 ${format === 'text' ? '文本' : 'JSON'} 数据。`); }
   }
   private apiBase(provider: Provider, host: string) { return provider === 'github' ? 'https://api.github.com' : `${host}/api/v1`; }
   private repositoryRecord(account: Account, raw: unknown): RemoteRepository {
@@ -344,9 +367,9 @@ export class AccountService {
   }
   private async git(path: string, args: string[]): Promise<string> {
     try {
-      const result = await execute('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', path, ...args], {
+      const result = await traceOperation('git-read', gitDetails(path, args), () => execute('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', path, ...args], {
         timeout: 10000, maxBuffer: 2_000_000, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
-      });
+      }), true);
       return result.stdout;
     } catch { throw new Error('无法读取该 Git 目录，请检查路径、仓库状态与访问权限。'); }
   }
@@ -474,7 +497,26 @@ export class AccountService {
     }
     return { path, branch: branch.trim(), files, commits: history.trim().split('\n').filter(Boolean).map(line => { const [id, summary, author, time] = line.split('\0'); return { id, summary, author, time }; }) };
   }
-  async handle(method: unknown, value: unknown, signal?: AbortSignal): Promise<unknown> {
+  async handle(method: unknown, value: unknown, signal?: AbortSignal, requestId?: string): Promise<unknown> {
+    if (!this.diagnostics) return this.dispatch(method, value, signal);
+    const id = isRecord(value) ? value.repositoryId || value.accountId : undefined;
+    const details: DiagnosticDetails = { ...(typeof method === 'string' && diagnosticMethods.includes(method as DiagnosticDetails['method'] & string) ? { method: method as DiagnosticDetails['method'] } : {}), ...(typeof id === 'string' ? { resource: this.diagnostics.key(id) } : {}) };
+    return this.diagnostics.run('api', details, async () => {
+      const result = await this.dispatch(method, value, signal);
+      // Some readers intentionally return useful partial data instead of throwing.
+      if (isRecord(result)) {
+        const entries = [...(Array.isArray(result.tasks) ? result.tasks : []), ...(Array.isArray(result.accounts) ? result.accounts : []), ...(Array.isArray(result.repositories) ? result.repositories : [])];
+        const failed = entries.filter(item => isRecord(item) && (item.error || item.metadataError));
+        const incomplete = entries.filter(item => isRecord(item) && (item.error || item.metadataError || item.treeComplete === false));
+        if (incomplete.length || result.complete === false) {
+          recordDiagnostic({ event: 'api', outcome: 'partial', ...details, tasks: incomplete.length });
+          for (const item of failed) recordDiagnostic({ event: 'api', outcome: 'failure', ...details, code: diagnosticCode(item.error || item.metadataError), ...(typeof item.id === 'string' ? { resource: this.diagnostics!.key(item.id) } : {}) });
+        }
+      }
+      return result;
+    }, requestId);
+  }
+  private async dispatch(method: unknown, value: unknown, signal?: AbortSignal): Promise<unknown> {
     if (!isRecord(value)) throw new Error('无效的请求。');
     if (method === 'status') return { instanceId: this.instanceId, version: pkg.version, githubWebAuth: this.githubAuthorization.configured };
     await this.ready;
