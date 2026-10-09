@@ -117,7 +117,7 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
 - [x] \[RUN-01] 新建不含 GitButler 源码的独立分支，类型检查、业务测试、构建、浏览器交互和视觉检查通过，实际启动桌面窗口并留给用户查看。
   - [ ] \[RUN-01-update] 打包实际 macOS App，在设置提供检查 GitHub Releases 更新、下载进度和重启安装；沿用原应用标识、加密账号数据目录及本地仓库关联，更新不清空配置、不改用户仓库。首次安装带更新能力的新版后，后续由 App 内更新。
     - [x] \[RUN-01-update-test] 0.9.0严格类型检查、337/337回归及生产构建通过；Developer ID签名和deep/strict校验通过。实际包启动恢复原Gitea账号及20仓库，无重新登录。独立临时App通过真实MacUpdater/Squirrel从0.8.99下载、签名校验、替换与重启至0.9.0；错误SHA-512被拒绝；加密配置字节、账号、仓库、关联和本地文件均不变。测试使用隔离本地feed，不等于GitHub发布验收；本机包未Apple公证。证据保存在被忽略的artifacts/desktop-updater，正式包在项目容器_builds/。
-    - [ ] \[RUN-01-update-release] 在GitHub发布对应源码版本及签名、公证ZIP/latest-mac.yml，并实际回读公共更新源。2026-10-09用户回复「推送」已授权提交与推送；0.10.1签名包及错误修复就绪，源码与包digest相符。正式公共发布等待本机notarytool profile配置及每个新版的Apple公证，不把签名或源码推送当作公证/发布完成。公开更新与真实App升级验证完成前不勾选；首次手动替换不含更新功能的旧App仍然必要。
+    - [ ] \[RUN-01-update-release] 在GitHub发布对应源码版本及签名、公证ZIP/latest-mac.yml，并实际回读公共更新源。2026-10-09用户回复「推送」已授权提交与推送；0.10.1源码0d3949c已推送origin/codex/standalone-ts，远端ref与GitHub API一致，签名包及错误修复就绪，源码与包digest相符。正式公共发布等待本机notarytool profile配置及每个新版的Apple公证，不把签名或源码推送当作公证/发布完成。公开更新与真实App升级验证完成前不勾选；首次手动替换不含更新功能的旧App仍然必要。
       - [x] \[RUN-01-update-errors] 0.10.1区分GitHub发布信息不可用、检查网络失败、下载失败和安装失败；检查阶段不提示目录/签名问题，不回显底层敏感诊断。7/7更新回归覆盖实际ERR_UPDATER_INVALID_RELEASE_FEED及重复error事件/Promise拒绝，类型检查、构建、4/4静态包装通过；真实原生/GitHub更新验收归发布项。
   - [x] \[RUN-01-identity] 按2026-10-09最新要求，将仓库description及Git关系整理为独立GitTogether项目。主页使用已推送的独立main基线，不再宣传GitButler或链接其官网；解除本地GitButler upstream及GitHub fork网络关系，保留旧分支、提交和worktree。正式解除已取得用户确认并经GitHub原生流程完成，未通过删除重建或强制推送冒充完成。
     - [x] \[RUN-01-identity-settings] 更新GitHub description、清除旧GitButler homepage、设置main为默认分支，并调整本地origin默认引用和main读取配置，移除仅指向GitButler的upstream remote。API回读description为独立Git任务工作台、homepage为空、default_branch=main。
