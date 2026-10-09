@@ -385,7 +385,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 ## 技术栈与命令
 
-- React / TypeScript / Vite；Electron TypeScript 桌面外壳；Phosphor 图标；第三方 MIT `electron-liquid-glass` 原生窗口材料与 `open-glass-ui` React 控件。LiqUIdify 仅作为语义令牌与组件状态参考，不混装两套组件库。
+- React / TypeScript / Vite；Electron TypeScript 桌面外壳；Phosphor 图标；Material 3 主题、Roboto 本地字体和 `open-glass-ui` 公共 classic/CSS 交互原语。不加载 electron-liquid-glass，不混装第二套组件库；OpenGlass 只承接可访问交互契约，不延续玻璃视觉。
 - `macos/` 是同一客户端的开发与浏览器预览入口；业务状态在 `macos/src/`；桌面桥在 `macos/electron/`。
 - `npm run dev` 启动预览；`npm run desktop` 启动桌面窗口；`npm run check`、`npm test`、`npm run build` 分别验证类型、业务与构建。
 - 页面应有真实的内部状态变化，失败保留输入，可取消异步动作，各 worktree 状态与表单隔离，刷新后本地保存可恢复。
@@ -396,7 +396,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 - `README.md`：产品与本地运行入口。
 - `REQUIREMENTS.md`：D-01 至 D-03、R-01 至 R-04 的功能追踪和状态。
-- `DESIGN.md`：Liquid Glass 材质层次、字体、布局、可访问性。
+- `DESIGN.md`：Material 3 色彩与卡片层级、字体、布局、可访问性。
 - `ARCHITECTURE.md`：数据与界面边界。
 - `reference/GitTogether_Wireframes/`：用户的只读设计来源。
 - `agent-log/system/`：本次实现与验证记录。
@@ -413,5 +413,6 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 ## 用户确认的视觉约定
 
-- 2026-10-03：统一窗口背景；全局左侧导航必须是四周内缩的悬浮圆角容器，不贴边铺满。右侧内容按语义采用无阴影、无折射、无立体描边的平面分组，不用整页大面板外壳。亮暗色与窄窗口保持这个层级；详细尺寸与材料以 `DESIGN.md` 为准。
+- 2026-10-09（最新细节）：侧栏32px开关与首页/仓库页首卡片顶边对齐，展开时右侧显示GitTogether名称；开关到Dashboard图标框固定8px，两态纵向位置不变。普通内容卡片亮暗色均无投影，用色调与细边缘区分；菜单/弹窗保留独立层级。保留既有图标尺寸、红绿灯、可访问性与挂载状态；取代顶部无品牌/60px留白方向。
+- 2026-10-09（最新）：实际客户端采用已认可的 Material 3（非 Expressive）样稿，覆盖浏览器与 Electron。侧栏透明、融入共享画布，没有独立悬浮卡片；首页、仓库页和设置语义分组轻微浮起，表格/文件行不各自套卡。统一亮暗色、Roboto/中文系统回退、Material 控件、菜单和弹窗；不透明表面不提供无作用的减少透明度开关。此条取代2026-10-03的悬浮侧栏及后续Ring回滚/H5-only材质方向。保留真实数据、外置系统红绿灯、32px导航框、56px收起列、三栏独立开关、12px内容内缩、隐藏滚动条与所有选择/草稿/安全边界；原生包另行打包。
  

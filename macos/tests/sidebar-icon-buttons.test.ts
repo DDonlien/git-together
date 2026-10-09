@@ -16,15 +16,15 @@ test('only permanent sidebar destinations receive an outlined decorative icon sl
 });
 
 test('permanent icon frames are square, use current semantic colors and align with the original expanded icon column', () => {
-  assert.match(css, /\.global-sidebar \{ --sidebar-button-size: 32px; --sidebar-button-radius: 10px; \}/);
-  assert.match(css, /\.sidebar-button-icon \{[^}]*width: var\(--sidebar-button-size\); height: var\(--sidebar-button-size\); border: 1px solid var\(--strong-line\); border-radius: var\(--sidebar-button-radius\)/);
-  assert.match(css, /\.nav-item\.sidebar-permanent \{[^}]*padding: 0 calc\(var\(--sidebar-row-inset\) - \(var\(--sidebar-button-size\) - var\(--sidebar-icon-size\)\) \/ 2\)/);
+  assert.match(css, /\.global-sidebar \{ --sidebar-button-size: 32px; --sidebar-button-radius: 10px; --sidebar-label-inset:/);
+  assert.match(css, /\.sidebar-button-icon \{[^}]*width: var\(--sidebar-button-size\); height: var\(--sidebar-button-size\); border: 1px solid var\(--card-edge\); border-radius: var\(--sidebar-button-radius\)/);
+  assert.match(css, /\.nav-item\.sidebar-permanent \{[^}]*padding: 0 var\(--sidebar-label-inset\); gap: var\(--icon-label-gap\)/);
   assert.match(css, /\.sidebar-permanent\.active \.sidebar-button-icon \{ background: var\(--selection\); color: var\(--blue\); \}/);
-  assert.match(css, /\.global-sidebar \.sidebar-disclosure\.icon-button\.ogui-control--small \{[^}]*border: 1px solid var\(--strong-line\); border-radius: var\(--sidebar-button-radius\)/);
+  assert.match(css, /\.global-sidebar \.sidebar-disclosure\.icon-button\.ogui-control--small \{[^}]*border: 1px solid var\(--card-edge\); border-radius: var\(--sidebar-button-radius\)/);
 });
 
 test('compact hit areas use the expanded 32px icon frame size without enlargement or resting folder outlines', () => {
-  assert.match(css, /\.global-sidebar \{ --sidebar-button-size: 32px; --sidebar-button-radius: 10px; \}/);
+  assert.match(css, /\.global-sidebar \{ --sidebar-button-size: 32px; --sidebar-button-radius: 10px; --sidebar-label-inset:/);
   assert.doesNotMatch(css, /\.global-sidebar\.is-collapsed\s*\{[^}]*--sidebar-button-(?:size|radius)/);
   assert.match(css, /\.global-sidebar\.is-collapsed \.nav-item\.sidebar-permanent \{ width: var\(--sidebar-button-size\); height: var\(--sidebar-button-size\); margin-inline: auto; padding: 0; gap: 0; border-radius: var\(--sidebar-button-radius\); \}/);
   assert.match(css, /\.global-sidebar\.is-collapsed :is\(\.repository-item,\.sidebar-account-toggle\) \{ width: var\(--sidebar-button-size\); height: var\(--sidebar-button-size\); margin-inline: auto; padding: 0; border: 0; border-radius: var\(--sidebar-button-radius\); \}/);
@@ -34,7 +34,7 @@ test('compact hit areas use the expanded 32px icon frame size without enlargemen
 });
 
 test('repository selection outlines the entire rectangular button without shifting glyphs or replacing keyboard focus', () => {
-  assert.match(css, /\.repository-item\.active \{ box-shadow: inset 0 0 0 1px var\(--strong-line\); \}/);
+  assert.match(css, /\.repository-item\.active \{ box-shadow: inset 0 0 0 1px var\(--card-edge\); \}/);
   assert.match(css, /\.nav-item\.active \{ background: var\(--selection\);/);
   assert.doesNotMatch(css, /\.repository-item(?:\.active)?\s*(?:>[^{]*)?\{[^}]*outline:\s*(?:0|none)/);
   const accounts = readFileSync(new URL('../src/AccountSidebar.tsx', import.meta.url), 'utf8');

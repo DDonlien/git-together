@@ -6,13 +6,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { WindowChrome } from '../src/WindowChrome';
 import { SidebarHeader } from '../src/SidebarHeader';
 
-test('sidebar header exposes only one public icon disclosure with no brand or visible label in either state', () => {
+test('sidebar header keeps one public disclosure and a right-hand wordmark hidden only when compact', () => {
   for (const collapsed of [false, true]) {
     const markup = renderToStaticMarkup(createElement(SidebarHeader, { collapsed, onToggle() {} }));
     const label = collapsed ? '展开侧边栏' : '收起侧边栏';
     assert.match(markup, /^<div class="sidebar-header"><button/);
-    assert.doesNotMatch(markup, /GitTogether|brand-identity/);
-    assert.equal(markup.replace(/<[^>]*>/g, '').trim(), '');
+    assert.match(markup, /<\/button><span class="sidebar-brand"[^>]*>GitTogether<\/span>/);
+    assert.equal(markup.includes('class="sidebar-brand" hidden=""'), collapsed);
+    assert.doesNotMatch(markup, /brand-identity/);
     assert.equal((markup.match(/<svg\b/g) || []).length, 1);
     assert.match(markup, new RegExp(`aria-expanded="${!collapsed}" aria-controls="global-sidebar"`));
     assert.match(markup, new RegExp(`aria-label="${label}"`));
@@ -48,7 +49,7 @@ test('production and real-Git QA shells keep navigation mounted with a shared he
     const source = readFileSync(new URL(file, import.meta.url), 'utf8');
     assert.match(source, /<WindowChrome native=/);
     assert.match(source, /<SidebarHeader collapsed=\{sidebarCollapsed\} onToggle=\{\(\) => setSidebarCollapsed\(value => !value\)\}/);
-    assert.match(source, /<div className="app-body">\s*<aside id="global-sidebar" className=\{`global-sidebar glass-panel\$\{sidebarCollapsed \? ' is-collapsed' : ''\}`\}/);
+    assert.match(source, /<div className="app-body">\s*<aside id="global-sidebar" className=\{`global-sidebar(?: glass-panel)?\$\{sidebarCollapsed \? ' is-collapsed' : ''\}`\}/);
     assert.doesNotMatch(source, /hidden=\{sidebarCollapsed\}|sidebarCollapsed\s*&&|@refresh reset/);
     assert.doesNotMatch(source, /<aside[^>]*>[\s\S]*className="traffic-lights"/);
     assert.match(source, /<div className="app-content">/);
@@ -70,11 +71,18 @@ test('collapsed layout retains a single icon column at every viewport and keeps 
   assert.equal((css.match(/\.traffic-lights \{/g) || []).length, 1);
 });
 
-test('icon-only header aligns with the expanded navigation frame without changing the shared button size', () => {
+test('header and permanent navigation share fixed geometry and the content top inset in both states', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const header = css.match(/\.sidebar-header \{([^}]+)\}/)?.[1] || '';
-  assert.match(header, /justify-content: flex-start; height: 60px;/);
-  assert.match(header, /padding-inline-start: calc\(var\(--sidebar-row-inset\) - \(var\(--sidebar-button-size\) - var\(--sidebar-icon-size\)\) \/ 2\)/);
+  assert.match(header, /height: var\(--sidebar-button-size\); flex-shrink: 0; margin-bottom: 8px;/);
+  assert.doesNotMatch(header, /padding-bottom|60px/);
+  assert.match(css, /\.global-sidebar \{[^}]*padding: var\(--workspace-top-inset\) 12px 0;/);
+  assert.match(css, /\.dashboard-view\.import-dashboard \{ padding-top: var\(--workspace-top-inset\);/);
+  assert.match(css, /\.repository-workspace-view \{ padding: var\(--workspace-top-inset\) 12px 12px;/);
+  assert.match(css, /\.nav-item\.sidebar-permanent \{ height: var\(--sidebar-button-size\);/);
+  assert.doesNotMatch(css, /\.global-sidebar\.is-collapsed \.sidebar-header \{[^}]*(?:height|margin-bottom|padding-top):/);
+  assert.match(css, /\.sidebar-brand\[hidden\] \{ display: none; \}/);
+  assert.match(header, /padding-inline-start: var\(--sidebar-label-inset\)/);
   assert.match(css, /\.sidebar-header \.sidebar-disclosure \{ margin-left: 0; flex-shrink: 0; -webkit-app-region: no-drag; \}/);
   assert.match(css, /\.global-sidebar \.sidebar-disclosure\.icon-button\.ogui-control--small \{ width: var\(--sidebar-button-size\);[^}]*height: var\(--sidebar-button-size\)/);
 });

@@ -1,14 +1,32 @@
 # 本地开发
 
+实际客户端使用已认可的Material 3（非Expressive），侧栏融入共享画布，语义内容卡片以色调区分层级；Roboto本地打包，Electron不透明背景。源码修改不会直接改变安装版；0.9.0新增设置内GitHub更新，发布新版安装包后才会更新。
+
+0.10.0（2026-10-09）接通生产多worktree读模型：仓库目录入口支持父目录批量匹配，分支目录单独保存/解除，显示尚未关联、部分关联、完全关联。发现只扫描用户所选范围，按真实Git远端和检出分支识别，不创建/切换/删除目录；兼容既有v2单目录和加密账号存储。Dashboard平铺Git图标和同步/更改提示灯，移除本地状态列；Fetch/Get Latest/Push/Commit执行仍未接入并禁用。346/346回归、类型检查、4/4静态包装、构建与真实临时Git生产App交互通过；4173/4174已恢复至0.10.0，加密授权配置正常。系统选择器回填/真实用户目录关联与新的桌面安装包仍待验收，本轮未重新打包或发布。
+
 客户端位于 `macos/`。`npm run dev` 是统一开发入口：固定在 `127.0.0.1:4173` 启动页面和账号服务，并检查、复用或启动 `127.0.0.1:4174` 的 GitHub 授权助手。兼容 `npm run dev -- --port 4173 --strictPort`，但不改到其他端口或局域网地址。`npm run desktop` 仍打开同一界面的 Electron macOS 窗口；先启动开发入口再打开桌面窗口。
+
+0.9.1（2026-10-09）修正侧栏图标框与文字间距、亮暗菜单材质、账号复选筛选及分支子行样式。GitHub目录合并collaborator分页返回的独有仓库，不再只给主列表加标记；Added仍表示平台确认的直接协作访问，不凭组织成员或管理员权限推断。严格检查、342/342回归、4/4静态包装、构建及隔离生产App交互验证通过；4173/4174同0.9.1且授权应用配置正常。主预览当前没有个人账号，真实Fork/Added验收待正常连接；未替换已安装0.9.0、重新打包或发布更新。
 
 0.7.1 起启动入口校验主服务版本/实例、助手版本/公开应用身份和配置状态；未知端口占用、状态超时、不匹配或助手退出明确失败，不覆盖未知进程、不把只有页面在线说成全部就绪。已有加密应用配置自动读回，不再要求重复注册 GitHub App 或填写密钥/回调。退出会关闭本入口新建的页面及助手；健康复用的外部助手不归本入口停止。没有安装系统自启动。账号登录/同意仍由用户完成，浏览器账号会话重启后需正常重连；应用开发配置与个人账号是两回事。
 
 ## 独立 macOS 本地包
 
-Apple Silicon macOS 在 `macos/` 运行 `npx tsx scripts/package-desktop.ts`。脚本读取当前 package.json 版本和已安装 Electron 版本，在临时快照里构建，无需重启现有 Vite 或复制账号；首次可能从官方 npm 获取固定版本的 Electron Packager。若已下载对应 Electron ZIP，可把缓存目录传入 `GITTOGETHER_ELECTRON_ZIP_DIR`，否则使用官方下载缓存。
+Apple Silicon macOS在macos/运行 `npm run package:desktop`。脚本从package.json读取版本，在临时快照构建；首次可能从官方npm获取固定Electron Packager。GITTOGETHER_ELECTRON_ZIP_DIR可指定对应Electron ZIP缓存目录。默认使用本机Developer ID；GITTOGETHER_SIGN_IDENTITY可选择已安装证书，必须与已发布版本保持同一身份。缺少证书或签名失败直接报错，不回退ad-hoc。仅保留Electron运行需要的JIT权限，不增加摄像头/位置等权限。
 
-产物位于项目容器的 `_builds/gittogether-<版本>-macos-arm64-<随机后缀>/`：独立 `.app`、ZIP 与包含两种 SHA-256 的 build-info.json。解压后双击 GitTogether.app 即可运行，不需要终端、Node、Vite 或 4173 服务；可自行移到应用程序目录，本脚本不会覆盖已安装应用。包只做本地 ad-hoc 签名，未用 Developer ID 签名或 Apple 公证，不作为公网安装版发布。
+产物在项目容器_builds/gittogether-版本-macos-arm64-随机后缀/：独立.app、ZIP、latest-mac.yml与build-info.json。安装版不需要Node、Vite或4173；建议移到可写的应用程序目录，不从ZIP/只读磁盘运行。脚本不覆盖已安装App。默认Developer ID签名；Apple公证需开发者在本机配置notarytool钥匙串profile，并通过GITTOGETHER_NOTARY_PROFILE传入其名称，不把密码或API私钥放源码/包。没有profile的包notarized=false，不能作为正式公共更新发布；完成公证后仍可能有系统首次启动确认，不关闭Gatekeeper或移除隔离属性冒充验收。profile只需配置一次，每个新的安装包都需提交公证；这是Apple自动扫描，不是App Store人工审核。
+
+## App 内更新
+
+第一次需手动替换旧版为0.9.0或更高版，之后在「设置 → 应用更新」检查、下载，再点击「重启并更新」。检查不自动下载/重启；更新保留账号、目录关联和偏好，未保存表单输入需先处理。账号/关联保存中先完成操作，失败可重试，不清除连接。网页预览和未打包开发窗口不安装更新。
+
+源为公共[GitHub Releases](https://github.com/DDonlien/git-together/releases)，无需用户提供更新令牌。维护者每次仍需递增macos/package.json版本、回归、签名及公证打包并发布同版本ZIP与latest-mac.yml；只push源码不会让App收到更新。公证通过、staple并重新生成ZIP及校验值后，先在draft Release上传完整资产，再发布，避免读到半成品。不可覆盖已发布同版本ZIP或更换签名身份；正式频道使用稳定semver tag（如v0.9.0），不能只发prerelease。
+
+0.10.1区分发布信息不可用、检查网络失败、下载/校验失败和安装失败；检查阶段不再混入目录权限/签名提示。发布前先确认提交及远端tag对应已打包源码，核对build-info.json的sourceSha256、ZIP SHA-512和latest-mac.yml；先上传ZIP及清单至draft，齐备后公开。发布后回读公共latest、清单与资产，再从旧签名版实际检查/下载/重启安装；这一步不能用本地测试feed替代。未完成Apple公证的签名包需明确标注，不能关闭Gatekeeper或清除隔离属性作为验收。
+
+账号继续使用~/Library/Application Support/GitTogether-Standalone-Demo/accounts-v2.encrypted。保留历史Demo路径，不能随意改名；安全存储、应用名和bundle ID不变，更新不读写/打包该文件或删除本地Git目录。浏览器内存账号不等于桌面账号，不通过复制令牌迁移。
+
+原生更新集成验证单独运行 `npx tsx tests/native-update-validation.ts /绝对路径/GitTogether.app`（本机需对应Developer ID证书）。它复制所选签名包为独立临时App和bundle ID，使用自己的本地feed、虚构账号、加密配置及目录，验证错误校验值拒绝、下载、Squirrel替换/重启与配置/文件保留，清理自己创建的临时数据和缓存；不会替换正在使用的App或发布GitHub资产。产物记录在artifacts/desktop-updater/native-validation.json；这一验证不等于公共GitHub发布、公证或用户环境验收。
 
 桌面设置从自己的系统加密存储读取账号，不自动复制网页令牌。先在桌面连接账号，再在 Dashboard 关联本地目录；文件夹入口调用 macOS 系统选择器，不使用文件上传伪路径。打包不等于 GitHub 网页返回、远端内容读取或 Git 写操作已接通。
 
@@ -38,7 +56,7 @@ Apple Silicon macOS 在 `macos/` 运行 `npx tsx scripts/package-desktop.ts`。�
 
 自动检查的纯调度回归使用注入时钟，不依赖真实等待；独立浏览器 QA 辅助为 `tests/auto-sync-preview.ts`，启动后提供临时端口，基于生产客户端、真实临时 Git 仓库和测试 provider，不连接用户凭据或进入运行构建。控制仅在该辅助进程 stdin 中，退出会核对 HEAD/index 未被应用修改并清理临时仓库。该验收与真实 Gitea 会话的目录心跳分别记录，不能冒充原生 IPC 或真实 GitHub 授权验收。
 
-本机 macOS 26.6.2 可以验证原生 Liquid Glass 插件；macOS 27 原生运行需在该系统另行验证。浏览器版本呈现同一 TS UI 的玻璃效果，不能称为 AppKit 原生控件。
+上面的 Liquid Glass 验收是旧版本历史，不适用于当前 Material 3 源码。当前浏览器与 Electron 共用 React/CSS 主题，控件不是 AppKit 原生控件；系统红绿灯与文件夹选择器仍由 Electron/macOS 提供。源码构建、浏览器交互检查、新包构建和已安装应用验收需分别记录。
 
 ## GitHub 正常网页授权（本机开发）
 

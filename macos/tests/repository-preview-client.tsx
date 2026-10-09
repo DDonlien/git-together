@@ -4,8 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { RepositoryView } from '../src/RepositoryView';
 import { WindowChrome } from '../src/WindowChrome';
 import { SidebarHeader } from '../src/SidebarHeader';
-import { GlassSystemProvider, Icon, Notice } from '../src/ui';
-import { componentTheme } from '../src/theme';
+import { MaterialProvider, Icon, Notice } from '../src/ui';
 import { useAutoRefresh } from '../src/use-auto-refresh';
 import type { RepositoryWorkspace } from '../src/repository-model';
 import 'open-glass-ui/styles.css';
@@ -33,7 +32,7 @@ function FixtureApp() {
     if (!response.ok) throw new Error(result.error || `QA HTTP ${response.status}`);
     return result as T;
   }
-  return <GlassSystemProvider renderer="css" motion="system" toasts={false} theme={{ appearance: theme, style: componentTheme, className: 'app-theme' }}><div className="app-frame" data-fixture="real-temporary-git">
+  return <MaterialProvider appearance={theme}><div className="app-frame" data-fixture="real-temporary-git">
     <WindowChrome native={false} />
     <div className="app-body">
     <aside id="global-sidebar" className={`global-sidebar glass-panel${sidebarCollapsed ? ' is-collapsed' : ''}`}><SidebarHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(value => !value)} /><nav className="global-nav"><button className="nav-item sidebar-permanent active" title="隔离 Git 测试" aria-label="隔离 Git 测试"><span className="sidebar-button-icon" aria-hidden="true"><Icon name="dashboard" size={19} /></span><span>隔离 Git 测试</span></button></nav><p className="sidebar-no-accounts">临时真实 Git 仓库<br />不使用你的账号或目录</p><div className="sidebar-bottom"><button className="nav-item sidebar-permanent" title="切换亮暗色" aria-label="切换亮暗色" onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); document.documentElement.dataset.theme = next; }}><span className="sidebar-button-icon" aria-hidden="true"><Icon name={theme === 'light' ? 'moon' : 'sun'} size={19} /></span><span>切换亮暗色</span></button></div></aside>
@@ -43,6 +42,6 @@ function FixtureApp() {
       if (!response.ok || result.text === undefined) throw new Error(result.error || `QA diff HTTP ${response.status}`);
       return result.text;
     }} />}</div></div>
-  </div></GlassSystemProvider>;
+  </div></MaterialProvider>;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><FixtureApp /></StrictMode>);

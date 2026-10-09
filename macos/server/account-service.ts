@@ -3,11 +3,15 @@ import { promisify } from 'node:util';
 import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { realpath } from 'node:fs/promises';
 import { isCatalog, isRecord, repositoryPermissionKeys, type Account, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository, type RepositoryPermissions } from '../src/import-model';
 import { GitHubDeviceAuthorization } from './github-authorization';
 import { RemoteRepositoryReader } from './remote-repository-reader';
 import { repositoryFileURL } from '../src/repository-file-url';
-import { repositoryTaskFile } from './repository-reader';
+import { readLocalGit, readRepositoryWorkspace, readRepositoryTaskDiff, readWorktrees, readFailure, repositoryTaskFile } from './repository-reader';
+import { discoverLocalWorktrees } from './local-discovery';
+import { remoteIdentity } from './git-identity';
+import { topologicalCommits, type RepositoryWorkspace } from '../src/repository-model';
 import { openSystemFile, type FileOpener } from './system-file-open';
 import pkg from '../package.json';
 
@@ -38,15 +42,7 @@ export function normalizeHost(provider: Provider, input: string): string {
   }
   return url.origin;
 }
-export function remoteIdentity(raw: string): string | null {
-  // Accept HTTPS, ssh:// and SCP-style remotes without returning embedded credentials.
-  const scp = /^(?:[^@/:]+@)?([^/:]+):(.+)$/.exec(raw);
-  try {
-    const url = new URL(raw.includes('://') ? raw : scp ? `ssh://${scp[1]}/${scp[2]}` : 'invalid:');
-    if (!['https:', 'http:', 'ssh:', 'git:'].includes(url.protocol)) return null;
-    return `${url.hostname.toLowerCase()}/${decodeURIComponent(url.pathname).replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').toLowerCase()}`;
-  } catch { return null; }
-}
+export { remoteIdentity } from './git-identity';
 
 export class AccountService {
   private instanceId = randomUUID();
@@ -151,17 +147,22 @@ export class AccountService {
   }
   private async repositories(account: Account, token: string, signal?: AbortSignal): Promise<RemoteRepository[]> {
     const repositories = await this.repositoryList(account, token, signal);
-    if (!repositories.length) return repositories;
     if (account.provider === 'github') {
       try {
         // Permissions do not identify collaboration. Ask the provider's explicit affiliation filter.
-        const collaborators = new Set((await this.repositoryList(account, token, signal, 'collaborator')).map(repo => repo.remoteId));
-        return repositories.map(repo => ({ ...repo, collaborator: collaborators.has(repo.remoteId) }));
+        const collaborationRepos = await this.repositoryList(account, token, signal, 'collaborator');
+        const collaborators = new Set(collaborationRepos.map(repo => repo.remoteId));
+        // Two paginated reads need not have identical snapshots. Do not drop a
+        // confirmed collaborator (or its fork flag) absent from the base read.
+        const combined = new Map(repositories.map(repo => [repo.remoteId, repo]));
+        for (const repo of collaborationRepos) combined.set(repo.remoteId, repo);
+        return [...combined.values()].map(repo => ({ ...repo, collaborator: collaborators.has(repo.remoteId) })).sort((a, b) => a.fullName.localeCompare(b.fullName));
       } catch (error) {
         signal?.throwIfAborted();
         return repositories.map(repo => ({ ...repo, metadataError: error instanceof Error ? `协作分类未能读取：${error.message}` : '协作分类未能读取。' }));
       }
     }
+    if (!repositories.length) return repositories;
     // Gitea's owner DTO has no organization flag. Confirm organizations and direct
     // collaborators using read-only endpoints, not names, admin rights or team access.
     // Four workers and a shared 15s deadline bound extra lookups for large catalogs.
@@ -342,7 +343,7 @@ export class AccountService {
   private async validatePath(repository: RemoteRepository, input: string): Promise<string> {
     const expanded = input === '~' ? homedir() : input.startsWith('~/') ? resolve(homedir(), input.slice(2)) : input;
     if (!expanded || !isAbsolute(expanded)) throw new Error('请输入绝对目录，例如 /Users/你的名字/Projects/repo 或 ~/Projects/repo。');
-    const path = (await this.git(resolve(expanded), ['rev-parse', '--show-toplevel'])).trim();
+    const path = await realpath((await this.git(resolve(expanded), ['rev-parse', '--show-toplevel'])).trim());
     // Accept a matching named remote, not just origin. Compare host + owner/name, never just the folder name.
     const names = (await this.git(path, ['remote'])).trim().split('\n').filter(Boolean);
     const expected = remoteIdentity(repository.url);
@@ -353,7 +354,43 @@ export class AccountService {
   private async linkedPath(id: string) {
     const repository = this.repository(id); const link = this.state.links.find(l => l.repositoryId === id);
     if (!link) throw new Error('请先在 Dashboard 关联本地目录。');
-    return this.validatePath(repository, link.path);
+    return this.validatePath(repository, link.worktrees?.[0]?.path || link.path);
+  }
+  private async localWorkspace(id: string, signal?: AbortSignal): Promise<RepositoryWorkspace> {
+    const repository = this.repository(id);
+    const link = this.state.links.find(l => l.repositoryId === id);
+    if (!link) throw new Error('请先关联本地目录。');
+    const roots = link.worktrees || [{ path: link.path, branch: '' }];
+    const tasks: RepositoryWorkspace['tasks'] = [];
+    const commits = new Map<string, RepositoryWorkspace['commits'][number]>();
+    for (const item of roots) {
+      signal?.throwIfAborted();
+      try {
+        const root = await this.validatePath(repository, item.path);
+        const workspace = await readRepositoryWorkspace(root, new Set([root]));
+        tasks.push(...workspace.tasks);
+        for (const commit of workspace.commits) {
+          const previous = commits.get(commit.id);
+          commits.set(commit.id, previous ? { ...previous, refs: [...new Set([...previous.refs, ...commit.refs])] } : commit);
+        }
+      } catch (problem) {
+        tasks.push({ id: `worktree:${item.branch}:${item.path}`, path: item.path, branch: item.branch || '未读取分支', head: '', files: [], tree: [], error: `${readFailure(problem)} 工作目录不可用或远端已变化，未修改文件；请重新关联。` });
+      }
+    }
+    signal?.throwIfAborted();
+    if (this.state.links.find(l => l.repositoryId === id) !== link) throw new Error('仓库关联已更新，请重试。');
+    return { source: 'local', tasks, commits: topologicalCommits([...commits.values()]), complete: tasks.every(task => !task.error) };
+  }
+  private async taskRoot(id: string, taskId: string): Promise<string> {
+    const repository = this.repository(id); const link = this.state.links.find(l => l.repositoryId === id);
+    if (!link) throw new Error('请先关联本地目录。');
+    const item = (link.worktrees || [{ path: link.path, branch: '' }]).find(item => taskId.endsWith(`:${item.path}`));
+    if (item) {
+      const root = await this.validatePath(repository, item.path);
+      const task = (await readWorktrees(root)).find(task => task.path === root && `worktree:${task.branch}:${task.path}` === taskId);
+      if (task) return root;
+    }
+    throw new Error('这个任务不属于已关联工作目录。');
   }
   private async snapshot(id: string): Promise<LocalSnapshot> {
     const path = await this.linkedPath(id);
@@ -394,11 +431,37 @@ export class AccountService {
       case 'link': {
         const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
         if (!repository.available) throw new Error('该账号目前无法访问这个仓库，请先重新加载。');
-        const path = await this.validatePath(repository, field(value, 'path'));
-        return this.mutate(next => { if (!next.repositories.some(r => r.id === id)) throw new Error('仓库已移除。'); next.links = [...next.links.filter(l => l.repositoryId !== id), { repositoryId: id, path }]; });
+        const branch = value.branch === undefined ? undefined : field(value, 'branch', 1024);
+        const previousLink = this.state.links.find(l => l.repositoryId === id);
+        const legacy = previousLink && !previousLink.worktrees ? (await this.localWorkspace(id)).tasks.map(task => ({ branch: task.branch, path: task.path! })) : [];
+        const discovered = await discoverLocalWorktrees(field(value, 'path'), repository.url, branch, signal);
+        return this.mutate(next => {
+          signal?.throwIfAborted();
+          const current = next.repositories.find(r => r.id === id);
+          if (!current?.available || current.fullName !== repository.fullName) throw new Error('仓库访问已变化。');
+          const previous = next.links.find(l => l.repositoryId === id);
+          if (JSON.stringify(previous) !== JSON.stringify(previousLink)) throw new Error('仓库关联已更新，请重试。');
+          const retained = (previous?.worktrees || legacy).filter(w => !discovered.worktrees.some(found => found.path === w.path) && (branch === undefined || w.branch !== branch));
+          const worktrees = [...retained, ...discovered.worktrees];
+          if (worktrees.length > 64) throw new Error('关联工作目录超过64个，尚未保存。');
+          next.links = [...next.links.filter(l => l.repositoryId !== id), { repositoryId: id, path: branch === undefined ? discovered.path : previous?.path || discovered.path, worktrees }];
+        });
       }
-      case 'unlink': { const id = field(value, 'repositoryId', 160); return this.mutate(next => { next.links = next.links.filter(l => l.repositoryId !== id); }); }
+      case 'unlink': { const id = field(value, 'repositoryId', 160); const branch = value.branch === undefined ? undefined : field(value, 'branch', 1024);
+        const previous = this.state.links.find(link => link.repositoryId === id);
+        const actual = branch !== undefined && previous ? (await this.localWorkspace(id, signal)).tasks : [];
+        return this.mutate(next => {
+        signal?.throwIfAborted();
+        if (JSON.stringify(next.links.find(link => link.repositoryId === id)) !== JSON.stringify(previous)) throw new Error('仓库关联已更新，请重试。');
+        if (branch === undefined) next.links = next.links.filter(l => l.repositoryId !== id);
+        else next.links = next.links.flatMap(link => {
+          if (link.repositoryId !== id) return [link];
+          const worktrees = actual.filter(task => task.branch !== branch).map(task => ({ branch: task.branch, path: task.path! }));
+          return worktrees.length ? [{ ...link, worktrees }] : [];
+        });
+      }); }
       case 'snapshot': return this.snapshot(field(value, 'repositoryId', 160));
+      case 'localWorkspace': return this.localWorkspace(field(value, 'repositoryId', 160), signal);
       case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
       case 'openFile': {
         const source = value.source;
@@ -417,16 +480,21 @@ export class AccountService {
           target = url;
         } else {
           const link = this.state.links.find(item => item.repositoryId === id);
-          const root = await this.linkedPath(id);
+          const root = await this.taskRoot(id, field(value, 'taskId'));
           target = await repositoryTaskFile(root, field(value, 'taskId'), value.path);
-          if (this.state.links.find(item => item.repositoryId === id)?.path !== link?.path || !this.state.accounts.some(item => item.account.id === account.id) || !this.repository(id).available || this.repository(id).fullName !== repository.fullName) throw new Error('仓库关联或访问账号已更新，请重试。');
+          if (this.state.links.find(item => item.repositoryId === id) !== link || !this.state.accounts.some(item => item.account.id === account.id) || !this.repository(id).available || this.repository(id).fullName !== repository.fullName) throw new Error('仓库关联或访问账号已更新，请重试。');
         }
         signal?.throwIfAborted();
         await this.openFile({ source, value: target });
         return { opened: true };
       }
       case 'diff': {
-        const id = field(value, 'repositoryId', 160); const file = field(value, 'path'); const snapshot = await this.snapshot(id);
+        const id = field(value, 'repositoryId', 160); const file = field(value, 'path');
+        if (value.taskId !== undefined) {
+          const taskId = field(value, 'taskId'); const root = await this.taskRoot(id, taskId);
+          return { text: await readRepositoryTaskDiff(root, taskId, file) };
+        }
+        const snapshot = await this.snapshot(id);
         const changed = snapshot.files.find(f => f.path === file);
         if (!changed) throw new Error('文件已不在更改列表，请刷新仓库。');
         if (!changed.tracked) return { text: '未跟踪文件尚无 Git Diff；本版本不会读取或上传其内容。' };

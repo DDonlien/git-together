@@ -29,11 +29,11 @@ export function RepositoryView({ repository, account, localPath, localState, glo
   const [treeSourceChoice, setTreeSource] = useState<'remote' | 'local' | null>(null);
   const workspace = useMemo<RepositoryWorkspace>(() => {
     if (suppliedWorkspace) return suppliedWorkspace;
-    const local = snapshot ? snapshotWorkspace(snapshot) : undefined;
+    const local = current?.workspace || (snapshot ? snapshotWorkspace(snapshot) : undefined);
     if (remoteState?.workspace) return combineRepositoryWorkspaces(remoteState.workspace, local);
     if (local) return local;
     return { source: 'remote', complete: false, commits: [], tasks: [{ id: 'remote:pending', branch: repository.defaultBranch || '默认分支', head: '', path: null, files: [], tree: [], remote: true, treeComplete: false, error: remoteState?.loading ? '' : remoteState?.error || '远端内容接口等待服务更新。' }] };
-  }, [suppliedWorkspace, snapshot, repository.defaultBranch, remoteState]);
+  }, [suppliedWorkspace, current?.workspace, snapshot, repository.defaultBranch, remoteState]);
   // Keep hidden cards mounted: heartbeat and focus must preserve each task's
   // draft, folder expansion and selected file instead of changing checkout.
   const focus = workspace.tasks.some(task => task.id === focusedTask) ? focusedTask : null;
@@ -54,8 +54,7 @@ export function RepositoryView({ repository, account, localPath, localState, glo
   };
   const select = (id: string, path?: string) => setSelectedFiles(previous => ({ ...previous, [id]: path }));
   const readDiff: ReadTaskDiff = suppliedReadDiff || (async (task, path, signal) => {
-    if (task.path !== localPath) throw new Error('这个任务的 Diff 读取等待服务更新。');
-    return (await importAPI('diff', { repositoryId: repository.id, path }, signal)).text;
+    return (await importAPI('diff', { repositoryId: repository.id, taskId: task.id, path }, signal)).text;
   });
   return <main className="repository-workspace-view" aria-label="仓库工作台">
     <section className="repository-overview flat-group" aria-label="仓库信息">
@@ -74,7 +73,7 @@ export function RepositoryView({ repository, account, localPath, localState, glo
       <section id="repository-tree-column" className="repository-column repository-tree-column flat-group" aria-label="文件树"><RepositoryColumnHeading title="文件树" icon="folder" controls="repository-tree-column"><Segmented<'remote' | 'local'> className="repository-tree-source" aria-label="文件树来源" aria-controls="repository-file-trees" value={treeSource} onValueChange={setTreeSource} items={[{ value: 'remote', label: '远端' }, { value: 'local', label: '本地' }]} /></RepositoryColumnHeading><div id="repository-file-trees" className={`repository-task-stack ${visibleTreeIds.size === 1 ? 'is-focused' : ''}`}>{workspace.tasks.map(task => {
         const commitId = selectedCommits[task.id];
         const details = commitId && remoteCommits[task.id]?.id === commitId ? remoteCommits[task.id]?.details : null;
-        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree task={task} repository={repository} account={account} changes={task.remote ? details?.files || noChanges : undefined} selected={selectedFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : workspace.complete} /></div>;
+        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree task={task} repository={repository} account={account} changes={task.remote ? details?.files || noChanges : undefined} selected={selectedFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
       })}{!visibleTreeIds.size && <div className="repository-column-empty" role="status"><Icon name="folder" size={26} /><p>{treeSource === 'local' ? !localPath ? '尚未关联本地目录。' : current?.error || (focus ? '这个分支尚无本地文件树。' : '正在读取本地文件树…') : remoteState?.error || (focus ? '这个分支尚无远端文件树。' : remoteState?.workspace ? '远端仓库尚无文件。' : remoteState?.loading ? '正在读取远端文件树…' : '远端文件树尚未接入。')}</p>{treeSource === 'local' && !localPath && <Button onClick={onConfigure} disabled={!repository.available}>关联本地目录</Button>}</div>}</div></section>
     </div></div>
   </main>;

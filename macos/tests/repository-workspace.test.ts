@@ -76,7 +76,7 @@ test('unlinked association reuses the configuration callback only in the local t
   const markup = renderToStaticMarkup(createElement(RepositoryView, { repository, account, globalSearch: '', onConfigure: () => {} }));
   assert.doesNotMatch(markup, /关联本地目录<\/span>|配置本地目录<\/span>/);
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /onConfigure=\{\(\) => setConfiguring\(repository\)\}/);
+  assert.match(app, /onConfigure=\{\(\) => setConfiguring\(\{ repository \}\)\}/);
   assert.match(app, /configuring && <LocalRepositoryModal/);
 });
 

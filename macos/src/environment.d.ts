@@ -1,4 +1,4 @@
-export {};
+import type { UpdateBridge } from './update-model';
 declare global {
   interface Window {
     gittogether?: {
@@ -7,6 +7,7 @@ declare global {
       import: (method: string, input: unknown) => Promise<unknown>;
       chooseDirectory: () => Promise<string | null>;
       openGithubAuthorization: () => Promise<void>;
+      updates: UpdateBridge;
     };
   }
 }

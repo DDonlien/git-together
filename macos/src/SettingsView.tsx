@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { accountLabel, providerName, type Account, type Catalog, type GitHubAuthorization, type Provider } from './import-model';
 import type { WorkspaceController } from './use-workspace';
-import { Button, Icon, Modal, Notice, Segmented, Select, Switch, TextField } from './ui';
+import { Button, Icon, Modal, Notice, Segmented, Select, TextField } from './ui';
 import pkg from '../package.json';
 import { AccountSignInOptions } from './AccountSignInOptions';
 import { AccountEditForm } from './AccountEditForm';
@@ -10,6 +10,7 @@ import { openGitHubAuthorization } from './github-auth-flow';
 import { GitHubBrowserAuthorizationModal } from './GitHubBrowserAuthorizationModal';
 import { cancelGitHubWebAuthorization, navigateGitHubWebWindow, reserveGitHubWebWindow, startGitHubWebAuthorization } from './github-web-api';
 import type { GitHubWebSession } from './github-web-model';
+import { UpdateSettings } from './UpdateSettings';
 
 export function SettingsView({ controller, onDashboard }: { controller: WorkspaceController; onDashboard: () => void }) {
   const [adding, setAdding] = useState(false);
@@ -74,7 +75,8 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
       </form>}
       {message && <Notice kind="success">{message}<Button variant="quiet" onClick={onDashboard}>打开 Dashboard</Button></Notice>}
     </section>
-    <section className="settings-section"><h2>外观</h2><div className="settings-group"><div className="setting-row"><span>颜色方案<small>跟随系统，或选择亮色与暗色</small></span><Select label={<span className="sr-only">颜色方案</span>} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '亮色' }, { value: 'dark', label: '暗色' }]} value={controller.preferences.theme} onChange={event => controller.updatePreferences({ theme: event.target.value as 'light' | 'dark' | 'system' })} /></div><Switch className="setting-row" label="减少透明度" description="使用更实的导航与控制层" checked={controller.preferences.reducedGlass} onCheckedChange={checked => controller.updatePreferences({ reducedGlass: checked })} /></div></section>
+    <section className="settings-section"><h2>外观</h2><div className="settings-group"><div className="setting-row"><span>颜色方案<small>跟随系统，或选择亮色与暗色</small></span><Select label={<span className="sr-only">颜色方案</span>} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '亮色' }, { value: 'dark', label: '暗色' }]} value={controller.preferences.theme} onChange={event => controller.updatePreferences({ theme: event.target.value as 'light' | 'dark' | 'system' })} /></div></div></section>
+    <UpdateSettings busy={busy || Object.values(controller.busy).some(Boolean)} />
     <footer className="settings-footer">GitTogether {pkg.version}</footer>
     {editing && <Modal title="编辑账号" onClose={() => { if (!controller.busy[editing.id]) setEditing(null); }}><AccountEditForm key={editing.id} account={editing} busy={!!controller.busy[editing.id]} onSubmit={controller.updateAccount} onSaved={() => { setEditing(null); setMessage('账号已更新。'); }} onCancel={() => setEditing(null)} onRemove={() => { setRemoving(editing); setError(''); }} /></Modal>}
     {removing && <Modal title={`移除 ${removing.name}？`} onClose={() => { if (!controller.busy[removing.id]) setRemoving(null); }}><p>{accountLabel(removing)}</p><p>移除这个账号的凭据、仓库列表与应用内的本地关联。不会删除任何本地文件。</p>{error && <Notice kind="error">{error}</Notice>}<div className="modal-actions"><Button disabled={!!controller.busy[removing.id]} onClick={() => setRemoving(null)}>取消</Button><Button variant="danger" disabled={!!controller.busy[removing.id]} onClick={() => { setError(''); void controller.removeAccount(removing.id).then(() => { setRemoving(null); setEditing(null); }).catch(problem => setError(problem instanceof Error ? problem.message : '移除失败。')); }}>移除账号</Button></div></Modal>}

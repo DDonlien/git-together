@@ -1,17 +1,18 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
-import liquidGlass from 'electron-liquid-glass';
 import { AccountService } from '../server/account-service';
 import { encryptedStore } from './credential-store';
 import { githubVerificationURL } from '../src/import-model';
 import { isTrustedRendererURL, type RendererSource } from './renderer-source';
 import { systemFetch } from './system-network';
+import { MacUpdater } from 'electron-updater';
+import { AppUpdater } from './app-updater';
+import { updateSource } from '../src/update-model';
 
 let window: BrowserWindow | null = null;
-let nativeGlass = false;
-let resolveGlass: () => void;
-let glassReady: Promise<void>;
 let accountService: AccountService;
+let updater: AppUpdater;
+let activeImports = 0;
 app.setName('GitTogether');
 app.setPath('userData', join(app.getPath('appData'), 'GitTogether-Standalone-Demo'));
 const rendererSource: RendererSource = app.isPackaged
@@ -25,16 +26,13 @@ function isMainRenderer(event: IpcMainInvokeEvent): boolean {
 }
 
 function createWindow() {
-  nativeGlass = false;
-  let initialized = false;
-  glassReady = new Promise<void>(resolve => { resolveGlass = resolve; });
   const display = screen.getPrimaryDisplay().workAreaSize;
   const width = Math.min(1600, display.width - 80);
   window = new BrowserWindow({
     title: 'GitTogether',
     width, height: Math.min(1000, display.height - 60),
     minWidth: 920, minHeight: 640,
-    transparent: true, backgroundColor: '#00000000', titleBarStyle: 'hidden',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#131318' : '#f6f5fa', titleBarStyle: 'hidden',
     trafficLightPosition: { x: 20, y: 18 }, show: false,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
@@ -42,14 +40,7 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('console-message', details => { if (details.level === 'error') console.error('Renderer:', details.message); });
   window.webContents.on('will-navigate', (event, url) => { if (!isTrustedRendererURL(url, rendererSource)) event.preventDefault(); });
-  window.webContents.on('did-finish-load', () => {
-    if (initialized) return;
-    try {
-      nativeGlass = liquidGlass.isGlassSupported() && liquidGlass.addView(window!.getNativeWindowHandle(), { cornerRadius: 18 }) >= 0;
-      console.log(`GitTogether native Liquid Glass: ${nativeGlass ? 'enabled' : 'fallback'}`);
-    } catch (error) { nativeGlass = false; console.warn('Native glass unavailable:', error instanceof Error ? error.message : error); }
-    initialized = true; resolveGlass(); window!.show();
-  });
+  window.once('ready-to-show', () => window!.show());
   window.on('closed', () => { window = null; });
   if (rendererSource.kind === 'file') void window.loadFile(rendererSource.path);
   else void window.loadURL(rendererSource.url);
@@ -57,18 +48,22 @@ function createWindow() {
 
 ipcMain.handle('gittogether:environment', async event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
-  await glassReady;
   console.log('GitTogether renderer mounted; native bridge connected.');
-  return { nativeGlass, platform: process.platform };
+  // Keep the finite bridge response compatible with already-built renderers.
+  return { nativeGlass: false, platform: process.platform };
 });
+nativeTheme.on('updated', () => window?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#131318' : '#f6f5fa'));
 ipcMain.handle('gittogether:theme', (event, theme: unknown) => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
   if (theme === 'light' || theme === 'dark' || theme === 'system') nativeTheme.themeSource = theme;
 });
 ipcMain.handle('gittogether:import', async (event, method: unknown, input: unknown) => {
   if (!isMainRenderer(event)) return { ok: false, error: '无效的应用来源。' };
+  if (updater.status().phase === 'installing') return { ok: false, error: '正在安装应用更新，请重启后继续。' };
+  activeImports++;
   try { return { ok: true, value: await accountService.handle(method, input) }; }
   catch (error) { return { ok: false, error: error instanceof Error ? error.message : '账号服务失败。' }; }
+  finally { activeImports--; }
 });
 ipcMain.handle('gittogether:choose-directory', async event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
@@ -81,6 +76,9 @@ ipcMain.handle('gittogether:github-authorization', async event => {
   await shell.openExternal(githubVerificationURL);
 });
 app.whenReady().then(() => {
+  const engine = app.isPackaged && process.platform === 'darwin' ? new MacUpdater(updateSource) : null;
+  if (engine) engine.logger = null;
+  updater = new AppUpdater(engine, app.getVersion(), () => activeImports === 0);
   accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch, { openFile: async target => {
     if (target.source === 'remote') await shell.openExternal(target.value);
     else if (await shell.openPath(target.value)) throw new Error('无法用系统默认应用打开此文件，请检查是否有可用应用。');
@@ -93,5 +91,21 @@ app.whenReady().then(() => {
   ]));
   createWindow();
   app.on('activate', () => { if (!window) createWindow(); });
+});
+ipcMain.handle('gittogether:update-status', event => {
+  if (!isMainRenderer(event)) throw new Error('Unknown sender');
+  return updater.status();
+});
+ipcMain.handle('gittogether:update-check', event => {
+  if (!isMainRenderer(event)) throw new Error('Unknown sender');
+  return updater.check();
+});
+ipcMain.handle('gittogether:update-download', event => {
+  if (!isMainRenderer(event)) throw new Error('Unknown sender');
+  return updater.download();
+});
+ipcMain.handle('gittogether:update-install', event => {
+  if (!isMainRenderer(event)) throw new Error('Unknown sender');
+  return updater.install();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

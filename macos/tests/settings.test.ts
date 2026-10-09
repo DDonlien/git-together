@@ -26,10 +26,10 @@ test('settings retain accounts and appearance without guide, material or storage
       cancelGithubAuthorization: async () => ({ cancelled: true }),
     };
     const markup = renderToStaticMarkup(createElement(SettingsView, { controller, onDashboard: () => {} }));
-    assert.deepEqual([...markup.matchAll(/<h2>(.*?)<\/h2>/g)].map(match => match[1]), ['账号', '外观']);
+    assert.deepEqual([...markup.matchAll(/<h2(?: [^>]*)?>(.*?)<\/h2>/g)].map(match => match[1]), ['账号', '外观', '应用更新']);
     assert.match(markup, /添加账号/);
     assert.match(markup, /颜色方案/);
-    assert.match(markup, /减少透明度/);
+    assert.doesNotMatch(markup, /减少透明度|使用更实的导航与控制层/);
     assert.equal(markup.match(/<div class="settings-heading">([\s\S]*?)<\/div>/)?.[1], '<h1>设置</h1>');
     assert.equal(markup.match(/<footer class="settings-footer">([\s\S]*?)<\/footer>/)?.[1], `GitTogether ${pkg.version}`);
     assert.equal((markup.match(/GitTogether /g) || []).length, 1);

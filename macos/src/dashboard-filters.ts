@@ -6,7 +6,11 @@ export type FilterSelection = ReadonlySet<string> | null;
 export interface MultiFilterOption { value: string; label: string; detail?: string }
 export interface MultiFilterGroup { id: string; label: string; detail?: string; options: MultiFilterOption[] }
 export const repositorySources: MultiFilterOption[] = [{ value: 'remote', label: '远端' }, { value: 'local', label: '本地' }];
-export const repositoryTypes: MultiFilterOption[] = [{ value: 'original', label: 'Original' }, { value: 'fork', label: 'Fork' }, { value: 'added', label: 'Added', detail: '协作访问' }];
+export const repositoryTypes: MultiFilterOption[] = [{ value: 'original', label: 'Original' }, { value: 'fork', label: 'Fork' }, { value: 'added', label: 'Added' }];
+
+export function accountOptions(accounts: Account[]): MultiFilterOption[] {
+  return accounts.map(account => ({ value: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}` }));
+}
 
 export function isSelected(selection: FilterSelection, value: string) { return selection === null || selection.has(value); }
 export function isUnrestricted(selection: FilterSelection, options: MultiFilterOption[]) {

@@ -80,15 +80,15 @@ test('sidebar represents an empty or failed account without asking for a local a
   assert.doesNotMatch(sidebar(emptyAccount), /关联仓库/);
 });
 
-test('Dashboard has six repository columns and independent disclosures, not a default-branch column', () => {
+test('Dashboard has five repository columns with inline Git actions, not a separate status or default-branch column', () => {
   const markup = dashboard();
   assert.equal((markup.match(/<table\b/g) || []).length, 1);
-  assert.deepEqual([...markup.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(match => match[1]), ['仓库', '组织 / 用户', '账号', '本地目录', '状态', '<span class="sr-only">仓库操作</span>']);
+  assert.deepEqual([...markup.matchAll(/<th scope="col">(.*?)<\/th>/g)].map(match => match[1]), ['仓库', '组织 / 用户', '账号', '本地目录', '<span class="sr-only">Git 操作</span>']);
   assert.doesNotMatch(markup, /remote-account-heading|remote-account-group/);
   const repositories = rows(markup);
   assert.equal(repositories.length, 3);
   for (const row of repositories) {
-    assert.equal((row.match(/<td>/g) || []).length, 6);
+    assert.equal((row.match(/<td>/g) || []).length, 5);
     assert.match(row, /<button class="repository-link"/);
     assert.match(row, /尚未关联/);
   }
@@ -102,7 +102,7 @@ test('Dashboard has six repository columns and independent disclosures, not a de
   const controlled = [...markup.matchAll(/<button([^>]*)>/g)].filter(match => match[1].includes('repository-disclosure')).map(match => match[1].match(/aria-expanded="false" aria-controls="([^"]+)"/)![1]);
   assert.equal(controlled.length, 3); assert.equal(new Set(controlled).size, 3);
   for (const id of controlled) assert.ok(markup.includes(`<tbody id="${id}" class="dashboard-repository-branches"`) && markup.includes('hidden=""'));
-  assert.match(repositories[1], /失去访问权限/);
+  assert.match(repositories[1], /访问账号目前无权读取此仓库/);
 });
 
 test('repository names omit the owner prefix while retaining the complete identity in their tooltip', () => {
@@ -162,10 +162,10 @@ test('each repository uses its centered folder tile as the sole disclosure besid
 test('local associations decorate only their matching repository, not another account with the same remote id', () => {
   const linked = { ...catalog, links: [{ repositoryId: 'work:1', path: '/projects/work/shared' }] };
   const repositories = rows(dashboard(linked));
-  assert.match(repositories[0], /未关联本地/);
+  assert.match(repositories[0], /尚未关联/);
   assert.doesNotMatch(repositories[0], /\/projects\/work\/shared/);
   assert.match(repositories[2], /\/projects\/work\/shared/);
-  assert.match(repositories[2], /mapping-status linked/);
+  assert.match(repositories[2], /部分关联/);
   assert.match(repositories[2], /配置本地/);
   assert.equal((sidebar(linked).match(/class="nav-item repository-item /g) || []).length, 3);
 });
@@ -192,7 +192,7 @@ test('the unlinked directory text itself is the association button without a sep
   for (const directory of directories) {
     assert.equal((directory.match(/<button\b/g) || []).length, 1);
     assert.match(directory, /class="local-path local-path-action muted"/);
-    assert.match(directory, />尚未关联<\/button>/);
+    assert.match(directory, />尚未关联<\/span><\/button>/);
     assert.match(directory, /aria-label="配置本地目录：/);
   }
   assert.match(directories[0], /配置本地目录：org\/shared · Personal · personal-login@github.com/);
@@ -207,8 +207,8 @@ test('a linked directory remains a text configuration button even if remote acce
   const directories = rows(dashboard(linked)).map(row => [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)][3][1]);
   for (const index of [1, 2]) {
     assert.match(directories[index], /class="local-path local-path-action "/);
-    assert.match(directories[index], /title="\/projects\//);
-    assert.match(directories[index], />\/projects\/(?:personal\/archive|work\/shared)<\/button>/);
+    assert.match(directories[index], /title="[^"]*分支已验证/);
+    assert.match(directories[index], />\/projects\/(?:personal\/archive|work\/shared)<\/small><\/button>/);
     assert.doesNotMatch(directories[index].match(/<button[^>]*>/)?.[0] || '', /disabled/);
   }
 });

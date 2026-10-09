@@ -87,7 +87,7 @@ test('local service resolves main/worktree files and literal Git pathspec names 
   await fixture.git(fixture.directory, ['remote', 'add', 'origin', 'https://git.fixture.test/qa/project.git']);
   const input = { repositoryId: fixture.repositoryId, source: 'local', path: 'README.md', taskId: `worktree:main:${fixture.directory}` };
   await assert.rejects(fixture.service.handle('openFile', input), /关联本地目录/);
-  await fixture.service.handle('link', { repositoryId: fixture.repositoryId, path: fixture.directory });
+  await fixture.service.handle('link', { repositoryId: fixture.repositoryId, path: fixture.root });
   const workspace = await readRepositoryWorkspace(fixture.directory);
   for (const task of workspace.tasks.filter(task => task.path)) {
     for (const path of ['README.md', 'src/:(top)all.ts']) {

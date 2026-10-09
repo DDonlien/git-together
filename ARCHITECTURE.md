@@ -2,21 +2,23 @@
 
 R-05-tree-identity-row仅调整RepositoryFileTree的应用自有标记与局部CSS：当前task.branch和task.head派生同一行名称/8位SHA，文本渐隐用带透明尾部留白的蒙版，短名称不被淡化，SHA不收缩。本地路径和worktree标签保留；没有新增状态、读取接口或树重建，历史选择不替换树基准。隔离QA可用--long-branch建立真实临时长分支，默认测试数据不变。
 
-React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以归属方、账号、本地目录等六列展示统一列表，实际分支位于可展开的仓库子行，不另设默认分支列；支持原搜索与筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
+React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以仓库、归属方、账号、本地目录和 Git 操作五列展示统一列表，不再单列本地状态。实际分支位于可展开的仓库子行，保留独立目录与操作；支持原搜索与筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
 
-IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。IMPORT-13-branches-folder把原文件夹底板直接复用为公共IconButton展开入口，保留aria-expanded/aria-controls；仓库名称的工作区导航处理器独立，不新增状态或箭头。每个可见仓库行复用 useRemoteRepository，只有展开且服务就绪时启用已有 remoteWorkspace；收起保留该行的最后结果并取消请求，筛选隐藏/离开 Dashboard 卸载读取器。分支名称取返回 tasks，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口会同时读取有限历史/树并缓存SHA；没有新增分支API或服务重启、凭据与Git写入。
+IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。IMPORT-13-branches-folder把原文件夹底板直接复用为公共IconButton展开入口，保留aria-expanded/aria-controls；仓库名称的工作区导航处理器独立，不新增状态或箭头。每个可见仓库行复用 useRemoteRepository；0.10.0 在展开或已有本地关联且服务就绪时启用已有 remoteWorkspace。未关联仓库收起保留该行最后结果并取消读取，已关联仓库保留同步信号所需心跳；筛选隐藏/离开 Dashboard 卸载读取器。分支名称取真实远端任务与已关联本地任务的并集，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口同时读取有限历史/树并缓存SHA，没有新增分支API或Git写入。
 
-`ui.tsx` 是 OpenGlass UI 的薄适配层，统一按钮、字段、分段选择、菜单、弹窗和开关契约；`theme.ts` 管理公共令牌。App shell 只有一个共享窗口 canvas，CSS 区分全局悬浮导航与右侧平面内容组。账号导航在桌面最小宽度仍保留可读名称，760px 以下使用浏览器图标栏回退。仓库图标上的空心角标明确表示 Presence 未连接，不伪造在线数据。
+`ui.tsx` 的 MaterialProvider 使用 OpenGlass UI 的公共 classic/CSS 交互原语，保留按钮、字段、分段选择、菜单与弹窗的无障碍/焦点契约；`theme.ts` 与 `styles.css` 统一 Material 3 亮暗色、状态、形状与轻微卡片 elevation。Roboto 字体本地打包，中文系统回退，不访问外部字体服务器。App shell 只有共享画布，侧栏透明且无独立浮层，主要语义内容分组为卡片，浏览器/Electron 共用样式。侧栏宽度只由显式开关决定，收起保留56px图标列；导航、选择与草稿不卸载。旧 reducedGlass 偏好仍可读取以兼容保存结构，但不再呈现无作用的开关。仓库图标空心角标表示 Presence 未连接，不伪造在线数据。
 
-`WindowChrome.tsx` 是生产 App 与真实 Git 隔离 QA 共用的窗口控制区，位于横向 app-body 外，只保留红绿灯；Electron 保留系统按钮，浏览器绘制既有预览。`SidebarHeader.tsx` 的sidebar-header行仅含公共IconButton，不再渲染品牌图标或文字，两态保留同一个按钮DOM；左边缘通过现有导航尺寸令牌与Dashboard图标框对齐。App 的 sidebarCollapsed 仅切换 is-collapsed CSS 类，侧栏保留56px图标列，不条件卸载导航或工作区，不改变页面/RepositoryView 的 key；账户/仓库导航隐藏文字时仍有明确可访问名称。函数式切换、aria-expanded/aria-controls 和显式名称维持鼠标/键盘操作。保持 hook 顺序不变，布局热更新不使用强制 refresh reset，避免重置当前表单。原生窗口按钮固定在顶部控制条内，不依赖侧栏宽度或 resize 回调；不增加 IPC、账号服务变更或凭据存储。
+`WindowChrome.tsx` 是生产 App 与真实 Git 隔离 QA 共用的窗口控制区，位于横向 app-body 外，只保留红绿灯；Electron 保留系统按钮，浏览器绘制既有预览。`SidebarHeader.tsx` 两态保留同一公共IconButton和右侧GitTogether文字DOM，收起时文字hidden；32px头部/常驻导航行与固定8px间距通过CSS统一，不引入新状态。侧栏与首页/仓库首卡片共用顶部内缩令牌，左边缘沿既有导航尺寸对齐。App 的 sidebarCollapsed 仅切换 is-collapsed CSS 类，侧栏保留56px图标列，不条件卸载导航或工作区，不改变页面/RepositoryView 的 key；账户/仓库导航隐藏文字时仍有明确可访问名称。函数式切换、aria-expanded/aria-controls 和显式名称维持鼠标/键盘操作。保持 hook 顺序不变，布局热更新不使用强制 refresh reset，避免重置当前表单。普通卡片共享无投影令牌，菜单/弹窗阴影独立。原生窗口按钮固定在顶部控制条内，不依赖侧栏宽度或 resize 回调；不增加 IPC、账号服务变更或凭据存储。
 
-`RepositoryActions.tsx` 用公共 Menu/MenuItem 承接 Dashboard 的行尾操作，分为 Git 与 GitTogether；已有工作台/本地配置复用 App 的原处理器和权限保护。Git Fetch、Pull、Push、提交仅显示为禁用入口，没有处理器或新服务 API；此 UI 改动不扩展只读凭据/本地 Git 边界。
+0.10.0 的 `RepositoryActions.tsx` 用四个公共 IconButton 平铺 Fetch、Get Latest、Push、Commit，移除行尾省略号菜单；工作台和本地配置仍由仓库名称、目录入口打开。`branch-links.ts` 从真实已关联任务、远端 HEAD 与已读取 ancestry 纯派生灯色及详细说明；没有足够依据时明确未知，SHA 不同不直接等同于落后。焦点包装层支持键盘与鼠标右侧 portal 提示，接近窗口边缘时约束在视口内。Git 写动作仍禁用，没有执行处理器或写服务 API。
 
 仓库分支图和文件树不渲染底部状态/操作容器；滚动内容使用原来的 flex 剩余高度，不用隐藏空条来占位。R-05-column-insets移除整套图标题选项与未使用的密度状态，固定36px双行；搜索跳转保留键盘监听，分支与提交右键菜单关闭后仍回到目标记录；真实复制/定位反馈按需显示在标题下。三栏CSS通过--repository-column-inset共享12px外侧水平留白，行内不重复加padding，图轨道与树层级缩进不变。本地配置仍由 Dashboard 复用原弹窗，未关联 Local 空态的关联入口保留；没有新 API 或账户行为。
 
 R-05-branch-title 将原定位分支菜单放入栏标题，Graph只持有用户选择的 task.id，名称由当前任务集合、聚焦任务和 RepositoryView 传入的真实 defaultBranch 派生；不存在可读名称时明确显示未读取分支。选择沿用 loaded-head 检查与提交定位/关闭后记录焦点，不过滤或重建整个并行工作台、不改树基准。RepositoryColumnHeading 可选 titleContent 和独立 disclosureLabel 让展开标题可交互、收起标题只读；图内容始终挂载，用户选择、文件及草稿保留。标题按钮局部覆盖后置通用small按钮尺寸，维持28px控件/44px标题；没有新增协议、服务存储或Git写入。
 
-`FilterMenu.tsx` 复用公共 Menu/MenuItem 保留账号单选；`MultiFilterMenu.tsx` 复用公共 Popover 与具名原生 checkbox/fieldset，组织按访问账号分组、仓库按位置与类型分组，连续勾选不关闭。Popover触发器显式使用dialog语义，方向键在应用层打开和导航，避免库openOnArrowKeys自动赋予menu语义；Escape/外部关闭和焦点管理仍复用公共弹层。`dashboard-filters.ts` 纯派生选项和交叉条件，null表示跟随全选，显式Set表示子集或空选；新增选项只自动进入全选，不清空手动子集，移除选项不产生跨账号别名。搜索由App持有，Cmd+K不变；目录revision不重置选择，不用effect复制派生状态。
+0.9.1的Dashboard不再使用单选`FilterMenu.tsx`；账号、组织、仓库统一复用`MultiFilterMenu.tsx`的公共Popover与具名原生checkbox/fieldset。账号以accountId为键、同名账号保留平台/login/host辅助身份；账号、组织、位置、类型与搜索取交集，组内取并集。整行label执行同一原生change，失去焦点且relatedTarget为空不提前卸载复选框，连续点击不关闭；键盘移到外部才关闭。触发器显式dialog语义，方向键在应用层打开和导航，避免库openOnArrowKeys自动赋予menu语义；Escape/外部关闭和焦点管理仍复用公共弹层。`dashboard-filters.ts`纯派生选项，null表示跟随全选，显式Set保留子集/空选；新增选项只进入全选，移除键不别名到新账号。目录revision不清空选择，搜索由App持有、Cmd+K不变。公共菜单内联光学背景经共享样式覆盖为不透明Material语义色，不修改库私有逻辑。
+
+GitHub的主目录和显式协作目录是两次分页快照，0.9.1按remoteId合并两者，再标记collaborator；不再仅给主目录附上标记而丢弃协作查询独有的Fork/Added仓库。协作快照中的最新provider字段保留，主目录为空时仍查询协作目录，重复记录不重复计数；可选查询失败仍保留主目录并标记未知。Gitea继续按官方204端点确认直接协作，不把团队权限或owner不同猜成Added。
 
 Dashboard 的仓库名称直接读取 `RemoteRepository.name`；「组织 / 用户」列读取 `fullName` 中的 owner，账号列继续通过 accountId 读取用于访问的身份。这两种归属独立。0.7.0在无凭据DTO中增加可选ownerType、fork、collaborator、permissions和安全metadataError，客户端与旧加密目录验证兼容；组织筛选键由accountId、真实归属类别和规范化组织名称组成，个人与未识别归属分别成组，不猜用户名。行键、导航、菜单与本地关联仍使用仓库id。远端表示未关联、本地表示已关联，沿用原关联语义，不声称已克隆；来源与协作关系可以重叠，组内OR、维度之间AND。权限只在状态提示中标注，不用于推断Added。
 
@@ -26,9 +28,9 @@ Dashboard 的仓库名称直接读取 `RemoteRepository.name`；「组织 / 用�
 
 `auto-refresh.ts` 是可注入时钟的单资源调度器，只有一个在途请求；请求结束后才安排下一次检查。`use-auto-refresh.ts` 根据稳定的资源 ID 保留计时器，监听 visibilitychange / focus / online / offline，隐藏或离线时取消/暂停；恢复后检查。重复激活合并，最短间隔 1 秒，失败指数退避至 5 分钟，激活不能绕过退避。每个账号/本地关联有独立调度器，删除一个资源不停止其他资源。
 
-Workspace 每约 10 秒检查服务 instance/version 与 Catalog；每个账号正常约 60 秒调用已有只读仓库 refresh；每个关联目录正常约 5 秒读取 snapshot。远端目录沿用服务分页/错误保留/原子 revision；新会话旧响应、已解绑或换路径的迟到响应不能覆盖当前数据。服务失联保留缓存并显示错误，不重放 connect、token 或授权。版本不一致停止检查，保留原刷新页面交接。
+Workspace 每约 10 秒检查服务 instance/version 与 Catalog；每个账号正常约 60 秒调用已有只读仓库 refresh；每个关联仓库正常约 5 秒读取 localWorkspace 中的真实工作目录。远端目录沿用服务分页/错误保留/原子 revision；新会话旧响应、已解绑或换路径的迟到响应不能覆盖当前数据。服务失联保留缓存并显示错误，不重放 connect、token 或授权。版本不一致停止检查，保留原刷新页面交接。
 
-本地快照缓存位于 controller 的 localStates，Dashboard 可显示本地不可用错误，RepositoryView 复用同一快照，不各自重复拉取。内容比较复用未变的快照对象；UI 不进入整页加载、清空搜索或已选文件。选中文件 Diff 独立正常约 5 秒重读：已经修改的文件继续编辑时 status 可能相同，不能只比较文件名/status 而忽略内容。错误保留最后成功的快照/Diff 并标明过期，恢复成功后消除错误；文件退出真实更改列表时关闭其 Diff。
+本地工作区缓存位于 controller 的 localStates，以 instanceId、仓库、父目录及工作目录集合组成 mappingKey。Dashboard 用操作灯及提示表达读取错误，RepositoryView 复用同一工作区，不各自重复拉取；映射变化时不能沿用旧目录任务，失败仅保留相同映射的最后结果。内容比较复用未变对象，不清空搜索或已选文件。选中文件 Diff 独立正常约 5 秒重读，请求包含 taskId，不能只比较文件名/status 而忽略内容。错误保留相同任务的最后成功 Diff 并标明过期，恢复成功后消除错误；文件退出真实更改列表时不继续冒充存在的差异。
 
 R-05 中已选文件退出更改列表时保留树选择，但不再显示旧 Diff，而明确显示没有未提交更改。每个任务卡片独立正常约 5 秒检查自己选中的更改文件；聚焦隐藏的卡片暂停 Diff 请求，重新展示后检查，草稿与选择不清空。
 
@@ -76,17 +78,27 @@ Vite 只监听 loopback，HTTP 中间件要求本机 Host、同源 Origin / Sec-
 
 应用 API 的跨端口 CORS 只允许固定 4173 origin，要求专用头和 JSON；配置 API 仅允许自身 origin、随机配置页凭证和明确轮换确认。密钥直接从密码字段进入本机进程，等待系统加密文件保存成功后才启用；保存中拒绝开始授权和并发配置，失败保留旧密钥与用户输入，不回显内部存储错误。有活动授权时拒绝更换配置。父目录0700、密文文件0600，响应/日志/源码/安装包/浏览器存储均不带密钥。页面禁缓存、禁止嵌入与 referrer，回调响应移除 URL 中的授权码；不会代填或自动生成真实密钥。旧进程的内存配置没有安全导出接口，首次升级由用户直接重新输入一次，不提取或重放。本机入口与测试不是生产远端 OAuth broker，也没有把秘密打包进 Electron。此进程的配置/重启不清除主服务账号。
 
-Electron main/preload 只开放有限 import、目录选择器、系统主题、原生玻璃检测与固定 GitHub 授权网页打开；所有 IPC 均检查当前窗口、主 frame 和可信页面，不接受调用者 URL。页面 window.open 一律拒绝，登录不嵌入 Electron renderer。`credential-store.ts` 使用 [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage) 将完整账号存储加密，系统加密不可用时拒绝保存，不明文降级；本地签名版可能触发系统钥匙串询问。浏览器服务使用内存会话存储，两者账号数据不共享。
+Electron main/preload 只开放有限 import、目录选择器、系统主题、环境信息与固定 GitHub 授权网页打开；所有 IPC 均检查当前窗口、主 frame 和可信页面，不接受调用者 URL。Material 3 使用不透明窗口背景，不再加载原生玻璃模块；兼容环境字段 nativeGlass 固定 false，不改变 IPC 形状。页面 window.open 一律拒绝，登录不嵌入 Electron renderer。`credential-store.ts` 使用 [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage) 将完整账号存储加密，系统加密不可用时拒绝保存，不明文降级；本地签名版可能触发系统钥匙串询问。浏览器服务使用内存会话存储，两者账号数据不共享。
 
 ### 独立 macOS 包
 
 生产 `.app` 通过 `app.isPackaged` 加载 `app.getAppPath()/client/index.html`，不用开发 URL，也不启动 Vite/HTTP 服务；账号服务直接在 Electron main 中运行。预览环境变量只影响开发启动。`renderer-source.ts` 对文件来源比较精确的绝对页面路径，不能把所有 origin 为 `null` 的 file URL 视为同源；开发版仍比较指定 HTTP(S) origin。保持 contextIsolation、sandbox 与 nodeIntegration 禁用，不扩大 preload 能力。
 
-`scripts/package-desktop.ts` 在系统临时目录构建有限源码快照，Vite 使用相对资源路径和禁用开发 env 注入，esbuild 编译 main/preload。产物只有 client、desktop、package.json 与有限原生模块依赖，不复制 `.env`、日志、测试、用户数据或浏览器账号。版本统一读取 `macos/package.json.version`；源码快照和 ZIP 的 SHA-256 写入产物外的 build-info.json，并拒绝交付构建期间变化的源码快照。官方 Electron Packager 生成 arm64 应用，再进行本地 ad-hoc 签名、签名验证和 ZIP 包装；不宣称 Developer ID 签名、公证或生产自动更新。
+`scripts/package-desktop.ts` 在系统临时目录构建有限源码/锁文件快照，Vite使用相对资源路径并禁用开发env注入，esbuild编译main/preload。产物只有client（含本地字体）、desktop与package.json，不复制.env、日志、测试、用户数据或账号。版本统一读取macos/package.json.version；源码/ZIP摘要写入包外build-info.json，拒绝交付构建期间变化的源码。Electron Packager生成arm64应用，osx-sign以Developer ID逐项签名，保留hardened runtime和必要JIT权限，不降级ad-hoc。可通过本机notarytool钥匙串profile公证并staple；未配置时明确notarized=false。公共app-update.yml放在Resources；latest-mac.yml记录ZIP的SHA-512、大小和版本，不含账号数据。
+
+### 桌面更新与数据保留
+
+0.9.0起Settings单独提供应用更新组，只在打包macOS启用。main持有固定公共DDonlien/git-together GitHub provider的electron-updater，renderer只通过当前窗口/主frame/精确file页面验证的四个有限IPC读取状态、检查、下载、重启安装，不能传入URL、凭据或路径。下载验证SHA-512，安装由Squirrel.Mac验证与当前App相同的代码签名后替换应用；不禁用TLS/ATS，不允许降级、预发行、自动下载或普通退出时自动安装。进度来自原生事件，设置轮询只读本地IPC，不重复请求GitHub。import完成前不安装，安装阶段拒绝新import，避免中断账号原子保存。
+
+bundle ID保持com.gittogether.standalone，名称保持GitTogether，userData固定appData/GitTogether-Standalone-Demo，继续使用accounts-v2.encrypted及preferences.v2；升级不重命名、删除或迁移此目录，不复制数据进包。safeStorage与SavedState v2保持原样，本地关联只是保存路径，不改仓库内容。浏览器会话不共享到桌面。旧ad-hoc版先手动替换为带更新能力的Developer ID版，此后使用同一签名身份；签名身份/存储位置变更需另行设计迁移，不能清空配置作为恢复。
+
+0.10.1将检查、下载和安装失败分开处理。GitHubProvider可把缺失的正式latest包装为ERR_UPDATER_INVALID_RELEASE_FEED，因此只输出安全的发布信息不可用提示，不把所有解析错误断言为未发布，也不显示底层XML/网址/路径。控制器记住当前操作，以免原生error事件与Promise拒绝重复到达后失去失败阶段；只有安装阶段提示应用可写目录和签名。公开Release需在资产齐备后发布，源码tag与安装包快照对应；仅生成本地ZIP或推送源码不代表更新源已就绪。
 
 ## 本地关联与只读查看
 
-账号设置中没有仓库路径字段。账号连接后，全部已读取的仓库直接出现在侧栏和 Dashboard；远端分支/历史/树/已提交 Diff 的读取不依赖 localLink，不请求本地 snapshot，按 R-05-remote 单独接入，不能停在 metadata-only 信息页。Dashboard 和仓库信息页的配置弹窗使用可点击的目录选择字段，不再手工输入路径；`local-directory.ts` 验证桌面原生 IPC 返回的绝对目录，取消返回 null 并保留原目录。浏览器尚无原生桥接，明确提示不可用，待用户允许重启后接入受保护的本机接口；不接受 HTML 文件上传伪路径。选择不自动保存，仍由原 link API 识别 checkout 根目录，读取已配置 remote 并比较 host + owner/repo，匹配后保存关联。解除关联不移除远端仓库，也不强制退回 Dashboard；移除账号后移除其导航。两者均不删除文件。
+账号设置中没有仓库路径字段。账号连接后，全部已读取的仓库直接出现在侧栏和 Dashboard；远端内容不依赖 localLink。Dashboard 的仓库/分支目录入口及本地文件树空态复用配置弹窗和可点击的目录选择字段。`local-directory.ts` 验证原生 IPC 返回的绝对目录，取消返回 null 并保留原目录；浏览器尚无原生选择桥接，不接受上传伪路径。选择不自动保存；0.10.0 的 link 可带 branch，保存时调用 local-discovery 按远端身份和真实检出分支匹配。解除关联可只针对一个分支，不移除远端仓库、不删除文件。
+
+`LocalLink.path` 保留用户选择的仓库/父目录，新增可选 worktrees（branch + canonical path）；加密 SavedState v2 与稳定存储位置不变，旧单目录记录仍可读取。`local-discovery.ts` 最多遍历4000目录、8层、64个匹配工作目录，不进入符号链接、Git元数据及常见构建/依赖目录；遇到checkout不扫描它的内容，另核对真实worktree登记中位于选定范围内的目录。远端身份复用 `git-identity.ts`，不按目录名猜分支；候选再次核对其实际remote。取消、限制、错误或持久化失败不部分保存，串行提交前复核原关联未被其他操作替换。仓库三态要求已知完整分支范围和每分支健康目录；范围未知不标完全关联。可见的已关联仓库即使收起，也用原远端心跳读取HEAD和分支范围；未关联仓库仍仅展开时读取。
 
 关联本地目录后，RepositoryView 使用真实 Git status、branch、最近 log、工作目录与暂存区 Diff；关联或解除时重建对应视图，避免残留的本地快照。有限 execFile 参数、不使用 shell、禁止外部 diff/textconv、关闭可选 index 锁；不提供任意命令/任意文件读取。Diff 仅接受当前更改列表中的路径；未跟踪文件不编造差异或读取内容。没有 Git 写动作与模拟成功。修改文件、克隆、LFS 写入、AI 和 Presence 连接需要后续独立合同。
 
@@ -102,11 +114,11 @@ App 不再渲染重复顶栏，RepositoryView 保留一个基础信息块，并�
 
 0.6.0 的 `commit-graph.ts` 是独立前端图模型，只以类型依赖共享 `repository-model.ts`；图布局/搜索改动不再牵动 Vite 配置所加载的账号服务模型。其 `layoutCommitGraph` 维护轨道颜色，已读取的真实父节点继续轨道，未读取父节点只输出 boundary 虚线短尾，不占用后续幽灵轨道。`GraphRow` 的颜色/入边及 `GraphEdge` 的颜色/边界字段只属于渲染模型，不改变服务 DTO。`RepositoryGraph` 复用公共栏标题并包含分支名定位菜单、只读上下文菜单、36px双行、单一键盘入口和搜索状态；匹配列表从现有提交与搜索派生，窗口键盘事件仅用于共享搜索框的结果导航并在卸载时移除。按SHA定位DOM行，选择继续调用View原有的按任务回调；不新增读取/存储/写操作，选中详情仍由中栏组件负责。
 
-`server/repository-reader.ts` 是独立、尚未由 AccountService 导入的只读读取器。以调用方已验证关联的根目录为前提：读取 `worktree list --porcelain -z`、local/remote refs、每个 worktree 的 status 和 tracked/untracked（忽略项排除）路径，以及未检出本地分支的 ls-tree。读取范围是当前本地 refs，不进行网络 fetch；提交图按真实父节点 topo 排序，最多最近 200 条，不代表完整历史或远端实时提交。
+0.10.0 的 `server/repository-reader.ts` 已由 AccountService 的有限 localWorkspace 方法接入。核对每个保存目录的真实 Git 根与远端后，只返回已关联路径中的真实 worktree，不用未检出分支冒充目录；不同 clone 的任务也独立保留。读取 `worktree list --porcelain -z`、local/remote refs、各目录 status、tracked/untracked（排除忽略项）完整树。合并图按真实父节点 topo 排序，最多每次读取最近200条，不进行网络fetch，不代表完整历史或远端实时提交。单个缺失/失效目录成为自己的错误任务，其余健康任务仍可用。
 
 每个 worktree 校验其 realpath Git common-dir 与关联仓库相同；缺失 worktree 的错误限制在该任务。Diff 按精确 task ID 找到工作目录，只接受当前更改列表中的字面路径，不接受任意目录、未检出分支或 Git 特殊 pathspec；不读取未跟踪文件内容。所有 Git 使用有限 execFile 参数、10 秒超时/8MB输出上限、禁止外部 diff/textconv、关闭可选锁，不写 HEAD/index、不暂存/提交/切换。
 
-完整读模型和 task Diff 的服务 DTO、HTTP/IPC 校验及 controller 接入仍待更新。0.4.0 仅按本轮许可接通账号编辑并重启预览，没有接入这些读取器；运行界面通过 `snapshotWorkspace` 兼容旧快照，仅显示已知单任务与更改文件，complete=false、无伪造 ancestry。独立 QA 入口 `tests/repository-preview-client.tsx` / `repository-preview.ts` 在另一临时 loopback 端口使用本轮创建的真实 Git fixture，不导入运行入口、不使用用户凭据，不作为账号 API 已接通的证据。
+完整读模型、带taskId的Diff、HTTP/IPC校验和controller已接通生产App。Diff/openFile仅允许精确已关联任务路径，先验证保存的远端，再确认当前真实任务身份；不能通过共享common-dir访问尚未关联的兄弟worktree。旧snapshot方法保留兼容测试，生产使用localWorkspace，snapshotWorkspace只作未提供新模型的组件回退。`worktree-links.test.ts` 与 `remote-integration-preview.ts --worktrees` 使用真实临时Git和实际AccountService验证父目录批量发现、独立内容、三态、逐分支解除与HEAD/index不变；不使用用户凭据或工作目录，不代替原生选择器验收。
 
 历史提交详情由模块级 `RepositoryCommitDetails.tsx` 统一渲染在本地/远端任务底部，不再属于Graph。View保存单一`commitSelection: {taskId, commitId} | null`，由它派生选中记录与提交订阅；聚焦时优先对应任务，未聚焦时保留远端HEAD/真实祖先匹配。仅本地composer使用hidden而不卸载，草稿与文件选择继续保留；取消选择恢复本地输入或远端等待选择空态。远端只使用匹配当前SHA的读取结果，未读到或失败时显示当前图记录而非旧提交。R-05-remote-metadata 移除远端顶部重复分支/来源/SHA 与摘要/作者/时间；R-05-remote-focus-control 再移除远端聚焦按钮和其专用标题栏、props/回调及样式。顶部显示全部任务及本地聚焦入口不改，区域名称继续标识任务，图、树及底部详情不改。R-05-history-body的前端组件支持可选description，按summary、普通正文、辅助作者/时间/SHA渲染；没有正文时省略，不推断或补写内容，不新增复制状态。当前远端读取器仍截取message首行，本地log仍只读summary；尚未更新共享DTO或正文读取协议，需用户批准4173更新/重启后另行接通。没有新存储，本地任务分支/路径及现有工作目录Diff不改为历史Diff。
 

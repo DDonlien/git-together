@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { Button as GlassButton, IconButton as GlassIconButton, SearchField, Dialog, type ButtonProps } from 'open-glass-ui';
-export { GlassSystemProvider, SegmentedControl as Segmented, Select, TextField, Textarea, Switch, Menu, MenuItem, Popover, Toolbar } from 'open-glass-ui';
+import { Button as BaseButton, IconButton as BaseIconButton, GlassSystemProvider, SearchField, Dialog, type ButtonProps } from 'open-glass-ui';
+import { componentTheme } from './theme';
+export { SegmentedControl as Segmented, Select, TextField, Textarea, Switch, Menu, MenuItem, Popover, Toolbar } from 'open-glass-ui';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/csr/SquaresFour';
 import { GitBranchIcon } from '@phosphor-icons/react/dist/csr/GitBranch';
 import { FolderSimpleIcon } from '@phosphor-icons/react/dist/csr/FolderSimple';
@@ -43,8 +44,13 @@ import { ListBulletsIcon } from '@phosphor-icons/react/dist/csr/ListBullets';
 const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon };
 export type IconName = keyof typeof icons;
 export function Icon({ name, size = 18, className = '', style }: { name: IconName | 'squares'; size?: number; className?: string; style?: CSSProperties }) { const Component = name === 'squares' ? SquaresFourIcon : icons[name]; return <Component size={size} weight="regular" className={className} style={style} aria-hidden="true" />; }
-export function Button({ className = '', size = 'small', variant = 'secondary', ...props }: ButtonProps) { return <GlassButton {...props} className={`app-button ${className}`} size={size} variant={variant} />; }
-export function IconButton({ icon, label, children, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string }) { return <GlassIconButton {...props} size="small" variant="quiet" title={label} aria-label={label} className={`icon-button ${className}`}><Icon name={icon} size={17} />{children}</GlassIconButton>; }
+// Reuse accessible interaction/portal contracts, not optical glass recipes.
+// One non-optical boundary gives app content and portals the same M3 tokens.
+export function MaterialProvider({ appearance, children }: { appearance: 'light' | 'dark' | 'system'; children: ReactNode }) {
+  return <GlassSystemProvider renderer="css" design="classic" motion="system" toasts={false} theme={{ appearance, defaultAppearance: 'light', style: componentTheme, className: 'app-theme' }}>{children}</GlassSystemProvider>;
+}
+export function Button({ className = '', size = 'small', variant = 'secondary', ...props }: ButtonProps) { return <BaseButton {...props} className={`app-button ${className}`} size={size} variant={variant} />; }
+export function IconButton({ icon, label, children, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: IconName; label: string }) { return <BaseIconButton {...props} size="small" variant="quiet" title={label} aria-label={label} className={`icon-button ${className}`}><Icon name={icon} size={17} />{children}</BaseIconButton>; }
 export function Checkbox({ checked, mixed = false, label, onChange, disabled }: { checked: boolean; mixed?: boolean; label: string; onChange: () => void; disabled?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   // Indeterminate is a native input property, not a separate selection state.

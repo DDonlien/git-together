@@ -4,11 +4,12 @@ import { emptyCatalog, isRecord, latestCatalog, type Catalog, type ConnectInput,
 import { syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
 import pkg from '../package.json';
+import type { RepositoryWorkspace } from './repository-model';
 
 type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[] };
 const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [] };
 const preferenceKey = 'gittogether.preferences.v2';
-export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; error: string; checkedAt: number }
+export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; error: string; checkedAt: number }
 export function useWorkspace() {
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const catalogRef = useRef<Catalog>(emptyCatalog);
@@ -94,26 +95,27 @@ export function useWorkspace() {
     },
     onError: (_resource, problem) => { if (problem instanceof LocalServiceError) setError(problem.message); },
   });
-  const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path])) : [];
+  const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees])) : [];
   useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
     run: async (resource, signal) => {
-      const [instanceId, repositoryId, path] = JSON.parse(resource) as [string, string, string];
-      const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path);
+      const [instanceId, repositoryId, path, worktrees] = JSON.parse(resource) as [string, string, string, unknown];
+      const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path && JSON.stringify(link.worktrees) === JSON.stringify(worktrees === null ? undefined : worktrees));
       if (!currentLink()) return;
       try {
-        const snapshot = await importAPI('snapshot', { repositoryId }, signal);
+        const workspace = await importAPI('localWorkspace', { repositoryId }, signal);
         if (signal.aborted || !currentLink()) return;
         setLocalStates(current => {
           const previous = current[repositoryId];
           // Unchanged file/status/history payloads keep their identity and open UI state.
-          const stable = previous?.path === path && JSON.stringify(previous.snapshot) === JSON.stringify(snapshot) ? previous.snapshot : snapshot;
-          return { ...current, [repositoryId]: { path, snapshot: stable, error: '', checkedAt: Date.now() } };
+          const stable = previous?.path === path && JSON.stringify(previous.workspace) === JSON.stringify(workspace) ? previous.workspace : workspace;
+          return { ...current, [repositoryId]: { path, mappingKey: resource, snapshot: null, workspace: stable, error: '', checkedAt: Date.now() } };
         });
       } catch (problem) {
         if (signal.aborted || !currentLink()) return;
         setLocalStates(current => {
           const previous = current[repositoryId];
-          return { ...current, [repositoryId]: { path, snapshot: previous?.path === path ? previous.snapshot : null, checkedAt: previous?.path === path ? previous.checkedAt : 0, error: problem instanceof Error ? problem.message : '读取本地状态失败，正在重试。' } };
+          const sameMapping = previous?.mappingKey === resource;
+          return { ...current, [repositoryId]: { path, mappingKey: resource, snapshot: sameMapping ? previous.snapshot : null, workspace: sameMapping ? previous.workspace : undefined, checkedAt: sameMapping ? previous.checkedAt : 0, error: problem instanceof Error ? problem.message : '读取本地状态失败，正在重试。' } };
         });
         throw problem;
       }
@@ -122,7 +124,7 @@ export function useWorkspace() {
   const linkIdentities = JSON.stringify(catalog.links);
   useEffect(() => {
     setLocalStates(current => {
-      const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && link.path === state.path)));
+      const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && JSON.stringify([catalogRef.current.instanceId, id, link.path, link.worktrees]) === state.mappingKey)));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
   }, [linkIdentities]);
@@ -160,8 +162,8 @@ export function useWorkspace() {
     }),
     refresh: (accountId: string) => task(accountId, () => importAPI('refresh', { accountId })),
     removeAccount: (accountId: string) => task(accountId, () => importAPI('removeAccount', { accountId })),
-    link: (repositoryId: string, path: string) => task(repositoryId, () => importAPI('link', { repositoryId, path })),
-    unlink: (repositoryId: string) => task(repositoryId, () => importAPI('unlink', { repositoryId })),
+    link: (repositoryId: string, path: string, branch?: string) => task(repositoryId, () => importAPI('link', { repositoryId, path, ...(branch === undefined ? {} : { branch }) })),
+    unlink: (repositoryId: string, branch?: string) => task(repositoryId, () => importAPI('unlink', { repositoryId, ...(branch === undefined ? {} : { branch }) })),
   };
 }
 export type WorkspaceController = ReturnType<typeof useWorkspace>;

@@ -44,12 +44,13 @@ test('expanded sidebar folders and accounts share one icon and label column with
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /--sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: 0px/);
   assert.match(css, /\.account-sidebar-list \{[^}]*margin-inline: 0;/);
-  assert.match(css, /\.sidebar-account-toggle \{[^}]*gap: var\(--icon-label-gap\); padding: 6px var\(--sidebar-row-inset\)/);
-  assert.match(css, /\.sidebar-account-disclosure \{[^}]*justify-content: center; flex: 0 0 var\(--sidebar-icon-size\); width: var\(--sidebar-icon-size\)/);
+  assert.match(css, /\.sidebar-account-toggle \{[^}]*gap: var\(--icon-label-gap\); padding: 6px var\(--sidebar-label-inset\)/);
+  assert.match(css, /\.sidebar-account-disclosure \{[^}]*justify-content: center; flex: 0 0 var\(--sidebar-button-size\); width: var\(--sidebar-button-size\)/);
   assert.match(css, /\.sidebar-account-repositories \{ --sidebar-item-indent: var\(--sidebar-level-indent\); \}/);
-  const inset = 'padding-inline-start: calc(var(--sidebar-row-inset) + var(--sidebar-item-indent, 0px));';
+  const inset = 'padding-inline-start: calc(var(--sidebar-label-inset) + var(--sidebar-item-indent, 0px));';
   assert.equal(css.split(inset).length - 1, 1, 'all expanded rows use the same leading inset without responsive re-indentation');
-  assert.match(css, /\.global-sidebar \.nav-item > svg, \.global-sidebar \.repository-logo, \.global-sidebar \.repository-logo > svg \{ width: var\(--sidebar-icon-size\); height: var\(--sidebar-icon-size\); \}/);
+  assert.match(css, /\.global-sidebar \.nav-item > svg, \.global-sidebar \.repository-logo > svg \{ width: var\(--sidebar-icon-size\); height: var\(--sidebar-icon-size\); \}/);
+  assert.match(css, /\.global-sidebar \.repository-logo \{ width: var\(--sidebar-button-size\); height: var\(--sidebar-icon-size\); align-items: center; justify-content: center; \}/);
   assert.match(css, /\.global-sidebar\.is-collapsed \.nav-item \{ justify-content: center; padding: 8px; gap: 0; \}/, 'compact icon rail stays centered');
 });
 

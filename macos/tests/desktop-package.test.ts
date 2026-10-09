@@ -29,7 +29,7 @@ test('packaged startup bypasses the preview server but keeps all native bridges 
   assert.match(source, /window\.loadFile\(rendererSource\.path\)/);
   assert.match(source, /event\.senderFrame === window\.webContents\.mainFrame/);
   assert.match(source, /isTrustedRendererURL\(event\.senderFrame\.url, rendererSource\)/);
-  for (const bridge of ['environment', 'theme', 'import', 'choose-directory', 'github-authorization']) {
+  for (const bridge of ['environment', 'theme', 'import', 'choose-directory', 'github-authorization', 'update-status', 'update-check', 'update-download', 'update-install']) {
     assert.match(source, new RegExp(`ipcMain\\.handle\\('gittogether:${bridge}',[^]*?if \\(!isMainRenderer\\(event\\)\\)`));
   }
   assert.match(source, /contextIsolation: true, nodeIntegration: false, sandbox: true/);
@@ -42,7 +42,7 @@ test('desktop build uses relative client assets and a finite production-content 
   assert.match(source, /version: manifest\.version/);
   assert.match(source, /main: 'desktop\/main\.cjs'/);
   assert.match(source, /sourcemap: false/);
-  assert.match(source, /\['src', 'server', 'electron', 'index\.html', 'package\.json'\]/);
+  assert.match(source, /\['src', 'server', 'electron', 'public', 'index\.html', 'package\.json', 'package-lock\.json'\]/);
   assert.match(source, /sourceDigest\(clientRoot\) !== sourceSha256/);
   assert.doesNotMatch(source, /cp\(clientRoot,|copyFile\([^\n]*\.env|loadEnv\(|GITHUB_CLIENT_SECRET/);
   assert.match(source, /await rm\(temporary, \{ recursive: true, force: true \}\)/);

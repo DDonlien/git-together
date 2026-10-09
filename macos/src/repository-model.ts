@@ -4,6 +4,16 @@ export type RepositoryCommit = LocalSnapshot['commits'][number] & { parents: str
 export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean };
 export type RepositoryWorkspace = { tasks: RepositoryTask[]; commits: RepositoryCommit[]; complete: boolean; source?: 'local' | 'remote' | 'mixed' };
 
+export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {
+  if (!value || typeof value !== 'object') return false;
+  const w = value as Record<string, unknown>;
+  const strings = (v: unknown) => Array.isArray(v) && v.every(item => typeof item === 'string');
+  const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  return w.source === 'local' && typeof w.complete === 'boolean' && Array.isArray(w.tasks) && w.tasks.length <= 64 && w.tasks.every(task => record(task) &&
+    ['id', 'branch', 'head', 'error', 'path'].every(key => typeof task[key] === 'string') && task.remote !== true && strings(task.tree) && Array.isArray(task.files) && task.files.every(file => record(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) &&
+    Array.isArray(w.commits) && w.commits.every(commit => record(commit) && ['id', 'summary', 'author', 'time'].every(key => typeof commit[key] === 'string') && strings(commit.parents) && strings(commit.refs));
+}
+
 export function topologicalCommits(commits: RepositoryCommit[]): RepositoryCommit[] {
   const byId = new Map(commits.map(commit => [commit.id, commit]));
   const children = new Map(commits.map(commit => [commit.id, 0]));

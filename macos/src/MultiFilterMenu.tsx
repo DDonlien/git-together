@@ -13,12 +13,12 @@ export function MultiFilterMenu({ label, groups, selections, onToggle, note }: {
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? inputs.length - 1 : event.key === 'ArrowDown' ? (index + 1) % inputs.length : (index - 1 + inputs.length) % inputs.length;
     event.preventDefault(); inputs[next].focus();
   }
-  return <Popover label={`${label}筛选`} open={open} onOpenChange={setOpen} placement="start" className="dashboard-filter" trigger={<Button variant="quiet" className="filter-trigger" aria-haspopup="dialog" onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }} trailingIcon={<Icon name="down" size={12} />}><span>{label}{restricted ? ' · 已筛选' : ''}</span></Button>}>
-    <div className="multi-filter-options" onKeyDown={navigate} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+  return <Popover label={`${label}筛选`} open={open} onOpenChange={setOpen} placement="start" focusOnOpen="first" className="dashboard-filter" trigger={<Button variant="quiet" className="filter-trigger" aria-haspopup="dialog" onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }} trailingIcon={<Icon name="down" size={12} />}><span>{label}{restricted ? ' · 已筛选' : ''}</span></Button>}>
+    <div className="multi-filter-options" onKeyDown={navigate} onBlur={event => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
       {groups.map(group => <fieldset className="multi-filter-group" key={group.id}>
         <legend><span>{group.label}</span>{group.detail && <small>{group.detail}</small>}</legend>
         {group.options.length ? group.options.map(option => <label className="multi-filter-option" key={option.value}>
-          <input type="checkbox" checked={isSelected(selections[group.id], option.value)} onChange={() => onToggle(group.id, option.value)} aria-label={`${group.label}：${option.label}${group.detail ? ` · ${group.detail}` : ''}`} />
+          <input type="checkbox" checked={isSelected(selections[group.id], option.value)} onChange={() => onToggle(group.id, option.value)} aria-label={`${group.label}：${option.label}${option.detail || group.detail ? ` · ${option.detail || group.detail}` : ''}`} />
           <span className="filter-option-label"><span>{option.label}</span>{option.detail && <small>{option.detail}</small>}</span>
         </label>) : <p className="multi-filter-empty">没有可筛选的仓库</p>}
       </fieldset>)}

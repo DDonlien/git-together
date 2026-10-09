@@ -38,6 +38,24 @@ test('GitHub optional affiliation failure keeps the base directory and honest un
   assert.equal(catalog.repositories.length, 1); assert.equal(catalog.repositories[0].fork, false); assert.equal(catalog.repositories[0].collaborator, undefined);
   assert.match(catalog.repositories[0].metadataError!, /协作分类未能读取/); assert.ok(!JSON.stringify(catalog).includes('PRIVATE_PROVIDER_BODY')); assert.equal(catalog.accounts[0].error, undefined);
 });
+test('GitHub keeps collaborator-only paginated discoveries including forks when the base snapshot is empty or incomplete', async () => {
+  for (const empty of [false, true]) {
+    const service = new AccountService(sessionStore(), async url => {
+      const endpoint = new URL(String(url));
+      if (endpoint.pathname === '/user') return Response.json({ login: 'alice' });
+      const page = endpoint.searchParams.get('page');
+      if (endpoint.searchParams.get('affiliation') === 'collaborator') return Response.json(page === '1' ? [raw(2, 'friend/shared-fork', true)] : page === '2' ? [raw(3, 'friend/shared-original', false)] : []);
+      return Response.json(!empty && page === '1' ? [raw(1, 'alice/source', false), raw(2, 'friend/shared-fork', false)] : []);
+    });
+    await service.handle('connect', input('github')); const catalog = await getCatalog(service);
+    assert.equal(catalog.repositories.length, empty ? 2 : 3);
+    const fork = catalog.repositories.find(repo => repo.remoteId === 2)!;
+    assert.equal(fork.fork, true); assert.equal(fork.collaborator, true);
+    assert.equal(catalog.repositories.find(repo => repo.remoteId === 3)!.collaborator, true);
+    assert.equal(new Set(catalog.repositories.map(repo => repo.id)).size, catalog.repositories.length);
+    assert.ok(!JSON.stringify(catalog).includes(input('github').token));
+  }
+});
 test('missing provider fork/owner flags remain unknown rather than becoming guessed Original or organization', async () => {
   const service = new AccountService(sessionStore(), async url => {
     const endpoint = new URL(String(url)); if (endpoint.pathname === '/user') return Response.json({ login: 'alice' });

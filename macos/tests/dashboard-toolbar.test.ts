@@ -28,7 +28,9 @@ test('Dashboard places the search first in the filter row, removes reload and do
   const dashboard = readFileSync(new URL('../src/Dashboard.tsx', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
   assert.match(dashboard, /className="import-filterbar" role="search"/);
-  assert.ok(dashboard.indexOf('className="dashboard-search"') < dashboard.indexOf('<FilterMenu'));
+  assert.ok(dashboard.indexOf('className="dashboard-search"') < dashboard.indexOf('<MultiFilterMenu'));
+  assert.doesNotMatch(dashboard, /<FilterMenu|selectedAccountId|value: 'all'/);
+  assert.match(dashboard, /<MultiFilterMenu label="账号"/);
   assert.doesNotMatch(dashboard, /重新加载|refreshRepositories|<Select/);
   assert.doesNotMatch(app, /<header className="topbar/);
   assert.match(app, /onSearchChange=\{setGlobalSearch\} searchRef=\{searchRef\}/);

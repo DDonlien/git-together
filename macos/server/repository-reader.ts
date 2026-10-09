@@ -11,12 +11,14 @@ function readFailure(problem: unknown): string {
   const code = problem && typeof problem === 'object' && 'code' in problem ? String(problem.code) : 'unknown';
   return code === 'ETIMEDOUT' ? 'Git 读取超时；正在等待下次检查。' : `Git 读取失败（${code}）；其他任务仍可查看。`;
 }
-async function git(path: string, args: string[]): Promise<string> {
+export { readFailure };
+export async function readLocalGit(path: string, args: string[]): Promise<string> {
   const { stdout } = await execute('git', ['--no-optional-locks', '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', path, ...args], {
     timeout: 10000, maxBuffer: 8_000_000, encoding: 'utf8', env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
   });
   return stdout;
 }
+const git = readLocalGit;
 
 export function parseChangedFiles(porcelain: string): LocalFile[] {
   const entries = porcelain.split('\0');
@@ -41,6 +43,14 @@ export function parseWorktrees(porcelain: string): Worktree[] {
   });
 }
 
+export async function readWorktrees(root: string): Promise<Worktree[]> {
+  const entries = parseWorktrees(await git(root, ['worktree', 'list', '--porcelain', '-z']));
+  return Promise.all(entries.map(async entry => ({ ...entry, path: await realpath(entry.path).catch(problem => {
+    if (problem && typeof problem === 'object' && 'code' in problem && problem.code === 'ENOENT') return entry.path;
+    throw problem;
+  }) })));
+}
+
 async function sameRepository(root: string, worktree: string): Promise<void> {
   const [rootCommon, worktreeCommon] = await Promise.all([git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']), git(worktree, ['rev-parse', '--path-format=absolute', '--git-common-dir'])]);
   if (await realpath(rootCommon.trim()) !== await realpath(worktreeCommon.trim())) throw new Error('工作目录不属于已关联仓库。');
@@ -48,12 +58,12 @@ async function sameRepository(root: string, worktree: string): Promise<void> {
 
 // Only the account service may supply the validated, remote-matched root.
 // Worktree paths and commit hashes come from that repository, not the renderer.
-export async function readRepositoryWorkspace(root: string): Promise<RepositoryWorkspace> {
+export async function readRepositoryWorkspace(root: string, allowedPaths?: Set<string>): Promise<RepositoryWorkspace> {
   const [worktreeOutput, refOutput] = await Promise.all([
-    git(root, ['worktree', 'list', '--porcelain', '-z']),
+    readWorktrees(root),
     git(root, ['for-each-ref', '--format=%(refname)%00%(objectname)', '--sort=refname', 'refs/heads', 'refs/remotes']),
   ]);
-  const worktrees = parseWorktrees(worktreeOutput).filter(worktree => !worktree.bare);
+  const worktrees = worktreeOutput.filter(worktree => !worktree.bare && (!allowedPaths || allowedPaths.has(worktree.path)));
   const refs = refOutput.trim().split('\n').filter(Boolean).map(line => { const [name, head] = line.split('\0'); return { name, head }; });
   const readTree = async (head: string) => (await git(root, ['ls-tree', '-r', '--name-only', '-z', head, '--'])).split('\0').filter(Boolean);
   const tasks: RepositoryTask[] = [];
@@ -69,7 +79,7 @@ export async function readRepositoryWorkspace(root: string): Promise<RepositoryW
     tasks.push(task);
   }
   const checkedBranches = new Set(worktrees.map(worktree => worktree.branch));
-  for (const ref of refs.filter(ref => ref.name.startsWith('refs/heads/'))) {
+  for (const ref of refs.filter(ref => !allowedPaths && ref.name.startsWith('refs/heads/'))) {
     const branch = ref.name.slice('refs/heads/'.length);
     if (checkedBranches.has(branch)) continue;
     const task: RepositoryTask = { id: `branch:${ref.name}`, branch, head: ref.head, path: null, files: [], tree: [], error: '' };
@@ -92,7 +102,7 @@ export async function readRepositoryWorkspace(root: string): Promise<RepositoryW
 }
 
 export async function readRepositoryTaskDiff(root: string, taskId: string, path: string): Promise<string> {
-  const task = parseWorktrees(await git(root, ['worktree', 'list', '--porcelain', '-z'])).find(task => `worktree:${task.branch}:${task.path}` === taskId);
+  const task = (await readWorktrees(root)).find(task => `worktree:${task.branch}:${task.path}` === taskId);
   if (!task || task.bare || task.prunable) throw new Error('这个任务没有可读取的工作目录。');
   await sameRepository(root, task.path);
   const files = parseChangedFiles(await git(task.path, ['status', '--porcelain=v1', '-z', '--untracked-files=all']));
@@ -109,7 +119,7 @@ export async function readRepositoryTaskDiff(root: string, taskId: string, path:
 
 export async function repositoryTaskFile(root: string, taskId: string, path: string): Promise<string> {
   if (!isRepositoryFilePath(path)) throw new Error('无效的仓库文件路径。');
-  const task = parseWorktrees(await git(root, ['worktree', 'list', '--porcelain', '-z'])).find(task => `worktree:${task.branch}:${task.path}` === taskId);
+  const task = (await readWorktrees(root)).find(task => `worktree:${task.branch}:${task.path}` === taskId);
   if (!task || task.bare || task.prunable) throw new Error('这个任务没有可打开的工作目录。');
   await sameRepository(root, task.path);
   // Literal enumeration includes tracked and non-ignored untracked files, but

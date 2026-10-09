@@ -11,7 +11,7 @@ catch { throw new Error(`请先启动本地预览服务：${previewURL}`); }
 await build({
   entryPoints: ['electron/main.ts', 'electron/preload.ts'], bundle: true,
   platform: 'node', format: 'cjs', outdir: 'dist-electron', outExtension: { '.js': '.cjs' },
-  external: ['electron', 'electron-liquid-glass'], sourcemap: true,
+  external: ['electron'], sourcemap: true,
 });
 const environment: NodeJS.ProcessEnv = { ...loadEnv('development', process.cwd(), 'GITTOGETHER_'), ...process.env, GITTOGETHER_PREVIEW_URL: previewURL };
 delete environment.ELECTRON_RUN_AS_NODE;

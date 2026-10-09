@@ -1,4 +1,5 @@
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
+import type { RepositoryWorkspace } from './repository-model';
 
 export type Provider = 'github' | 'gitea';
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
@@ -14,7 +15,8 @@ export type RemoteRepository = {
   ownerType?: 'user' | 'organization'; fork?: boolean; collaborator?: boolean;
   permissions?: RepositoryPermissions; metadataError?: string;
 };
-export type LocalLink = { repositoryId: string; path: string };
+export type LocalWorktreeLink = { branch: string; path: string };
+export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[] };
 export type Catalog = {
   instanceId: string;
   revision: number;
@@ -46,10 +48,11 @@ export type ApiInputs = {
   githubAuthCancel: { sessionId: string };
   refresh: { accountId: string };
   removeAccount: { accountId: string };
-  link: { repositoryId: string; path: string };
-  unlink: { repositoryId: string };
+  link: { repositoryId: string; path: string; branch?: string };
+  unlink: { repositoryId: string; branch?: string };
   snapshot: { repositoryId: string };
-  diff: { repositoryId: string; path: string };
+  localWorkspace: { repositoryId: string };
+  diff: { repositoryId: string; path: string; taskId?: string };
   remoteWorkspace: { repositoryId: string };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
@@ -62,6 +65,7 @@ export type ApiOutputs = {
   githubAuthPoll: GitHubAuthorizationProgress;
   githubAuthCancel: GitHubAuthorizationCancellation;
   link: Catalog; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
+  localWorkspace: RepositoryWorkspace;
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
 };
@@ -85,7 +89,8 @@ export function isCatalog(value: unknown): value is Catalog {
       (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
       (r.metadataError === undefined || typeof r.metadataError === 'string') &&
       (r.permissions === undefined || (isRecord(r.permissions) && Object.entries(r.permissions).every(([key, flag]) => repositoryPermissionKeys.some(allowed => allowed === key) && typeof flag === 'boolean')))) &&
-    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string');
+    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' &&
+      (l.worktrees === undefined || Array.isArray(l.worktrees) && l.worktrees.length <= 64 && l.worktrees.every(w => isRecord(w) && typeof w.branch === 'string' && typeof w.path === 'string')));
 }
 
 // A new service session can legitimately start at revision zero. Old in-flight

@@ -39,7 +39,7 @@ test('empty selection renders one keyboard-accessible folder button, not an edit
   assert.equal((markup.match(/<button/g) || []).length, 1);
   assert.match(markup, /type="button"/);
   assert.match(markup, /aria-labelledby="[^"]+ [^"]+"/);
-  assert.match(markup, /本地仓库目录/);
+  assert.match(markup, /本地仓库 \/ 父目录/);
   assert.match(markup, /选择文件夹…/);
   assert.doesNotMatch(markup, /<input|contenteditable|disabled/);
 });
@@ -58,10 +58,10 @@ test('a selected directory is visible and has a full-path tooltip, while an acti
 test('modal keeps explicit saving, validation, unlink and error handling after removing the two annotations', () => {
   const source = readFileSync(new URL('../src/LocalRepositoryModal.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /关联已有的 Git 工作目录|可以输入绝对路径|TextField|请手动输入/);
-  assert.match(source, /await controller\.link\(repository\.id, path\)/);
+  assert.match(source, /await controller\.link\(repository\.id, path, branch\)/);
   assert.match(source, /if \(chosen !== null\) setPath\(chosen\)/);
   assert.match(source, /disabled=\{busy \|\| !path\.trim\(\) \|\| !repository\.available\}/);
-  assert.match(source, /controller\.unlink\(repository\.id\)/);
+  assert.match(source, /controller\.unlink\(repository\.id, branch\)/);
   assert.match(source, /<Notice kind="error">\{error\}<\/Notice>/);
   assert.match(source, /解除关联只移除应用记录，不删除本地目录/);
 });

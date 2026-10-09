@@ -17,10 +17,10 @@ test('expanded repositories render exactly one table row per returned branch, wi
   const markup = render(ready());
   const rows = [...markup.matchAll(/<tr class="dashboard-branch-row">([\s\S]*?)<\/tr>/g)].map(match => match[1]);
   assert.equal(rows.length, 3);
-  for (const [index, row] of rows.entries()) { assert.match(row, /<td colSpan="6">/); assert.ok(row.includes(workspace.tasks[index].branch)); }
+  for (const [index, row] of rows.entries()) { assert.match(row, /<td colSpan="3">/); assert.ok(row.includes(workspace.tasks[index].branch)); assert.equal((row.match(/<td/g) || []).length, 3); }
   assert.equal((markup.match(/class="dashboard-default-branch"/g) || []).length, 1);
   assert.match(rows[0], />默认<\/small>/); assert.doesNotMatch(rows[1], /默认/);
-  assert.doesNotMatch(markup, /<button|checkout|本地目录/);
+  assert.match(markup, /关联工作目录/); assert.doesNotMatch(markup, /checkout/);
 });
 
 test('missing default branch is not injected and a truly empty remote has no fabricated main row', () => {
@@ -71,14 +71,14 @@ test('disclosure reuses the finite remote reader, instance-bound identity and in
   const source = readFileSync(new URL('../src/Dashboard.tsx', import.meta.url), 'utf8');
   assert.match(source, /useState<Set<string>>\(new Set\(\)\)/);
   assert.match(source, /JSON.stringify\(\[controller.catalog.instanceId, repo.id\]\)/);
-  assert.match(source, /useRemoteRepository\(repo, controller.catalog.instanceId, expanded && ready\)/);
+  assert.match(source, /useRemoteRepository\(repo, controller.catalog.instanceId, \(expanded \|\| !!link\) && ready\)/);
   assert.match(source, /aria-expanded=\{expanded\} aria-controls=\{branchesId\}/);
   assert.match(source, /hidden=\{!expanded\}/); assert.match(source, /filtered.length\} 个仓库/);
   assert.match(source, /onClick=\{\(\) => onOpen\(repo.id\)\}/);
   assert.doesNotMatch(source, /<th[^>]*>默认分支|fetch\(|remoteFile|remoteCommit/);
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /\.remote-repo-table th:nth-child\(5\) \{ width: 96px/);
-  assert.match(css, /\.remote-repo-table th:nth-child\(6\) \{ width: 40px/);
+  assert.match(css, /\.remote-repo-table th:nth-child\(5\) \{ width: 128px/);
+  assert.doesNotMatch(css, /\.remote-repo-table th:nth-child\(6\)/);
   assert.doesNotMatch(css, /\.remote-repo-table th:nth-child\(7\)/);
 });
 

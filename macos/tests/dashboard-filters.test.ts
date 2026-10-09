@@ -5,13 +5,27 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { MultiFilterMenu } from '../src/MultiFilterMenu';
 import { isCatalog, type Account, type RemoteRepository } from '../src/import-model';
-import { isSelected, matchesRepositoryFilters, organizationGroups, organizationKey, repositoryClassification, repositorySources, repositoryTypes, toggleFilter, type FilterSelection } from '../src/dashboard-filters';
+import { accountOptions, isSelected, matchesRepositoryFilters, organizationGroups, organizationKey, repositoryClassification, repositorySources, repositoryTypes, toggleFilter, type FilterSelection } from '../src/dashboard-filters';
 
 const accounts: Account[] = ['a', 'b'].map(id => ({ id, provider: 'github', host: 'https://github.com', login: id, name: 'Team', updatedAt: '' }));
 const repo = (overrides: Partial<RemoteRepository> = {}): RemoteRepository => ({ id: 'a:1', accountId: 'a', remoteId: 1, name: 'project', fullName: 'studio/project', description: '', defaultBranch: 'main', private: false, available: true, url: 'https://github.com/studio/project', ownerType: 'organization', fork: false, collaborator: false, ...overrides });
 const repositories = [repo(), repo({ id: 'a:2', fullName: 'a/fork', ownerType: 'user', fork: true }), repo({ id: 'a:3', fullName: 'friend/shared', ownerType: 'user', fork: true, collaborator: true }), repo({ id: 'b:1', accountId: 'b' }), repo({ id: 'a:4', fullName: 'hidden/project', ownerType: undefined, fork: undefined, collaborator: undefined })];
 const groups = organizationGroups(accounts, repositories); const options = groups.flatMap(group => group.options);
 const all = { organization: null, source: null, type: null };
+
+test('account checkbox choices use identity keys, preserve none and combine across accounts', () => {
+  const choices = accountOptions(accounts);
+  assert.deepEqual(choices.map(option => option.value), ['a', 'b']);
+  assert.match(choices[0].detail!, /a@github.com/); assert.match(choices[1].detail!, /b@github.com/);
+  let selection = toggleFilter(null, 'b', choices);
+  assert.deepEqual(repositories.filter(repo => isSelected(selection, repo.accountId)).map(repo => repo.id), ['a:1', 'a:2', 'a:3', 'a:4']);
+  selection = toggleFilter(selection, 'a', choices);
+  assert.equal(repositories.filter(repo => isSelected(selection, repo.accountId)).length, 0);
+  selection = toggleFilter(selection, 'b', choices);
+  assert.deepEqual(repositories.filter(repo => isSelected(selection, repo.accountId)).map(repo => repo.id), ['b:1']);
+  selection = toggleFilter(selection, 'a', choices); assert.equal(selection, null);
+  assert.ok(repositoryTypes.every(option => option.detail === undefined));
+});
 
 test('organization choices are account-bound, distinguish same-host logins and never guess users as organizations', () => {
   assert.equal(groups.length, 2); assert.notEqual(groups[0].options.find(o => o.label === 'studio')!.value, groups[1].options[0].value);
