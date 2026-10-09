@@ -484,3 +484,13 @@ final result for IMPORT-13-branches: passed
 - 自有测试标签关闭、39917隔离服务quit，fixtureRemoved=true/gitUnchanged=true/userDataChanged=false。主和助手均HTTP200/0.8.7，主实例fead0bc8-c050-4969-a84e-46b9b8491305、1账号/38仓库/0关联/失败账号0保持，助手configured=true。没有服务重启、凭据迁移或原生包更新；源码提交/main推送由IMPORT-13-main单独记录。
 
 final result for IMPORT-13-branches-folder: passed
+
+## 2026-10-09 侧栏顶部单图标（UI-04-sidebar-header-icon-only）
+
+- 按最新指示删除顶部品牌图标与GitTogether文字，只保留公共32×32收起/展开按钮，没有常驻文字。原brand相关CSS和Icon导入删除，sidebar-header行仍60px，外部红绿灯、Dashboard/账号/仓库/设置位置与主体布局不变。
+- 实际849×853主预览：展开按钮与Dashboard图标框均x=23.5，左边缘差0，按钮32×32；紧凑栏宽56px，两框左边缘差仍0，尺寸32×32、圆角10px。两态header只有一个按钮/一个svg、textContent为空，没有品牌节点；当前截图与原整体配色/材质一致。
+- 主页面先保留agent-done已展开的三个真实分支，再暂时搜索agent-done。鼠标收起→Enter展开→Space收起→鼠标展开均通过，搜索和三个子行始终保留，开关焦点连续。最终恢复原空搜索、展开侧栏及顶部滚动位置，账号分组状态未变。没有为了QA切换用户主题。
+- check、直接strict、327/327回归、生产构建、Sites4/4及差异检查通过；[最终实际主预览截图](/Users/taobe/Projects/GitHub/Personal/git-together/_builds/qa/sidebar-header-icon-only-main.png)已目视检查。此图证明浏览器当前状态，不作为旧安装包或原生桌面目视验收。
+- 主/助手HTTP200、0.8.7、实例fead0bc8-c050-4969-a84e-46b9b8491305，1账号/38仓库/0关联/失败账号0及configured=true保持。只做前端热更新，没有重启、版本依赖更新、凭据迁移、Git提交/推送或安装包生成；此前main推送已完成，本次更改仍在本地。
+
+final result for UI-04-sidebar-header-icon-only: passed

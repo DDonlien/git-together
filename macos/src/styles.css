@@ -441,11 +441,8 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .traffic-light-close { background: #ff6058; }
 .traffic-light-minimize { background: #febc2e; }
 .traffic-light-fullscreen { background: #29c840; }
-.brand { display: flex; align-items: center; gap: 4px; height: 60px; flex-shrink: 0; padding-bottom: 4px; font-size: 16px; font-weight: 600; letter-spacing: -.25px; }
-.brand-identity { display: flex; align-items: center; gap: 9px; padding-left: var(--sidebar-row-inset); white-space: nowrap; }
-.brand-identity[hidden] { display: none; }
-.brand-identity > svg { color: var(--blue); flex-shrink: 0; }
-.brand .sidebar-disclosure { margin-left: auto; flex-shrink: 0; -webkit-app-region: no-drag; }
+.sidebar-header { display: flex; align-items: center; justify-content: flex-start; height: 60px; flex-shrink: 0; padding-bottom: 4px; padding-inline-start: calc(var(--sidebar-row-inset) - (var(--sidebar-button-size) - var(--sidebar-icon-size)) / 2); }
+.sidebar-header .sidebar-disclosure { margin-left: 0; flex-shrink: 0; -webkit-app-region: no-drag; }
 .nav-item { display: flex; width: 100%; align-items: center; gap: var(--icon-label-gap); height: 36px; padding: 7px var(--sidebar-row-inset); padding-inline-start: calc(var(--sidebar-row-inset) + var(--sidebar-item-indent, 0px)); border-radius: 8px; font-size: 13px; text-align: left; white-space: nowrap; }
 .global-sidebar .nav-item > svg, .global-sidebar .repository-logo, .global-sidebar .repository-logo > svg { width: var(--sidebar-icon-size); height: var(--sidebar-icon-size); }
 .nav-item > svg { color: var(--muted); }
@@ -863,8 +860,7 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 }
 /* Explicit disclosure, not viewport width, selects the single-column rail. */
 .global-sidebar.is-collapsed { width: 56px; padding-inline: 4px; }
-.global-sidebar.is-collapsed .brand { justify-content: center; }
-.global-sidebar.is-collapsed .sidebar-disclosure { margin-left: 0; }
+.global-sidebar.is-collapsed .sidebar-header { justify-content: center; padding-inline-start: 0; }
 .global-sidebar.is-collapsed .nav-item { justify-content: center; padding: 8px; gap: 0; }
 .global-sidebar.is-collapsed .sidebar-account-toggle { justify-content: center; gap: 0; padding-inline: 0; }
 .global-sidebar.is-collapsed :is(.sidebar-account-name,.sidebar-account-toggle > small,.nav-item > span:not(.repository-logo):not(.sidebar-button-icon),.repository-item > svg,.sidebar-account-empty,.sidebar-no-accounts) { display: none; }
