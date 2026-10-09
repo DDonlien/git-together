@@ -6,7 +6,7 @@ import { useAutoRefresh } from './use-auto-refresh';
 import pkg from '../package.json';
 import type { RepositoryWorkspace } from './repository-model';
 
-type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[] };
+type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; hiddenEntries?: string[] };
 const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [] };
 const preferenceKey = 'gittogether.preferences.v2';
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; error: string; checkedAt: number }
@@ -29,7 +29,7 @@ export function useWorkspace() {
     try {
       const raw = localStorage.getItem(preferenceKey); if (!raw) return defaults;
       const saved: unknown = JSON.parse(raw);
-      if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string')) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
+      if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string') || (saved.hiddenEntries !== undefined && (!Array.isArray(saved.hiddenEntries) || !saved.hiddenEntries.every(entry => typeof entry === 'string')))) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
       return saved as Preferences;
     } catch (problem) { queueMicrotask(() => setStorageError(problem instanceof Error ? problem.message : '无法读取外观设置。')); return defaults; }
   });
@@ -163,6 +163,16 @@ export function useWorkspace() {
     refresh: (accountId: string) => task(accountId, () => importAPI('refresh', { accountId })),
     removeAccount: (accountId: string) => task(accountId, () => importAPI('removeAccount', { accountId })),
     link: (repositoryId: string, path: string, branch?: string) => task(repositoryId, () => importAPI('link', { repositoryId, path, ...(branch === undefined ? {} : { branch }) })),
+    matchAccountRepositories: async (accountId: string, path: string) => {
+      let matchedRepositoryIds: string[] = [];
+      await task(`match:${accountId}`, async () => {
+        await ensureService();
+        const result = await importAPI('matchAccountRepositories', { accountId, path });
+        matchedRepositoryIds = result.matchedRepositoryIds;
+        return result.catalog;
+      });
+      return matchedRepositoryIds;
+    },
     unlink: (repositoryId: string, branch?: string) => task(repositoryId, () => importAPI('unlink', { repositoryId, ...(branch === undefined ? {} : { branch }) })),
   };
 }

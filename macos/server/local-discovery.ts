@@ -5,17 +5,23 @@ import type { LocalWorktreeLink } from '../src/import-model';
 import { remoteIdentity } from './git-identity';
 import { readLocalGit, readWorktrees } from './repository-reader';
 
+export type LocalRepositoryTarget = { id: string; url: string };
+export type LocalRepositoryDiscovery = { path: string; worktrees: ReadonlyMap<string, LocalWorktreeLink[]> };
+
 // Stops at a checkout: its tracked folders are not candidate repositories.
 // Bounds cover a normal project container, not an unbounded disk search.
-export async function discoverLocalWorktrees(input: string, remoteURL: string, branch?: string, signal?: AbortSignal): Promise<{ path: string; worktrees: LocalWorktreeLink[] }> {
+export async function discoverLocalRepositories(input: string, repositories: readonly LocalRepositoryTarget[], branch?: string, signal?: AbortSignal): Promise<LocalRepositoryDiscovery> {
   signal?.throwIfAborted();
   const expanded = input === '~' ? homedir() : input.startsWith('~/') ? resolve(homedir(), input.slice(2)) : input;
   if (!expanded || !isAbsolute(expanded)) throw new Error('请选择绝对本地目录。');
   const root = await realpath(expanded);
   if (!(await lstat(root)).isDirectory()) throw new Error('请选择文件夹，而不是文件。');
-  const expected = remoteIdentity(remoteURL);
-  if (!expected) throw new Error('仓库远端地址无效。');
-  const worktrees: LocalWorktreeLink[] = [];
+  const idsByIdentity = new Map<string, string[]>();
+  for (const repository of repositories) {
+    const identity = remoteIdentity(repository.url);
+    if (identity) idsByIdentity.set(identity, [...(idsByIdentity.get(identity) || []), repository.id]);
+  }
+  const worktreesByRepository = new Map(repositories.map(repository => [repository.id, [] as LocalWorktreeLink[]]));
   const pending = [{ path: root, depth: 0 }];
   let visited = 0;
   while (pending.length) {
@@ -27,7 +33,8 @@ export async function discoverLocalWorktrees(input: string, remoteURL: string, b
     if (marker && !marker.isSymbolicLink()) {
       const names = (await readLocalGit(next.path, ['remote'])).trim().split('\n').filter(Boolean);
       const remotes = await Promise.all(names.map(name => readLocalGit(next.path, ['remote', 'get-url', name])));
-      if (remotes.some(remote => remoteIdentity(remote.trim()) === expected)) {
+      const candidateIdentities = new Set(remotes.map(remote => remoteIdentity(remote.trim())).filter((identity): identity is string => !!identity && idsByIdentity.has(identity)));
+      if (candidateIdentities.size) {
         // Registered nested worktrees can sit below the checkout we stop at.
         // Never associate registered siblings outside the user's chosen scope.
         for (const task of await readWorktrees(next.path)) {
@@ -37,12 +44,19 @@ export async function discoverLocalWorktrees(input: string, remoteURL: string, b
           if (branch !== undefined && task.branch !== branch) continue;
           let path = root; let symlink = false;
           for (const part of subpath.split(sep).filter(Boolean)) { path = join(path, part); if ((await lstat(path)).isSymbolicLink()) { symlink = true; break; } }
-          if (symlink || worktrees.some(item => item.path === task.path)) continue;
+          if (symlink) continue;
           const taskNames = (await readLocalGit(task.path, ['remote'])).trim().split('\n').filter(Boolean);
           const taskRemotes = await Promise.all(taskNames.map(name => readLocalGit(task.path, ['remote', 'get-url', name])));
-          if (!taskRemotes.some(remote => remoteIdentity(remote.trim()) === expected)) continue;
-          worktrees.push({ branch: task.branch, path: task.path });
-          if (worktrees.length > 64) throw new Error('匹配工作目录超过64个，请选择更具体的项目目录，尚未保存关联。');
+          const taskIdentities = new Set(taskRemotes.map(remote => remoteIdentity(remote.trim())).filter((identity): identity is string => !!identity));
+          for (const identity of candidateIdentities) {
+            if (!taskIdentities.has(identity)) continue;
+            for (const repositoryId of idsByIdentity.get(identity)!) {
+              const worktrees = worktreesByRepository.get(repositoryId)!;
+              if (worktrees.some(item => item.path === task.path)) continue;
+              worktrees.push({ branch: task.branch, path: task.path });
+              if (worktrees.length > 64) throw new Error('匹配工作目录超过64个，请选择更具体的项目目录，尚未保存关联。');
+            }
+          }
         }
       }
       continue;
@@ -52,7 +66,14 @@ export async function discoverLocalWorktrees(input: string, remoteURL: string, b
       pending.push({ path: join(next.path, entry.name), depth: next.depth + 1 });
     }
   }
-  if (!worktrees.length) throw new Error(branch === undefined ? '这个目录及子目录的远端不是目标仓库，没有保存关联。' : `未找到真实检出分支 ${branch} 的匹配工作目录，没有保存关联。`);
   signal?.throwIfAborted();
-  return { path: root, worktrees };
+  return { path: root, worktrees: worktreesByRepository };
+}
+
+export async function discoverLocalWorktrees(input: string, remoteURL: string, branch?: string, signal?: AbortSignal): Promise<{ path: string; worktrees: LocalWorktreeLink[] }> {
+  if (!remoteIdentity(remoteURL)) throw new Error('仓库远端地址无效。');
+  const discovered = await discoverLocalRepositories(input, [{ id: 'target', url: remoteURL }], branch, signal);
+  const worktrees = [...discovered.worktrees.get('target')!];
+  if (!worktrees.length) throw new Error(branch === undefined ? '这个目录及子目录的远端不是目标仓库，没有保存关联。' : `未找到真实检出分支 ${branch} 的匹配工作目录，没有保存关联。`);
+  return { path: discovered.path, worktrees };
 }

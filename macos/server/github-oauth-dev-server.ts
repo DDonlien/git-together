@@ -5,6 +5,7 @@ import { githubDevClientId, githubOAuthCallback } from '../src/github-web-model'
 import { GitHubWebAuthorization, type WebCredential, type WebConnector } from './github-web-authorization';
 import { callbackContent, callbackScript, callbackStyles } from './github-callback-page';
 import pkg from '../package.json';
+import { GitHubNativeBroker } from './github-native-broker';
 
 export const previewOrigin = 'http://127.0.0.1:4173';
 type PreviewStatus = { instanceId: string; version: string };
@@ -77,8 +78,8 @@ function page(res: ServerResponse, title: string, content: string, script = '', 
   // depend on painting an unfinished streamed document to show progress.
   res.end(html);
 }
-function callbackPage(res: ServerResponse, sessionId: string) {
-  page(res, '正在完成 GitHub 授权', callbackContent(previewOrigin), callbackScript(sessionId), callbackStyles);
+function callbackPage(res: ServerResponse, sessionId: string, native = false) {
+  page(res, '正在完成 GitHub 授权', callbackContent(native ? null : previewOrigin), callbackScript(sessionId), callbackStyles);
 }
 async function jsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new Error('仅支持 JSON 请求。');
@@ -97,6 +98,7 @@ export function createGitHubOAuthServer(options: {
   onCallback?: (stage: 'received' | 'accepted' | 'complete' | 'rejected' | 'failed') => void;
 }) {
   const flow = new GitHubWebAuthorization(options.connect, options.request, options.now);
+  const native = new GitHubNativeBroker(flow, options.now);
   if (options.configuration?.secret) flow.configure(options.configuration.secret);
   const setupKey = randomBytes(32).toString('base64url');
   // A finite stage only: never forward request URLs, query values, identities or
@@ -109,6 +111,7 @@ export function createGitHubOAuthServer(options: {
     if (req.headers.host !== authority) { res.statusCode = 403; res.end('仅允许本机访问。'); return; }
     const origin = `http://${authority}`; const url = new URL(req.url || '/', origin);
     const applicationAPI = ['/api/status', '/api/start', '/api/poll', '/api/cancel'].includes(url.pathname);
+    const nativeAPI = ['/api/native/status', '/api/native/start', '/api/native/poll', '/api/native/complete', '/api/native/cancel'].includes(url.pathname);
     if (applicationAPI && req.headers.origin === previewOrigin) {
       res.setHeader('Access-Control-Allow-Origin', previewOrigin); res.setHeader('Vary', 'Origin');
       if (req.method === 'OPTIONS') {
@@ -127,7 +130,7 @@ export function createGitHubOAuthServer(options: {
       if (req.method === 'GET' && url.pathname === '/oauth/github/callback') {
         report('received');
         try {
-          await flow.callback(url.searchParams, sessionId => { report('accepted'); callbackPage(res, sessionId); });
+          await flow.callback(url.searchParams, sessionId => { report('accepted'); callbackPage(res, sessionId, native.owns(sessionId)); });
           report('complete');
         } catch (problem) {
           report(res.writableEnded ? 'failed' : 'rejected');
@@ -144,7 +147,9 @@ export function createGitHubOAuthServer(options: {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       if (req.method !== 'POST') { res.statusCode = 405; throw new Error('仅支持 POST 请求。'); }
       const callbackAPI = url.pathname === '/api/callback-status';
-      if (applicationAPI) {
+      if (nativeAPI) {
+        if (req.headers.origin !== undefined || (req.headers['sec-fetch-site'] !== undefined && req.headers['sec-fetch-site'] !== 'none') || req.headers['x-gittogether-client'] !== '1') { res.statusCode = 403; throw new Error('仅允许本机桌面进程发起授权。'); }
+      } else if (applicationAPI) {
         if (req.headers.origin !== previewOrigin || req.headers['x-gittogether-client'] !== '1') { res.statusCode = 403; throw new Error('仅允许 GitTogether 预览发起授权。'); }
       } else if (callbackAPI) {
         if (req.headers.origin !== origin || req.headers['x-gittogether-client'] !== '1' || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) { res.statusCode = 403; throw new Error('仅允许本机授权回调页查询结果。'); }
@@ -152,7 +157,13 @@ export function createGitHubOAuthServer(options: {
         if (req.headers.origin !== origin || req.headers['x-gittogether-setup'] !== setupKey || (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin')) { res.statusCode = 403; throw new Error('请从本机开发配置页输入。'); }
       } else { res.statusCode = 404; throw new Error('接口不存在。'); }
       const input = await jsonBody(req); let value: unknown;
-      if (url.pathname === '/api/config') {
+      if (nativeAPI) {
+        if (url.pathname === '/api/native/status') value = { configured: flow.configured, nativeAuthorization: true, version: pkg.version, clientId: githubDevClientId };
+        else if (url.pathname === '/api/native/start') value = native.start(input);
+        else if (url.pathname === '/api/native/poll') value = native.poll(input);
+        else if (url.pathname === '/api/native/complete') value = native.complete(input);
+        else value = await native.cancel(input);
+      } else if (url.pathname === '/api/config') {
         if (input.rotated !== true || typeof input.secret !== 'string') throw new Error('请先撤销已暴露的密钥，再直接输入新密钥。');
         const secret = input.secret.trim();
         if (options.configuration) await flow.configureAndSave(secret, next => options.configuration!.save(next));
@@ -167,6 +178,7 @@ export function createGitHubOAuthServer(options: {
       }
       else {
         if (typeof input.sessionId !== 'string' || !/^[\w-]{36}$/.test(input.sessionId)) throw new Error('授权会话格式无效。');
+        if (!callbackAPI && native.owns(input.sessionId)) throw new Error('此授权由桌面应用管理。');
         value = callbackAPI ? flow.callbackProgress(input.sessionId)
           : url.pathname === '/api/poll' ? flow.poll(input.sessionId) : await flow.cancel(input.sessionId);
       }
@@ -176,5 +188,6 @@ export function createGitHubOAuthServer(options: {
       res.end(JSON.stringify({ ok: false, error: problem instanceof Error ? problem.message : '操作失败。' }));
     }
   });
+  server.on('close', () => native.close());
   return server;
 }

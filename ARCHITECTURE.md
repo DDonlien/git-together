@@ -1,5 +1,11 @@
 # TypeScript 客户端架构
 
+2026-10-10操作裁切与隐藏修正：Dashboard的显式repository-action-cell固定在表格可见右端，276px容纳七个Git入口和独立Hide/Restore；错误行的colSpan不套用固定列。其他列保持表内横滚与六项排序。RepositoryRowActions复用已有RepositoryActions并追加真实可用的隐藏按钮。useWorkspace沿用v2界面偏好存储，新增可选hiddenEntries字符串数组，旧记录缺省兼容；键为JSON编码的repositoryId和可选branch，不依赖服务instanceId。Dashboard过滤隐藏仓库及分支，显示已隐藏模式提供逐行恢复，分支全部隐藏时显示明确说明。隐藏仅影响列表，不改变Catalog、账号权限、目录关联、Git状态或文件。
+
+2026-10-10行尾操作定义：`RepositoryActions`按Commit/Fetch/Pull/Push/Get Latest/Reconcile/Clear显示7个公共IconButton，移除Ignore专用图标。`branch-links.ts`的`GitSignals`扩展为7个固定键，已有HEAD ancestry与工作目录数用于Pull/Push，未提交文件数用于Commit；Get Latest的空间清理与Reconcile/Clear的文件内容比较没有读取契约时保持数量未知。操作列220px容纳7个28px按钮与6个4px间隔，日期列继续保留。本轮没有新增写API、Git进程或目录删除；保留已有按下反馈和禁用说明。真实操作执行另列未完成需求，后续实现需要先产生账号/仓库/当前分支绑定的影响清单，再处理浅拷贝、当前版本完整性、Git对象与LFS缓存回收、共享worktree和文件覆盖的边界。
+
+`SettingsView` 使用flex纵向布局：标题和账号/外观/更新内容放在独立的settings-scroll滚动区域，版本footer是其后的不收缩兄弟区域，固定沿窗口底部右对齐，不覆盖表单。没有新增偏好、账号状态或IPC。侧栏公共收纳按钮与常驻导航图标框在styles.css共用状态反馈规则，保留原DOM和aria状态。
+
 R-05-tree-identity-row仅调整RepositoryFileTree的应用自有标记与局部CSS：当前task.branch和task.head派生同一行名称/8位SHA，文本渐隐用带透明尾部留白的蒙版，短名称不被淡化，SHA不收缩。本地路径和worktree标签保留；没有新增状态、读取接口或树重建，历史选择不替换树基准。隔离QA可用--long-branch建立真实临时长分支，默认测试数据不变。
 
 React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 SettingsView、LocalRepositoryModal 和只读 RepositoryView 组成。设置仅显示账号与外观，不显示指南或材质说明；App 仍保留原生桥接就绪检查。`import-model.ts` 定义有限 API 方法与 DTO，`import-api.ts` 验证响应形状，`use-workspace.ts` 管理账号目录、异步操作和外观偏好。AccountSidebar 按 accountId 展示完整 Catalog 仓库，不用 LocalLink 过滤导航或数量；Dashboard 以仓库、归属方、账号、本地目录和 Git 操作五列展示统一列表，不再单列本地状态。实际分支位于可展开的仓库子行，保留独立目录与操作；支持原搜索与筛选。旧 `domain.ts` / `data.ts` 仅保留历史测试契约，运行入口不导入场景或模拟操作。
@@ -21,6 +27,8 @@ R-05-gitlens-graph-local从已有工作区纯派生workingTask节点，每个非
 0.9.1的Dashboard不再使用单选`FilterMenu.tsx`；账号、组织、仓库统一复用`MultiFilterMenu.tsx`的公共Popover与具名原生checkbox/fieldset。账号以accountId为键、同名账号保留平台/login/host辅助身份；账号、组织、位置、类型与搜索取交集，组内取并集。整行label执行同一原生change，失去焦点且relatedTarget为空不提前卸载复选框，连续点击不关闭；键盘移到外部才关闭。触发器显式dialog语义，方向键在应用层打开和导航，避免库openOnArrowKeys自动赋予menu语义；Escape/外部关闭和焦点管理仍复用公共弹层。`dashboard-filters.ts`纯派生选项，null表示跟随全选，显式Set保留子集/空选；新增选项只进入全选，移除键不别名到新账号。目录revision不清空选择，搜索由App持有、Cmd+K不变。公共菜单内联光学背景经共享样式覆盖为不透明Material语义色，不修改库私有逻辑。
 
 GitHub的主目录和显式协作目录是两次分页快照，0.9.1按remoteId合并两者，再标记collaborator；不再仅给主目录附上标记而丢弃协作查询独有的Fork/Added仓库。协作快照中的最新provider字段保留，主目录为空时仍查询协作目录，重复记录不重复计数；可选查询失败仍保留主目录并标记未知。Gitea继续按官方204端点确认直接协作，不把团队权限或owner不同猜成Added。
+
+IMPORT-17-completeness（2026-10-10）统一有限分页解析：只构造本地页码，不访问provider返回的Link地址；中间空页仍遵循next/total继续，连续三页没有新ID但声明仍有记录则报错，避免不完整快照替换旧目录或重复查询到上限。GitHub协作快照与Gitea认证用户uid限定的Fork/collaborative搜索按remoteId合并，补充快照缺失的可选字段不擦掉已确认值。Gitea搜索可能包含team访问，所以只补目录，不凭搜索结果标记直接Added；仍由204接口确认。缺失fork通过固定仓库详情补查并核对ID/fullName，失败保留未知。四worker队列的每次实际请求各有15秒超时，不再共享15秒排队截止；外部取消仍透传，组织查询按owner复用。补充失败保留基本目录与安全metadataError；基本/补充均空且补充失败则拒绝把它当完整空目录。Dashboard由其他筛选的候选集合计算所选类型覆盖缺口，只警示真正未确认且未匹配的项或补充目录失败；全选/主动空选不被未知警告干扰。不改变凭据存储、关联、Git写操作或既有日期字段。
 
 Dashboard 的仓库名称直接读取 `RemoteRepository.name`；「组织 / 用户」列读取 `fullName` 中的 owner，账号列继续通过 accountId 读取用于访问的身份。这两种归属独立。0.7.0在无凭据DTO中增加可选ownerType、fork、collaborator、permissions和安全metadataError，客户端与旧加密目录验证兼容；组织筛选键由accountId、真实归属类别和规范化组织名称组成，个人与未识别归属分别成组，不猜用户名。行键、导航、菜单与本地关联仍使用仓库id。远端表示未关联、本地表示已关联，沿用原关联语义，不声称已克隆；来源与协作关系可以重叠，组内OR、维度之间AND。权限只在状态提示中标注，不用于推断Added。
 
@@ -60,9 +68,11 @@ Vite 只监听 loopback，HTTP 中间件要求本机 Host、同源 Origin / Sec-
 
 ### 正常网页返回与开发配置
 
+原生桌面也通过正常网页回调连接 GitHub。每次由主进程生成能力值，保存在主进程和授权助手内存中；无浏览器 Origin 的有限原生接口才可传递授权结果，普通页面不能轮询原生会话。主进程使用账号服务的授权专用接口保存并保留旧身份、目录映射和有效期，再向助手确认完成。页面仅收到公开授权网址及不含凭据的账号目录。助手缺失时，安装包以独立进程和原加密身份启动内置助手，恢复既有应用配置；应用密钥不进入安装包。当前接入仍使用本机已有开发应用配置，公共生产授权服务另行部署。
+
 主页面的 `connect-src` 除自身和现有开发 websocket，只增加固定 `http://127.0.0.1:4174/api/` 路径前缀，供网页授权的 start/poll/cancel 请求使用；不允许任意 HTTP、外部 GitHub API、开发配置或回调路径。仅配置服务 CORS 不够，客户端 CSP 也必须允许该精确来源。客户端 HTML 策略回归同时限制脚本、默认来源和对象，构建与实际页面均需核对。
 
-浏览器主入口现使用 `github-web-api.ts` 和 `GitHubBrowserAuthorizationModal`，不再调用设备码接口；原生桌面入口未迁移。`github-web-model.ts` 只有自有开发应用的公开 Client ID、固定本机地址与无凭据 DTO。先在点击事件内预留窗口，拿到经白名单校验的 URL 后只导航到 GitHub 官方 authorize；关闭 opener，弹窗被阻止时提供明确的再次打开入口。等待检查本机结果，不把访问令牌返回 renderer。
+浏览器与原生桌面入口现使用 `github-web-api.ts` 和 `GitHubBrowserAuthorizationModal`，不再调用设备码接口。`github-web-model.ts` 只有自有开发应用的公开 Client ID、固定本机地址与无凭据 DTO。浏览器先在点击事件内预留窗口，拿到经白名单校验的 URL 后只导航到 GitHub 官方 authorize；关闭 opener，弹窗被阻止时提供明确的再次打开入口。原生入口通过主进程打开已登记会话的系统浏览器网址。等待检查本机结果，不把访问令牌返回 renderer。
 
 `github-web-authorization.ts` 保存十分钟的随机 state、S256 PKCE verifier 和一次性回调状态，服务端固定向 GitHub access_token 端点交换，不跟随重定向，不回显 provider payload，不保存 refresh token。拒绝、格式/网络失败、过期、重复回调和取消分别处理；提交门后取消等待保存结果，不误报回滚。主账号服务重启后停止当前流程，不把授权凭据自动重放到新的会话。
 
@@ -101,6 +111,8 @@ bundle ID保持com.gittogether.standalone，名称保持GitTogether，userData�
 账号设置中没有仓库路径字段。账号连接后，全部已读取的仓库直接出现在侧栏和 Dashboard；远端内容不依赖 localLink。Dashboard 的仓库/分支目录入口及本地文件树空态复用配置弹窗和可点击的目录选择字段。`local-directory.ts` 验证原生 IPC 返回的绝对目录，取消返回 null 并保留原目录；浏览器尚无原生选择桥接，不接受上传伪路径。选择不自动保存；0.10.0 的 link 可带 branch，保存时调用 local-discovery 按远端身份和真实检出分支匹配。解除关联可只针对一个分支，不移除远端仓库、不删除文件。
 
 `LocalLink.path` 保留用户选择的仓库/父目录，新增可选 worktrees（branch + canonical path）；加密 SavedState v2 与稳定存储位置不变，旧单目录记录仍可读取。`local-discovery.ts` 最多遍历4000目录、8层、64个匹配工作目录，不进入符号链接、Git元数据及常见构建/依赖目录；遇到checkout不扫描它的内容，另核对真实worktree登记中位于选定范围内的目录。远端身份复用 `git-identity.ts`，不按目录名猜分支；候选再次核对其实际remote。取消、限制、错误或持久化失败不部分保存，串行提交前复核原关联未被其他操作替换。仓库三态要求已知完整分支范围和每分支健康目录；范围未知不标完全关联。可见的已关联仓库即使收起，也用原远端心跳读取HEAD和分支范围；未关联仓库仍仅展开时读取。
+
+Dashboard 的 `matchAccountRepositories` 是单账号批量目录关联入口：renderer 只提交 `accountId` 和用户选择的父目录，账号服务从自己的 Catalog 取得该账号全部可访问仓库，目录扫描一次后按规范化远端身份返回命中的仓库 ID，并在一次持久化变更中更新这些关联。未匹配仓库保持原记录；多个账号筛选时客户端逐账号调用，搜索、组织、类型和可见性筛选不参与匹配范围。请求与响应继续通过有限 API DTO/IPC 校验，不向 renderer 传递账号令牌。
 
 关联本地目录后，RepositoryView 使用真实 Git status、branch、最近 log、工作目录与暂存区 Diff；关联或解除时重建对应视图，避免残留的本地快照。有限 execFile 参数、不使用 shell、禁止外部 diff/textconv、关闭可选 index 锁；不提供任意命令/任意文件读取。Diff 仅接受当前更改列表中的路径；未跟踪文件不编造差异或读取内容。没有 Git 写动作与模拟成功。修改文件、克隆、LFS 写入、AI 和 Presence 连接需要后续独立合同。
 

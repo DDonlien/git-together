@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('gittogether', {
   import: (method: string, input: unknown) => ipcRenderer.invoke('gittogether:import', method, input),
   chooseDirectory: () => ipcRenderer.invoke('gittogether:choose-directory'),
   openGithubAuthorization: () => ipcRenderer.invoke('gittogether:github-authorization'),
+  githubWeb: (method: 'start' | 'poll' | 'cancel' | 'open', input: unknown) => ipcRenderer.invoke('gittogether:github-web', method, input),
   updates: {
     status: () => ipcRenderer.invoke('gittogether:update-status'),
     check: () => ipcRenderer.invoke('gittogether:update-check'),

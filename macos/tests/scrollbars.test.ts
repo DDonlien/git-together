@@ -20,7 +20,7 @@ test('app scroll containers retain their native scrolling behavior', () => {
   const containers = [
     ['account-sidebar-list', 'overflow-y'],
     ['remote-table-scroll', 'overflow-x'],
-    ['settings-view', 'overflow'],
+    ['settings-scroll', 'overflow'],
     ['repository-workspace-view', 'overflow'],
     ['repository-columns-scroll', 'overflow-x'],
     ['repository-task-stack', 'overflow'],

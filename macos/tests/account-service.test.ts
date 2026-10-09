@@ -19,8 +19,9 @@ function fixture() {
     const url = new URL(String(input)); requests.push(url);
     const token = new Headers(init?.headers).get('Authorization') || '';
     if (token.endsWith('invalid')) return new Response('provider body must not leak', { status: 401 });
-    if (url.pathname.endsWith('/user')) return Response.json({ login: token.endsWith('fixture-b') ? 'bob' : 'alice', name: token.endsWith('fixture-b') ? 'Work' : 'Personal' });
+    if (url.pathname.endsWith('/user')) return Response.json({ id: token.endsWith('fixture-b') ? 2 : 1, login: token.endsWith('fixture-b') ? 'bob' : 'alice', name: token.endsWith('fixture-b') ? 'Work' : 'Personal' });
     if (failRepos) return new Response('private provider diagnostic', { status: 503 });
+    if (url.pathname.endsWith('/repos/search')) return Response.json({ ok: true, data: [] });
     const page = Number(url.searchParams.get('page'));
     if (url.hostname === 'api.github.com') return Response.json(page === 1 ? [repo(1, 'alice/project')] : page === 2 ? [repo(2, 'org/team'), repo(3, 'friend/shared')] : [], { headers: page === 1 ? { Link: '<https://evil.test/credentials>; rel="next"' } : {} });
     return Response.json(page === 1 && !unavailable ? [repo(1, 'alice/project')] : page === 2 ? [repo(2, 'org/team')] : []);

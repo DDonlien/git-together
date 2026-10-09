@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Catalog } from './import-model';
 import type { GitHubWebSession } from './github-web-model';
-import { cancelGitHubWebAuthorization, reopenGitHubWebWindow, waitForGitHubWebAuthorization } from './github-web-api';
+import { cancelGitHubWebAuthorization, openGitHubWebAuthorization, waitForGitHubWebAuthorization } from './github-web-api';
 import { Button, Icon, Modal, Notice } from './ui';
 
 export function GitHubBrowserAuthorizationModal({ session, opened, onComplete, onClose, onRestart }: {
@@ -40,7 +40,7 @@ export function GitHubBrowserAuthorizationModal({ session, opened, onComplete, o
       {!pageOpened && <Notice kind="info">授权网页未能自动打开，请点击下方按钮。</Notice>}
       {error ? <Notice kind="error">{error}</Notice> : <div className="authorization-wait" role="status"><Icon name="spinner" size={16} className="spin" /><span>等待 GitHub 授权…</span></div>}
     </div><div className="modal-actions"><Button disabled={closing} onClick={() => void finish()}>{closing ? '正在确认取消…' : unconfirmed ? '关闭' : '取消授权'}</Button>
-      {error && !unconfirmed ? <Button variant="primary" disabled={closing} onClick={() => void finish(true)}>重新授权</Button> : !error && <Button variant="primary" disabled={closing} leadingIcon={<Icon name="external" size={16} />} onClick={() => setPageOpened(reopenGitHubWebWindow(session.authorizationURL))}>打开 GitHub</Button>}
+      {error && !unconfirmed ? <Button variant="primary" disabled={closing} onClick={() => void finish(true)}>重新授权</Button> : !error && <Button variant="primary" disabled={closing} leadingIcon={<Icon name="external" size={16} />} onClick={() => void openGitHubWebAuthorization(session).then(setPageOpened)}>打开 GitHub</Button>}
     </div>
   </Modal>;
 }

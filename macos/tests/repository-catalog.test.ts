@@ -30,7 +30,7 @@ function controllerFor(value: Catalog): WorkspaceController {
     service: { instanceId: value.instanceId, version: pkg.version, githubWebAuth: false }, needsReload: false,
     updatePreferences: () => {}, reload: async () => {},
     connect: async () => value, updateAccount: async () => value, refresh: async () => value, removeAccount: async () => value,
-    link: async () => value, unlink: async () => value,
+    link: async () => value, matchAccountRepositories: async () => [], unlink: async () => value,
     startGithubAuthorization: async () => ({ id: 'catalog-test', userCode: 'ABCD-EFGH', verificationURL: githubVerificationURL, expiresAt: Date.now() + 900000, interval: 5 }),
     pollGithubAuthorization: async () => ({ status: 'pending', retryAfter: 5 }),
     cancelGithubAuthorization: async () => ({ cancelled: true }),

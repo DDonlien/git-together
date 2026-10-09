@@ -1,27 +1,41 @@
-import { useId, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import type { GitSignals } from './branch-links';
-import { IconButton } from './ui';
+import { IconButton, type IconName } from './ui';
 
-const actions = [
-  { key: 'fetch', label: 'Fetch', icon: 'refresh' },
-  { key: 'latest', label: 'Get Latest', icon: 'download' },
-  { key: 'push', label: 'Push', icon: 'upload' },
-  { key: 'commit', label: 'Commit', icon: 'commit' },
-] as const;
+type RepositoryActionKey = keyof GitSignals;
+type RepositoryAction = { key: RepositoryActionKey; label: string; icon: IconName; description: string };
+const actions: RepositoryAction[] = [
+  { key: 'commit', label: 'Commit', icon: 'commit', description: '把本地更改创建为本地提交。' },
+  { key: 'fetch', label: 'Fetch', icon: 'refresh', description: '获取远端引用与对象，更新本地远端跟踪信息。' },
+  { key: 'pull', label: 'Pull', icon: 'arrowDown', description: '获取远端更新并合入当前本地分支。' },
+  { key: 'push', label: 'Push', icon: 'upload', description: '把本地提交推送到远端。' },
+  { key: 'latest', label: 'Get Latest', icon: 'download', description: '下载当前分支最新快照，仅保留1层历史；下载完成后清理旧 Git 历史与历史 LFS 缓存，释放空间。' },
+  { key: 'reconcile', label: 'Reconcile', icon: 'reconcile', description: '以本地为准比较远端：本地多出的文件标记添加，内容不同的采用本地版本并创建本地提交，本地缺少的忽略。' },
+  { key: 'clear', label: 'Clear', icon: 'clear', description: '以远端为准比较本地：本地多出的文件标记删除，内容不同的恢复远端版本，本地缺少的下载。' },
+];
 
 export function RepositoryActions({ label, signals }: { label: string; signals: GitSignals }) {
-  const id = useId();
-  const [hover, setHover] = useState<{ key: keyof GitSignals; x: number; y: number } | null>(null);
-  const describe = (key: keyof GitSignals) => `${signals[key].detail} 此 Git 操作尚未接入执行，不会修改工作目录。`;
-  const show = (key: keyof GitSignals, x: number, y: number) => setHover({ key, x: Math.max(8, Math.min(x + 12, window.innerWidth - 272)), y: Math.max(8, Math.min(y + 8, window.innerHeight - 140)) });
+  const [pressed, setPressed] = useState<RepositoryActionKey | null>(null);
+  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearPress = () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); releaseTimer.current = null; setPressed(null); };
+  const press = (key: RepositoryActionKey) => { if (releaseTimer.current) clearTimeout(releaseTimer.current); releaseTimer.current = null; setPressed(key); };
+  // Feedback acknowledges input only. The actual Git buttons remain
+  // disabled until their execution is implemented; never report fake success.
+  const pulse = (key: RepositoryActionKey) => { press(key); releaseTimer.current = setTimeout(() => { releaseTimer.current = null; setPressed(null); }, 180); };
+  useEffect(() => () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); }, []);
+  const describe = (action: RepositoryAction) => `${action.description} ${signals[action.key].detail} 此 Git 操作尚未接入执行，不会修改工作目录。`;
   return <div className="repository-actions" role="group" aria-label={label}>
-    {actions.map(action => <span key={action.key} className="git-action-anchor" tabIndex={0} aria-label={`${action.label}：${describe(action.key)}`} aria-describedby={hover?.key === action.key ? id : undefined}
-      onMouseEnter={event => show(action.key, event.clientX, event.clientY)} onMouseMove={event => show(action.key, event.clientX, event.clientY)} onMouseLeave={() => setHover(null)}
-      onFocus={event => { const rect = event.currentTarget.getBoundingClientRect(); show(action.key, rect.right, rect.top); }} onBlur={() => setHover(null)} onKeyDown={event => { if (event.key === 'Escape') setHover(null); }}>
-      <IconButton icon={action.icon} label={action.label} disabled />
-      {signals[action.key].tone !== 'off' && <span aria-hidden="true" className={`git-action-lamp ${signals[action.key].tone}`} />}
-    </span>)}
-    {hover && typeof document !== 'undefined' && createPortal(<div className="git-action-tooltip" role="tooltip" id={id} style={{ left: hover.x, top: hover.y }}><strong>{actions.find(action => action.key === hover.key)!.label}</strong><span>{describe(hover.key)}</span></div>, document.body)}
+    {actions.map(action => {
+      const signal = signals[action.key];
+      const count = signal.count;
+      return <span key={action.key} className={`git-action-anchor${pressed === action.key ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={0} aria-label={`${action.label}${count !== undefined ? `，数量 ${count}` : ''}：${describe(action)}`}
+        onPointerDown={event => { if (event.button === 0) press(action.key); }} onPointerCancel={clearPress} onPointerLeave={clearPress}
+        onClick={() => pulse(action.key)} onBlur={clearPress}
+        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); press(action.key); } else if (event.key === 'Escape') clearPress(); }}
+        onKeyUp={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pulse(action.key); } }}>
+        <IconButton icon={action.icon} label={action.label} title="" aria-hidden="true" tabIndex={-1} disabled />
+        {count !== undefined && <span aria-hidden="true" className={`git-action-badge ${signal.tone}`}>{count}</span>}
+      </span>;
+    })}
   </div>;
 }

@@ -93,15 +93,20 @@ test('lamps distinguish equal, ahead, behind, unknown ancestry, changes, unlinke
   const task = { id: 'w', branch: 'main', path: '/qa/main', head: 'local', tree: [], files: [], error: '' };
   const remote = { workspace: { source: 'remote' as const, tasks: [{ ...task, path: null, remote: true, head: 'remote' }], commits: [], complete: true, checkedAt: 1, warnings: [] }, error: '', loading: false };
   const state = { path: '/qa', snapshot: null, error: '', checkedAt: 1, workspace: { tasks: [task], commits: [{ id: 'remote', parents: ['local'], summary: '', author: '', time: '', refs: [] }], complete: true } };
-  assert.equal(gitSignals([], remote).latest.tone, 'off');
+  assert.equal(gitSignals([], remote).pull.tone, 'off');
   const pending = linkedTasks({ repositoryId: 'qa', path: '/qa', worktrees: [{ branch: 'main', path: '/qa/main' }] });
-  assert.equal(gitSignals(pending, { workspace: null, error: '', loading: true }, { path: '/qa', snapshot: null, error: '', checkedAt: 0 }).latest.tone, 'off', 'pending verification is not an actual read failure');
-  assert.match(gitSignals([task], remote, state).latest.detail, /落后/);
+  assert.equal(gitSignals(pending, { workspace: null, error: '', loading: true }, { path: '/qa', snapshot: null, error: '', checkedAt: 0 }).pull.tone, 'off', 'pending verification is not an actual read failure');
+  assert.match(gitSignals([task], remote, state).pull.detail, /落后/);
   state.workspace.commits = [{ ...state.workspace.commits[0], id: 'local', parents: ['remote'] }];
-  assert.equal(gitSignals([task], remote, state).latest.tone, 'good'); assert.equal(gitSignals([task], remote, state).push.tone, 'warning');
-  assert.equal(gitSignals([{ ...task, head: 'remote' }], remote, state).latest.tone, 'good');
-  state.workspace.commits = []; const unknown = gitSignals([task], remote, state); assert.equal(unknown.latest.tone, 'warning'); assert.match(unknown.latest.detail, /无法确认领先、落后或分叉/);
+  assert.equal(gitSignals([task], remote, state).pull.tone, 'good'); assert.equal(gitSignals([task], remote, state).push.tone, 'warning');
+  const synchronized = gitSignals([{ ...task, head: 'remote' }], remote, state);
+  assert.equal(synchronized.pull.tone, 'good');
+  for (const key of ['latest', 'reconcile', 'clear'] as const) {
+    assert.equal(synchronized[key].tone, 'off', `${key}: equal HEADs do not measure storage or file contents`);
+    assert.equal(synchronized[key].count, undefined);
+  }
+  state.workspace.commits = []; const unknown = gitSignals([task], remote, state); assert.equal(unknown.pull.tone, 'warning'); assert.match(unknown.pull.detail, /无法确认领先、落后或分叉/);
   assert.equal(gitSignals([{ ...task, files: [{ path: 'file', status: 'M', tracked: true }] }], remote, state).commit.tone, 'warning');
-  assert.equal(gitSignals([{ ...task, error: 'Unreadable' }], remote, state).latest.tone, 'error');
+  assert.equal(gitSignals([{ ...task, error: 'Unreadable' }], remote, state).pull.tone, 'error');
   assert.equal(associationStatus(undefined, state, remote).label, '尚未关联');
 });

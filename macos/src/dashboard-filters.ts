@@ -7,6 +7,7 @@ export interface MultiFilterOption { value: string; label: string; detail?: stri
 export interface MultiFilterGroup { id: string; label: string; detail?: string; options: MultiFilterOption[] }
 export const repositorySources: MultiFilterOption[] = [{ value: 'remote', label: '远端' }, { value: 'local', label: '本地' }];
 export const repositoryTypes: MultiFilterOption[] = [{ value: 'original', label: 'Original' }, { value: 'fork', label: 'Fork' }, { value: 'added', label: 'Added' }];
+export const repositoryVisibilities: MultiFilterOption[] = [{ value: 'public', label: '公开' }, { value: 'private', label: '私有' }];
 
 export function accountOptions(accounts: Account[]): MultiFilterOption[] {
   return accounts.map(account => ({ value: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}` }));
@@ -34,13 +35,28 @@ export function organizationGroups(accounts: Account[], repositories: RemoteRepo
     return { id: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}`, options: [...options.values()].sort((a, b) => a.label.localeCompare(b.label)) };
   });
 }
-export function matchesRepositoryFilters(repo: RemoteRepository, linked: boolean, selections: { organization: FilterSelection; source: FilterSelection; type: FilterSelection }, organizations: MultiFilterOption[]) {
+export function matchesRepositoryFilters(repo: RemoteRepository, linked: boolean, selections: { organization: FilterSelection; source: FilterSelection; type: FilterSelection; visibility?: FilterSelection }, organizations: MultiFilterOption[]) {
   if (!isUnrestricted(selections.organization, organizations) && !isSelected(selections.organization, organizationKey(repo))) return false;
   if (!isSelected(selections.source, linked ? 'local' : 'remote')) return false;
-  if (isUnrestricted(selections.type, repositoryTypes)) return true;
-  return (repo.fork === false && isSelected(selections.type, 'original')) ||
-    (repo.fork === true && isSelected(selections.type, 'fork')) ||
-    (repo.collaborator === true && isSelected(selections.type, 'added'));
+  if (!isSelected(selections.visibility ?? null, repo.private ? 'private' : 'public')) return false;
+  return matchesRepositoryType(repo, selections.type);
+}
+export function matchesRepositoryType(repo: RemoteRepository, type: FilterSelection) {
+  if (isUnrestricted(type, repositoryTypes)) return true;
+  return (repo.fork === false && isSelected(type, 'original')) ||
+    (repo.fork === true && isSelected(type, 'fork')) ||
+    (repo.collaborator === true && isSelected(type, 'added'));
+}
+export function repositoryTypeCoverage(repositories: RemoteRepository[], type: FilterSelection) {
+  if (isUnrestricted(type, repositoryTypes) || type?.size === 0) return { unknown: 0, errors: [] as string[] };
+  const unknown = repositories.filter(repo => !matchesRepositoryType(repo, type) && (
+    (repo.fork === undefined && (isSelected(type, 'original') || isSelected(type, 'fork'))) ||
+    (repo.collaborator === undefined && isSelected(type, 'added'))
+  ));
+  // A failed supplementary directory may hide a repository entirely, even when
+  // every visible record already has its own classification.
+  const directoryErrors = repositories.filter(repo => repo.metadataError?.includes('补充目录'));
+  return { unknown: unknown.length, errors: [...new Set([...unknown, ...directoryErrors].flatMap(repo => repo.metadataError ? [repo.metadataError] : []))] };
 }
 export function repositoryClassification(repo: RemoteRepository): string {
   const source = repo.fork === true ? 'Fork' : repo.fork === false ? 'Original' : '来源未确认';

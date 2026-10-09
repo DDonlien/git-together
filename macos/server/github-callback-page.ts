@@ -17,7 +17,7 @@ export const callbackStyles = `
   @media(max-width:420px){.oauth-card{padding:22px}.oauth-progress{gap:14px}.oauth-meta{flex-direction:column;gap:6px}}
 `;
 
-export function callbackContent(previewOrigin: string): string {
+export function callbackContent(previewOrigin: string | null): string {
   return `<section class="oauth-card" aria-label="GitHub 授权进度">
     <div class="oauth-progress"><div class="oauth-symbol" aria-hidden="true"><span class="oauth-spinner"></span>
       <svg class="oauth-result-icon oauth-complete" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="1.5"/><path d="m10 16 4 4 8-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -26,7 +26,7 @@ export function callbackContent(previewOrigin: string): string {
     <div class="oauth-meta"><span id="oauth-elapsed" aria-live="off">已等待 0 秒</span><span id="oauth-heartbeat" aria-live="off">正在查询授权状态…</span></div>
     <p id="oauth-slow" class="oauth-slow" role="status" hidden>这一步比平时久，仍在等待结果。请保持窗口打开；如果失败，会在这里显示原因。</p>
     <noscript><p>此页需要 JavaScript 才能更新进度。请返回 GitTogether 查看账号连接结果。</p></noscript>
-    <div class="actions"><a class="button" href="${previewOrigin}/">返回 GitTogether</a></div>
+    ${previewOrigin ? `<div class="actions"><a class="button" href="${previewOrigin}/">返回 GitTogether</a></div>` : '<p>完成后将自动返回 GitTogether，你可以关闭此页。</p>'}
   </section>`;
 }
 

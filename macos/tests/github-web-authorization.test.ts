@@ -282,7 +282,8 @@ test('browser waiting UI stays token-free and the helper is isolated from the ma
   const modal = readFileSync(new URL('../src/GitHubBrowserAuthorizationModal.tsx', import.meta.url), 'utf8');
   assert.match(modal, /在 GitHub 完成登录和授权/); assert.doesNotMatch(modal, /userCode|复制验证码|Client secret|使用指南|settings-footer/);
   const settings = readFileSync(new URL('../src/SettingsView.tsx', import.meta.url), 'utf8');
-  assert.match(settings, /if \(!window.gittogether\)/); assert.match(settings, /startGitHubWebAuthorization\(name\)/);
+  assert.match(settings, /startGitHubWebAuthorization\(name\)/);
+  assert.doesNotMatch(settings, /controller.startGithubAuthorization/);
   const config = readFileSync(new URL('../vite.config.mjs', import.meta.url), 'utf8'); assert.doesNotMatch(config, /github-oauth-dev|github-web-authorization/);
   const launch = readFileSync(new URL('../server/github-oauth-dev.ts', import.meta.url), 'utf8');
   assert.match(launch, /mkdtemp/); assert.match(launch, /delete environment.ELECTRON_RUN_AS_NODE/); assert.doesNotMatch(launch, /client_secret|loadEnv|dotenv|writeFile|--use-env-proxy/);

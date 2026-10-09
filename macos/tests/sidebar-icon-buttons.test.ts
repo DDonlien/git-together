@@ -33,6 +33,15 @@ test('compact hit areas use the expanded 32px icon frame size without enlargemen
   assert.match(css, /\.global-sidebar\.is-collapsed \{ width: 56px; padding-inline: 4px; \}/);
 });
 
+test('disclosure and permanent navigation share hover, pressed, motion and focus feedback', () => {
+  const disclosure = '\\.global-sidebar \\.sidebar-disclosure\\.icon-button\\.ogui-control--small';
+  assert.match(css, new RegExp(`${disclosure},\\s*\\.global-sidebar \\.sidebar-button-icon \\{ transition: background-color 160ms ease; transform: none; \\}`));
+  assert.match(css, new RegExp(`${disclosure}:hover:not\\(:disabled\\),\\s*\\.global-sidebar \\.sidebar-permanent:hover \\.sidebar-button-icon \\{ background: var\\(--surface-hover\\); \\}`));
+  assert.match(css, new RegExp(`${disclosure}:active:not\\(:disabled\\),\\s*\\.global-sidebar \\.sidebar-permanent:active \\.sidebar-button-icon \\{ background: color-mix\\(in srgb, var\\(--text\\) 12%, var\\(--content\\)\\); transform: none; \\}`));
+  assert.match(css, new RegExp(`${disclosure}:focus-visible,\\s*\\.global-sidebar \\.sidebar-permanent:focus-visible \\{ outline: 2px solid var\\(--blue\\); outline-offset: 2px; \\}`));
+  assert.doesNotMatch(css, /\.global-sidebar \.sidebar-disclosure:hover \{/);
+});
+
 test('repository selection outlines the entire rectangular button without shifting glyphs or replacing keyboard focus', () => {
   assert.match(css, /\.repository-item\.active \{ box-shadow: inset 0 0 0 1px var\(--card-edge\); \}/);
   assert.match(css, /\.nav-item\.active \{ background: var\(--selection\);/);

@@ -20,7 +20,7 @@ test('settings retain accounts and appearance without guide, material or storage
       service: { instanceId: 'test-session', version: pkg.version, githubWebAuth: false }, needsReload: false,
       updatePreferences: () => {}, reload: async () => {},
       connect: async () => catalog, updateAccount: async () => catalog, refresh: async () => catalog,
-      removeAccount: async () => catalog, link: async () => catalog, unlink: async () => catalog,
+      removeAccount: async () => catalog, link: async () => catalog, matchAccountRepositories: async () => [], unlink: async () => catalog,
       startGithubAuthorization: async () => ({ id: 'test-session', userCode: 'ABCD-EFGH', verificationURL: githubVerificationURL, expiresAt: Date.now() + 900000, interval: 5 }),
       pollGithubAuthorization: async () => ({ status: 'pending', retryAfter: 5 }),
       cancelGithubAuthorization: async () => ({ cancelled: true }),
@@ -34,18 +34,27 @@ test('settings retain accounts and appearance without guide, material or storage
     assert.equal(markup.match(/<footer class="settings-footer">([\s\S]*?)<\/footer>/)?.[1], `GitTogether ${pkg.version}`);
     assert.equal((markup.match(/GitTogether /g) || []).length, 1);
     assert.ok(markup.indexOf('settings-footer') > markup.indexOf('<h2>外观</h2>'));
+    assert.match(markup, /^<main class="settings-view"><div class="settings-scroll">/);
+    assert.match(markup, /<\/section><\/div><footer class="settings-footer">/);
     assert.doesNotMatch(markup, /使用指南|import-guide|setting-material|OpenGlass UI · 浏览器材质|原生 Liquid Glass 已启用/);
     assert.doesNotMatch(markup, /storage-help|账号与令牌由系统安全存储加密保存|账号与令牌仅在服务会话中保存/);
   }
 });
 
-test('settings footer is flat, right aligned and shares the heading-to-account spacing without stacked margins', () => {
+test('settings footer is a flat bottom region outside the independently scrolling content', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const view = css.match(/\.settings-view\s*\{([^}]+)\}/)?.[1] || '';
+  const scroll = css.match(/\.settings-scroll\s*\{([^}]+)\}/)?.[1] || '';
   const footer = css.match(/\.settings-footer\s*\{([^}]+)\}/)?.[1] || '';
   assert.match(css, /\.settings-view\s*\{[^}]*--settings-heading-gap:\s*22px/);
   assert.match(css, /\.settings-heading\s*\{[^}]*margin-bottom:\s*var\(--settings-heading-gap\)/);
-  assert.match(css, /\.settings-view\s*>\s*\.settings-section:last-of-type\s*\{\s*margin-bottom:\s*0;/);
-  assert.match(footer, /padding-block:\s*var\(--settings-heading-gap\)/);
+  assert.match(view, /display:\s*flex;\s*flex-direction:\s*column/);
+  assert.match(view, /min-height:\s*0/);
+  assert.match(view, /overflow:\s*hidden/);
+  assert.match(scroll, /flex:\s*1;\s*min-height:\s*0;\s*overflow:\s*auto/);
+  assert.match(css, /\.settings-scroll\s*>\s*\.settings-section:last-of-type\s*\{\s*margin-bottom:\s*0;/);
+  assert.match(footer, /flex-shrink:\s*0/);
+  assert.match(footer, /padding:\s*8px 0 12px/);
   assert.match(footer, /text-align:\s*right/);
   assert.doesNotMatch(footer, /border|box-shadow|background|position/);
 });

@@ -7,6 +7,7 @@ declare global {
       import: (method: string, input: unknown) => Promise<unknown>;
       chooseDirectory: () => Promise<string | null>;
       openGithubAuthorization: () => Promise<void>;
+      githubWeb?: (method: 'start' | 'poll' | 'cancel' | 'open', input: unknown) => Promise<unknown>;
       updates: UpdateBridge;
     };
   }

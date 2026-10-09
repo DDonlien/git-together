@@ -44,7 +44,7 @@ test('expanded sidebar folders and accounts share one icon and label column with
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /--sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: 0px/);
   assert.match(css, /\.account-sidebar-list \{[^}]*margin-inline: 0;/);
-  assert.match(css, /\.sidebar-account-toggle \{[^}]*gap: var\(--icon-label-gap\); padding: 6px var\(--sidebar-label-inset\)/);
+  assert.match(css, /\.sidebar-account-toggle \{[^}]*height: var\(--sidebar-button-size\);[^}]*align-items: center; gap: var\(--icon-label-gap\); padding: 0 var\(--sidebar-label-inset\)/);
   assert.match(css, /\.sidebar-account-disclosure \{[^}]*justify-content: center; flex: 0 0 var\(--sidebar-button-size\); width: var\(--sidebar-button-size\)/);
   assert.match(css, /\.sidebar-account-repositories \{ --sidebar-item-indent: var\(--sidebar-level-indent\); \}/);
   const inset = 'padding-inline-start: calc(var(--sidebar-label-inset) + var(--sidebar-item-indent, 0px));';

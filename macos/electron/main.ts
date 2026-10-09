@@ -8,13 +8,24 @@ import { systemFetch } from './system-network';
 import { MacUpdater } from 'electron-updater';
 import { AppUpdater } from './app-updater';
 import { updateSource } from '../src/update-model';
+import { isRecord } from '../src/import-model';
+import { NativeGitHubAuthorization } from './native-github-authorization';
+import { nativeOAuthHelper, runNativeOAuthHelper } from './native-oauth-helper';
+import { createLoopbackFetch } from './system-network';
 
 let window: BrowserWindow | null = null;
 let accountService: AccountService;
 let updater: AppUpdater;
 let activeImports = 0;
-app.setName('GitTogether');
-app.setPath('userData', join(app.getPath('appData'), 'GitTogether-Standalone-Demo'));
+let nativeGithub: NativeGitHubAuthorization;
+const authorizationHelper = nativeOAuthHelper();
+const helperMode = process.argv.includes('--gittogether-authorization-helper');
+app.setName(helperMode ? 'GitTogether Authorization' : 'GitTogether');
+if (helperMode) {
+  const directory = process.argv.find(value => value.startsWith('--gittogether-helper-session='))?.split('=').slice(1).join('=');
+  if (!directory) throw new Error('授权助手缺少独立会话目录。');
+  app.setPath('userData', directory); app.setPath('sessionData', directory);
+} else app.setPath('userData', join(app.getPath('appData'), 'GitTogether-Standalone-Demo'));
 const rendererSource: RendererSource = app.isPackaged
   ? { kind: 'file', path: join(app.getAppPath(), 'client', 'index.html') }
   : { kind: 'url', url: process.env.GITTOGETHER_PREVIEW_URL || 'http://127.0.0.1:4173/' };
@@ -67,7 +78,7 @@ ipcMain.handle('gittogether:import', async (event, method: unknown, input: unkno
 });
 ipcMain.handle('gittogether:choose-directory', async event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
-  const result = await dialog.showOpenDialog(window!, { title: '选择已有的本地 Git 仓库', properties: ['openDirectory'] });
+  const result = await dialog.showOpenDialog(window!, { title: '选择本地仓库或其父文件夹', properties: ['openDirectory'] });
   return result.canceled ? null : result.filePaths[0];
 });
 ipcMain.handle('gittogether:github-authorization', async event => {
@@ -75,14 +86,37 @@ ipcMain.handle('gittogether:github-authorization', async event => {
   // This bridge cannot open caller-supplied URLs or embed GitHub credentials.
   await shell.openExternal(githubVerificationURL);
 });
-app.whenReady().then(() => {
+ipcMain.handle('gittogether:github-web', async (event, method: unknown, input: unknown) => {
+  if (!isMainRenderer(event)) return { ok: false, error: '无效的应用来源。' };
+  if (!isRecord(input)) return { ok: false, error: '授权请求无效。' };
+  activeImports++;
+  try {
+    if (updater.status().phase === 'installing') throw new Error('正在安装应用更新，请重启后继续。');
+    let value: unknown;
+    if (method === 'start') {
+      if (typeof input.name !== 'string' || input.name.length > 120) throw new Error('账号名称无效。');
+      value = await nativeGithub.start(input.name);
+    } else {
+      if (typeof input.sessionId !== 'string' || !/^[\w-]{36}$/.test(input.sessionId)) throw new Error('授权会话无效。');
+      if (method === 'poll') { value = await nativeGithub.poll(input.sessionId); if (isRecord(value) && value.status === 'complete') { window?.show(); window?.focus(); } }
+      else if (method === 'cancel') value = await nativeGithub.cancel(input.sessionId);
+      else if (method === 'open') { await shell.openExternal(nativeGithub.authorizationURL(input.sessionId)); value = true; }
+      else throw new Error('不支持该授权操作。');
+    }
+    return { ok: true, value };
+  } catch (problem) { return { ok: false, error: problem instanceof Error ? problem.message : 'GitHub 授权失败。' }; }
+  finally { activeImports--; }
+});
+app.whenReady().then(async () => {
+  if (helperMode) { await runNativeOAuthHelper(); return; }
   const engine = app.isPackaged && process.platform === 'darwin' ? new MacUpdater(updateSource) : null;
   if (engine) engine.logger = null;
-  updater = new AppUpdater(engine, app.getVersion(), () => activeImports === 0);
+  updater = new AppUpdater(engine, app.getVersion(), () => activeImports === 0 && !nativeGithub?.busy);
   accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch, { openFile: async target => {
     if (target.source === 'remote') await shell.openExternal(target.value);
     else if (await shell.openPath(target.value)) throw new Error('无法用系统默认应用打开此文件，请检查是否有可用应用。');
   } });
+  nativeGithub = new NativeGitHubAuthorization(credential => accountService.connectGitHubWebAuthorization(credential), await createLoopbackFetch(), authorizationHelper.ensure);
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'GitTogether', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
@@ -91,7 +125,8 @@ app.whenReady().then(() => {
   ]));
   createWindow();
   app.on('activate', () => { if (!window) createWindow(); });
-});
+}).catch(() => { console.error('GitTogether 启动失败，请检查系统钥匙串和本机授权服务。'); app.exit(1); });
+app.on('before-quit', () => { if (!helperMode) { nativeGithub?.close(); authorizationHelper.close(); } });
 ipcMain.handle('gittogether:update-status', event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
   return updater.status();
@@ -108,4 +143,4 @@ ipcMain.handle('gittogether:update-install', event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
   return updater.install();
 });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { if (!helperMode && process.platform !== 'darwin') app.quit(); });

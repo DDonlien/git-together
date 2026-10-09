@@ -2,7 +2,14 @@ import { isRecord } from './import-model';
 import { githubOAuthOrigin, isGitHubAuthorizationURL, isGitHubWebSession, isGitHubWebProgress, isGitHubWebCancellation, type GitHubWebSession, type GitHubWebProgress, type GitHubWebCancellation } from './github-web-model';
 import { authorizationDelay } from './github-auth-flow';
 
-async function webAPI(method: 'start' | 'poll' | 'cancel', input: unknown, signal?: AbortSignal): Promise<unknown> {
+async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unknown, signal?: AbortSignal): Promise<unknown> {
+  if (typeof window !== 'undefined' && window.gittogether) {
+    if (!window.gittogether.githubWeb) throw new Error('请更新桌面版 GitTogether，以使用已配置的 GitHub 网页授权。');
+    const envelope = await window.gittogether.githubWeb(method, input);
+    signal?.throwIfAborted();
+    if (!isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '桌面网页授权失败。');
+    return envelope.value;
+  }
   let response: Response;
   try {
     response = await fetch(`${githubOAuthOrigin}/api/${method}`, { method: 'POST', redirect: 'error', credentials: 'omit',
@@ -45,6 +52,11 @@ export function navigateGitHubWebWindow(popup: Window | null, authorizationURL: 
 export function reopenGitHubWebWindow(authorizationURL: string): boolean {
   if (!isGitHubAuthorizationURL(authorizationURL)) throw new Error('授权网址无效，没有打开其他网站。');
   return navigateGitHubWebWindow(reserveGitHubWebWindow(), authorizationURL);
+}
+export async function openGitHubWebAuthorization(session: GitHubWebSession): Promise<boolean> {
+  if (!window.gittogether) return reopenGitHubWebWindow(session.authorizationURL);
+  try { return await webAPI('open', { sessionId: session.id }) === true; }
+  catch { return false; }
 }
 export async function waitForGitHubWebAuthorization(session: GitHubWebSession, signal: AbortSignal, options: {
   poll?: typeof pollGitHubWebAuthorization; now?: () => number; sleep?: typeof authorizationDelay;

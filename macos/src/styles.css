@@ -53,13 +53,13 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 /* Semantic cards use tonal separation, not shadows; overlays retain elevation. */
 .flat-group { background: var(--content); border-radius: var(--radius-panel); border: 1px solid var(--card-edge); box-shadow: var(--card-shadow); backdrop-filter: none; }
 .account-sidebar-list { flex: 1; min-height: 0; overflow-y: auto; margin-inline: 0; }
-.sidebar-account { margin-bottom: 14px; }
-.sidebar-account-toggle { width: 100%; min-height: 30px; display: flex; align-items: center; gap: var(--icon-label-gap); padding: 6px var(--sidebar-label-inset); color: var(--muted); font-size: 11px; font-weight: 600; text-align: left; border-radius: 6px; }
+.sidebar-account + .sidebar-account { margin-top: var(--sidebar-section-gap); }
+.sidebar-account-toggle { width: 100%; height: var(--sidebar-button-size); display: flex; align-items: center; gap: var(--icon-label-gap); padding: 0 var(--sidebar-label-inset); color: var(--muted); font-size: 11px; line-height: 16px; font-weight: 600; text-align: left; border-radius: 6px; }
 .sidebar-account-toggle:hover { background: var(--surface-hover); }
 .sidebar-account-disclosure { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 var(--sidebar-button-size); width: var(--sidebar-button-size); }
 .sidebar-account-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-account-repositories { --sidebar-item-indent: var(--sidebar-level-indent); }
-.sidebar-account-toggle > small { font-size: 10px; font-weight: 400; }
+.sidebar-account-toggle > small { padding-inline-end: 4px; font-size: 10px; font-weight: 400; }
 .sidebar-account-empty, .sidebar-no-accounts { display: block; padding: 7px 10px; font-size: 11px; color: var(--muted); text-align: left; line-height: 1.6; }
 .account-sidebar-list + .sidebar-bottom { flex-shrink: 0; padding: 12px 0; }
 .repository-logo { position: relative; display: inline-flex; color: var(--blue); overflow: visible !important; flex-shrink: 0; }
@@ -111,6 +111,10 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .multi-filter-empty, .multi-filter-note { clear: both; margin: 0; padding: 8px; font-size: 11px; line-height: 1.5; color: var(--muted); }
 .multi-filter-note { border-top: 1px solid var(--line); }
 .repository-count { margin-left: auto; white-space: nowrap; font-size: 11px; }
+button.repository-count-action { display: inline-flex; align-items: center; gap: 4px; padding: 4px 2px; color: var(--muted); font: inherit; font-size: 11px; line-height: inherit; border: 0; border-radius: 6px; background: transparent; }
+button.repository-count-action:not(:disabled) { cursor: pointer; }
+button.repository-count-action:hover:not(:disabled) { color: var(--blue); background: var(--surface-hover); }
+button.repository-count-action:disabled { opacity: .7; }
 .remote-repository-group { flex-shrink: 0; padding: 12px 18px 8px; min-width: 0; }
 .remote-account-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .remote-account-cell > div { min-width: 0; }
@@ -119,12 +123,21 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .provider-mark { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; color: var(--blue); background: var(--blue-bg); }
 .provider-mark.gitea { color: var(--teal); background: color-mix(in srgb,var(--teal) 9%,var(--content)); }
 .remote-table-scroll { position: relative; overflow-x: auto; }
-.remote-repo-table { width: 100%; min-width: 840px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.remote-repo-table { width: 100%; min-width: 1240px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
 .remote-repo-table th { height: 30px; font-size: 11px; font-weight: 500; text-align: left; color: var(--muted); border-bottom: 1px solid var(--line); }
-.remote-repo-table th:nth-child(1) { width: 28%; }
-.remote-repo-table th:nth-child(2) { width: 12%; }
-.remote-repo-table th:nth-child(3) { width: 20%; }
-.remote-repo-table th:nth-child(5) { width: 128px; }
+.remote-repo-table th:nth-child(1) { width: 21%; }
+.remote-repo-table th:nth-child(2) { width: 8%; }
+.remote-repo-table th:nth-child(3) { width: 14%; }
+.remote-repo-table th:nth-child(4), .remote-repo-table th:nth-child(5) { width: 10%; }
+.remote-repo-table th:nth-child(6) { width: 13%; }
+.remote-repo-table th:nth-child(7) { width: 276px; }
+/* Keep row actions reachable while data columns scroll in a narrow window. */
+.remote-repo-table .repository-action-cell { position: sticky; right: 0; z-index: 1; background: var(--content); border-left: 1px solid var(--line); }
+.remote-repo-table th.repository-action-cell { z-index: 2; }
+.remote-repo-table .repository-sort-button { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; color: inherit; text-align: left; white-space: nowrap; }
+.remote-repo-table .repository-sort-button:hover { color: var(--text); }
+.repository-sort-indicator { color: var(--blue); font-size: 10px; }
+.repository-date { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .remote-repo-table td { height: 58px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
 .remote-repo-table tbody:last-child tr:last-child td { border-bottom: 0; }
 .remote-repo-table td:last-child { padding-right: 0; text-align: right; }
@@ -140,6 +153,8 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .remote-repo-table .dashboard-branch-row td, .remote-repo-table .dashboard-branch-message td { height: 34px; padding: 6px 8px 6px 0; text-align: left; border-bottom: 0; }
 .remote-repo-table .dashboard-branch-row td:first-child, .remote-repo-table .dashboard-branch-message td { padding-left: 34px; }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
+.remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
+.dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
 .dashboard-repository-branches { background: transparent; }
 .dashboard-branch-content { display: flex; align-items: center; gap: var(--icon-label-gap); min-width: 0; }
 .dashboard-branch-content .branch-label { color: var(--text); }
@@ -150,7 +165,6 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .remote-name strong, .remote-name .repository-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--repository-name-size); line-height: var(--repository-text-leading); font-weight: 550; }
 .remote-name .repository-link:hover { color: var(--blue); }
 .remote-name small { display: block; color: var(--muted); font-size: var(--repository-detail-size); line-height: var(--repository-text-leading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: var(--repository-text-gap); }
-.repository-visibility { font-size: 9px; }
 .repository-owner { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .remote-repo-table .branch-label { display: inline-flex; align-items: center; gap: var(--icon-label-gap); color: var(--muted); font-size: 11px; max-width: 100%; white-space: nowrap; }
 .remote-repo-table .branch-label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -159,21 +173,28 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .local-path-action small { display: block; max-width: 100%; font-size: 10px; line-height: 1.5; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .local-path-action:hover:not(:disabled) { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
 .repository-actions { display: inline-flex; align-items: center; gap: 4px; text-align: left; }
-.git-action-anchor { display: inline-flex; position: relative; width: 28px; height: 28px; border-radius: var(--radius-control); }
+.repository-row-actions { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.repository-hide-action.ogui-icon-button { flex-shrink: 0; width: 28px; height: 28px; color: var(--muted); }
+.repository-hide-action.ogui-icon-button:hover { color: var(--text); background: var(--surface-hover); }
+.repository-hide-action.ogui-icon-button:active { color: var(--blue); background: var(--blue-bg); }
+.dashboard-hidden-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 6px; border-radius: var(--radius-control); color: var(--muted); }
+.dashboard-hidden-toggle:hover, .dashboard-hidden-toggle[aria-pressed='true'] { color: var(--blue); background: var(--blue-bg); }
+.git-action-anchor { display: inline-flex; position: relative; flex-shrink: 0; width: 28px; height: 28px; border-radius: var(--radius-control); background: transparent; color: var(--muted); cursor: default; -webkit-app-region: no-drag; transition: background-color 120ms ease, color 120ms ease; }
+.git-action-anchor:hover { background: var(--surface-hover); color: var(--text); }
+.git-action-anchor:active, .git-action-anchor.is-pressed { background: var(--blue-bg); color: var(--blue); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 35%, transparent); }
 .git-action-anchor:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .git-action-anchor .ogui-icon-button { width: 28px; height: 28px; pointer-events: none; }
-.git-action-lamp { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; outline: 1px solid var(--content); }
-.git-action-lamp.good { background: var(--teal); }
-.git-action-lamp.warning { background: var(--warning); }
-.git-action-lamp.error { background: var(--danger); }
-.git-action-tooltip { position: fixed; z-index: 2000; width: 256px; padding: 10px 12px; border-radius: 10px; background: var(--menu-surface); color: var(--text); border: 1px solid var(--card-edge); box-shadow: var(--menu-shadow); font-size: 11px; line-height: 1.5; pointer-events: none; overflow-wrap: anywhere; }
-.git-action-tooltip strong, .git-action-tooltip span { display: block; }
-.git-action-tooltip strong { margin-bottom: 4px; }
+.git-action-anchor .ogui-icon-button:disabled { background: transparent; color: inherit; }
+.git-action-badge { position: absolute; top: -3px; right: -3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px; outline: 1px solid var(--content); color: var(--content); font-size: 9px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.git-action-badge.good { background: var(--teal); }
+.git-action-badge.warning { background: var(--warning); }
+.git-action-badge.error { background: var(--danger); }
 .account-repos-empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 12px; }
-.settings-view { --settings-heading-gap: 22px; flex: 1; min-height: 0; overflow: auto; padding: 8px 12px 28px; }
+.settings-view { --settings-heading-gap: 22px; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0 12px; }
+.settings-scroll { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 12px; }
 .settings-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: var(--settings-heading-gap); }
 .settings-view .settings-section { margin-bottom: 26px; }
-.settings-view > .settings-section:last-of-type { margin-bottom: 0; }
+.settings-scroll > .settings-section:last-of-type { margin-bottom: 0; }
 .settings-view .settings-section > h2 { margin: 0 3px 10px; }
 .settings-view .settings-group { background: var(--content); border-radius: var(--radius-panel); padding-inline: 18px; border: 1px solid var(--card-edge); box-shadow: var(--card-shadow); }
 .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -467,7 +488,7 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .traffic-light-close { background: #ff6058; }
 .traffic-light-minimize { background: #febc2e; }
 .traffic-light-fullscreen { background: #29c840; }
-.sidebar-header { display: flex; align-items: center; justify-content: flex-start; gap: var(--icon-label-gap); height: var(--sidebar-button-size); flex-shrink: 0; margin-bottom: 8px; padding-inline-start: var(--sidebar-label-inset); }
+.sidebar-header { display: flex; align-items: center; justify-content: flex-start; gap: var(--icon-label-gap); height: var(--sidebar-button-size); flex-shrink: 0; margin-bottom: var(--sidebar-section-gap); padding-inline-start: var(--sidebar-label-inset); }
 .sidebar-header .sidebar-disclosure { margin-left: 0; flex-shrink: 0; -webkit-app-region: no-drag; }
 .sidebar-brand { min-width: 0; overflow: hidden; white-space: nowrap; font-size: 15px; line-height: 20px; font-weight: 500; }
 .sidebar-brand[hidden] { display: none; }
@@ -479,7 +500,7 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .nav-item:hover { background: var(--surface-hover); }
 .nav-item.active { background: var(--selection); color: var(--text); font-weight: 550; }
 .nav-item.active > svg { color: var(--blue); }
-.global-nav { margin-bottom: 18px; }
+.global-nav { margin-bottom: var(--sidebar-section-gap); }
 .sidebar-label { display: flex; justify-content: space-between; padding: 0 10px 7px; font-size: 11px; font-weight: 550; color: var(--muted); letter-spacing: .1px; }
 .repository-item { height: 34px; }
 .repo-sidebar-list { min-height: 0; overflow-y: auto; flex-shrink: 1; }
@@ -761,7 +782,7 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .ogui-switch__label { font-size: 13px; font-weight: 400; }
 .ogui-switch__description { font-size: 11px; line-height: 1.4; max-width: 285px; }
 .danger-text.app-button { color: var(--danger); padding-left: 2px; margin-top: 8px; }
-.settings-footer { padding-block: var(--settings-heading-gap); text-align: right; color: var(--muted); font-size: 11px; }
+.settings-footer { flex-shrink: 0; padding: 8px 0 12px; text-align: right; color: var(--muted); font-size: 11px; }
 .update-setting-row small { max-width: 480px; }
 .update-feedback { padding-bottom: 16px; color: var(--muted); font-size: 12px; }
 .update-feedback p { margin: 0 0 8px; }
@@ -895,14 +916,21 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .global-sidebar.is-collapsed .sidebar-account-toggle { justify-content: center; gap: 0; padding-inline: 0; }
 .global-sidebar.is-collapsed :is(.sidebar-account-name,.sidebar-account-toggle > small,.nav-item > span:not(.repository-logo):not(.sidebar-button-icon),.repository-item > svg,.sidebar-account-empty,.sidebar-no-accounts) { display: none; }
 /* Permanent icon slots stay framed; other full button areas frame only selection. */
-.global-sidebar { --sidebar-button-size: 32px; --sidebar-button-radius: 10px; --sidebar-label-inset: calc(var(--sidebar-row-inset) - (var(--sidebar-button-size) - var(--sidebar-icon-size)) / 2); }
+.global-sidebar { --sidebar-button-size: 32px; --sidebar-button-radius: 10px; --sidebar-label-inset: calc(var(--sidebar-row-inset) - (var(--sidebar-button-size) - var(--sidebar-icon-size)) / 2); --sidebar-section-gap: 8px; }
 .nav-item.sidebar-permanent { height: var(--sidebar-button-size); padding: 0 var(--sidebar-label-inset); gap: var(--icon-label-gap); background: transparent; }
 .sidebar-button-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 var(--sidebar-button-size); width: var(--sidebar-button-size); height: var(--sidebar-button-size); border: 1px solid var(--card-edge); border-radius: var(--sidebar-button-radius); color: var(--muted); }
 .sidebar-button-icon > svg { width: var(--sidebar-icon-size); height: var(--sidebar-icon-size); }
-.sidebar-permanent:hover .sidebar-button-icon { background: var(--surface-hover); }
 .sidebar-permanent.active .sidebar-button-icon { background: var(--selection); color: var(--blue); }
-.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small { width: var(--sidebar-button-size); min-width: var(--sidebar-button-size); height: var(--sidebar-button-size); min-height: var(--sidebar-button-size); padding: 0; border: 1px solid var(--card-edge); border-radius: var(--sidebar-button-radius); background: transparent; box-shadow: none; }
-.global-sidebar .sidebar-disclosure:hover { background: var(--surface-hover); }
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small { width: var(--sidebar-button-size); min-width: var(--sidebar-button-size); height: var(--sidebar-button-size); min-height: var(--sidebar-button-size); padding: 0; border: 1px solid var(--card-edge); border-radius: var(--sidebar-button-radius); background: transparent; color: var(--muted); box-shadow: none; }
+/* The public icon button and decorative navigation frames share state layers. */
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small,
+.global-sidebar .sidebar-button-icon { transition: background-color 160ms ease; transform: none; }
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small:hover:not(:disabled),
+.global-sidebar .sidebar-permanent:hover .sidebar-button-icon { background: var(--surface-hover); }
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small:active:not(:disabled),
+.global-sidebar .sidebar-permanent:active .sidebar-button-icon { background: color-mix(in srgb, var(--text) 12%, var(--content)); transform: none; }
+.global-sidebar .sidebar-disclosure.icon-button.ogui-control--small:focus-visible,
+.global-sidebar .sidebar-permanent:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .global-sidebar .sidebar-disclosure > svg { width: var(--sidebar-icon-size); height: var(--sidebar-icon-size); }
 .global-sidebar.is-collapsed .nav-item.sidebar-permanent { width: var(--sidebar-button-size); height: var(--sidebar-button-size); margin-inline: auto; padding: 0; gap: 0; border-radius: var(--sidebar-button-radius); }
 .global-sidebar.is-collapsed :is(.repository-item,.sidebar-account-toggle) { width: var(--sidebar-button-size); height: var(--sidebar-button-size); margin-inline: auto; padding: 0; border: 0; border-radius: var(--sidebar-button-radius); }

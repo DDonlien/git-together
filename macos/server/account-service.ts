@@ -4,12 +4,12 @@ import { homedir } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
-import { isCatalog, isRecord, repositoryPermissionKeys, type Account, type Catalog, type LocalFile, type LocalSnapshot, type Provider, type RemoteRepository, type RepositoryPermissions } from '../src/import-model';
+import { isCatalog, isRecord, repositoryPermissionKeys, type Account, type Catalog, type LocalFile, type LocalSnapshot, type LocalWorktreeLink, type Provider, type RemoteRepository, type RepositoryPermissions } from '../src/import-model';
 import { GitHubDeviceAuthorization } from './github-authorization';
 import { RemoteRepositoryReader } from './remote-repository-reader';
 import { repositoryFileURL } from '../src/repository-file-url';
 import { readLocalGit, readRepositoryWorkspace, readRepositoryTaskDiff, readWorktrees, readFailure, repositoryTaskFile } from './repository-reader';
-import { discoverLocalWorktrees } from './local-discovery';
+import { discoverLocalRepositories, discoverLocalWorktrees } from './local-discovery';
 import { remoteIdentity } from './git-identity';
 import { topologicalCommits, type RepositoryWorkspace } from '../src/repository-model';
 import { openSystemFile, type FileOpener } from './system-file-open';
@@ -116,36 +116,66 @@ export class AccountService {
     } catch { signal?.throwIfAborted(); throw new Error(`账号服务返回了无效或过大的 ${format === 'text' ? '文本' : 'JSON'} 数据。`); }
   }
   private apiBase(provider: Provider, host: string) { return provider === 'github' ? 'https://api.github.com' : `${host}/api/v1`; }
+  private repositoryRecord(account: Account, raw: unknown): RemoteRepository {
+    if (!isRecord(raw) || !Number.isSafeInteger(raw.id) || typeof raw.id !== 'number' || typeof raw.name !== 'string' || typeof raw.full_name !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(raw.full_name)) throw new Error('仓库列表中包含无效的记录。');
+    const permissions: RepositoryPermissions = {};
+    if (isRecord(raw.permissions)) for (const key of repositoryPermissionKeys) if (typeof raw.permissions[key] === 'boolean') permissions[key] = raw.permissions[key];
+    const ownerType = account.provider === 'github' && isRecord(raw.owner) ? raw.owner.type === 'Organization' ? 'organization' : raw.owner.type === 'User' ? 'user' : undefined : undefined;
+    return { id: `${account.id}:${raw.id}`, remoteId: raw.id, accountId: account.id, name: raw.name, fullName: raw.full_name,
+      description: typeof raw.description === 'string' ? raw.description : '', defaultBranch: typeof raw.default_branch === 'string' ? raw.default_branch : '',
+      private: raw.private === true, url: `${account.host}/${raw.full_name.split('/').map(encodeURIComponent).join('/')}`, available: true,
+      ...(typeof raw.updated_at === 'string' && Number.isFinite(Date.parse(raw.updated_at)) ? { updatedAt: raw.updated_at } : {}),
+      ...(ownerType ? { ownerType } : {}), ...(typeof raw.fork === 'boolean' ? { fork: raw.fork } : {}), ...(Object.keys(permissions).length ? { permissions } : {}) };
+  }
   private async repositoryList(account: Account, token: string, signal?: AbortSignal, affiliation = 'owner,collaborator,organization_member'): Promise<RemoteRepository[]> {
+    return this.pagedRepositories(account, token, signal, '/user/repos', account.provider === 'github' ? { visibility: 'all', affiliation } : {});
+  }
+  private async pagedRepositories(account: Account, token: string, signal: AbortSignal | undefined, path: '/user/repos' | '/repos/search', query: Record<string, string>): Promise<RemoteRepository[]> {
     const output = new Map<number, RemoteRepository>();
-    const endpoint = `${this.apiBase(account.provider, account.host)}/user/repos`;
+    const endpoint = `${this.apiBase(account.provider, account.host)}${path}`;
+    let stalledPages = 0;
     // Page parameters are constructed locally; never forward credentials to a Link URL.
     for (let page = 1; page <= 10000; page++) {
       signal?.throwIfAborted();
       const url = new URL(endpoint); url.searchParams.set('page', String(page));
       url.searchParams.set(account.provider === 'github' ? 'per_page' : 'limit', '100');
-      if (account.provider === 'github') { url.searchParams.set('visibility', 'all'); url.searchParams.set('affiliation', affiliation); }
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
       const { value, headers } = await this.getJSON(url, account.provider, token, signal);
-      if (!Array.isArray(value)) throw new Error('仓库列表返回格式不正确。');
-      for (const raw of value) {
-        if (!isRecord(raw) || !Number.isSafeInteger(raw.id) || typeof raw.id !== 'number' || typeof raw.name !== 'string' || typeof raw.full_name !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(raw.full_name)) throw new Error('仓库列表中包含无效的记录。');
-        const permissions: RepositoryPermissions = {};
-        if (isRecord(raw.permissions)) for (const key of repositoryPermissionKeys) if (typeof raw.permissions[key] === 'boolean') permissions[key] = raw.permissions[key];
-        const ownerType = account.provider === 'github' && isRecord(raw.owner) ? raw.owner.type === 'Organization' ? 'organization' : raw.owner.type === 'User' ? 'user' : undefined : undefined;
-        output.set(raw.id, { id: `${account.id}:${raw.id}`, remoteId: raw.id, accountId: account.id, name: raw.name, fullName: raw.full_name,
-          description: typeof raw.description === 'string' ? raw.description : '', defaultBranch: typeof raw.default_branch === 'string' ? raw.default_branch : '',
-          private: raw.private === true, url: `${account.host}/${raw.full_name.split('/').map(encodeURIComponent).join('/')}`, available: true,
-          ...(ownerType ? { ownerType } : {}), ...(typeof raw.fork === 'boolean' ? { fork: raw.fork } : {}), ...(Object.keys(permissions).length ? { permissions } : {}) });
-      }
+      const records = path === '/repos/search' && isRecord(value) && value.ok === true ? value.data : path === '/user/repos' ? value : undefined;
+      if (!Array.isArray(records)) throw new Error('仓库列表返回格式不正确。');
+      const previousSize = output.size;
+      for (const raw of records) { const repo = this.repositoryRecord(account, raw); output.set(repo.remoteId, repo); }
       const link = headers.get('link');
       const total = Number(headers.get('x-total-count'));
-      const more = link ? /rel="?next"?/.test(link) : total > 0 ? output.size < total : value.length > 0;
-      if (!more || value.length === 0) return [...output.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
+      const more = link ? /rel="?next"?/.test(link) : total > 0 ? output.size < total : records.length > 0;
+      if (!more) return [...output.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
+      stalledPages = output.size > previousSize ? 0 : stalledPages + 1;
+      // An empty page may be permission-filtered even though another page exists.
+      // Follow only local page numbers, with a finite guard against broken totals.
+      if (stalledPages >= 3) throw new Error('仓库分页连续未返回新记录但仍声明有后续记录；未用不完整数据覆盖已有列表。');
       if (page === 10000) throw new Error('仓库分页超出安全上限，未覆盖已有列表。');
     }
     return [];
   }
-  private async repositories(account: Account, token: string, signal?: AbortSignal): Promise<RemoteRepository[]> {
+  private async hydrateForks(account: Account, token: string, repositories: RemoteRepository[], signal?: AbortSignal) {
+    const missing = repositories.filter(repo => repo.fork === undefined); let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, missing.length) }, async () => {
+      while (cursor < missing.length) {
+        signal?.throwIfAborted();
+        const repo = missing[cursor++];
+        try {
+          const path = repo.fullName.split('/').map(encodeURIComponent).join('/');
+          const { value } = await this.getJSON(new URL(`${this.apiBase(account.provider, account.host)}/repos/${path}`), account.provider, token, signal);
+          const details = this.repositoryRecord(account, value);
+          if (details.remoteId !== repo.remoteId || details.fullName.toLowerCase() !== repo.fullName.toLowerCase() || details.fork === undefined) throw new Error('仓库详情没有返回匹配的来源分类。');
+          repo.fork = details.fork;
+          if (details.ownerType) repo.ownerType = details.ownerType;
+          if (details.permissions) repo.permissions = details.permissions;
+        } catch (error) { signal?.throwIfAborted(); repo.metadataError = [repo.metadataError, error instanceof Error ? `来源分类未能读取：${error.message}` : '来源分类未能读取。'].filter(Boolean).join(' '); }
+      }
+    }));
+  }
+  private async repositories(account: Account, token: string, signal?: AbortSignal, userId?: number): Promise<RemoteRepository[]> {
     const repositories = await this.repositoryList(account, token, signal);
     if (account.provider === 'github') {
       try {
@@ -155,23 +185,51 @@ export class AccountService {
         // Two paginated reads need not have identical snapshots. Do not drop a
         // confirmed collaborator (or its fork flag) absent from the base read.
         const combined = new Map(repositories.map(repo => [repo.remoteId, repo]));
-        for (const repo of collaborationRepos) combined.set(repo.remoteId, repo);
-        return [...combined.values()].map(repo => ({ ...repo, collaborator: collaborators.has(repo.remoteId) })).sort((a, b) => a.fullName.localeCompare(b.fullName));
+        for (const repo of collaborationRepos) combined.set(repo.remoteId, { ...combined.get(repo.remoteId), ...repo });
+        const result = [...combined.values()].map(repo => ({ ...repo, collaborator: collaborators.has(repo.remoteId) })).sort((a, b) => a.fullName.localeCompare(b.fullName));
+        await this.hydrateForks(account, token, result, signal);
+        return result;
       } catch (error) {
         signal?.throwIfAborted();
-        return repositories.map(repo => ({ ...repo, metadataError: error instanceof Error ? `协作分类未能读取：${error.message}` : '协作分类未能读取。' }));
+        const result = repositories.map(repo => ({ ...repo, metadataError: error instanceof Error ? `协作分类未能读取：${error.message}` : '协作分类未能读取。' }));
+        await this.hydrateForks(account, token, result, signal);
+        return result;
       }
     }
-    if (!repositories.length) return repositories;
+    const combined = new Map(repositories.map(repo => [repo.remoteId, repo]));
+    const directoryErrors: string[] = [];
+    try {
+      if (!Number.isSafeInteger(userId) || !userId || userId < 1) {
+        const { value } = await this.getJSON(new URL(`${account.host}/api/v1/user`), 'gitea', token, signal);
+        if (!isRecord(value) || typeof value.login !== 'string' || value.login.toLowerCase() !== account.login.toLowerCase() || !Number.isSafeInteger(value.id) || typeof value.id !== 'number' || value.id < 1) throw new Error('无法确认补充目录的账号身份。');
+        userId = value.id;
+      }
+      // Gitea's collaborative search also includes team access. Merge discoveries
+      // into the catalog, but confirm direct Added below rather than guessing it.
+      for (const mode of ['fork', 'collaborative']) {
+        try {
+          const extra = await this.pagedRepositories(account, token, signal, '/repos/search', { uid: String(userId), mode, exclusive: 'false' });
+          for (const repo of extra) combined.set(repo.remoteId, { ...combined.get(repo.remoteId), ...repo });
+        } catch (error) { signal?.throwIfAborted(); directoryErrors.push(error instanceof Error ? `${mode === 'fork' ? 'Fork' : '协作'}补充目录未能读取：${error.message}` : '补充目录未能读取。'); }
+      }
+    } catch (error) { signal?.throwIfAborted(); directoryErrors.push(error instanceof Error ? `补充目录未能读取：${error.message}` : '无法读取补充目录。'); }
+    const result = [...combined.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
+    // Without even a base snapshot, do not report a failed supplement as an
+    // authoritative empty account; refresh must retain the previous directory.
+    if (!result.length && directoryErrors.length) throw new Error(directoryErrors.join(' '));
+    if (directoryErrors.length) for (const repo of result) repo.metadataError = directoryErrors.join(' ');
+    await this.hydrateForks(account, token, result, signal);
     // Gitea's owner DTO has no organization flag. Confirm organizations and direct
     // collaborators using read-only endpoints, not names, admin rights or team access.
-    // Four workers and a shared 15s deadline bound extra lookups for large catalogs.
-    const metadataSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000);
+    // Four workers; each actual request has its own 15s timeout. Waiting in the
+    // queue must not spend a later repository's entire request budget.
+    const metadataSignal = signal;
     const owners = new Map<string, Promise<{ ownerType?: 'organization'; error?: string }>>();
     let cursor = 0;
-    await Promise.all(Array.from({ length: Math.min(4, repositories.length) }, async () => {
-      while (cursor < repositories.length) {
-        const repo = repositories[cursor++]; const owner = repo.fullName.split('/')[0];
+    await Promise.all(Array.from({ length: Math.min(4, result.length) }, async () => {
+      while (cursor < result.length) {
+        signal?.throwIfAborted();
+        const repo = result[cursor++]; const owner = repo.fullName.split('/')[0];
         if (owner.toLowerCase() === account.login.toLowerCase()) { repo.ownerType = 'user'; repo.collaborator = false; continue; }
         let pending = owners.get(owner.toLowerCase());
         if (!pending) {
@@ -185,7 +243,7 @@ export class AccountService {
         }
         const organization = await pending;
         if (organization.ownerType) repo.ownerType = organization.ownerType;
-        if (organization.error) repo.metadataError = organization.error;
+        if (organization.error) repo.metadataError = [repo.metadataError, organization.error].filter(Boolean).join(' ');
         try {
           const path = repo.fullName.split('/').map(encodeURIComponent).join('/');
           const { value } = await this.getJSON(new URL(`${account.host}/api/v1/repos/${path}/collaborators/${encodeURIComponent(account.login)}`), 'gitea', token, metadataSignal, 'status');
@@ -198,7 +256,12 @@ export class AccountService {
         }
       }
     }));
-    return repositories;
+    return result;
+  }
+  async connectGitHubWebAuthorization(credential: { token: string; name: string; expiresAt?: string }) {
+    return this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, {
+      expiresAt: credential.expiresAt, signal: new AbortController().signal, commit: () => {},
+    });
   }
   private async connect(input: Record<string, unknown>, authorization?: { expiresAt?: string; signal: AbortSignal; commit: () => void }) {
     const provider = input.provider;
@@ -214,7 +277,7 @@ export class AccountService {
     if (existing && !authorization) throw new Error('这个账号已经添加。同一服务可以添加其他账号。');
     const account: Account = { id: existing?.account.id || randomUUID(), provider, host, login: user.login, name: name || existing?.account.name || (typeof user.name === 'string' && user.name ? user.name : user.login), updatedAt: '', ...(authorization?.expiresAt ? { authorizationExpiresAt: authorization.expiresAt } : {}) };
     let repositories: RemoteRepository[] = [];
-    try { repositories = await this.repositories(account, token, authorization?.signal); account.updatedAt = new Date().toISOString(); }
+    try { repositories = await this.repositories(account, token, authorization?.signal, typeof user.id === 'number' ? user.id : undefined); account.updatedAt = new Date().toISOString(); }
     catch (error) { account.error = error instanceof Error ? error.message : '读取仓库失败。'; }
     return this.mutate(next => {
       const duplicate = next.accounts.find(a => a.account.provider === provider && a.account.host === host && a.account.login.toLowerCase() === account.login.toLowerCase());
@@ -427,6 +490,42 @@ export class AccountService {
       case 'removeAccount': {
         const id = field(value, 'accountId', 100);
         return this.mutate(next => { const repoIds = new Set(next.repositories.filter(r => r.accountId === id).map(r => r.id)); next.accounts = next.accounts.filter(a => a.account.id !== id); next.repositories = next.repositories.filter(r => r.accountId !== id); next.links = next.links.filter(l => !repoIds.has(l.repositoryId)); });
+      }
+      case 'matchAccountRepositories': {
+        const accountId = field(value, 'accountId', 100);
+        const saved = this.state.accounts.find(item => item.account.id === accountId);
+        if (!saved) throw new Error('账号不存在，请重新加载列表。');
+        const repositories = this.state.repositories.filter(repository => repository.accountId === accountId && repository.available);
+        if (!repositories.length) return { catalog: this.catalog(), matchedRepositoryIds: [] };
+        const previousLinks = new Map(repositories.map(repository => [repository.id, this.state.links.find(link => link.repositoryId === repository.id)]));
+        const discovered = await discoverLocalRepositories(field(value, 'path'), repositories.map(({ id, url }) => ({ id, url })), undefined, signal);
+        const matched = repositories.filter(repository => discovered.worktrees.get(repository.id)!.length > 0);
+        const matchedRepositoryIds = matched.map(repository => repository.id);
+        if (!matched.length) return { catalog: this.catalog(), matchedRepositoryIds };
+        const legacy = new Map<string, LocalWorktreeLink[]>();
+        for (const repository of matched) {
+          if (previousLinks.get(repository.id) && !previousLinks.get(repository.id)!.worktrees) {
+            legacy.set(repository.id, (await this.localWorkspace(repository.id, signal)).tasks.map(task => ({ branch: task.branch, path: task.path! })));
+          }
+        }
+        const catalog = await this.mutate(next => {
+          signal?.throwIfAborted();
+          const currentAccount = next.accounts.find(item => item.account.id === accountId);
+          if (!currentAccount || currentAccount.token !== saved.token) throw new Error('账号已更新或移除，请重新加载后再匹配。');
+          for (const repository of matched) {
+            const currentRepository = next.repositories.find(item => item.id === repository.id);
+            if (!currentRepository?.available || currentRepository.accountId !== accountId || currentRepository.fullName !== repository.fullName || currentRepository.url !== repository.url) throw new Error('仓库列表已更新，请重新加载后再匹配。');
+            const previous = previousLinks.get(repository.id);
+            const current = next.links.find(link => link.repositoryId === repository.id);
+            if (JSON.stringify(current) !== JSON.stringify(previous)) throw new Error('仓库关联已更新，请重新加载后再匹配。');
+            const worktrees = discovered.worktrees.get(repository.id)!;
+            const retained = (previous?.worktrees || legacy.get(repository.id) || []).filter(item => !worktrees.some(found => found.path === item.path));
+            const allWorktrees = [...retained, ...worktrees];
+            if (allWorktrees.length > 64) throw new Error('关联工作目录超过64个，尚未保存。');
+            next.links = [...next.links.filter(link => link.repositoryId !== repository.id), { repositoryId: repository.id, path: discovered.path, worktrees: allWorktrees }];
+          }
+        });
+        return { catalog, matchedRepositoryIds };
       }
       case 'link': {
         const id = field(value, 'repositoryId', 160); const repository = this.repository(id);

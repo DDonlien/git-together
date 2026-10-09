@@ -60,6 +60,8 @@ export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs
     if (!isRemoteCommitDetails(value)) throw new Error('远端提交返回格式无效。');
   } else if (method === 'remoteFile') {
     if (!isRemoteFileContent(value)) throw new Error('远端文件返回格式无效。');
+  } else if (method === 'matchAccountRepositories') {
+    if (!isRecord(value) || !isCatalog(value.catalog) || !Array.isArray(value.matchedRepositoryIds) || !value.matchedRepositoryIds.every(id => typeof id === 'string')) throw new Error('仓库批量匹配结果返回格式无效。');
   } else if (!isCatalog(value)) throw new Error('账号列表返回格式无效。');
   // The finite method above determines the validated result shape.
   return value as ApiOutputs[M];

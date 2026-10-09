@@ -11,7 +11,7 @@ export type Account = {
 export type RemoteRepository = {
   id: string; remoteId: number; accountId: string; name: string; fullName: string;
   description: string; defaultBranch: string; private: boolean; url: string;
-  available: boolean;
+  available: boolean; updatedAt?: string;
   ownerType?: 'user' | 'organization'; fork?: boolean; collaborator?: boolean;
   permissions?: RepositoryPermissions; metadataError?: string;
 };
@@ -49,6 +49,7 @@ export type ApiInputs = {
   refresh: { accountId: string };
   removeAccount: { accountId: string };
   link: { repositoryId: string; path: string; branch?: string };
+  matchAccountRepositories: { accountId: string; path: string };
   unlink: { repositoryId: string; branch?: string };
   snapshot: { repositoryId: string };
   localWorkspace: { repositoryId: string };
@@ -64,7 +65,7 @@ export type ApiOutputs = {
   githubAuthStart: GitHubAuthorization;
   githubAuthPoll: GitHubAuthorizationProgress;
   githubAuthCancel: GitHubAuthorizationCancellation;
-  link: Catalog; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
+  link: Catalog; matchAccountRepositories: { catalog: Catalog; matchedRepositoryIds: string[] }; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
   localWorkspace: RepositoryWorkspace;
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
@@ -85,6 +86,7 @@ export function isCatalog(value: unknown): value is Catalog {
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
       typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&
+      (r.updatedAt === undefined || typeof r.updatedAt === 'string' && Number.isFinite(Date.parse(r.updatedAt))) &&
       (r.ownerType === undefined || r.ownerType === 'user' || r.ownerType === 'organization') &&
       (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
       (r.metadataError === undefined || typeof r.metadataError === 'string') &&

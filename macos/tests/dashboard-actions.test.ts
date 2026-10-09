@@ -18,29 +18,39 @@ test('repository Git icons are flat, labelled and do not open an ellipsis menu',
   assert.equal((markup.match(/role="group"/g) || []).length, 1);
   assert.doesNotMatch(markup, /aria-haspopup|role="menu|role="separator"/);
   const actions = buttons(markup);
-  assert.equal(actions.length, 4);
-  for (const label of ['Fetch', 'Get Latest', 'Push', 'Commit']) assert.ok(actions.some(action => action.attributes.includes(`aria-label="${label}"`)));
+  assert.deepEqual(actions.map(action => action.attributes.match(/aria-label="([^"]+)"/)?.[1]), ['Commit', 'Fetch', 'Pull', 'Push', 'Get Latest', 'Reconcile', 'Clear']);
+  assert.doesNotMatch(markup, /aria-label="Ignore/);
 });
 
 test('unimplemented Git actions are disabled, explained and never represent success', () => {
   {
     const markup = items();
     const actions = buttons(markup);
-    for (const action of actions.slice(0, 4)) {
+    for (const action of actions) {
       assert.match(action.attributes, /disabled=""/);
     }
     assert.doesNotMatch(markup, /已提交|已推送|操作成功/);
     assert.match(markup, /尚未接入执行，不会修改工作目录/);
+    assert.match(markup, /aria-label="Get Latest[^"]*仅保留1层历史[^"]*清理旧 Git 历史与历史 LFS 缓存/);
+    assert.match(markup, /aria-label="Reconcile[^"]*以本地为准[^"]*标记添加[^"]*本地版本并创建本地提交[^"]*本地缺少的忽略/);
+    assert.match(markup, /aria-label="Clear[^"]*以远端为准[^"]*标记删除[^"]*恢复远端版本[^"]*本地缺少的下载/);
   }
 });
 
-test('each action has keyboard-readable detail and pointer/focus tooltip handling', () => {
+test('each action retains disabled accessible detail without hover or native-title prompts', () => {
   const markup = items();
   assert.match(markup, /aria-label="Git 操作：org\/shared · Personal"/);
-  assert.equal((markup.match(/tabindex="0"/g) || []).length, 4);
+  assert.equal((markup.match(/tabindex="0"/g) || []).length, 7);
+  assert.equal((markup.match(/aria-disabled="true"/g) || []).length, 7);
+  for (const action of buttons(markup)) assert.match(action.attributes, /title=""/);
   const source = readFileSync(new URL('../src/RepositoryActions.tsx', import.meta.url), 'utf8');
-  assert.match(source, /onMouseMove=/); assert.match(source, /onFocus=/);
-  assert.match(source, /x \+ 12/); assert.match(source, /role="tooltip"/);
+  assert.doesNotMatch(source, /createPortal|role="tooltip"|onMouseMove|aria-describedby/);
+  assert.match(source, /onPointerDown=/); assert.match(source, /onClick=/);
+  assert.match(source, /onKeyDown=/); assert.match(source, /onKeyUp=/);
+  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.git-action-anchor:hover \{[^}]*background: var\(--surface-hover\)/);
+  assert.match(css, /\.git-action-anchor:active, \.git-action-anchor\.is-pressed \{[^}]*background: var\(--blue-bg\)/);
+  assert.doesNotMatch(css, /\.git-action-tooltip/);
 });
 
 test('Dashboard annotation styles scope the 2px reduction and share the 10px icon-label gap', () => {
