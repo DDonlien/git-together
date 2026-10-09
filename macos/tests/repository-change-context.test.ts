@@ -16,7 +16,7 @@ const commit: RepositoryCommit = { id: 'a'.repeat(40), summary: 'Selected commit
 const tasks: RepositoryTask[] = Array.from({ length: 8 }, (_, index) => ({ id: `remote:${index}`, branch: index ? `task/${index}` : 'main', head: index.toString().repeat(40), path: null, files: [], tree: ['global.ts'], remote: true, treeComplete: true, error: '' }));
 const files = Array.from({ length: 180 }, (_, index) => ({ path: `src/file-${String(index).padStart(3, '0')}.ts`, status: index < 120 ? 'added' : index < 160 ? 'modified' : 'removed', patch: null }));
 const details: RemoteCommitDetails = { commit, files, diff: 'Not an inline preview', tree: ['historical.ts'], treeComplete: true, warnings: ['Provider limit warning'] };
-const props = { tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, loading: false, readDiff: async () => '' };
+const props = { tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: null, onLocalChoice() {}, loading: false, readDiff: async () => '' };
 const render = (overrides: Partial<Parameters<typeof RepositoryChangesColumn>[0]> = {}) => renderToStaticMarkup(createElement(RepositoryChangesColumn, { ...props, ...overrides }));
 const slots = (html: string) => Array.from(html.matchAll(/<div class="repository-task-slot"( hidden="")?><section class="repository-change-task" aria-label="([^"]+)"/g)).map(match => ({ hidden: !!match[1], label: match[2] }));
 

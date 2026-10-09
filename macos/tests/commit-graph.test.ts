@@ -73,7 +73,7 @@ test('graph retains branch refs, merge styling, author/date, SHA and a single ke
   assert.match(markup, /graph-merge-node/);
   assert.match(markup, /graph-remote-ref/);
   assert.match(markup, /graph-head-marker/);
-  assert.match(markup, /选择分支：main/);
+  assert.match(markup, /title="全部分支"/);
   assert.doesNotMatch(markup, /分支图选项|repository-graph-tools|repository-column-accessory/);
   assert.doesNotMatch(markup, /5 条提交|repository-graph-status|<thead|repository-commit-details|<textarea|checkout|rebase/);
 });

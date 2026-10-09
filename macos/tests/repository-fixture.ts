@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const execute = promisify(execFile);
-export async function createRepositoryFixture({ treeChanges = false, denseChanges = false, longBranch = false }: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean } = {}) {
+export async function createRepositoryFixture({ treeChanges = false, denseChanges = false, longBranch = false, localAhead = false }: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean; localAhead?: boolean } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-three-column-qa-')));
   const directory = join(root, 'main');
   const feature = join(root, 'feature task');
@@ -40,6 +40,14 @@ export async function createRepositoryFixture({ treeChanges = false, denseChange
     await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Update project files']);
     await writeFile(join(directory, 'src/later.ts'), 'export const later = true;\n');
     await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Add later file']);
+  }
+  if (localAhead) {
+    await git(directory, ['update-ref', 'refs/remotes/origin/main', 'HEAD']);
+    await git(directory, ['update-ref', 'refs/remotes/upstream/task/search', 'task/search']);
+    await writeFile(join(directory, 'src/local-commit.ts'), 'export const localCommit = true;\n');
+    await git(directory, ['add', 'src/local-commit.ts']); await git(directory, ['commit', '-m', 'Local commit waiting to be pushed']);
+    await writeFile(join(directory, 'src/staged.ts'), 'export const staged = true;\n');
+    await git(directory, ['add', 'src/staged.ts']);
   }
   await writeFile(join(directory, 'src/app.ts'), 'export const value = 10;\n');
   await writeFile(join(directory, 'src/:(top)all.ts'), 'export const literal = 1;\n');

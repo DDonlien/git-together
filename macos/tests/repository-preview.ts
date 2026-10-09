@@ -12,7 +12,7 @@ import { combineRepositoryWorkspaces } from '../src/repository-model';
 
 const mixed = process.argv.includes('--mixed');
 const remoteFixture = mixed || process.argv.includes('--remote') ? await createGitRemoteFixture('gitea', { treeChanges: process.argv.includes('--tree-changes'), denseChanges: process.argv.includes('--dense-changes'), longBranch: process.argv.includes('--long-branch') }) : null;
-const fixture = remoteFixture || await createRepositoryFixture();
+const fixture = remoteFixture || await createRepositoryFixture({ localAhead: process.argv.includes('--local-ahead') });
 const remoteReader = remoteFixture ? new RemoteRepositoryReader('gitea', { fullName: 'qa/project', defaultBranch: 'main' }, remoteFixture.transport) : null;
 const bundle = await build({ entryPoints: [resolve('tests/repository-preview-client.tsx')], bundle: true, write: false, outdir: 'qa-bundle', jsx: 'automatic', format: 'esm', target: 'es2022', loader: { '.woff2': 'dataurl', '.woff': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"' } });
 const js = bundle.outputFiles.find(file => file.path.endsWith('.js'))!;

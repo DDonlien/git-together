@@ -95,7 +95,9 @@ export async function readRepositoryWorkspace(root: string, allowedPaths?: Set<s
     const history = await git(root, ['log', '--all', ...heads, '--topo-order', '-200', '--format=%H%x00%P%x00%s%x00%an%x00%aI%x00', '--']);
     for (const line of history.trim().split('\n').filter(Boolean)) {
       const [id, parents, summary, author, time] = line.split('\0');
-      commits.push({ id, parents: parents.split(' ').filter(Boolean), summary, author, time, refs: refs.filter(ref => ref.head === id).map(ref => ref.name.replace(/^refs\/(heads|remotes)\//, '')) });
+      // Keep other remote namespaces distinguishable from local slash-named
+      // branches; origin retains the label shared with the provider reader.
+      commits.push({ id, parents: parents.split(' ').filter(Boolean), summary, author, time, refs: refs.filter(ref => ref.head === id).map(ref => ref.name.replace(/^refs\/(heads\/|remotes\/(?=origin\/))/, '')) });
     }
   }
   return { tasks, commits, complete: true };

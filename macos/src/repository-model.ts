@@ -29,12 +29,10 @@ export function topologicalCommits(commits: RepositoryCommit[]): RepositoryCommi
   return result;
 }
 
-export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string | null): RepositoryCommit[] {
-  const task = workspace.tasks.find(task => task.id === taskId);
-  if (!task || (!workspace.complete && !task.remote)) return workspace.commits;
-  const commits = new Map(workspace.commits.map(commit => [commit.id, commit]));
+export function reachableCommitIds(history: RepositoryCommit[], heads: string[]): Set<string> {
+  const commits = new Map(history.map(commit => [commit.id, commit]));
   const reachable = new Set<string>();
-  const pending = [task.head];
+  const pending = [...heads];
   while (pending.length) {
     const id = pending.pop()!;
     if (reachable.has(id)) continue;
@@ -42,7 +40,19 @@ export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string
     const commit = commits.get(id);
     if (commit) pending.push(...commit.parents);
   }
+  return reachable;
+}
+
+export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string | null): RepositoryCommit[] {
+  const task = workspace.tasks.find(task => task.id === taskId);
+  if (!task || (!workspace.complete && !workspace.source && !task.remote)) return workspace.commits;
+  const reachable = reachableCommitIds(workspace.commits, [task.head]);
   return workspace.commits.filter(commit => reachable.has(commit.id));
+}
+
+export function repositoryCommitTask(workspace: RepositoryWorkspace, commitId: string, focusedTask: string | null): RepositoryTask | undefined {
+  const candidates = workspace.tasks.filter(task => taskCommitHistory(workspace, task.id).some(commit => commit.id === commitId));
+  return candidates.find(task => task.id === focusedTask) || candidates.find(task => task.remote && task.head === commitId) || candidates.find(task => task.remote) || candidates.find(task => task.head === commitId) || candidates[0];
 }
 
 export function combineRepositoryWorkspaces(remote: RepositoryWorkspace, local?: RepositoryWorkspace): RepositoryWorkspace {

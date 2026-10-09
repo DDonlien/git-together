@@ -34,7 +34,7 @@ test('removed graph options leave no dormant density state while keeping branch 
   const source = readFileSync(new URL('../src/RepositoryGraph.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /分支图选项|repository-graph-tools|setCompact|is-compact|jumpMatch|IconButton/);
   assert.match(source, /const rowHeight = 36;/);
-  assert.match(source, /选择分支：/);
+  assert.match(source, /label="分支筛选"/);
   assert.match(source, /onContextMenu=/);
   assert.match(source, /key === 'ContextMenu' \|\| key === 'F10' && event.shiftKey/);
   assert.match(source, /nextGraphMatch\(matches,[^\n]*event.shiftKey \? -1 : 1/);

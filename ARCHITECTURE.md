@@ -14,7 +14,9 @@ IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId 
 
 仓库分支图和文件树不渲染底部状态/操作容器；滚动内容使用原来的 flex 剩余高度，不用隐藏空条来占位。R-05-column-insets移除整套图标题选项与未使用的密度状态，固定36px双行；搜索跳转保留键盘监听，分支与提交右键菜单关闭后仍回到目标记录；真实复制/定位反馈按需显示在标题下。三栏CSS通过--repository-column-inset共享12px外侧水平留白，行内不重复加padding，图轨道与树层级缩进不变。本地配置仍由 Dashboard 复用原弹窗，未关联 Local 空态的关联入口保留；没有新 API 或账户行为。
 
-R-05-branch-title 将原定位分支菜单放入栏标题，Graph只持有用户选择的 task.id，名称由当前任务集合、聚焦任务和 RepositoryView 传入的真实 defaultBranch 派生；不存在可读名称时明确显示未读取分支。选择沿用 loaded-head 检查与提交定位/关闭后记录焦点，不过滤或重建整个并行工作台、不改树基准。RepositoryColumnHeading 可选 titleContent 和独立 disclosureLabel 让展开标题可交互、收起标题只读；图内容始终挂载，用户选择、文件及草稿保留。标题按钮局部覆盖后置通用small按钮尺寸，维持28px控件/44px标题；没有新增协议、服务存储或Git写入。
+R-05-gitlens-graph-filter取代原R-05-branch-title的单选定位：Graph默认显示全部历史，按task与真实ref归并同名本地/远端分支；null跟随全选，显式Set保留子集或空选。复选只显示所选分支实际HEAD祖先的并集，与任务聚焦、历史选择和树来源独立，不改变checkout或卸载任务。公共Popover、原生checkbox/fieldset支持连续选择及键盘导航；标题仍是28px控件/44px栏，收起时显示只读筛选范围。
+
+R-05-gitlens-graph-local从已有工作区纯派生workingTask节点，每个非空更改目录一个，以task.id稳定标识并连接实际HEAD；unborn HEAD没有父节点，不赋予虚构SHA、作者或时间，不调用提交详情API。点击节点清除历史上下文并选择对应已挂载的本地更改卡片；各目录草稿、文件选择和树基准保留。本地领先已读取远端祖先的记录标为未推送，缺失或分歧远端头只标本地提交。读取器保留非origin远端ref命名空间，避免与含斜线的本地分支混淆；不新增DTO字段、读取权限、账号存储或Git写操作。
 
 0.9.1的Dashboard不再使用单选`FilterMenu.tsx`；账号、组织、仓库统一复用`MultiFilterMenu.tsx`的公共Popover与具名原生checkbox/fieldset。账号以accountId为键、同名账号保留平台/login/host辅助身份；账号、组织、位置、类型与搜索取交集，组内取并集。整行label执行同一原生change，失去焦点且relatedTarget为空不提前卸载复选框，连续点击不关闭；键盘移到外部才关闭。触发器显式dialog语义，方向键在应用层打开和导航，避免库openOnArrowKeys自动赋予menu语义；Escape/外部关闭和焦点管理仍复用公共弹层。`dashboard-filters.ts`纯派生选项，null表示跟随全选，显式Set保留子集/空选；新增选项只进入全选，移除键不别名到新账号。目录revision不清空选择，搜索由App持有、Cmd+K不变。公共菜单内联光学背景经共享样式覆盖为不透明Material语义色，不修改库私有逻辑。
 

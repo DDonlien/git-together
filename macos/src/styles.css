@@ -298,6 +298,11 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .graph-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .graph-menu-branch { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .graph-menu-branch small { color: var(--muted); font-size: 10px; }
+.graph-branch-filter { min-width: 230px; max-width: min(380px,calc(100vw - 32px)); }
+.graph-working-identity { color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-local-ref { color: var(--warning); flex-shrink: 0; }
+.graph-working-edge { stroke-dasharray: 3 3; }
+.graph-node.graph-working-node { fill: var(--content); stroke: currentColor; stroke-width: 1.8; }
 .repository-graph-scroll { --graph-row-height: 36px; flex: 1; min-height: 0; overflow: auto; padding-inline: var(--repository-column-inset); }
 .repository-graph-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .repository-graph-table td { height: var(--graph-row-height); padding: 0 5px; vertical-align: middle; }

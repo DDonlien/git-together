@@ -1,12 +1,56 @@
-import type { RepositoryCommit } from './repository-model';
+import { reachableCommitIds, type RepositoryCommit, type RepositoryTask, type RepositoryWorkspace } from './repository-model';
 
 export type GraphEdge = { from: number; to: number; node: boolean; color: number; boundary?: boolean };
-export type GraphRow = { commit: RepositoryCommit; lane: number; color: number; incoming: boolean; edges: GraphEdge[]; width: number };
+export type GraphCommit = RepositoryCommit & { workingTask?: RepositoryTask; localOnly?: boolean; unpublished?: boolean };
+export type GraphBranch = { branch: string; localHeads: string[]; remoteHeads: string[]; tasks: RepositoryTask[] };
+export type GraphRow = { commit: GraphCommit; lane: number; color: number; incoming: boolean; edges: GraphEdge[]; width: number };
+
+export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBranch[] {
+  const branches = new Map<string, GraphBranch>();
+  function add(branch: string, head: string, remote: boolean, task?: RepositoryTask) {
+    let entry = branches.get(branch);
+    if (!entry) { entry = { branch, localHeads: [], remoteHeads: [], tasks: [] }; branches.set(branch, entry); }
+    const heads = remote ? entry.remoteHeads : entry.localHeads;
+    if (head && !/^0+$/.test(head) && !heads.includes(head)) heads.push(head);
+    if (task) entry.tasks.push(task);
+  }
+  for (const task of workspace.tasks) if (task.id !== 'remote:pending') add(task.branch, task.head, !!task.remote, task);
+  for (const commit of workspace.commits) for (const ref of commit.refs) {
+    const remote = /^(origin\/|refs\/remotes\/)/.test(ref);
+    const branch = ref.replace(/^refs\/heads\//, '').replace(/^(origin\/|refs\/remotes\/[^/]+\/)/, '');
+    if (branch !== 'HEAD') add(branch, commit.id, remote);
+  }
+  return [...branches.values()].sort((a, b) => a.branch.localeCompare(b.branch));
+}
+
+// Working changes are view-only nodes. Their stable task identity is never
+// returned as a Git commit or used by the committed-content readers.
+export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches: GraphBranch[], selection: ReadonlySet<string> | null): GraphCommit[] {
+  const visible = branches.filter(branch => selection === null || selection.has(branch.branch));
+  const reachable = selection === null ? null : reachableCommitIds(workspace.commits, visible.flatMap(branch => [...branch.localHeads, ...branch.remoteHeads]));
+  const local = reachableCommitIds(workspace.commits, branches.flatMap(branch => branch.localHeads));
+  const remote = reachableCommitIds(workspace.commits, branches.flatMap(branch => branch.remoteHeads));
+  const unpublished = new Set<string>();
+  for (const branch of branches) {
+    const history = reachableCommitIds(workspace.commits, branch.localHeads);
+    // A loaded remote tip in local ancestry proves the commits ahead of it.
+    // Missing or divergent tips retain a neutral local label instead.
+    if (branch.remoteHeads.some(head => history.has(head))) for (const id of history) if (!remote.has(id)) unpublished.add(id);
+  }
+  const working = visible.flatMap(branch => branch.tasks.filter(task => task.path && task.files.length).map(task => ({
+    id: `working:${task.id}`, summary: `未提交更改 · ${task.files.length} 个文件`, author: task.branch, time: '', refs: [],
+    parents: task.head && !/^0+$/.test(task.head) ? [task.head] : [], workingTask: task,
+  })));
+  return [...working, ...workspace.commits.filter(commit => !reachable || reachable.has(commit.id)).map(commit => ({
+    ...commit, localOnly: local.has(commit.id) && !remote.has(commit.id), unpublished: unpublished.has(commit.id),
+  }))];
+}
+
 // Git supplies topological order. Only actual parent IDs create edges, never
 // neighboring rows or descending timestamps. Colors belong to continuing
 // tracks, not reusable lane positions; unloaded parents stop at a dashed stub.
 // Cycle the six shared light/dark CSS colors so new tracks stay distinguishable.
-export function layoutCommitGraph(commits: RepositoryCommit[]): GraphRow[] {
+export function layoutCommitGraph(commits: GraphCommit[]): GraphRow[] {
   const known = new Set(commits.map(commit => commit.id));
   const incoming = new Set(commits.flatMap(commit => commit.parents));
   const lanes: ({ id: string; color: number } | null)[] = [];
