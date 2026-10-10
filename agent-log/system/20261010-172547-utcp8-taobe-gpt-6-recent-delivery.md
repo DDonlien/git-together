@@ -23,3 +23,15 @@
 ## 发布阶段
 
 - 待最终并行对话收尾后统一提交/推送main，并执行现有签名、公证、staple/validate、公开stable/latest与完整资产回读；未安装或重启现有App。真实发布证据及结束时间在完成后追加。
+
+
+## 实际推送与发布阻塞
+
+- 检查并纳入最近并行实现，M3对话已idle完成。100文件统一提交f8441b052820d04d1d3aa0615fd9099c5be88d82，正常push main成功；远端main完整SHA回读相同，工作目录干净。
+- 运行现有npm run package:desktop，发布权限/main预检后，notarytool history以gittogether-notary提前失败：No Keychain password item found for profile。退出69；未进入包装、签名、公证提交或公开新版本。release lock已正常清理，没有0.21.0产物或新tag。
+- security默认及搜索钥匙串均为/Users/taobe/Library/Keychains/login.keychain-db；Developer ID预期身份存在（2个valid）。分别尝试默认profile、显式login.keychain-db及verbose仍返回相同not-found；不读取/导出密码，不假设凭据为何变化。
+- 公开GitHub latest实际回读仍v0.17.3，两旧资产齐全；没有把source push冒称安装版更新。
+- CUA尝试已安装GitTogether返回Mac locked且自动解锁失败，已请求用户手工解锁。Codex终端面板打开请求queued；随后请求用户通过notarytool交互式恢复同名profile，本机输入Apple ID/App专用密码，不通过聊天传递。
+- RUN-01-recent-delivery保持未完成，待安全公证凭据恢复后重跑原入口，完成公证、stable/latest发布和公开清单/完整ZIP验证；现有App未安装/重启。
+
+- 本轮暂停记录时间：2026-10-10 19:35:52 UTC+8。任务未完成；等待本机公证凭据恢复。
