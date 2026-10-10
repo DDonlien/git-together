@@ -1,6 +1,7 @@
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
+import { isLocalCommitDetails } from './local-commit-model';
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
 
@@ -34,7 +35,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'downloadBranch' ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -66,6 +67,8 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || typeof value.text !== 'string') throw new Error('Diff 返回格式无效。');
   } else if (method === 'localWorkspace') {
     if (!isLocalWorkspace(value)) throw new Error('本地工作目录返回格式无效。');
+  } else if (method === 'localCommit') {
+    if (!isLocalCommitDetails(value) || !('commitId' in input) || value.commit.id !== input.commitId) throw new Error('本地提交返回格式无效。');
   } else if (method === 'openFile') {
     if (!isRecord(value) || value.opened !== true) throw new Error('文件打开结果无效。');
   } else if (method === 'remoteWorkspace') {

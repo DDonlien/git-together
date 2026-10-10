@@ -5,6 +5,7 @@ import { useRemoteRepository } from './use-remote-repository';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import { Button, Icon, IconButton, Notice, SearchInput } from './ui';
 import { RepositoryActions } from './RepositoryActions';
+import { DashboardActionNames } from './DashboardActionNames';
 import { MultiFilterMenu } from './MultiFilterMenu';
 import { accountOptions, isSelected, matchesRepositoryFilters, matchesRepositoryType, organizationGroups, repositorySources, repositoryTypes, repositoryTypeCoverage, repositoryVisibilities, toggleFilter, type FilterSelection } from './dashboard-filters';
 import { associationStatus, gitSignals, linkedTasks } from './branch-links';
@@ -36,11 +37,12 @@ function RepositoryDate({ value, source }: { value?: string; source: string }) {
   return <time className="repository-date" dateTime={date.toISOString()} title={`${source}：${date.toLocaleString()}`}>{dashboardDate.format(date)}</time>;
 }
 
-function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden }: { itemLabel: string; signals: ReturnType<typeof gitSignals>; hidden: boolean; onToggleHidden?: () => void }) {
-  return <div className="repository-row-actions"><RepositoryActions label={`Git 操作：${itemLabel}`} signals={signals} />{onToggleHidden && <IconButton className="repository-hide-action" icon={hidden ? 'eye' : 'eyeSlash'} label={`${hidden ? '恢复显示' : '隐藏'}：${itemLabel}`} title="" aria-pressed={hidden} onClick={onToggleHidden} />}</div>;
+function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden, unlinked = false, onDownload, downloadBlocked = false, downloadBusy = false }: { itemLabel: string; signals: ReturnType<typeof gitSignals>; hidden: boolean; onToggleHidden?: () => void; unlinked?: boolean; onDownload?: () => void; downloadBlocked?: boolean; downloadBusy?: boolean }) {
+  const reading = downloadBusy || (unlinked ? signals.fetch.status === 'reading' : Object.values(signals).some(signal => signal.status === 'reading'));
+  return <div className={`repository-row-actions${reading ? ' is-reading' : ''}`} aria-busy={reading}>{unlinked ? <IconButton className="repository-download-action" icon="download" label={`下载分支并关联：${itemLabel}`} data-action-name="下载" title="" disabled={downloadBlocked || downloadBusy || !onDownload} onClick={onDownload} /> : <RepositoryActions label={`Git 操作：${itemLabel}`} signals={signals} />}{onToggleHidden && <IconButton className="repository-hide-action" icon={hidden ? 'eye' : 'eyeSlash'} label={`${hidden ? '恢复显示' : '隐藏'}：${itemLabel}`} data-action-name={hidden ? '恢复显示' : '隐藏'} title="" aria-pressed={hidden} onClick={onToggleHidden} />}</div>;
 }
 
-export function Dashboard({ controller, globalSearch, onSearchChange, searchRef, onSettings, onConfigure, onOpen }: { controller: WorkspaceController; globalSearch: string; onSearchChange: (value: string) => void; searchRef?: RefObject<HTMLInputElement | null>; onSettings: () => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onOpen: (id: string) => void }) {
+export function Dashboard({ controller, globalSearch, onSearchChange, searchRef, onSettings, onConfigure, onDownload, onOpen }: { controller: WorkspaceController; globalSearch: string; onSearchChange: (value: string) => void; searchRef?: RefObject<HTMLInputElement | null>; onSettings: () => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; onOpen: (id: string) => void }) {
   const [selectedAccounts, setSelectedAccounts] = useState<FilterSelection>(null);
   const [organization, setOrganization] = useState<FilterSelection>(null);
   const [source, setSource] = useState<FilterSelection>(null);
@@ -151,25 +153,27 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
       {visibleAccounts.filter(account => account.error).map(account => <Notice kind="error" key={account.id}>{account.name}：{account.error}{account.updatedAt && ' 已保留上次读取的仓库列表。'} 正在自动重试。</Notice>)}
       {incompleteClassification && <Notice kind="info">分类尚未读全{coverage.unknown > 0 ? `：${coverage.unknown} 个仓库的所选分类未确认` : ''}。当前只显示已确认的匹配项，全选可查看已读取的完整目录。{coverage.errors.length > 0 && ` ${coverage.errors[0]}`}</Notice>}
       <section className="remote-repository-group flat-group" aria-label="仓库列表">
+        <DashboardActionNames>
         <div className="remote-table-scroll"><table className="remote-repo-table"><thead><tr><DashboardSortHeader label="仓库" column="repository" sort={sort} onSort={changeSort} /><DashboardSortHeader label="组织 / 用户" column="owner" sort={sort} onSort={changeSort} /><DashboardSortHeader label="账号" column="account" sort={sort} onSort={changeSort} /><DashboardSortHeader label="更新日期" column="updatedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="修改日期" column="modifiedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="本地目录" column="localPath" sort={sort} onSort={changeSort} /><th scope="col" className="repository-action-cell"><span className="sr-only">Git 操作与隐藏</span></th></tr></thead>{rows.map(({ repo, account, localPath, modifiedAt }) => {
           const key = JSON.stringify([controller.catalog.instanceId, repo.id]);
-          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={toggleHidden} />;
+          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} onDownload={onDownload} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={toggleHidden} />;
         })}</table></div>
+        </DashboardActionNames>
         {!filtered.length && <div className="account-repos-empty">{incompleteClassification ? '所选分类尚未读取完整，暂时没有已确认的匹配项。' : !visibleAccounts.length || repositories.some(repo => isSelected(selectedAccounts, repo.accountId)) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
       </section>
     </>}
   </main>;
 }
 
-function DashboardRepositoryRows({ repository: repo, account, controller, localPath, modifiedAt, expanded, onToggle, onOpen, onConfigure, hiddenEntries, showHidden, onToggleHidden }: {
-  repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; hiddenEntries: ReadonlySet<string>; showHidden: boolean; onToggleHidden: (key: string) => void;
+function DashboardRepositoryRows({ repository: repo, account, controller, localPath, modifiedAt, expanded, onToggle, onOpen, onConfigure, onDownload, hiddenEntries, showHidden, onToggleHidden }: {
+  repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; hiddenEntries: ReadonlySet<string>; showHidden: boolean; onToggleHidden: (key: string) => void;
 }) {
   const branchesId = useId();
   const ready = !controller.loading && !controller.needsReload;
   const link = controller.catalog.links.find(link => link.repositoryId === repo.id);
-  // Linked rows need remote HEADs even when collapsed, for association/signals.
-  // Filtering/unmounting still cancels through the shared reader.
-  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, (expanded || !!link) && ready);
+  // Linked rows share workspace-owned checks, including while filtered out.
+  // Unlinked repositories keep their expanded-row, on-demand reader.
+  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, (expanded || !!link) && ready, controller.remoteStates[repo.id]);
   const owner = repo.fullName.split('/')[0];
   const local = controller.localStates[repo.id];
   const association = associationStatus(link, local, state);
@@ -184,11 +188,11 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
       <td><button className={`local-path local-path-action ${localPath ? '' : 'muted'}`} title={association.detail} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !localPath} onClick={() => onConfigure(repo)}><span>{association.label}</span>{localPath && <small>{localPath}</small>}</button></td>
       <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repo.fullName} · ${accountLabel(account)}`} signals={gitSignals(linkedTasks(link, local), state, local, undefined, repo.available)} hidden={hidden} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
     </tr></tbody>
-    <tbody id={branchesId} className="dashboard-repository-branches" aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} hidden={!expanded}>{expanded && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} />}</tbody>
+    <tbody id={branchesId} className="dashboard-repository-branches" aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} hidden={!expanded}>{expanded && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} downloadBusy={!!controller.busy[repo.id]} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} />}</tbody>
   </>;
 }
 
-export function RepositoryBranchRows({ repository, state, blocked = false, link, localState, onConfigure, hiddenEntries, showHidden = false, onToggleHidden }: { repository: RemoteRepository; state: RemoteRepositoryState; blocked?: boolean; link?: LocalLink; localState?: LocalRepositoryState; onConfigure?: (repository: RemoteRepository, branch?: string) => void; hiddenEntries?: ReadonlySet<string>; showHidden?: boolean; onToggleHidden?: (key: string) => void }) {
+export function RepositoryBranchRows({ repository, state, blocked = false, link, localState, onConfigure, onDownload, downloadBusy = false, hiddenEntries, showHidden = false, onToggleHidden }: { repository: RemoteRepository; state: RemoteRepositoryState; blocked?: boolean; link?: LocalLink; localState?: LocalRepositoryState; onConfigure?: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; downloadBusy?: boolean; hiddenEntries?: ReadonlySet<string>; showHidden?: boolean; onToggleHidden?: (key: string) => void }) {
   const { workspace, loading } = state;
   const error = repository.available ? state.error : '访问账号目前无权读取此仓库。';
   const branchWarnings = workspace?.warnings.filter(warning => warning.startsWith('分支超过')) || [];
@@ -204,7 +208,7 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
       <td colSpan={3}><div className="dashboard-branch-content"><span className="branch-label" title={branch}><Icon name="branch" size={13} /><span>{branch}</span></span>{branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}</div></td>
       <td aria-hidden="true"></td><td aria-hidden="true"></td>
       <td><button className={`local-path local-path-action ${paths.length ? '' : 'muted'}`} title={paths.join('\n') || '选择该分支的真实工作目录，或包含它的父目录'} aria-label={`配置分支目录：${repository.fullName} · ${branch}`} disabled={blocked || (!repository.available && !paths.length) || !onConfigure} onClick={() => onConfigure?.(repository, branch)}>{paths.length ? `${paths[0]}${paths.length > 1 ? ` +${paths.length - 1}` : ''}` : '关联工作目录'}</button></td>
-      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(localTasks, state, localState, branch, repository.available)} hidden={hidden} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></td>
+      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(localTasks, state, localState, branch, repository.available)} hidden={hidden} unlinked={!paths.length} onDownload={onDownload ? () => onDownload(repository, branch) : undefined} downloadBusy={downloadBusy} downloadBlocked={blocked || !repository.available || !workspace?.tasks.some(task => task.branch === branch) || !!(link && !link.worktrees && !localState?.workspace)} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></td>
     </tr>; })}
     {!!branchWarnings.length && <tr className="dashboard-branch-message"><td colSpan={7}><Notice kind="info">{branchWarnings.join(' ')}</Notice></td></tr>}
   </>;

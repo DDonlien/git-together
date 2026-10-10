@@ -29,14 +29,15 @@ export function RepositoryActions({ label, signals }: { label: string; signals: 
     {actions.map(action => {
       const signal = signals[action.key];
       const count = signal.count;
-      return <span key={action.key} className={`git-action-anchor${pressed === action.key ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={0} aria-label={`${action.label}${count !== undefined ? `，数量 ${count}` : ''}：${describe(action)}`}
+      const hasCount = count !== undefined && count > 0;
+      return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${pressed === action.key ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={0} aria-label={`${action.label}${hasCount ? `，数量 ${count}` : ''}：${describe(action)}`}
         onPointerDown={event => { if (event.button === 0) press(action.key); }} onPointerCancel={clearPress} onPointerLeave={clearPress}
         onClick={() => pulse(action.key)} onBlur={clearPress}
         onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); press(action.key); } else if (event.key === 'Escape') clearPress(); }}
         onKeyUp={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pulse(action.key); } }}>
         <IconButton icon={action.icon} label={action.label} title="" aria-hidden="true" tabIndex={-1} disabled />
-        {count !== undefined && <span aria-hidden="true" className={`git-action-badge ${signal.tone}`}>{count}</span>}
-        {signal.status && <span aria-hidden="true" className={`git-action-read-badge ${signal.status}`}>{signal.status === 'reading' ? <span className="git-action-read-spinner" /> : '!'}</span>}
+        {hasCount && <span aria-hidden="true" className={`git-action-badge ${signal.tone}`}>{count}</span>}
+        {signal.status === 'error' && <span aria-hidden="true" className="git-action-read-badge error">!</span>}
       </span>;
     })}
   </div>;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { isTrustedRendererURL, type RendererSource } from '../electron/renderer-source';
+import { releaseBranch, updateSource } from '../src/update-model';
 
 const packaged: RendererSource = { kind: 'file', path: '/Applications/Git Together.app/Contents/Resources/app/client/index.html' };
 
@@ -46,4 +47,16 @@ test('desktop build uses relative client assets and a finite production-content 
   assert.match(source, /sourceDigest\(clientRoot\) !== sourceSha256/);
   assert.doesNotMatch(source, /cp\(clientRoot,|copyFile\([^\n]*\.env|loadEnv\(|GITHUB_CLIENT_SECRET/);
   assert.match(source, /await rm\(temporary, \{ recursive: true, force: true \}\)/);
+});
+
+test('release packages require committed main source and retain the public GitHub release feed', () => {
+  assert.equal(releaseBranch, 'main');
+  assert.deepEqual(updateSource, { provider: 'github', owner: 'DDonlien', repo: 'git-together', private: false });
+  const source = readFileSync(new URL('../scripts/package-desktop.ts', import.meta.url), 'utf8');
+  assert.match(source, /sourceBranch !== releaseBranch/);
+  assert.match(source, /'status', '--porcelain=v1', '--untracked-files=all', '--', \.\.\.sourceEntries/);
+  assert.match(source, /if \(sourceStatus\) throw/);
+  assert.match(source, /finalStatus \|\| finalBranch !== sourceBranch \|\| finalCommit !== sourceCommit/);
+  assert.match(source, /sourceSha256, sourceBranch, sourceCommit, version: manifest.version/);
+  assert.match(source, /JSON.stringify\(\{ \.\.\.updateSource, updaterCacheDirName:/);
 });

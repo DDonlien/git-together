@@ -16,7 +16,7 @@ const commit: RepositoryCommit = { id: 'a'.repeat(40), summary: 'Selected commit
 const tasks: RepositoryTask[] = Array.from({ length: 8 }, (_, index) => ({ id: `remote:${index}`, branch: index ? `task/${index}` : 'main', head: index.toString().repeat(40), path: null, files: [], tree: ['global.ts'], remote: true, treeComplete: true, error: '' }));
 const files = Array.from({ length: 180 }, (_, index) => ({ path: `src/file-${String(index).padStart(3, '0')}.ts`, status: index < 120 ? 'added' : index < 160 ? 'modified' : 'removed', patch: null }));
 const details: RemoteCommitDetails = { commit, files, diff: 'Not an inline preview', tree: ['historical.ts'], treeComplete: true, warnings: ['Provider limit warning'] };
-const props = { tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: null, onLocalChoice() {}, loading: false, readDiff: async () => '' };
+const props = { tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: null, onLocalChoice() {}, loading: false };
 const render = (overrides: Partial<Parameters<typeof RepositoryChangesColumn>[0]> = {}) => renderToStaticMarkup(createElement(RepositoryChangesColumn, { ...props, ...overrides }));
 const slots = (html: string) => Array.from(html.matchAll(/<div class="repository-task-slot"( hidden="")?><section class="repository-change-task" aria-label="([^"]+)"/g)).map(match => ({ hidden: !!match[1], label: match[2] }));
 
@@ -64,7 +64,7 @@ test('state grouping retains all files, selected rows, unknown statuses and the 
   const sample = statuses.map((status, index) => ({ path: `file-${index}.ts`, status }));
   const html = renderToStaticMarkup(createElement(RepositoryChangedFiles, { files: sample, grouped: true, search: '', selected: 'file-11.ts', label: 'Changes', onSelect() {} }));
   assert.equal((html.match(/class="readonly-file /g) || []).length, 12);
-  for (const [label, count] of [['新增 Added', 4], ['修改 Modified', 4], ['删除 Deleted', 3], ['其他', 1]]) assert.ok(html.includes(`${label}<small>${count}</small>`));
+  for (const [label, count] of [['新增', 4], ['修改', 4], ['删除', 3], ['其他', 1]]) assert.ok(html.includes(`${label}<small>${count}</small>`));
   assert.match(html, /aria-pressed="true"/); assert.match(html, /future/);
   assert.deepEqual(statuses.map(fileChangeKind), ['added', 'added', 'added', 'added', 'modified', 'modified', 'modified', 'modified', 'deleted', 'deleted', 'deleted', undefined]);
 });
@@ -73,7 +73,7 @@ test('flat and grouped search filter the same full file list without fixed slice
   for (const grouped of [false, true]) {
     const html = renderToStaticMarkup(createElement(RepositoryChangedFiles, { files, grouped, search: 'FILE-17', label: 'Changes', onSelect() {} }));
     assert.equal((html.match(/class="readonly-file /g) || []).length, 10);
-    assert.match(html, /file-179\.ts/); assert.doesNotMatch(html, /新增 Added|修改 Modified/);
+    assert.match(html, /file-179\.ts/); assert.doesNotMatch(html, /新增|修改/);
     const empty = renderToStaticMarkup(createElement(RepositoryChangedFiles, { files, grouped, search: 'not-there', label: 'Changes', onSelect() {} }));
     assert.match(empty, /没有符合搜索条件的文件/); assert.doesNotMatch(empty, /<h3|readonly-file/);
   }
@@ -96,13 +96,14 @@ test('a linked working directory is the default context while all separate task 
 
 test('local history does not pass working changes off as a commit Diff or poll its file', () => {
   const local = { ...tasks[0], remote: false, path: '/isolated/main', files: [{ path: 'working-only.ts', status: ' M', tracked: true }] };
-  const html = renderToStaticMarkup(createElement(RepositoryChanges, { task: local, selectedCommit: commit, selected: 'working-only.ts', onSelect() {}, search: '', focused: false, onFocus() {}, readDiff: async () => '', loading: false, linked: true, active: true, showFocus: false }));
-  assert.match(html, /本地历史提交差异尚未接入/);
+  const html = renderToStaticMarkup(createElement(RepositoryChanges, { task: local, selectedCommit: commit, selected: 'working-only.ts', onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false }));
+  assert.match(html, /正在读取本地提交/);
+  assert.doesNotMatch(html, /本地历史提交差异尚未接入/);
   assert.match(html, /repository-working-changes" hidden=""/);
   assert.match(html, /repository-commit-composer" hidden=""/);
   assert.match(html, /提交详情：main/);
   const source = readFileSync(new URL('../src/RepositoryChanges.tsx', import.meta.url), 'utf8');
-  assert.match(source, /resources: active && !selectedCommit && changed && task.path/);
+  assert.doesNotMatch(source, /useAutoRefresh|readDiff|const readable|repository-inline-diff/);
 });
 
 test('remote subscriptions and full-tree decoration depend on one explicit selection, never a default HEAD', () => {
@@ -114,7 +115,7 @@ test('remote subscriptions and full-tree decoration depend on one explicit selec
   assert.match(view, /useState<\{ taskId: string; commitId: string \} \| null>\(null\)/);
   assert.match(view, /if \(!id\) \{ setCommitSelection\(null\); return; \}/);
   assert.match(view, /const commitId = selectedCommits\[task.id\];/);
-  assert.match(view, /changes=\{task.remote \? details\?\.files \|\| noChanges : undefined\}/);
+  assert.match(view, /changes=\{task.remote \|\| commitId \? details\?\.files \|\| noChanges : undefined\}/);
   assert.doesNotMatch(view, /selectedCommits\[task.id\] \|\| task.head|setSelectedCommits/);
 });
 
@@ -143,9 +144,9 @@ for (const provider of ['github', 'gitea'] as const) test(`${provider} real Git 
   assert.equal(loaded.files.length, 99);
   const html = renderToStaticMarkup(createElement(RepositoryChangedFiles, { files: loaded.files, search: '', grouped: true, label: 'Changes', onSelect() {} }));
   assert.equal((html.match(/class="readonly-file /g) || []).length, 99);
-  assert.match(html, /新增 Added<small>97<\/small>/);
-  assert.match(html, /修改 Modified<small>1<\/small>/);
-  assert.match(html, /删除 Deleted<small>1<\/small>/);
+  assert.match(html, /新增<small>97<\/small>/);
+  assert.match(html, /修改<small>1<\/small>/);
+  assert.match(html, /删除<small>1<\/small>/);
   assert.match(html, /file-095\.ts/);
   assert.ok(await fixture.unchanged());
 });

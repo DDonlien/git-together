@@ -1,6 +1,6 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.13.0",
+  "version": "0.17.1",
   "private": true,
   "type": "module",
   "scripts": {

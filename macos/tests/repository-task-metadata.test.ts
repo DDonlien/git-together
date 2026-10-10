@@ -56,7 +56,7 @@ test('metadata removal preserves remote loading, failure and search notices plus
   const cached = render({ search: 'missing', state: { id: task.head, details, error: 'Read failed' } });
   assert.match(cached, /Read failed/); assert.match(cached, /显示上次读取的提交/); assert.match(cached, /没有符合搜索条件的文件/); assert.match(cached, /Existing warning/);
   assert.doesNotMatch(pending + cached, /repository-remote-commit|repository-task-header|repository-task-path/);
-  const local = renderToStaticMarkup(createElement(RepositoryChanges, { task: { ...task, id: 'local:main', remote: false, path: '/isolated/qa' }, onSelect() {}, search: '', focused: false, onFocus() {}, readDiff: async () => '', loading: false, linked: true, active: true, showFocus: false }));
+  const local = renderToStaticMarkup(createElement(RepositoryChanges, { task: { ...task, id: 'local:main', remote: false, path: '/isolated/qa' }, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false }));
   assert.match(local, /class="branch-label"/); assert.match(local, /repository-task-path/); assert.match(local, /\/isolated\/qa/); assert.match(local, /填写提交说明/);
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /\.repository-remote-commit|\.repository-task-controls/);

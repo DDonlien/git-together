@@ -36,12 +36,7 @@ function FixtureApp() {
     <WindowChrome native={false} />
     <div className="app-body">
     <aside id="global-sidebar" className={`global-sidebar glass-panel${sidebarCollapsed ? ' is-collapsed' : ''}`}><SidebarHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(value => !value)} /><nav className="global-nav"><button className="nav-item sidebar-permanent active" title="隔离 Git 测试" aria-label="隔离 Git 测试"><span className="sidebar-button-icon" aria-hidden="true"><Icon name="dashboard" size={19} /></span><span>隔离 Git 测试</span></button></nav><p className="sidebar-no-accounts">临时真实 Git 仓库<br />不使用你的账号或目录</p><div className="sidebar-bottom"><button className="nav-item sidebar-permanent" title="切换亮暗色" aria-label="切换亮暗色" onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; setTheme(next); document.documentElement.dataset.theme = next; }}><span className="sidebar-button-icon" aria-hidden="true"><Icon name={theme === 'light' ? 'moon' : 'sun'} size={19} /></span><span>切换亮暗色</span></button></div></aside>
-    <div className="app-content">{error && <Notice kind="error">{error}</Notice>}{workspace && <RepositoryView repository={repository} account={account} localPath={path || undefined} workspace={workspace} globalSearch={search} onSearchChange={setSearch} searchRef={searchRef} onConfigure={() => {}} readRemoteCommit={(commitId, signal) => remoteRead('/fixture/commit', { commitId }, signal)} readDiff={async (task, file, signal) => {
-      const response = await fetch('/fixture/diff', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-QA': '1' }, body: JSON.stringify({ taskId: task.id, path: file }), signal });
-      const result: { text?: string; error?: string } = await response.json();
-      if (!response.ok || result.text === undefined) throw new Error(result.error || `QA diff HTTP ${response.status}`);
-      return result.text;
-    }} />}</div></div>
+    <div className="app-content">{error && <Notice kind="error">{error}</Notice>}{workspace && <RepositoryView repository={repository} account={account} localPath={path || undefined} workspace={workspace} globalSearch={search} onSearchChange={setSearch} searchRef={searchRef} onConfigure={() => {}} readRemoteCommit={(commitId, signal) => remoteRead('/fixture/commit', { commitId }, signal)} readLocalCommit={(task, commitId, signal) => remoteRead('/fixture/local-commit', { taskId: task.id, commitId }, signal)} />}</div></div>
   </div></MaterialProvider>;
 }
 createRoot(document.getElementById('root')!).render(<StrictMode><FixtureApp /></StrictMode>);

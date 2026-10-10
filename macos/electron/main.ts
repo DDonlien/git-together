@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { join } from 'node:path';
+import { closeSync, fstatSync, writeSync } from 'node:fs';
 import { AccountService } from '../server/account-service';
 import { encryptedStore } from './credential-store';
 import { githubVerificationURL } from '../src/import-model';
@@ -10,7 +11,9 @@ import { AppUpdater } from './app-updater';
 import { updateSource } from '../src/update-model';
 import { isRecord } from '../src/import-model';
 import { NativeGitHubAuthorization } from './native-github-authorization';
-import { nativeOAuthHelper, runNativeOAuthHelper } from './native-oauth-helper';
+import { nativeOAuthHelper } from './native-oauth-helper';
+import { legacyOAuthMigration } from './legacy-oauth-migration';
+import { oauthConfigurationStore } from './oauth-config-store';
 import { createLoopbackFetch } from './system-network';
 import { LocalDiagnostics } from '../server/diagnostics';
 import { diagnosticCode } from '../src/diagnostics-model';
@@ -22,16 +25,17 @@ let updater: AppUpdater;
 let activeImports = 0;
 let quitting = false;
 let nativeGithub: NativeGitHubAuthorization;
-const authorizationHelper = nativeOAuthHelper();
-const helperMode = process.argv.includes('--gittogether-authorization-helper');
-app.setName(helperMode ? 'GitTogether Authorization' : 'GitTogether');
-if (helperMode) {
+let authorizationHelper: ReturnType<typeof nativeOAuthHelper>;
+let legacyMigration: ReturnType<typeof legacyOAuthMigration>;
+const migrationMode = process.argv.includes('--gittogether-authorization-migration');
+app.setName(migrationMode ? 'GitTogether Authorization' : 'GitTogether');
+if (migrationMode) {
   const directory = process.argv.find(value => value.startsWith('--gittogether-helper-session='))?.split('=').slice(1).join('=');
-  if (!directory) throw new Error('授权助手缺少独立会话目录。');
+  if (!directory) throw new Error('授权配置迁移缺少独立会话目录。');
   app.setPath('userData', directory); app.setPath('sessionData', directory);
 } else app.setPath('userData', join(app.getPath('appData'), 'GitTogether-Standalone-Demo'));
-// Helper browser profiles are temporary; diagnostics always use the stable app directory.
-const diagnostics = new LocalDiagnostics(join(app.getPath('appData'), 'GitTogether-Standalone-Demo', 'logs'), helperMode ? 'authorization' : 'app');
+// Migration profiles are temporary; diagnostics always use the stable app directory.
+const diagnostics = new LocalDiagnostics(join(app.getPath('appData'), 'GitTogether-Standalone-Demo', 'logs'), migrationMode ? 'authorization' : 'app');
 diagnostics.record({ event: 'lifecycle', outcome: 'start' });
 process.on('uncaughtExceptionMonitor', problem => diagnostics.record({ event: 'lifecycle', outcome: 'failure', code: diagnosticCode(problem) }));
 app.on('child-process-gone', (_event, details) => { if (!quitting && details.reason !== 'clean-exit') diagnostics.record({ event: 'lifecycle', outcome: 'failure', code: 'unknown' }); });
@@ -97,7 +101,7 @@ ipcMain.handle('gittogether:import', async (event, method: unknown, input: unkno
 });
 ipcMain.handle('gittogether:choose-directory', async event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
-  const result = await diagnostics.run('ui-action', { method: 'chooseDirectory' }, () => dialog.showOpenDialog(window!, { title: '选择本地仓库或其父文件夹', properties: ['openDirectory'] }));
+  const result = await diagnostics.run('ui-action', { method: 'chooseDirectory' }, () => dialog.showOpenDialog(window!, { title: '选择本地文件夹', properties: ['openDirectory'] }));
   if (result.canceled) diagnostics.record({ event: 'ui-action', outcome: 'cancelled', method: 'chooseDirectory' });
   return result.canceled ? null : result.filePaths[0];
 });
@@ -131,15 +135,33 @@ ipcMain.handle('gittogether:github-web', async (event, method: unknown, input: u
   finally { activeImports--; }
 });
 app.whenReady().then(async () => {
-  if (helperMode) { await runNativeOAuthHelper(diagnostics); return; }
+  if (migrationMode) {
+    // A dedicated inherited pipe prevents a manually launched mode from
+    // writing the old developer secret to a terminal or ordinary output file.
+    const channel = fstatSync(3);
+    if (!channel.isFIFO() && !channel.isSocket()) throw new Error('旧授权配置迁移缺少私有管道。');
+    app.dock?.hide();
+    const secret = await diagnostics.run('storage', {}, () => oauthConfigurationStore(join(app.getPath('appData'), 'GitTogether Authorization', 'github-oauth-v1.encrypted')).load());
+    if (secret !== null) writeSync(3, secret);
+    closeSync(3); app.quit(); return;
+  }
   const engine = app.isPackaged && process.platform === 'darwin' ? new MacUpdater(updateSource) : null;
   if (engine) engine.logger = null;
   updater = new AppUpdater(engine, app.getVersion(), () => activeImports === 0 && !nativeGithub?.busy, diagnostics);
-  accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch, { diagnostics, openFile: async target => {
+  accountService = new AccountService(encryptedStore(join(app.getPath('userData'), 'accounts-v2.encrypted')), systemFetch, { diagnostics, downloadRoot: join(app.getPath('userData'), 'repositories'), openFile: async target => {
     if (target.source === 'remote') await shell.openExternal(target.value);
     else if (await shell.openPath(target.value)) throw new Error('无法用系统默认应用打开此文件，请检查是否有可用应用。');
   } });
-  nativeGithub = new NativeGitHubAuthorization(credential => accountService.connectGitHubWebAuthorization(credential), await createLoopbackFetch(), authorizationHelper.ensure);
+  const localRequest = await createLoopbackFetch();
+  legacyMigration = legacyOAuthMigration({ executable: process.execPath, entry: app.isPackaged ? undefined : app.getAppPath(),
+    legacyPath: join(app.getPath('appData'), 'GitTogether Authorization', 'github-oauth-v1.encrypted') });
+  authorizationHelper = nativeOAuthHelper({ configuration: oauthConfigurationStore(join(app.getPath('userData'), 'github-oauth-v1.encrypted')),
+    restoreLegacy: legacyMigration.load, request: systemFetch, localRequest, diagnostics });
+  // Account storage and OAuth now use GitTogether's one encryption identity.
+  // Keep a failed preparation available to the login UI without blocking Settings.
+  activeImports++;
+  void authorizationHelper.prepare().catch(problem => diagnostics.record({ event: 'authorization', outcome: 'failure', code: diagnosticCode(problem) })).finally(() => { activeImports--; });
+  nativeGithub = new NativeGitHubAuthorization(credential => accountService.connectGitHubWebAuthorization(credential), localRequest, authorizationHelper.ensure);
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'GitTogether', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
@@ -149,7 +171,7 @@ app.whenReady().then(async () => {
   createWindow();
   app.on('activate', () => { if (!window) createWindow(); });
 }).catch(problem => { diagnostics.record({ event: 'lifecycle', outcome: 'failure', code: diagnosticCode(problem) }); diagnostics.close(); console.error('GitTogether 启动失败，请检查系统钥匙串和本机授权服务。'); app.exit(1); });
-app.on('before-quit', () => { quitting = true; diagnostics.record({ event: 'lifecycle', outcome: 'complete' }); diagnostics.close(); if (!helperMode) { nativeGithub?.close(); authorizationHelper.close(); } });
+app.on('before-quit', () => { quitting = true; diagnostics.record({ event: 'lifecycle', outcome: 'complete' }); diagnostics.close(); if (!migrationMode) { nativeGithub?.close(); authorizationHelper?.close(); legacyMigration?.close(); } });
 ipcMain.handle('gittogether:update-status', event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
   return updater.status();
@@ -166,4 +188,4 @@ ipcMain.handle('gittogether:update-install', event => {
   if (!isMainRenderer(event)) throw new Error('Unknown sender');
   return updater.install();
 });
-app.on('window-all-closed', () => { if (!helperMode && process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { if (!migrationMode && process.platform !== 'darwin') app.quit(); });

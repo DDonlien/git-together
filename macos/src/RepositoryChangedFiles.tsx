@@ -3,9 +3,9 @@ import { Icon } from './ui';
 import { fileChangeKind, type FileTreeChange } from './file-tree';
 
 const groups = [
-  { kind: 'added', label: '新增 Added' },
-  { kind: 'modified', label: '修改 Modified' },
-  { kind: 'deleted', label: '删除 Deleted' },
+  { kind: 'added', label: '新增' },
+  { kind: 'modified', label: '修改' },
+  { kind: 'deleted', label: '删除' },
   { kind: 'other', label: '其他' },
 ] as const;
 

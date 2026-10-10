@@ -3,6 +3,7 @@ import { connectAfterServiceCheck, importAPI, LocalServiceError, verifyServiceVe
 import { emptyCatalog, isRecord, latestCatalog, type Catalog, type ConnectInput, type LocalSnapshot, type ServiceInfo, type UpdateAccountInput } from './import-model';
 import { syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
+import { useRemoteRepositories } from './use-remote-repository';
 import pkg from '../package.json';
 import { preserveLocalWorkspace, type RepositoryWorkspace } from './repository-model';
 import { logDiagnostic } from './diagnostics-api';
@@ -16,6 +17,8 @@ export function useWorkspace() {
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const catalogRef = useRef<Catalog>(emptyCatalog);
   const [localStates, setLocalStates] = useState<Record<string, LocalRepositoryState>>({});
+  const localChanges = useRef(new Map<string, Map<string, string>>());
+  const [changeVersions, setChangeVersions] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [storageError, setStorageError] = useState('');
@@ -56,7 +59,7 @@ export function useWorkspace() {
           setError('');
           if (catalogRef.current.instanceId && catalogRef.current.instanceId !== info.instanceId) {
             catalogRef.current = { ...emptyCatalog, instanceId: info.instanceId };
-            setCatalog(catalogRef.current); setLocalStates({});
+            setCatalog(catalogRef.current); setLocalStates({}); setChangeVersions({}); localChanges.current.clear();
           }
         }
         return info;
@@ -115,6 +118,19 @@ export function useWorkspace() {
       try {
         const workspace = await importAPI('localWorkspace', { repositoryId }, signal);
         if (signal.aborted || !currentLink()) return;
+        const previousChanges = localChanges.current.get(resource);
+        const nextChanges = new Map<string, string>();
+        let changed = false;
+        for (const task of workspace.tasks) {
+          if (!task.path || task.remote) continue;
+          const previous = previousChanges?.get(task.path);
+          if (task.error) { if (previous !== undefined) nextChanges.set(task.path, previous); continue; }
+          const next = JSON.stringify([task.branch, task.changeKey || [task.head, task.files, task.tree]]);
+          nextChanges.set(task.path, next);
+          if (previous !== undefined && previous !== next) changed = true;
+        }
+        localChanges.current.set(resource, nextChanges);
+        if (changed) setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
         setLocalStates(current => {
           const previous = current[repositoryId];
           const retained = preserveLocalWorkspace(previous?.mappingKey === resource ? previous.workspace : undefined, workspace);
@@ -135,11 +151,19 @@ export function useWorkspace() {
   });
   const linkIdentities = JSON.stringify(catalog.links);
   useEffect(() => {
+    const resources = new Set(catalogRef.current.links.map(link => JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees])));
+    for (const resource of localChanges.current.keys()) if (!resources.has(resource)) localChanges.current.delete(resource);
+    setChangeVersions(current => {
+      const retained = Object.fromEntries(Object.entries(current).filter(([id]) => catalogRef.current.links.some(link => link.repositoryId === id)));
+      return Object.keys(retained).length === Object.keys(current).length ? current : retained;
+    });
     setLocalStates(current => {
       const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && JSON.stringify([catalogRef.current.instanceId, id, link.path, link.worktrees]) === state.mappingKey)));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
   }, [linkIdentities]);
+  const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions);
   useEffect(() => {
     if (!preferencesChanged.current) return;
     try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); setStorageError(''); logDiagnostic({ event: 'ui-action', outcome: 'success', method: 'preferences' }); }
@@ -158,7 +182,7 @@ export function useWorkspace() {
     catch (problem) { if (mounted.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
   }
   return {
-    catalog, localStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload,
+    catalog, localStates, remoteStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload,
     connect: (input: ConnectInput) => task('connect', () => connectAfterServiceCheck(input, ensureService)),
     updateAccount: (input: UpdateAccountInput) => task(input.accountId, async () => { await ensureService(); return importAPI('updateAccount', input); }),
     startGithubAuthorization: (name: string) => connectionTask(async () => { await ensureService(); return importAPI('githubAuthStart', { name }); }),
@@ -175,6 +199,10 @@ export function useWorkspace() {
     refresh: (accountId: string) => task(accountId, () => importAPI('refresh', { accountId })),
     removeAccount: (accountId: string) => task(accountId, () => importAPI('removeAccount', { accountId })),
     link: (repositoryId: string, path: string, branch?: string) => task(repositoryId, () => importAPI('link', { repositoryId, path, ...(branch === undefined ? {} : { branch }) })),
+    downloadBranch: (repositoryId: string, branch: string, parentPath: string, folderName: string) => task(repositoryId, async () => {
+      await ensureService();
+      return importAPI('downloadBranch', { repositoryId, branch, parentPath, folderName });
+    }),
     matchAccountRepositories: async (accountId: string, path: string) => {
       let matchedRepositoryIds: string[] = [];
       await task(`match:${accountId}`, async () => {

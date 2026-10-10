@@ -93,7 +93,7 @@ test('an unborn HEAD has a working node without a fake zero-hash parent', () => 
 
 test('working-node choice selects the matching mounted local context and preserves the other composer', () => {
   const source = { ...workspace, tasks: workspace.tasks.map(item => item.path ? { ...item, files: [{ path: `${item.id}.ts`, status: 'M', tracked: true }] } : item) };
-  const markup = renderToStaticMarkup(createElement(RepositoryChangesColumn, { tasks: source.tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: 'search', onLocalChoice() {}, localPath: '/qa/local', loading: false, readDiff: async () => '' }));
+  const markup = renderToStaticMarkup(createElement(RepositoryChangesColumn, { tasks: source.tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: 'search', onLocalChoice() {}, localPath: '/qa/local', loading: false }));
   assert.match(markup, /class="repository-task-slot"><section class="repository-change-task" aria-label="更改任务：task\/search"/);
   assert.equal((markup.match(/<textarea/g) || []).length, 2);
 });

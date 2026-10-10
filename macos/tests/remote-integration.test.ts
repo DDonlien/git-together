@@ -96,7 +96,9 @@ test('production App wires remote workspace and commit reads without the removed
   assert.match(app, /useRemoteRepository\(page === 'repo' \? repository/);
   assert.match(app, /remoteState=\{remote.state\}/); assert.match(app, /readRemoteCommit=\{remote.readCommit\}/); assert.doesNotMatch(app, /readRemoteFile|remote\.readFile/);
   const hook = await readFile(new URL('../src/use-remote-repository.ts', import.meta.url), 'utf8');
-  assert.match(hook, /intervalMs: syncIntervals.remote/); assert.match(hook, /current.current !== key/); assert.match(hook, /workspace: previous\[key\]\?\.workspace/);
+  assert.match(hook, /intervalMs: syncIntervals.remote/); assert.match(hook, /!current.current.has\(key\)/); assert.match(hook, /workspace: previous\[key\]\?\.workspace/);
+  assert.match(app, /controller.remoteStates\[repoId\]/);
+  assert.match(hook, /repository && !sharedState \? \[repository\] : \[\]/);
   assert.doesNotMatch(hook, /localPath|\blink\b|setInterval|importAPI\('remoteFile'/);
 });
 

@@ -31,7 +31,6 @@ test('app scroll containers retain their native scrolling behavior', () => {
   for (const [className, property] of containers) {
     assert.match(css, new RegExp(`\\.${className}\\s*\\{[^}]*${property}:\\s*auto`), className);
   }
-  assert.match(css, /\.repository-inline-diff pre\s*\{[^}]*overflow:\s*auto/);
   assert.match(css, /\.repository-task-body \{[^}]*overflow: hidden;/);
   assert.match(css, /\.repository-change-context \{ overflow: hidden; \}/);
   assert.match(css, /button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible\s*\{\s*outline: 2px solid var\(--blue\)/);

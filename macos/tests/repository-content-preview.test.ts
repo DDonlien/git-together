@@ -43,14 +43,18 @@ test('removing the preview retains remote search, loading, errors and cached-dat
   assert.doesNotMatch(cached, /repository-inline-diff|<pre\b/);
 });
 
-test('local working-change Diff and editable draft remain outside remote preview removal', () => {
-  const local = { ...task, id: 'local:main', remote: false, path: '/isolated/qa', files: [{ path: 'changed.ts', status: 'M', tracked: true }] };
-  const html = renderToStaticMarkup(createElement(RepositoryChanges, { task: local, selected: 'changed.ts', onSelect() {}, search: '', focused: false, onFocus() {}, readDiff: async () => '+local-content', loading: false, linked: true, active: true, showFocus: false }));
-  assert.match(html, /repository-inline-diff/); assert.match(html, /关闭 Diff：main/); assert.match(html, /正在读取 Diff/); assert.match(html, /填写提交说明/);
-  assert.doesNotMatch(html, /<textarea[^>]*disabled/);
+test('local working files retain selection and the editable draft without any content preview', () => {
+  const local = { ...task, id: 'local:main', remote: false, path: '/isolated/qa', files: [{ path: 'changed.ts', status: 'M', tracked: true }, { path: 'scene.uasset', status: 'M', tracked: true }] };
+  for (const selected of [undefined, 'changed.ts', 'scene.uasset', 'unchanged.ts']) {
+    const html = renderToStaticMarkup(createElement(RepositoryChanges, { task: local, selected, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false }));
+    assert.doesNotMatch(html, /repository-inline-diff|is-history-diff|<pre\b|关闭 Diff|正在读取 Diff|这个文件没有未提交的更改/);
+    assert.match(html, /changed.ts/); assert.match(html, /scene.uasset/); assert.match(html, /填写提交说明/);
+    assert.doesNotMatch(html, /<textarea[^>]*disabled/);
+    assert.match(html, new RegExp(`class="readonly-file${selected === 'changed.ts' ? ' selected' : ''}\\s*"[^>]*aria-pressed="${selected === 'changed.ts'}"`));
+  }
 });
 
-test('remote file-preview reads are removed from the production and isolated view wiring', async () => {
+test('file-preview readers and polling are removed from the production and isolated view wiring', async () => {
   for (const path of ['../src/RepositoryRemoteChanges.tsx', '../src/RepositoryView.tsx', '../src/App.tsx', '../src/use-remote-repository.ts', './repository-preview-client.tsx']) {
     const source = await readFile(new URL(path, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /readRemoteFile|readFile=|importAPI\('remoteFile'|RemoteFileContent|contentKey/);
@@ -60,4 +64,10 @@ test('remote file-preview reads are removed from the production and isolated vie
   assert.match(remote, /<RepositoryChangedFiles[^>]*onSelect=\{onSelect\}/);
   const files = await readFile(new URL('../src/RepositoryChangedFiles.tsx', import.meta.url), 'utf8');
   assert.match(files, /onClick=\{\(\) => onSelect\(file.path\)\}/);
+  for (const path of ['../src/RepositoryChanges.tsx', '../src/RepositoryChangesColumn.tsx', '../src/RepositoryView.tsx', './repository-preview-client.tsx']) {
+    const source = await readFile(new URL(path, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /readDiff|ReadTaskDiff|importAPI\('diff'|fixture\/diff|repository-inline-diff|is-history-diff/);
+  }
+  const local = await readFile(new URL('../src/RepositoryChanges.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(local, /useAutoRefresh|setDiff|syncIntervals/);
 });

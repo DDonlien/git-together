@@ -1,64 +1,81 @@
-import { app } from 'electron';
 import { connect } from 'node:net';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import type { Server } from 'node:http';
 import { createGitHubOAuthServer, previewConnector, readPreviewStatus } from '../server/github-oauth-dev-server';
-import { oauthConfigurationStore } from './oauth-config-store';
-import { systemFetch, createLoopbackFetch } from './system-network';
+import type { oauthConfigurationStore } from './oauth-config-store';
 import type { LocalDiagnostics } from '../server/diagnostics';
 import { diagnosticCode } from '../src/diagnostics-model';
 
-async function occupied() {
+async function occupied(port: number) {
   return new Promise<boolean>((resolve, reject) => {
-    const socket = connect({ host: '127.0.0.1', port: 4174 });
+    const socket = connect({ host: '127.0.0.1', port });
     socket.once('connect', () => { socket.destroy(); resolve(true); });
     socket.once('error', problem => { if ((problem as NodeJS.ErrnoException).code === 'ECONNREFUSED') resolve(false); else reject(problem); });
   });
 }
 
-export function nativeOAuthHelper() {
-  let child: ChildProcess | undefined;
+type Configuration = { secret: string | null; save(secret: string): Promise<void> };
+
+/** Native callbacks share the main app's already-authorized encryption identity. */
+export function nativeOAuthHelper(options: {
+  configuration: ReturnType<typeof oauthConfigurationStore>;
+  restoreLegacy: () => Promise<string | null>;
+  request: typeof fetch; localRequest: typeof fetch;
+  diagnostics?: LocalDiagnostics; port?: number;
+}) {
+  const port = options.port ?? 4174;
+  let server: Server | undefined;
   let starting: Promise<void> | undefined;
+  let prepared: Promise<Configuration> | undefined;
+  let closed = false;
+  const storage = <T>(operation: () => Promise<T>) => options.diagnostics ? options.diagnostics.run('storage', {}, operation) : operation();
+  const prepare = () => {
+    if (!prepared) prepared = (async () => {
+      let secret = await storage(() => options.configuration.load());
+      if (secret === null) {
+        const restored = await options.restoreLegacy();
+        if (restored !== null) await storage(() => options.configuration.save(restored));
+        secret = restored;
+      }
+      const configuration: Configuration = {
+        secret,
+        async save(value) {
+          await storage(() => options.configuration.save(value));
+          configuration.secret = value;
+        },
+      };
+      return configuration;
+    })();
+    return prepared;
+  };
   return {
+    // Prepare at app startup, so opening a login never performs a keychain read.
+    prepare,
     async ensure() {
+      if (closed) throw new Error('GitTogether 正在退出，请重新打开后授权。');
       if (starting) return starting;
       starting = (async () => {
-        if (await occupied()) return;
-        const directory = await mkdtemp(join(tmpdir(), 'gittogether-native-authorization-'));
-        const environment = { ...process.env }; delete environment.ELECTRON_RUN_AS_NODE;
-        const flags = ['--gittogether-authorization-helper', `--gittogether-helper-session=${directory}`];
-        child = spawn(process.execPath, app.isPackaged ? flags : [app.getAppPath(), ...flags], { env: environment, stdio: ['ignore', 'ignore', 'pipe'] });
-        child.stderr?.on('data', () => console.warn('GitTogether 授权助手报告启动问题。'));
-        child.once('exit', () => { void rm(directory, { recursive: true, force: true }).catch(() => console.warn('授权助手临时目录清理未完成。')); });
-        let launchError: Error | undefined; child.once('error', problem => { launchError = problem; });
-        for (let attempt = 0; attempt < 75; attempt++) {
-          if (launchError || child.exitCode !== null || child.signalCode !== null) throw new Error('授权助手启动失败，请检查系统钥匙串权限。');
-          if (await occupied()) return;
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-        child.kill('SIGTERM'); throw new Error('GitHub 授权助手未能及时启动。');
+        if (server?.listening || await occupied(port)) return;
+        const configuration = await prepare();
+        if (closed) throw new Error('GitTogether 正在退出，请重新打开后授权。');
+        const bind = async () => previewConnector(await readPreviewStatus(options.localRequest), options.request, options.localRequest).connect;
+        const active = createGitHubOAuthServer({ request: options.request, configuration, bind,
+          onCallback: stage => options.diagnostics?.record({ event: 'authorization', outcome: stage }),
+          verify: async () => { await readPreviewStatus(options.localRequest); }, connect: async credential => (await bind())(credential),
+        });
+        server = active;
+        active.on('error', problem => {
+          options.diagnostics?.record({ event: 'authorization', outcome: 'failure', code: diagnosticCode(problem) });
+          if (server === active) server = undefined;
+          active.closeAllConnections();
+          if (active.listening) active.close();
+        });
+        await new Promise<void>((resolve, reject) => {
+          active.once('error', reject);
+          active.listen(port, '127.0.0.1', () => { active.off('error', reject); resolve(); });
+        });
       })();
       try { await starting; } finally { starting = undefined; }
     },
-    close() { child?.kill('SIGTERM'); },
+    close() { closed = true; server?.closeAllConnections(); server?.close(); server = undefined; },
   };
-}
-
-export async function runNativeOAuthHelper(diagnostics?: LocalDiagnostics) {
-  app.dock?.hide();
-  const configuration = oauthConfigurationStore(join(app.getPath('appData'), 'GitTogether Authorization', 'github-oauth-v1.encrypted'));
-  const secret = diagnostics ? await diagnostics.run('storage', {}, () => configuration.load()) : await configuration.load();
-  const localRequest = await createLoopbackFetch();
-  const bind = async () => previewConnector(await readPreviewStatus(localRequest), systemFetch, localRequest).connect;
-  const server = createGitHubOAuthServer({ request: systemFetch,
-    onCallback: stage => diagnostics?.record({ event: 'authorization', outcome: stage }),
-    configuration: { secret, save: value => diagnostics ? diagnostics.run('storage', {}, () => configuration.save(value)) : configuration.save(value) }, bind,
-    verify: async () => { await readPreviewStatus(localRequest); }, connect: async credential => (await bind())(credential),
-  });
-  server.on('error', problem => { diagnostics?.record({ event: 'authorization', outcome: 'failure', code: diagnosticCode(problem) }); diagnostics?.close(); console.error('网页授权服务未能启动；已保存配置未修改。'); app.exit(1); });
-  server.listen(4174, '127.0.0.1');
-  app.on('before-quit', () => { server.closeAllConnections(); server.close(); });
-  process.on('SIGTERM', () => app.quit()); process.on('SIGINT', () => app.quit());
 }

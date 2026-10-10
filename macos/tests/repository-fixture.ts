@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const execute = promisify(execFile);
-export async function createRepositoryFixture({ treeChanges = false, denseChanges = false, longBranch = false, localAhead = false }: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean; localAhead?: boolean } = {}) {
+export async function createRepositoryFixture({ treeChanges = false, denseChanges = false, longBranch = false, localAhead = false, historyBody = '' }: { treeChanges?: boolean; denseChanges?: boolean; longBranch?: boolean; localAhead?: boolean; historyBody?: string } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-three-column-qa-')));
   const directory = join(root, 'main');
   const feature = join(root, 'feature task');
@@ -37,7 +37,7 @@ export async function createRepositoryFixture({ treeChanges = false, denseChange
       await mkdir(join(directory, 'src/dense'));
       await Promise.all(Array.from({ length: 96 }, (_, index) => writeFile(join(directory, `src/dense/file-${String(index).padStart(3, '0')}.ts`), `export const value = ${index};\n`)));
     }
-    await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Update project files']);
+    await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Update project files', ...(historyBody ? ['-m', historyBody] : [])]);
     await writeFile(join(directory, 'src/later.ts'), 'export const later = true;\n');
     await git(directory, ['add', '.']); await git(directory, ['commit', '-m', 'Add later file']);
   }

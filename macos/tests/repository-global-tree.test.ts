@@ -27,9 +27,10 @@ test('View keeps the original tree and HEAD and passes only current-SHA changes 
   const view = readFileSync(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
   const tree = view.split('<div id="repository-file-trees"')[1];
   assert.match(tree, /task=\{task\}/);
-  assert.match(tree, /changes=\{task.remote \? details\?\.files \|\| noChanges : undefined\}/);
+  assert.match(tree, /changes=\{task.remote \|\| commitId \? details\?\.files \|\| noChanges : undefined\}/);
   assert.doesNotMatch(tree, /tree: details\.tree|head: commitId|treeTask/);
-  assert.match(tree, /remoteCommits\[task.id\]\?\.id === commitId/);
+  assert.match(tree, /const state = task.remote \? remoteCommits\[task.id\] : localCommits\[task.id\]/);
+  assert.match(tree, /state\?\.id === commitId/);
   assert.match(tree, /const commitId = selectedCommits\[task.id\];/);
   assert.match(tree, /const details = commitId &&/);
 });

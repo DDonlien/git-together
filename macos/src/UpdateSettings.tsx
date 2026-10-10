@@ -27,7 +27,7 @@ export function UpdateSettings({ busy }: { busy: boolean }) {
   return <section className="settings-section" aria-labelledby="update-settings-title">
     <h2 id="update-settings-title">应用更新</h2>
     <div className="settings-group">
-      <div className="setting-row update-setting-row"><span>GitHub Releases<small>更新保留已连接账号和本地仓库关联，不修改仓库文件。</small></span>
+      <div className="setting-row update-setting-row"><span>GitTogether {status.currentVersion}</span>
         {status.phase === 'available' ? <Button onClick={() => void action('download')}>下载更新</Button>
           : status.phase === 'ready' ? <Button disabled={busy} onClick={() => setConfirm(true)}>重启并更新</Button>
             : <Button disabled={!bridge || status.phase === 'unavailable' || waiting} onClick={() => void action('check')}>{status.phase === 'checking' ? '检查中…' : '检查更新'}</Button>}

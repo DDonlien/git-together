@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { EventEmitter } from 'node:events';
 import { LocalDiagnostics, traceOperation } from '../server/diagnostics';
 import { diagnosticsMiddleware } from '../server/diagnostics-http';
+import { diagnosticsCommand } from '../server/diagnostics-command';
 import { diagnosticCode, diagnosticFailure, rendererDiagnostic, sanitizeDiagnostic, type DiagnosticRecord } from '../src/diagnostics-model';
 import { createRemoteServiceFixture } from './remote-service-fixture';
 import { readLocalGit } from '../server/repository-reader';
@@ -28,6 +29,25 @@ async function records(directory: string): Promise<DiagnosticRecord[]> {
   const files = (await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort();
   return (await Promise.all(files.map(name => readFile(join(directory, name), 'utf8')))).flatMap(text => text.trim().split('\n').filter(Boolean).map(line => JSON.parse(line)));
 }
+
+test('copy uses only retained regular logger files and reports actual system success or failure', async t => {
+  const directory = await fixture(t);
+  const log = new LocalDiagnostics(directory, 'test', { now: () => base, timer: false }); t.after(() => log.close());
+  await assert.rejects(diagnosticsCommand(log, 'copy', {}, async () => {}, async () => {}), /暂无可复制/);
+  log.record({ event: 'lifecycle', outcome: 'start' });
+  const [file] = log.files(); assert.ok(file);
+  await writeFile(join(directory, 'user-data.txt'), secret);
+  const alias = join(directory, `diagnostics-${base}-test-${randomUUID()}.jsonl`);
+  await symlink(file, alias);
+  let copied: string[] = [];
+  const count = await diagnosticsCommand(log, 'copy', { path: '/untrusted/path' }, async () => {}, async files => { copied = files; });
+  assert.equal(count, 1); assert.deepEqual(copied, [file]);
+  assert.equal(await readFile(join(directory, 'user-data.txt'), 'utf8'), secret);
+  await assert.rejects(diagnosticsCommand(log, 'copy', {}, async () => {}, async () => { throw new Error('Fixture clipboard failed'); }), /clipboard failed/);
+  const script = await readFile(new URL('../server/system-clipboard.ts', import.meta.url), 'utf8');
+  assert.match(script, /NSURL.fileURLWithPath\(path\)/); assert.match(script, /NSPasteboard.generalPasteboard/);
+  assert.match(script, /writeObjects/); assert.match(script, /timeout: 4000/);
+});
 
 test('finite diagnostic fields strip secrets, raw errors, URLs, bodies and untrusted server spans', () => {
   const clean = sanitizeDiagnostic({ event: 'api', outcome: 'failure', method: 'remoteWorkspace', code: secret, message: secret, stack: secret, path: secret, token: secret, url: secret, input: { secret }, response: secret, httpStatus: 503, durationMs: 23, requestId: randomUUID(), resource: secret, tasks: -1 });

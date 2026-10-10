@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { accountLabel, providerName, type Account, type Catalog, type Provider } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { Button, Icon, Modal, Notice, Segmented, Select, TextField } from './ui';
-import pkg from '../package.json';
 import { AccountSignInOptions } from './AccountSignInOptions';
 import { AccountEditForm } from './AccountEditForm';
 import { GitHubBrowserAuthorizationModal } from './GitHubBrowserAuthorizationModal';
@@ -66,7 +65,6 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
     <UpdateSettings busy={busy || Object.values(controller.busy).some(Boolean)} />
     <DiagnosticsSettings />
     </div>
-    <footer className="settings-footer">GitTogether {pkg.version}</footer>
     {editing && <Modal title="编辑账号" onClose={() => { if (!controller.busy[editing.id]) setEditing(null); }}><AccountEditForm key={editing.id} account={editing} busy={!!controller.busy[editing.id]} onSubmit={controller.updateAccount} onSaved={() => { setEditing(null); setMessage('账号已更新。'); }} onCancel={() => setEditing(null)} onRemove={() => { setRemoving(editing); setError(''); }} /></Modal>}
     {removing && <Modal title={`移除 ${removing.name}？`} onClose={() => { if (!controller.busy[removing.id]) setRemoving(null); }}><p>{accountLabel(removing)}</p><p>移除这个账号的凭据、仓库列表与应用内的本地关联。不会删除任何本地文件。</p>{error && <Notice kind="error">{error}</Notice>}<div className="modal-actions"><Button disabled={!!controller.busy[removing.id]} onClick={() => setRemoving(null)}>取消</Button><Button variant="danger" disabled={!!controller.busy[removing.id]} onClick={() => { setError(''); void controller.removeAccount(removing.id).then(() => { setRemoving(null); setEditing(null); }).catch(problem => setError(problem instanceof Error ? problem.message : '移除失败。')); }}>移除账号</Button></div></Modal>}
     {browserAuthorization && <GitHubBrowserAuthorizationModal key={browserAuthorization.session.id} {...browserAuthorization} onComplete={catalog => { void controller.reload(); connected(catalog); }} onClose={() => setBrowserAuthorization(null)} onRestart={() => { setBrowserAuthorization(null); void authorizeGithub(); }} />}

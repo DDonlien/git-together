@@ -1,3 +1,6 @@
+// Release assets are built from this Git branch; GitHub Releases remains the
+// download feed (a Git branch is not an electron-updater channel).
+export const releaseBranch = 'main';
 export const updateSource = { provider: 'github', owner: 'DDonlien', repo: 'git-together', private: false } as const;
 export type UpdatePhase = 'unavailable' | 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'ready' | 'installing' | 'error';
 export interface UpdateStatus {

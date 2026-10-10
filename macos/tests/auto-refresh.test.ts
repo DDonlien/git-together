@@ -31,8 +31,9 @@ test('remote and local resources use separate cadence, without initial duplicate
   const b = createAutoRefresh({ clock, intervalMs: syncIntervals.local, run: async () => { local++; } });
   t.after(a.stop); t.after(b.stop);
   await clock.advance(0); assert.equal(local, 1); assert.equal(remote, 0);
-  await clock.advance(59_999); assert.equal(local, 12); assert.equal(remote, 0);
-  await clock.advance(1); assert.equal(local, 13); assert.equal(remote, 1);
+  assert.equal(syncIntervals.remote, 300_000); assert.equal(syncIntervals.local, 5_000);
+  await clock.advance(299_999); assert.equal(local, 60); assert.equal(remote, 0);
+  await clock.advance(1); assert.equal(local, 61); assert.equal(remote, 1);
 });
 
 test('slow requests, repeated wakeups and timer ticks cannot overlap a resource', async t => {
@@ -77,12 +78,57 @@ test('pause aborts work; a fast resume waits for its settlement and ignores a la
   await clock.advance(0); assert.equal(calls, 2); assert.equal(published, 1);
 });
 
-test('burst activation events are coalesced and cannot bypass the minimum request spacing', async t => {
+test('burst activation events keep a successful result fresh until its cadence expires', async t => {
   const clock = new ManualClock(); let calls = 0;
   const monitor = createAutoRefresh({ clock, intervalMs: 60_000, run: async () => { calls++; } }); t.after(monitor.stop);
   await clock.advance(0); for (let i = 0; i < 10; i++) monitor.wake();
   await clock.advance(999); assert.equal(calls, 1);
+  await clock.advance(1); assert.equal(calls, 1);
+  await clock.advance(59_000); assert.equal(calls, 2);
+});
+
+test('new Git changes can check a fresh result, coalescing bursts with minimum spacing', async t => {
+  const clock = new ManualClock(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: syncIntervals.remote, run: async () => { calls++; } }); t.after(monitor.stop);
+  await clock.advance(0); assert.equal(calls, 1);
+  for (let i = 0; i < 10; i++) monitor.trigger();
+  await clock.advance(999); assert.equal(calls, 1);
   await clock.advance(1); assert.equal(calls, 2);
+  await clock.advance(299_999); assert.equal(calls, 2);
+  await clock.advance(1); assert.equal(calls, 3);
+});
+
+test('Git changes during an in-flight check queue exactly one serialized follow-up', async t => {
+  const clock = new ManualClock(); const pending = deferred(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: syncIntervals.remote, run: async () => { calls++; if (calls === 1) await pending.promise; } }); t.after(monitor.stop);
+  await clock.advance(0);
+  for (let i = 0; i < 10; i++) monitor.trigger();
+  await clock.advance(5_000); assert.equal(calls, 1);
+  pending.resolve(); await flush(); await clock.advance(0); assert.equal(calls, 2);
+  await clock.advance(299_999); assert.equal(calls, 2);
+});
+
+test('paused changes and interrupted triggered checks survive until active resume', async t => {
+  const clock = new ManualClock(); let active = true; let calls = 0; const pending = deferred(); let signal: AbortSignal | undefined;
+  const monitor = createAutoRefresh({ clock, intervalMs: syncIntervals.remote, isActive: () => active, run: async current => { calls++; signal = current; if (calls === 3) await pending.promise; } }); t.after(monitor.stop);
+  await clock.advance(0); active = false; monitor.pause(); monitor.trigger();
+  await clock.advance(5_000); assert.equal(calls, 1);
+  active = true; monitor.wake(); await clock.advance(0); assert.equal(calls, 2);
+  monitor.trigger(); await clock.advance(1_000); assert.equal(calls, 3);
+  active = false; monitor.pause(); assert.equal(signal?.aborted, true);
+  pending.resolve(); await flush(); await clock.advance(5_000); assert.equal(calls, 3);
+  active = true; monitor.wake(); await clock.advance(0); assert.equal(calls, 4);
+});
+
+test('Git change triggers retain provider retry deadlines and disappear after stop', async t => {
+  const clock = new ManualClock(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: 5_000, run: async () => { calls++; if (calls === 1) throw new Error('HTTP 429'); } }); t.after(monitor.stop);
+  await clock.advance(0);
+  for (let i = 0; i < 10; i++) monitor.trigger();
+  await clock.advance(9_999); assert.equal(calls, 1);
+  await clock.advance(1); assert.equal(calls, 2);
+  monitor.stop(); monitor.trigger(); monitor.wake(); await clock.advance(60_000);
+  assert.equal(calls, 2); assert.equal(clock.timers.size, 0);
 });
 
 test('focus or reconnection events cannot bypass failure backoff and provider throttling', async t => {

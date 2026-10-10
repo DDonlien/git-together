@@ -10,6 +10,7 @@ declare global {
         status: (input?: unknown) => Promise<DiagnosticsStatus>;
         record: (input: DiagnosticInput) => Promise<boolean>;
         open: (input?: unknown) => Promise<boolean>;
+        copy?: () => Promise<number>;
       };
       chooseDirectory: () => Promise<string | null>;
       openGithubAuthorization: () => Promise<void>;

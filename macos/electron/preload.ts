@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('gittogether', {
     status: () => ipcRenderer.invoke('gittogether:diagnostics', 'status'),
     record: (input: unknown) => ipcRenderer.invoke('gittogether:diagnostics', 'record', input),
     open: () => ipcRenderer.invoke('gittogether:diagnostics', 'open'),
+    copy: () => ipcRenderer.invoke('gittogether:diagnostics', 'copy'),
   },
   chooseDirectory: () => ipcRenderer.invoke('gittogether:choose-directory'),
   openGithubAuthorization: () => ipcRenderer.invoke('gittogether:github-authorization'),

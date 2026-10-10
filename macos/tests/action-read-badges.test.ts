@@ -28,8 +28,8 @@ test('unchanged Git numbers survive remote refresh, failure, retry and recovery 
     assert.equal(signals.pull.status, state.loading ? 'reading' : state.error ? 'error' : undefined);
   }
   const waiting = render(gitSignals([task], { ...remote, loading: true }, local));
-  assert.match(waiting, /git-action-badge warning">4</); assert.match(waiting, /git-action-badge good">0</);
-  assert.match(waiting, /git-action-read-badge reading/); assert.match(waiting, /git-action-read-spinner/);
+  assert.match(waiting, /git-action-badge warning">4</); assert.doesNotMatch(waiting, /git-action-badge [^"]+">0</);
+  assert.doesNotMatch(waiting, /git-action-read-badge reading|git-action-read-spinner/);
   const failed = render(gitSignals([task], { ...remote, error: 'HTTP 503' }, local));
   assert.match(failed, /git-action-read-badge error">!</); assert.doesNotMatch(failed, /git-action-badge error">1</);
   assert.match(failed, /HTTP 503/); assert.match(failed, /不代表本次读取成功/);
@@ -96,11 +96,12 @@ test('local loading/errors only affect dependent actions; successful changed dat
   assert.equal(first.commit.status, 'reading'); assert.doesNotMatch(first.commit.detail, /没有未提交/);
 });
 
-test('read badges reuse theme roles and stop motion for reduced-motion users without changing Git hit areas', () => {
+test('error badges reuse theme roles and row checking breathes with reduced-motion support', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.git-action-read-badge\.error \{[^}]*var\(--danger\)/);
-  assert.match(css, /\.git-action-read-spinner \{[^}]*animation: git-action-reading/);
-  assert.match(css, /prefers-reduced-motion: reduce\) \{ \.git-action-read-spinner \{ animation: none/);
+  assert.match(css, /\.is-reading[\s\S]*animation: git-action-breathe 1\.6s/);
+  assert.match(css, /prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
+  assert.doesNotMatch(css, /git-action-read-spinner|git-action-reading/);
   assert.match(css, /\.git-action-read-badge \{[^}]*pointer-events: none/);
   const html = render(gitSignals([task], { ...remote, loading: true }, local));
   assert.equal((html.match(/aria-disabled="true"/g) || []).length, 7);

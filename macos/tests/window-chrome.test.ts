@@ -74,7 +74,8 @@ test('collapsed layout retains a single icon column at every viewport and keeps 
 test('header and permanent navigation share fixed geometry and the content top inset in both states', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const header = css.match(/\.sidebar-header \{([^}]+)\}/)?.[1] || '';
-  assert.match(header, /height: var\(--sidebar-button-size\); flex-shrink: 0; margin-bottom: 8px;/);
+  assert.match(header, /height: var\(--sidebar-button-size\); flex-shrink: 0; margin-bottom: var\(--sidebar-section-gap\);/);
+  assert.match(css, /--sidebar-section-gap: 8px;/);
   assert.doesNotMatch(header, /padding-bottom|60px/);
   assert.match(css, /\.global-sidebar \{[^}]*padding: var\(--workspace-top-inset\) 12px 0;/);
   assert.match(css, /\.dashboard-view\.import-dashboard \{ padding-top: var\(--workspace-top-inset\);/);

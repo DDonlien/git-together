@@ -1,5 +1,6 @@
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
 import type { RepositoryWorkspace } from './repository-model';
+import type { LocalCommitDetails } from './local-commit-model';
 
 export type Provider = 'github' | 'gitea';
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
@@ -49,11 +50,13 @@ export type ApiInputs = {
   refresh: { accountId: string };
   removeAccount: { accountId: string };
   link: { repositoryId: string; path: string; branch?: string };
+  downloadBranch: { repositoryId: string; branch: string; parentPath: string; folderName: string };
   matchAccountRepositories: { accountId: string; path: string };
   unlink: { repositoryId: string; branch?: string };
   snapshot: { repositoryId: string };
   localWorkspace: { repositoryId: string };
-  diff: { repositoryId: string; path: string; taskId?: string };
+  localCommit: { repositoryId: string; taskId: string; commitId: string };
+  diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
@@ -65,8 +68,9 @@ export type ApiOutputs = {
   githubAuthStart: GitHubAuthorization;
   githubAuthPoll: GitHubAuthorizationProgress;
   githubAuthCancel: GitHubAuthorizationCancellation;
-  link: Catalog; matchAccountRepositories: { catalog: Catalog; matchedRepositoryIds: string[] }; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
+  link: Catalog; downloadBranch: Catalog; matchAccountRepositories: { catalog: Catalog; matchedRepositoryIds: string[] }; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
   localWorkspace: RepositoryWorkspace;
+  localCommit: LocalCommitDetails;
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
 };

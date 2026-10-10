@@ -17,7 +17,7 @@ test('expanded repositories render exactly one table row per returned branch, wi
   const markup = render(ready());
   const rows = [...markup.matchAll(/<tr class="dashboard-branch-row">([\s\S]*?)<\/tr>/g)].map(match => match[1]);
   assert.equal(rows.length, 3);
-  for (const [index, row] of rows.entries()) { assert.match(row, /<td colSpan="3">/); assert.ok(row.includes(workspace.tasks[index].branch)); assert.equal((row.match(/<td/g) || []).length, 3); }
+  for (const [index, row] of rows.entries()) { assert.match(row, /<td colSpan="3">/); assert.ok(row.includes(workspace.tasks[index].branch)); assert.equal((row.match(/<td/g) || []).length, 5); }
   assert.equal((markup.match(/class="dashboard-default-branch"/g) || []).length, 1);
   assert.match(rows[0], />默认<\/small>/); assert.doesNotMatch(rows[1], /默认/);
   assert.match(markup, /关联工作目录/); assert.doesNotMatch(markup, /checkout/);
@@ -27,6 +27,17 @@ test('missing default branch is not injected and a truly empty remote has no fab
   assert.doesNotMatch(render(ready(), { ...repository, defaultBranch: 'missing' }), /dashboard-default-branch|>missing</);
   const markup = render(ready({ ...workspace, tasks: [] }));
   assert.match(markup, /此仓库暂无远端分支/); assert.doesNotMatch(markup, /dashboard-branch-row|>main</);
+});
+
+test('unlinked branches expose only Download and Hide while linked ones retain seven Git controls', () => {
+  const markup = renderToStaticMarkup(createElement(RepositoryBranchRows, { repository, state: ready(), onDownload: () => {}, onToggleHidden: () => {} }));
+  assert.equal((markup.match(/data-action-name="下载"/g) || []).length, 3);
+  assert.equal((markup.match(/data-action-name="隐藏"/g) || []).length, 3);
+  assert.doesNotMatch(markup, /class="repository-actions"|data-action-name="Commit"|data-action-name="Fetch"/);
+  const linked = renderToStaticMarkup(createElement(RepositoryBranchRows, { repository, state: ready(), link: { repositoryId: repository.id, path: '/qa/main', worktrees: [{ path: '/qa/main', branch: 'main' }] }, onDownload: () => {}, onToggleHidden: () => {} }));
+  assert.equal((linked.match(/data-action-name="Commit"/g) || []).length, 1);
+  assert.equal((linked.match(/data-action-name="下载"/g) || []).length, 2);
+  assert.equal((linked.match(/aria-disabled="true"/g) || []).length, 7);
 });
 
 test('initial loading and a blocked service are status messages, not empty branches or default-name rows', () => {
@@ -71,15 +82,15 @@ test('disclosure reuses the finite remote reader, instance-bound identity and in
   const source = readFileSync(new URL('../src/Dashboard.tsx', import.meta.url), 'utf8');
   assert.match(source, /useState<Set<string>>\(new Set\(\)\)/);
   assert.match(source, /JSON.stringify\(\[controller.catalog.instanceId, repo.id\]\)/);
-  assert.match(source, /useRemoteRepository\(repo, controller.catalog.instanceId, \(expanded \|\| !!link\) && ready\)/);
+  assert.match(source, /useRemoteRepository\(repo, controller.catalog.instanceId, \(expanded \|\| !!link\) && ready, controller.remoteStates\[repo.id\]\)/);
   assert.match(source, /aria-expanded=\{expanded\} aria-controls=\{branchesId\}/);
   assert.match(source, /hidden=\{!expanded\}/); assert.match(source, /filtered.length\} 个仓库/);
   assert.match(source, /onClick=\{\(\) => onOpen\(repo.id\)\}/);
   assert.doesNotMatch(source, /<th[^>]*>默认分支|fetch\(|remoteFile|remoteCommit/);
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /\.remote-repo-table th:nth-child\(5\) \{ width: 128px/);
-  assert.doesNotMatch(css, /\.remote-repo-table th:nth-child\(6\)/);
-  assert.doesNotMatch(css, /\.remote-repo-table th:nth-child\(7\)/);
+  assert.match(css, /\.remote-repo-table th:nth-child\(4\), \.remote-repo-table th:nth-child\(5\) \{ width: 10%/);
+  assert.match(css, /\.remote-repo-table th:nth-child\(6\) \{ width: 13%/);
+  assert.match(css, /\.remote-repo-table th:nth-child\(7\) \{ width: 276px/);
 });
 
 test('the existing folder tile is the only disclosure, without an extra arrow or a changed hit-area size', () => {

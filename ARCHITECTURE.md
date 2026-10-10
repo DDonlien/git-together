@@ -1,5 +1,15 @@
 # TypeScript 客户端架构
 
+更新包来源（2026-10-10）：releaseBranch指定main，打包入口检查当前分支及生产输入已提交，构建前后复核提交、分支、工作树和输入摘要，build-info记录sourceBranch/sourceCommit/sourceSha256。GitHub Releases仍是MacUpdater的公共下载源；Git分支不作为更新频道。发布tag应指向该main源码提交，不通过源码push冒称已发布安装更新。
+
+2026-10-10本地Git变化触发远端检查（0.17.0）：保留五分钟远端定时和五秒本地扫描。repository-reader为每个真实worktree生成可选changeKey：HEAD、原始porcelain状态、index的模式/对象ID/阶段，以及Git更改列表内文件的mode/size/mtimeNs/ctimeNs/inode共同生成稳定SHA-256。只读index枚举补足同状态再次暂存的检测，lstat不跟随软链接，不每轮读取大型LFS内容；脏文件元信息按64项并行批次读取，正常删除用missing标识，其他读取失败作为该task错误。useWorkspace按服务、关联映射和工作目录保存成功基线，比较实际branch及指纹；首次成功建立基线，逐任务失败保留该路径基线，整个读取失败不改基线，映射移除/服务重启清理。新变化递增该仓库触发版本，单次扫描内多个分支变化合并。关联仓库的useRemoteRepositories由useWorkspace持有，Dashboard与仓库页共享同一remoteStates；筛选、隐藏、收起和页面切换不重置网络节奏。未关联仓库仍由展开/打开页面按需读取，已保存SHA内容沿用服务缓存。useAutoRefresh比较触发版本，createAutoRefresh.trigger提前检查新变化但不绕过重试截止；在途变化合并为一次后续请求，取消的触发在恢复时保留，focus/online仍只恢复原定时或已有触发。远端部分task失败发布各自结果并进入同一重试期限，不把失败扩散成整仓库假计数。没有新增远端API、Git fetch写入、文件内容上传或持久化字段；实际reading继续驱动呼吸，最后成功结果继续驱动正数角标。
+
+2026-10-10未关联分支下载（0.16.0）：Dashboard分支行按实际已关联任务决定显示七项Git操作或仅下载/隐藏。App提供BranchDownloadModal，复用本地目录选择器，输入新文件夹名称并显示目标位置；useWorkspace复用单仓库busy锁，有限downloadBranch协议只接受repositoryId、branch、parentPath、folderName并返回Catalog。服务依据自己的仓库/账号构造远端HTTPS URL，复用账号凭据；令牌仅进入子进程环境，临时credential helper限定同一origin，不存入Git参数、URL、配置或日志。新分支使用应用数据目录内按账号/仓库身份区分的共享bare对象库，精确fetch该分支depth=1，创建私有临时worktree，按实际filter属性处理当前版本LFS，然后创建/使用真实分支并通过git worktree move移至用户指定的新文件夹。已有目录、工作目录和不同本地提交不覆盖，其他检出不切换。下载、账号/关联身份和实际remote/branch验证完成后，经既有v2存储原子追加LocalWorktreeLink；保存失败保留完成目录并提示手动关联。失败只清理未发布的私有临时worktree；请求取消/超时先等待Git及同进程组子进程退出，再处理清理。后台检查继续只读，不复用下载为普通Fetch/Pull/Push/Get Latest/Reconcile/Clear执行。依据[Git worktree](https://git-scm.com/docs/git-worktree)、[Git credential helper](https://git-scm.com/docs/gitcredentials)、[Git LFS pull](https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-pull.adoc)契约实现；源码和运行验收分别记录。
+
+Dashboard操作名称：`DashboardActionNames`只围绕整个仓库表建立一个事件边界，读取行尾控件的`data-action-name`，通过body portal展示单一名称；禁用Git的现有wrapper和可用Hide仍独立处理原点击。名称和鼠标/焦点坐标是短暂UI状态，无服务、存储或Git调用；窗口边缘按实际标签尺寸计算，键盘自动滚动保持按钮锚点，鼠标滚动关闭。不改变账号、本地目录、刷新或诊断日志协议。
+
+2026-10-10检查节奏与稳定结果（0.13.1）：参考[GitHub Desktop BackgroundFetcher](https://github.com/desktop/desktop/blob/development/app/src/lib/stores/helpers/background-fetcher.ts)的完成后定时，以及[AppStore](https://github.com/desktop/desktop/blob/development/app/src/lib/stores/app-store.ts)的条件检查和独立在途状态。现有provider只读接口继续读取远端，未引入真实Git fetch写入；远端目录/HEAD每5分钟检查，本地仍每5秒只读。auto-refresh记录最近成功完成时间，focus/online只恢复尚未到期的原定时或启动过期检查，同时保留重试截止与单资源单请求。已有0.12.2工作区缓存及状态/数量分离继续使用。Dashboard从实际reading派生整排行尾动作的aria-busy与呼吸类，Git与Hide同相位；读取状态不直接成为数字。RepositoryActions只渲染大于0的数字和独立错误感叹号，取消、失败与待机不产生临时1或0。
+
 2026-10-10读取状态与计数分离（0.12.2）：auto-refresh的onReading仅覆盖实际在途请求，取消/暂停清除等待状态，失败退避不持续显示忙碌。远端与本地hook沿用原资源身份保护，分别发布loading/error及最后可用workspace；preserveLocalWorkspace在相同映射内保留失败任务的文件、树和历史，按task id/path/branch核对，成功任务更新、删除任务或映射变化不复用。branch-links从已读取数据计算真实数量，独立status/statusDetail表达reading/error，读取失败不短路成count=1，未知仍未知；Commit只依赖本地，Fetch只依赖远端，逐任务错误限定分支。RepositoryActions独立渲染数字和状态，保持禁用执行。账号服务的15秒远端请求限时覆盖头/正文，外部取消仍透传；只将白名单连接/证书代码、超时、HTTP权限与限流转换为安全说明，不返回原始异常、凭据或provider正文。无新API、持久化结构、账号重放或Git写操作。
 
 2026-10-10操作裁切与隐藏修正：Dashboard的显式repository-action-cell固定在表格可见右端，276px容纳七个Git入口和独立Hide/Restore；错误行的colSpan不套用固定列。其他列保持表内横滚与六项排序。RepositoryRowActions复用已有RepositoryActions并追加真实可用的隐藏按钮。useWorkspace沿用v2界面偏好存储，新增可选hiddenEntries字符串数组，旧记录缺省兼容；键为JSON编码的repositoryId和可选branch，不依赖服务instanceId。Dashboard过滤隐藏仓库及分支，显示已隐藏模式提供逐行恢复，分支全部隐藏时显示明确说明。隐藏仅影响列表，不改变Catalog、账号权限、目录关联、Git状态或文件。
@@ -42,9 +52,9 @@ Dashboard 的仓库名称直接读取 `RemoteRepository.name`；「组织 / 用�
 
 Workspace 每约 10 秒检查服务 instance/version 与 Catalog；每个账号正常约 60 秒调用已有只读仓库 refresh；每个关联仓库正常约 5 秒读取 localWorkspace 中的真实工作目录。远端目录沿用服务分页/错误保留/原子 revision；新会话旧响应、已解绑或换路径的迟到响应不能覆盖当前数据。服务失联保留缓存并显示错误，不重放 connect、token 或授权。版本不一致停止检查，保留原刷新页面交接。
 
-本地工作区缓存位于 controller 的 localStates，以 instanceId、仓库、父目录及工作目录集合组成 mappingKey。Dashboard 用操作灯及提示表达读取错误，RepositoryView 复用同一工作区，不各自重复拉取；映射变化时不能沿用旧目录任务，失败仅保留相同映射的最后结果。内容比较复用未变对象，不清空搜索或已选文件。选中文件 Diff 独立正常约 5 秒重读，请求包含 taskId，不能只比较文件名/status 而忽略内容。错误保留相同任务的最后成功 Diff 并标明过期，恢复成功后消除错误；文件退出真实更改列表时不继续冒充存在的差异。
+本地工作区缓存位于 controller 的 localStates，以 instanceId、仓库、父目录及工作目录集合组成 mappingKey。Dashboard 用操作灯及提示表达读取错误，RepositoryView 复用同一工作区，不各自重复拉取；映射变化时不能沿用旧目录任务，失败仅保留相同映射的最后结果。内容比较复用未变对象，不清空搜索或已选文件。按R-05-local-preview-removal，文件选择只保留列表/树联动，不再读取或轮询所选文件内容；工作区状态与历史提交详情的自动检查继续沿用原缓存和错误边界。
 
-R-05 中已选文件退出更改列表时保留树选择，但不再显示旧 Diff，而明确显示没有未提交更改。每个任务卡片独立正常约 5 秒检查自己选中的更改文件；聚焦隐藏的卡片暂停 Diff 请求，重新展示后检查，草稿与选择不清空。
+R-05中已选文件退出更改列表时仍保留树选择；本地和远端均没有内嵌内容预览或预览专用占位。删除RepositoryChanges的Diff状态和调度，以及View/Column/隔离预览入口的readDiff回调链；隐藏任务继续保持挂载，草稿与选择不清空。有限后端Diff接口保留，不再由文件选择触发。
 
 浏览器远端读取的 AbortSignal 通过 HTTP 连接关闭传递到服务端，再传递给提供方请求；监听 response close / request aborted，不把正常 POST 读完误判为取消。既有目录 refresh 不改变去重语义。原生 IPC 本身没有远端执行取消，renderer 的 signal/资源身份阻止卸载后的发布。`use-remote-repository.ts` 为打开且可访问的工作区，以及 Dashboard 中可见且展开的仓库建立正常约 60 秒的 HEAD 心跳，以服务 instanceId + 仓库身份定位缓存，保留最后成功结果与逐任务 UI 状态；停止旧资源、丢弃迟到结果，隐藏/离线和错误退避沿用共享调度器。这是前台轮询，不是 webhook 推送，不 fetch 或写入本地 refs，不表示零延迟或 API 限流时仍实时。
 
@@ -70,7 +80,9 @@ Vite 只监听 loopback，HTTP 中间件要求本机 Host、同源 Origin / Sec-
 
 ### 正常网页返回与开发配置
 
-原生桌面也通过正常网页回调连接 GitHub。每次由主进程生成能力值，保存在主进程和授权助手内存中；无浏览器 Origin 的有限原生接口才可传递授权结果，普通页面不能轮询原生会话。主进程使用账号服务的授权专用接口保存并保留旧身份、目录映射和有效期，再向助手确认完成。页面仅收到公开授权网址及不含凭据的账号目录。助手缺失时，安装包以独立进程和原加密身份启动内置助手，恢复既有应用配置；应用密钥不进入安装包。当前接入仍使用本机已有开发应用配置，公共生产授权服务另行部署。
+原生桌面也通过正常网页回调连接 GitHub。每次由主进程生成能力值，保存在主进程和原生授权服务内存中；无浏览器 Origin 的有限原生接口才可传递授权结果，普通页面不能轮询原生会话。主进程使用账号服务的授权专用接口保存并保留旧身份、目录映射和有效期，再确认完成。页面仅收到公开授权网址及不含凭据的账号目录。已有外部助手仍可复用；缺失时主进程直接运行原有 4174 服务，不再启动另一个应用身份来读取钥匙串。浏览器预览的实例绑定与原生能力值边界保持独立。当前接入仍使用本机已有开发应用配置，公共生产授权服务另行部署。
+
+桌面启动时只读取一次 `userData/github-oauth-v1.encrypted`，与账号存储共同使用 `GitTogether` 的系统加密身份。缺失时短期迁移进程以旧 `GitTogether Authorization` 身份恢复既有开发配置，仅经继承的私有管道传回主进程并重新加密；管道有 512 字节上限，stdout/stderr 不承载秘密，临时会话退出即清理，旧文件保留。迁移或保存失败不会启用配置，损坏的新配置不会回退覆盖；准备失败由授权入口显示，设置仍可使用。首次读取旧钥匙串可能仍须用户授权，不能绕过系统权限；后续重新授权使用缓存，不读取钥匙串或启动迁移进程。应用密钥仍不进入源码、日志、页面或安装包。
 
 主页面的 `connect-src` 除自身和现有开发 websocket，只增加固定 `http://127.0.0.1:4174/api/` 路径前缀，供网页授权的 start/poll/cancel 请求使用；不允许任意 HTTP、外部 GitHub API、开发配置或回调路径。仅配置服务 CORS 不够，客户端 CSP 也必须允许该精确来源。客户端 HTML 策略回归同时限制脚本、默认来源和对象，构建与实际页面均需核对。
 
@@ -136,9 +148,9 @@ App 不再渲染重复顶栏，RepositoryView 保留一个基础信息块，并�
 
 完整读模型、带taskId的Diff、HTTP/IPC校验和controller已接通生产App。Diff/openFile仅允许精确已关联任务路径，先验证保存的远端，再确认当前真实任务身份；不能通过共享common-dir访问尚未关联的兄弟worktree。旧snapshot方法保留兼容测试，生产使用localWorkspace，snapshotWorkspace只作未提供新模型的组件回退。`worktree-links.test.ts` 与 `remote-integration-preview.ts --worktrees` 使用真实临时Git和实际AccountService验证父目录批量发现、独立内容、三态、逐分支解除与HEAD/index不变；不使用用户凭据或工作目录，不代替原生选择器验收。
 
-历史提交详情由模块级 `RepositoryCommitDetails.tsx` 统一渲染在本地/远端任务底部，不再属于Graph。View保存单一`commitSelection: {taskId, commitId} | null`，由它派生选中记录与提交订阅；聚焦时优先对应任务，未聚焦时保留远端HEAD/真实祖先匹配。仅本地composer使用hidden而不卸载，草稿与文件选择继续保留；取消选择恢复本地输入或远端等待选择空态。远端只使用匹配当前SHA的读取结果，未读到或失败时显示当前图记录而非旧提交。R-05-remote-metadata 移除远端顶部重复分支/来源/SHA 与摘要/作者/时间；R-05-remote-focus-control 再移除远端聚焦按钮和其专用标题栏、props/回调及样式。顶部显示全部任务及本地聚焦入口不改，区域名称继续标识任务，图、树及底部详情不改。R-05-history-body的前端组件支持可选description，按summary、普通正文、辅助作者/时间/SHA渲染；没有正文时省略，不推断或补写内容，不新增复制状态。当前远端读取器仍截取message首行，本地log仍只读summary；尚未更新共享DTO或正文读取协议，需用户批准4173更新/重启后另行接通。没有新存储，本地任务分支/路径及现有工作目录Diff不改为历史Diff。
+历史提交详情由模块级 `RepositoryCommitDetails.tsx` 统一渲染在本地/远端任务底部，不再属于Graph。View保存单一`commitSelection: {taskId, commitId} | null`，由它派生选中记录与提交订阅；聚焦时优先对应任务，未聚焦时保留远端HEAD/真实祖先匹配。仅本地composer使用hidden而不卸载，草稿与文件选择继续保留；取消选择恢复本地输入或远端等待选择空态。远端只使用匹配当前SHA的读取结果，未读到或失败时显示当前图记录而非旧提交。R-05-remote-metadata 移除远端顶部重复分支/来源/SHA 与摘要/作者/时间；R-05-remote-focus-control 再移除远端聚焦按钮和其专用标题栏、props/回调及样式。顶部显示全部任务及本地聚焦入口不改，区域名称继续标识任务，图、树及底部详情不改。R-05-history-body的前端组件支持可选description，按summary、普通正文、辅助作者/时间/SHA渲染；没有正文时省略，不推断或补写内容，不新增复制状态。远端读取器及本地图记录仍只读summary；R-05-local-history-diff新增的localCommit详情读取完整本地提交正文，经独立有限DTO验证后送入底部组件。没有新存储，工作目录更改列表和草稿仍独立保留；文件内容预览按R-05-local-preview-removal取消。
 
-R-05-change-context由`RepositoryChangesColumn.tsx`承担中栏稳定边界，派生唯一活动task，保留原task.id和所有隐藏卡片。无提交选择时优先选择的本地任务/聚焦本地任务/已关联目录，多个本地任务通过公共菜单切换；选择提交时只展示对应任务。组件仅持有必要的分组模式和本地目录选择，不用effect同步派生状态。`RepositoryChangedFiles.tsx`在本地/远端真实复用完整文件行、搜索和可选Added/Modified/Deleted/其他分组，使用前端`file-tree.ts`导出的同一状态分类器，不切片、不复制服务字段。中栏stack及body不再滚动，活动卡片伸缩约束在可视栏；列表flex:1/min-height:0/overflow:auto，底部composer/历史详情不收缩，取消160px上限。本地历史未接入时隐藏工作更改并停止对应Diff请求，明确提示未接入，仍显示该历史说明；不新增本地历史API，不恢复远端文本预览，也不改Vite服务导入的共享模型。
+R-05-change-context由`RepositoryChangesColumn.tsx`承担中栏稳定边界，派生唯一活动task，保留原task.id和所有隐藏卡片。无提交选择时优先选择的本地任务/聚焦本地任务/已关联目录，多个本地任务通过公共菜单切换；选择提交时只展示对应任务。组件仅持有必要的分组模式和本地目录选择，不用effect同步派生状态。`RepositoryChangedFiles.tsx`在本地/远端真实复用完整文件行、搜索和可选新增/修改/删除/其他分组，使用前端`file-tree.ts`导出的同一状态分类器，不切片、不复制服务字段。中栏stack及body不再滚动，活动卡片伸缩约束在可视栏；列表flex:1/min-height:0/overflow:auto，底部composer/历史详情不收缩，取消160px上限。R-05-local-history-diff接通后，选择本地提交时隐藏工作更改，改读该SHA的完整文件列表和提交说明；取消恢复原工作区选择。按R-05-local-preview-removal，本地与远端均不显示文件内容预览。
 
 ## 无本地关联的远端内容（R-05-remote，0.5.0 正式接入）
 
@@ -152,11 +164,19 @@ GitHub 使用 branches、commits、git/trees、git/blobs；Gitea 区分 branches
 
 RepositoryView 接受独立 remoteState 和有限 readRemoteCommit。图选中提交控制对应任务的中栏文件列表和右栏差异标记，不替换树的当前 HEAD 目录，再点选中项清除选择；文件选择仍按任务 ID 同步。按 R-05-remote-inline-preview 移除远端内嵌文本展示、内容状态/轮询以及 App→View→RemoteChanges 的文件读取 prop；生产 hook 不再发起专供预览的 remoteFile 请求。后台有限 API、Diff/blob DTO 和相关权限/隔离测试保留，没有服务或协议改动。`use-remote-commits.ts`仅订阅明确选中的远端SHA，无选择不回退到task.head；复用前台取消/退避调度器，按 SHA 缓存最多 64 份，资源身份阻止过期发布。远端禁用composer已移除，本地未提交卡片仍独立保留草稿和Diff。实际 App 始终传入远端读取状态，失败显示实际错误/自动重试、空仓库显示真实空态；旧隔离组件未传 reader 的占位契约保留。0.5.0接通时的服务重启和当时需重新连接账号属于历史更新，不用fixture端口或无凭据公开读取作为当前真实账号已登录的证据。
 
-R-05-global-tree 将树基准与提交差异分离：View 始终将原 task、HEAD 和 treeComplete 传入树，仅将与当前明确选择 SHA 匹配的 details.files 作为差异；加载或迟到结果不能带入旧提交着色，也不能把历史树的完整性替代当前树。按R-05-change-context取消选择传入空差异集合，远端树恢复中性，不回退HEAD差异；共享的空集合稳定且不会触发新的读取。本地仍由task.files提供真实工作目录状态。前端专用 `file-tree.ts` 由固定路径和变更集合纯派生树，归一化 Git/provider 状态、重命名旧路径、历史缺失路径以及父目录混合状态；不修改输入、共享服务模型或 DTO。`RepositoryFileTree` 使用 memoized 派生数据和稳定路径 key，不新增状态或重置 effect，继续保留 native details 展开和挂载的来源任务。没有本地历史读取时不冒充远端历史 Diff。无需新请求、账号服务重启或原生包更新。
+R-05-global-tree 将树基准与提交差异分离：View 始终将原 task、HEAD 和 treeComplete 传入树，仅将与当前明确选择 SHA 匹配的 details.files 作为差异；加载或迟到结果不能带入旧提交着色，也不能把历史树的完整性替代当前树。按R-05-change-context取消选择传入空差异集合，远端树恢复中性，不回退HEAD差异；共享的空集合稳定且不会触发新的读取。本地仍由task.files提供真实工作目录状态。前端专用 `file-tree.ts` 由固定路径和变更集合纯派生树，归一化 Git/provider 状态、重命名旧路径、历史缺失路径以及父目录混合状态；不修改输入、共享服务模型或 DTO。`RepositoryFileTree` 使用 memoized 派生数据和稳定路径 key，不新增状态或重置 effect，继续保留 native details 展开和挂载的来源任务。本地历史通过R-05-local-history-diff提供匹配当前SHA的差异；取消后本地树恢复task.files工作目录标记。源码接入不等于原生包更新。
 
 测试 `git-remote-fixture.ts` 把本轮创建的真实临时 Git 数据转换为有限 provider 响应，覆盖零关联的真实 merge、分支树、Diff、已提交 blob 与本地脏内容隔离；`remote-integration.test.ts` 经过实际 AccountService→HTTP→importAPI，验证两个 provider、有限输入、SHA 缓存、凭据更新/移除竞争、取消和 HTTP 断连。`remote-integration-preview.ts` 在独立临时端口运行生产构建 App 和实际服务，测试账号只有 synthetic token，无测试入口进入生产；`repository-preview.ts --remote` 保留组件隔离 QA。临时 Git 的 HEAD/index 不受应用改动，用户凭据不导出、不重放、不落盘。
 
 文件树来源控制仅为 RepositoryView 内部状态，不新增 API。未选择时优先远端（只有本地任务时显示本地）；用户选择不被心跳重置。按 task.remote 区分来源，按现有 task.id 隐藏而不卸载树，选择与展开仍各任务独立；聚焦任务不属于所选来源时，右栏按同一分支匹配另一来源的任务，不改变聚焦或 checkout。源无任务时显示明确状态，不回退冒充另一源。标题公共分段组件提供具名 fieldset/legend 与 pressed 按钮，复用 Tab、Enter、Space；右栏卡片不重复显示远端文字。隔离 `repository-preview.ts --mixed` 组合同一个新建临时 Git 仓库的 provider 已提交内容与本地脏工作目录，用于来源差异/状态保留验证，不连接用户账号服务。
+
+## 本地历史提交差异（R-05-local-history-diff，0.15.0）
+
+AccountService新增有限localCommit方法，diff增加可选commitId；只接受仓库、已关联worktree任务、完整SHA与字面文件路径。taskRoot核对真实关联/远端/工作目录，请求前后检查账号可访问性与关联身份；HTTP/IPC沿用同一分发。提交必须是当前仓库历史中可达的commit，补丁路径必须属于该提交更改列表。读取禁用外部diff/textconv、可选index锁和partial clone隐式fetch；每条Git读取限制10秒/8MB，取消传播至进程，不写HEAD/index或切换分支。
+
+repository-reader读取真实提交正文与原始对象parent头，避免浅克隆pretty-format隐藏父节点而误判为首个提交。普通/合并提交与第一个父提交比较，根提交使用--root；缺失父提交明确报错。NUL分隔的name-status保留中文、空白及换行路径，重命名同时携带旧路径；逐文件patch保留二进制、模式及重命名元信息，不用工作目录内容代替历史。
+
+use-local-commits仅订阅明确选中的本地task/SHA，缓存最多64份，取消或迟到数据不发布；独立LocalCommitDetails验证完整提交身份、正文和文件列表。RepositoryView分别保存工作区选择与task/SHA历史选择。按R-05-local-preview-removal，选中文件只更新列表和树的选择，不读取内嵌补丁；提交详情仍按task/SHA读取。未读取到当前SHA时显示加载或实际错误，不显示其他提交；底部composer隐藏但保持挂载。完整当前文件树/HEAD不替换，仅叠加当前提交差异，取消后恢复工作区状态与草稿。本地和远端都没有文件内容预览。
 
 ## 本地诊断日志（IMPORT-14-diagnostics，0.13.0）
 
@@ -166,4 +186,4 @@ R-05-global-tree 将树基准与提交差异分离：View 始终将原 task、HE
 
 有限协议由 `diagnostics-model.ts` 白名单重建，仅保留时间、版本、事件/结果、方法、provider/端点类别、允许的错误类型/代码、HTTP 状态、Git 退出码/信号、耗时、重试延迟与计数。不保存原始消息、堆栈、输入/响应、URL、凭据、文件内容或明文账号/仓库/分支/目录。资源使用每进程随机盐 HMAC；渲染层不能传入资源标识或服务器跨度。`importAPI` 生成 UUID，经有限 IPC 或同源 HTTP 传给服务；AsyncLocalStorage 关联根请求、provider/存储子跨度与只读 Git 失败。常规本地读取由外层 API 记录开始/成功，内部 Git 仅记录失败，以免高频轮询产生巨量日志。部分任务/目录失败及不完整结果独立记 partial；保留缓存不代表读取成功。
 
-渲染层记录请求结果、实际退避/暂停/恢复、网络/可见性、偏好存储失败及未接入 Git 操作的 blocked；授权只记录安全阶段，更新记录 check/download/install 及终态，不存发布包内容或错误原文。进程异常监视不改变崩溃语义。日志不上传。设置的三个有限操作 status/record/open 由本机同源 HTTP 检查或既有可信主 frame IPC 检查保护；共用 `diagnosticsCommand`，打开固定日志目录而非接受调用者路径。纯静态部署和旧客户端无日志服务时明确提示不可用；不降级到浏览器明文存储。构建加载 Vite 配置不启动日志写入。账户与本地关联格式及安装应用身份保持不变。
+渲染层记录请求结果、实际退避/暂停/恢复、网络/可见性、偏好存储失败及未接入 Git 操作的 blocked；授权只记录安全阶段，更新记录 check/download/install 及终态，不存发布包内容或错误原文。进程异常监视不改变崩溃语义。日志不上传。设置的四个有限操作status/record/open/copy由本机同源HTTP检查或既有可信主frame IPC检查保护；共用`diagnosticsCommand`，打开固定日志目录而非接受调用者路径。0.14.0的copy先按既有24小时规则清理，仅读取受控文件名的普通JSONL文件，排除软链接、目录及非本功能文件；通过固定系统脚本调用macOS NSPasteboard，以NSURL文件项写入剪贴板，供文件附件粘贴使用。脚本内容固定、文件路径只作execFile参数，没有shell插值；4秒超时、空列表和系统失败明确反馈，不复制文本路径/文件内容或上传。使用Apple的[NSURL写入剪贴板方式](https://developer.apple.com/documentation/appkit/nspasteboardwriting)。纯静态部署和旧客户端无日志服务时明确提示不可用；不降级到浏览器明文存储。构建加载Vite配置不启动日志写入。账户与本地关联格式及安装应用身份保持不变。

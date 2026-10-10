@@ -6,8 +6,8 @@ import { createGitRemoteFixture } from './git-remote-fixture';
 import type { FileOpener } from '../server/system-file-open';
 import type { LocalDiagnostics } from '../server/diagnostics';
 
-export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean; diagnostics?: LocalDiagnostics } = {}) {
-  const git = await createGitRemoteFixture(provider, { treeChanges: options.treeChanges });
+export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean; diagnostics?: LocalDiagnostics; historyBody?: string } = {}) {
+  const git = await createGitRemoteFixture(provider, { treeChanges: options.treeChanges, historyBody: options.historyBody });
   const requests: { url: URL; authorization: string; signal?: AbortSignal | null }[] = [];
   let failure = 0;
   let failWhere: (url: URL) => boolean = () => true;

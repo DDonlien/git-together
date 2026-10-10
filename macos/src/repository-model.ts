@@ -1,7 +1,7 @@
 import type { LocalFile, LocalSnapshot } from './import-model';
 
 export type RepositoryCommit = LocalSnapshot['commits'][number] & { parents: string[]; refs: string[] };
-export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean };
+export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean; changeKey?: string };
 export type RepositoryWorkspace = { tasks: RepositoryTask[]; commits: RepositoryCommit[]; complete: boolean; source?: 'local' | 'remote' | 'mixed' };
 
 export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {
@@ -10,7 +10,7 @@ export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {
   const strings = (v: unknown) => Array.isArray(v) && v.every(item => typeof item === 'string');
   const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
   return w.source === 'local' && typeof w.complete === 'boolean' && Array.isArray(w.tasks) && w.tasks.length <= 64 && w.tasks.every(task => record(task) &&
-    ['id', 'branch', 'head', 'error', 'path'].every(key => typeof task[key] === 'string') && task.remote !== true && strings(task.tree) && Array.isArray(task.files) && task.files.every(file => record(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) &&
+    ['id', 'branch', 'head', 'error', 'path'].every(key => typeof task[key] === 'string') && task.remote !== true && (task.changeKey === undefined || typeof task.changeKey === 'string' && /^[a-f0-9]{64}$/.test(task.changeKey)) && strings(task.tree) && Array.isArray(task.files) && task.files.every(file => record(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) &&
     Array.isArray(w.commits) && w.commits.every(commit => record(commit) && ['id', 'summary', 'author', 'time'].every(key => typeof commit[key] === 'string') && strings(commit.parents) && strings(commit.refs));
 }
 

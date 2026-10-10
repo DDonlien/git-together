@@ -94,6 +94,10 @@ export class LocalDiagnostics {
     } catch (problem) { if (diagnosticCode(problem) !== 'ENOENT') this.failure('prune', problem); /* Another writer may just have pruned the same expired file. */ }
   }
   status(): DiagnosticsStatus { this.prune(); return { directory: this.directory, retentionHours: 24, maxBytes: this.maxBytes, limited: this.limited, error: Object.entries(this.errors).map(([stage, code]) => `日志${stage === 'write' ? '写入' : '清理'}失败（${code}），记录可能不完整。`).join(' ') }; }
+  files(): string[] {
+    const status = this.status(); if (status.error) throw new Error(status.error);
+    return readdirSync(this.directory).filter(name => logName.test(name)).sort().map(name => join(this.directory, name)).filter(file => lstatSync(file).isFile());
+  }
   close() { clearInterval(this.timer); this.prune(); }
   async run<T>(event: DiagnosticEvent, details: DiagnosticDetails, action: () => Promise<T>, requestId?: string, failuresOnly = false): Promise<T> {
     const parent = context.getStore(); const id = requestId && uuidPattern.test(requestId) ? requestId : parent?.requestId || randomUUID();

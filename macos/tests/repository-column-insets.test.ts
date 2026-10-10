@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 
 const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 const rule = (selector: string) => {
-  const start = css.indexOf(`${selector} {`);
+  const start = css.indexOf(`\n${selector} {`);
   assert.notEqual(start, -1, `Missing rule: ${selector}`);
-  return css.slice(start, css.indexOf('}', start) + 1);
+  return css.slice(start + 1, css.indexOf('}', start) + 1);
 };
 
 test('expanded column headings and all three content panes use one horizontal inset', () => {
@@ -17,13 +17,12 @@ test('expanded column headings and all three content panes use one horizontal in
   assert.match(rule('.repository-column-heading.is-collapsed'), /padding: 8px;/);
 });
 
-test('rows do not double the outer inset, including grouped changes and local inline Diff', () => {
-  assert.match(rule('.repository-task-body .readonly-file'), /padding-inline: 0;/);
+test('file rows and group labels retain inner padding within the shared outer inset', () => {
+  assert.match(rule('.readonly-file'), /padding: 9px 8px;/);
+  assert.doesNotMatch(css, /\.repository-task-body \.readonly-file \{/);
   assert.match(rule('.repository-graph-table .repository-graph-lane'), /padding: 0;/);
   assert.match(rule('.repository-graph-table .repository-graph-byline'), /padding-right: 0;/);
-  assert.match(rule('.repository-change-group h3'), /padding: 8px 0;/);
-  assert.match(rule('.repository-inline-diff .section-title'), /padding: 6px 0;/);
-  assert.match(rule('.repository-inline-diff pre'), /padding: 6px 0 12px;/);
+  assert.match(rule('.repository-change-group h3'), /padding: 8px;/);
   assert.match(rule('.repository-tree-row'), /padding: 3px 0;/);
   assert.match(rule('.repository-tree-row.tree-file'), /padding: 0;/);
   assert.match(rule('.repository-tree-select'), /padding: 3px 0;/);

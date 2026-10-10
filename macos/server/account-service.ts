@@ -1,15 +1,16 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { isCatalog, isRecord, repositoryPermissionKeys, type Account, type Catalog, type LocalFile, type LocalSnapshot, type LocalWorktreeLink, type Provider, type RemoteRepository, type RepositoryPermissions } from '../src/import-model';
 import { GitHubDeviceAuthorization } from './github-authorization';
 import { RemoteRepositoryReader } from './remote-repository-reader';
 import { repositoryFileURL } from '../src/repository-file-url';
-import { readLocalGit, readRepositoryWorkspace, readRepositoryTaskDiff, readWorktrees, readFailure, repositoryTaskFile } from './repository-reader';
+import { readLocalGit, readRepositoryWorkspace, readRepositoryTaskDiff, readRepositoryCommit, readRepositoryCommitDiff, readWorktrees, readFailure, repositoryTaskFile } from './repository-reader';
 import { discoverLocalRepositories, discoverLocalWorktrees } from './local-discovery';
+import { downloadBranchWorktree } from './branch-download';
 import { remoteIdentity } from './git-identity';
 import { topologicalCommits, type RepositoryWorkspace } from '../src/repository-model';
 import { openSystemFile, type FileOpener } from './system-file-open';
@@ -53,13 +54,16 @@ export class AccountService {
   private ready: Promise<void>;
   private mutation: Promise<void> = Promise.resolve();
   private refreshes = new Map<string, Promise<Catalog>>();
+  private branchDownloads = new Set<string>();
   private remoteReaders = new Map<string, { reader: RemoteRepositoryReader; valid: () => boolean }>();
   private revision = 0;
   private restoreError = '';
   private openFile: FileOpener;
   private diagnostics?: LocalDiagnostics;
-  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener; diagnostics?: LocalDiagnostics } = {}) {
+  private downloadRoot: string;
+  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener; diagnostics?: LocalDiagnostics; downloadRoot?: string } = {}) {
     this.openFile = options.openFile || openSystemFile;
+    this.downloadRoot = options.downloadRoot || join(homedir(), '.gittogether', 'repositories');
     this.diagnostics = options.diagnostics;
     this.ready = (this.diagnostics ? this.diagnostics.run('storage', {}, () => this.restore()) : this.restore()).catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
     this.githubAuthorization = new GitHubDeviceAuthorization(options.githubClientId ?? process.env.GITTOGETHER_GITHUB_CLIENT_ID ?? '', credential => this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, credential), request, options.now);
@@ -442,6 +446,44 @@ export class AccountService {
     if (!link) throw new Error('请先在 Dashboard 关联本地目录。');
     return this.validatePath(repository, link.worktrees?.[0]?.path || link.path);
   }
+  private async downloadBranch(input: Record<string, unknown>, signal?: AbortSignal): Promise<Catalog> {
+    if (Object.keys(input).some(key => !['repositoryId', 'branch', 'parentPath', 'folderName'].includes(key))) throw new Error('分支下载仅接受仓库、分支与本地存放位置。');
+    const id = field(input, 'repositoryId', 160); const branch = field(input, 'branch', 1024);
+    if (this.branchDownloads.has(id)) throw new Error('这个仓库已有分支正在下载，请稍候。');
+    const repository = this.repository(id);
+    const saved = this.state.accounts.find(item => item.account.id === repository.accountId);
+    if (!repository.available || !saved) throw new Error('访问账号不可用，请先在设置中检查仓库权限。');
+    const previous = this.state.links.find(link => link.repositoryId === id);
+    this.branchDownloads.add(id);
+    try {
+      let worktrees = previous?.worktrees || [];
+      if (previous && !previous.worktrees) {
+        const workspace = await this.localWorkspace(id, signal);
+        if (!workspace.complete || workspace.tasks.some(task => task.error || !task.path)) throw new Error('已有工作目录读取未完成，请先修复或重新关联，再下载新分支。');
+        worktrees = workspace.tasks.map(task => ({ branch: task.branch, path: task.path! }));
+      }
+      if (worktrees.some(worktree => worktree.branch === branch)) throw new Error('这个分支已经关联工作目录，请刷新列表。');
+      if (worktrees.length >= 64) throw new Error('关联工作目录已达64个，请先整理既有关联。');
+      const validate = () => {
+        signal?.throwIfAborted();
+        const currentAccount = this.state.accounts.find(item => item.account.id === repository.accountId);
+        const currentRepository = this.state.repositories.find(item => item.id === id);
+        if (!currentAccount || currentAccount.token !== saved.token || currentAccount.account.host !== saved.account.host || currentAccount.account.login !== saved.account.login ||
+          !currentRepository?.available || currentRepository.accountId !== repository.accountId || currentRepository.fullName !== repository.fullName || currentRepository.url !== repository.url ||
+          JSON.stringify(this.state.links.find(link => link.repositoryId === id)) !== JSON.stringify(previous)) throw new Error('账号、仓库或目录关联已更新，下载未保存关联，请刷新后重试。');
+      };
+      const path = await downloadBranchWorktree({ repository, account: saved.account, token: saved.token, branch,
+        parentPath: field(input, 'parentPath'), folderName: field(input, 'folderName', 160), storageRoot: this.downloadRoot, signal, validate });
+      try {
+        await this.validatePath(repository, path);
+        if ((await readLocalGit(path, ['symbolic-ref', '--short', 'HEAD'], signal)).trim() !== branch) throw new Error('下载目录的实际分支不匹配，没有保存关联。');
+        return await this.mutate(next => {
+          validate();
+          next.links = [...next.links.filter(link => link.repositoryId !== id), { repositoryId: id, path: previous?.path || path, worktrees: [...worktrees, { branch, path }] }];
+        });
+      } catch (problem) { throw new Error(`${problem instanceof Error ? problem.message : '保存关联失败。'} 下载目录已保留：${path}，可通过「关联工作目录」重新关联。`); }
+    } finally { this.branchDownloads.delete(id); }
+  }
   private async localWorkspace(id: string, signal?: AbortSignal): Promise<RepositoryWorkspace> {
     const repository = this.repository(id);
     const link = this.state.links.find(l => l.repositoryId === id);
@@ -529,6 +571,7 @@ export class AccountService {
       case 'githubAuthPoll': return this.githubAuthorization.poll(field(value, 'sessionId', 100));
       case 'githubAuthCancel': return this.githubAuthorization.cancel(field(value, 'sessionId', 100));
       case 'refresh': return this.refresh(field(value, 'accountId', 100));
+      case 'downloadBranch': return this.downloadBranch(value, signal);
       case 'removeAccount': {
         const id = field(value, 'accountId', 100);
         return this.mutate(next => { const repoIds = new Set(next.repositories.filter(r => r.accountId === id).map(r => r.id)); next.accounts = next.accounts.filter(a => a.account.id !== id); next.repositories = next.repositories.filter(r => r.accountId !== id); next.links = next.links.filter(l => !repoIds.has(l.repositoryId)); });
@@ -603,6 +646,17 @@ export class AccountService {
       }); }
       case 'snapshot': return this.snapshot(field(value, 'repositoryId', 160));
       case 'localWorkspace': return this.localWorkspace(field(value, 'repositoryId', 160), signal);
+      case 'localCommit': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'commitId'].includes(key))) throw new Error('本地提交仅接受仓库、任务和提交标识。');
+        const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
+        if (!repository.available) throw new Error('该账号目前无法访问这个仓库。');
+        const link = this.state.links.find(item => item.repositoryId === id);
+        const root = await this.taskRoot(id, field(value, 'taskId'));
+        const details = await readRepositoryCommit(root, field(value, 'commitId', 64), signal);
+        signal?.throwIfAborted();
+        if (this.state.links.find(item => item.repositoryId === id) !== link || !this.repository(id).available) throw new Error('仓库关联或访问账号已更新，请重试。');
+        return details;
+      }
       case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
       case 'openFile': {
         const source = value.source;
@@ -630,6 +684,18 @@ export class AccountService {
         return { opened: true };
       }
       case 'diff': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'path', 'commitId'].includes(key))) throw new Error('Diff 仅接受仓库、任务、提交和字面文件路径。');
+        if (value.commitId !== undefined) {
+          const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
+          if (!repository.available) throw new Error('该账号目前无法访问这个仓库。');
+          if (typeof value.path !== 'string') throw new Error('无效的仓库文件路径。');
+          const link = this.state.links.find(item => item.repositoryId === id);
+          const root = await this.taskRoot(id, field(value, 'taskId'));
+          const text = await readRepositoryCommitDiff(root, field(value, 'commitId', 64), value.path, signal);
+          signal?.throwIfAborted();
+          if (this.state.links.find(item => item.repositoryId === id) !== link || !this.repository(id).available) throw new Error('仓库关联或访问账号已更新，请重试。');
+          return { text };
+        }
         const id = field(value, 'repositoryId', 160); const file = field(value, 'path');
         if (value.taskId !== undefined) {
           const taskId = field(value, 'taskId'); const root = await this.taskRoot(id, taskId);

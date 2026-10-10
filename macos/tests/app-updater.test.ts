@@ -59,7 +59,7 @@ test('unpackaged/native-unavailable clients never pretend to check or install', 
   assert.equal(updater.install().phase, 'unavailable');
   const markup = renderToStaticMarkup(createElement(UpdateSettings, { busy: false }));
   assert.match(markup, /应用更新/); assert.match(markup, /桌面 App/); assert.match(markup, /disabled/);
-  assert.match(markup, /更新保留已连接账号和本地仓库关联/);
+  assert.doesNotMatch(markup, /更新保留已连接账号和本地仓库关联/);
   assert.equal(updateDescription({ phase: 'downloading', currentVersion: '0.9.0', availableVersion: '0.9.1', percent: 13.8 }), '正在下载 0.9.1：13%');
 });
 test('missing and wrapped GitHub feeds never blame local installation permissions or reveal provider diagnostics', async () => {

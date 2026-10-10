@@ -2,9 +2,13 @@ import { diagnosticFailure, rendererDiagnostic, type DiagnosticInput, type Diagn
 
 let reportingFailure = false;
 let installed = false;
-async function request(method: 'status' | 'record' | 'open', value: unknown = {}) {
+async function request(method: 'status' | 'record' | 'open' | 'copy', value: unknown = {}) {
   if (window.gittogether?.diagnostics) {
     const bridge = window.gittogether.diagnostics;
+    if (method === 'copy') {
+      if (!bridge.copy) throw new Error('当前 App 还未包含日志复制功能，请使用更新后的版本。');
+      return bridge.copy();
+    }
     return method === 'record' ? bridge.record(value as DiagnosticInput) : method === 'status' ? bridge.status() : bridge.open();
   }
   if (window.gittogether) throw new Error('当前 App 还未包含日志功能，请使用更新后的版本。');
@@ -19,6 +23,11 @@ export async function diagnosticsStatus(): Promise<DiagnosticsStatus> {
   return status;
 }
 export const openDiagnostics = (): Promise<unknown> => request('open');
+export async function copyDiagnostics(): Promise<number> {
+  const count = await request('copy');
+  if (!Number.isSafeInteger(count) || count < 1) throw new Error('无法确认日志文件已复制，请重试。');
+  return count;
+}
 export function logDiagnostic(value: DiagnosticInput) {
   if (!installed || typeof window === 'undefined') return;
   const clean = rendererDiagnostic(value); if (!clean) return;

@@ -37,7 +37,7 @@ test('unimplemented Git actions are disabled, explained and never represent succ
   }
 });
 
-test('each action retains disabled accessible detail without hover or native-title prompts', () => {
+test('each action retains disabled accessible detail without long hover or native-title prompts', () => {
   const markup = items();
   assert.match(markup, /aria-label="Git 操作：org\/shared · Personal"/);
   assert.equal((markup.match(/tabindex="0"/g) || []).length, 7);
@@ -59,7 +59,7 @@ test('Dashboard annotation styles scope the 2px reduction and share the 10px ico
   assert.match(css, /--icon-label-gap:\s*10px/);
   assert.match(css, /--repository-detail-size:\s*11px/);
   assert.match(css, /\.remote-name small\s*\{[^}]*font-size:\s*var\(--repository-detail-size\)/);
-  assert.match(css, /\.repository-visibility\s*\{\s*font-size:\s*9px/);
+  assert.doesNotMatch(css, /\.repository-visibility\s*\{\s*font-size:\s*9px/);
   assert.match(css, /\.remote-repo-table \.branch-label\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*var\(--icon-label-gap\)/);
   assert.match(css, /\.nav-item\s*\{[^}]*gap:\s*var\(--icon-label-gap\)/);
   assert.doesNotMatch(dashboard, /provider-mark/);

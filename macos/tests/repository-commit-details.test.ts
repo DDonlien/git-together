@@ -83,7 +83,7 @@ test('loading or failed selection uses the selected graph record rather than a p
 
 test('local history hides but does not discard its original draft composer and restores normal editing when deselected', () => {
   const local: RepositoryTask = { ...task, id: 'local:main', remote: false, path: '/isolated/qa' };
-  const props = { task: local, onSelect() {}, search: '', focused: false, onFocus() {}, readDiff: async () => '', loading: false, linked: true, active: true, showFocus: false };
+  const props = { task: local, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false };
   const history = renderToStaticMarkup(createElement(RepositoryChanges, { ...props, selectedCommit: commit }));
   assert.match(history, /class="repository-commit-composer" hidden=""/);
   assert.match(history, /<textarea/);

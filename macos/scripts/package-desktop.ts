@@ -2,14 +2,15 @@ import { build as buildClient } from 'vite';
 import react from '@vitejs/plugin-react';
 import { build as buildDesktop } from 'esbuild';
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { sign } from '@electron/osx-sign';
-import { updateSource } from '../src/update-model';
+import { releaseBranch, updateSource } from '../src/update-model';
 
 const clientRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -18,6 +19,12 @@ const electronVersion = (require('electron/package.json') as { version: string }
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('此打包入口需要 Apple Silicon macOS。');
 const sourceEntries = ['src', 'server', 'electron', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
+const git = promisify(execFile);
+const sourceBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
+if (sourceBranch !== releaseBranch) throw new Error(`更新包必须从 ${releaseBranch} 分支构建，当前为 ${sourceBranch}。`);
+const sourceStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts'], { cwd: clientRoot })).stdout;
+if (sourceStatus) throw new Error('打包源码有未提交改动，请先检查并提交到 main。');
+const sourceCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
 
 async function sourceDigest(root: string) {
   const hash = createHash('sha256');
@@ -91,6 +98,10 @@ try {
     optionsForFile: () => ({ entitlements: join(source, 'electron', 'entitlements.plist'), hardenedRuntime: true }) });
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath], clientRoot);
   if (await sourceDigest(clientRoot) !== sourceSha256) throw new Error('打包期间源文件发生变化，请重新打包；没有交付过期快照。');
+  const finalStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts'], { cwd: clientRoot })).stdout;
+  const finalBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
+  const finalCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
+  if (finalStatus || finalBranch !== sourceBranch || finalCommit !== sourceCommit) throw new Error('打包期间main源码或提交发生变化，请重新检查并打包。');
   const zipPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.zip`);
   await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
   let notarized = false;
@@ -108,7 +119,7 @@ try {
   const updateMetadata = { version: manifest.version, files: [{ url: zipName, sha512, size: bytes.length }], path: zipName, sha512, releaseDate: new Date().toISOString() };
   const updateMetadataPath = join(output, 'latest-mac.yml');
   await writeFile(updateMetadataPath, JSON.stringify(updateMetadata, null, 2) + '\n');
-  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, version: manifest.version, electronVersion, architecture: 'arm64', signature: 'Developer ID', notarized };
+  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, electronVersion, architecture: 'arm64', signature: 'Developer ID', notarized };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result, null, 2));
 } finally {

@@ -5,14 +5,14 @@ import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { createRepositoryFixture } from './repository-fixture';
-import { readRepositoryWorkspace, readRepositoryTaskDiff } from '../server/repository-reader';
+import { readRepositoryWorkspace, readRepositoryTaskDiff, readRepositoryCommit, readRepositoryCommitDiff } from '../server/repository-reader';
 import { RemoteRepositoryReader } from '../server/remote-repository-reader';
 import { createGitRemoteFixture } from './git-remote-fixture';
 import { combineRepositoryWorkspaces } from '../src/repository-model';
 
 const mixed = process.argv.includes('--mixed');
 const remoteFixture = mixed || process.argv.includes('--remote') ? await createGitRemoteFixture('gitea', { treeChanges: process.argv.includes('--tree-changes'), denseChanges: process.argv.includes('--dense-changes'), longBranch: process.argv.includes('--long-branch') }) : null;
-const fixture = remoteFixture || await createRepositoryFixture({ localAhead: process.argv.includes('--local-ahead') });
+const fixture = remoteFixture || await createRepositoryFixture({ localAhead: process.argv.includes('--local-ahead'), treeChanges: process.argv.includes('--tree-changes'), denseChanges: process.argv.includes('--dense-changes') });
 const remoteReader = remoteFixture ? new RemoteRepositoryReader('gitea', { fullName: 'qa/project', defaultBranch: 'main' }, remoteFixture.transport) : null;
 const bundle = await build({ entryPoints: [resolve('tests/repository-preview-client.tsx')], bundle: true, write: false, outdir: 'qa-bundle', jsx: 'automatic', format: 'esm', target: 'es2022', loader: { '.woff2': 'dataurl', '.woff': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"' } });
 const js = bundle.outputFiles.find(file => file.path.endsWith('.js'))!;
@@ -38,11 +38,17 @@ const server = createServer((request, response) => { void (async () => {
     else { if (!('path' in input) || typeof input.path !== 'string') throw new Error('QA path invalid'); response.end(JSON.stringify(await remoteReader.file(input.commitId, input.path))); }
     return;
   }
-  if (url.pathname === '/fixture/diff' && request.method === 'POST' && request.headers['x-gittogether-qa'] === '1') {
+  if (['/fixture/diff', '/fixture/local-commit'].includes(url.pathname) && request.method === 'POST' && request.headers['x-gittogether-qa'] === '1') {
     let body = ''; for await (const chunk of request) { body += String(chunk); if (body.length > 8192) throw new Error('QA request too large'); }
     const input: unknown = JSON.parse(body);
-    if (!input || typeof input !== 'object' || !('taskId' in input) || !('path' in input) || typeof input.taskId !== 'string' || typeof input.path !== 'string') throw new Error('QA input invalid');
-    response.end(JSON.stringify({ text: await readRepositoryTaskDiff(fixture.directory, input.taskId, input.path) })); return;
+    if (!input || typeof input !== 'object' || !('taskId' in input) || typeof input.taskId !== 'string') throw new Error('QA input invalid');
+    if (url.pathname === '/fixture/local-commit') {
+      if (!('commitId' in input) || typeof input.commitId !== 'string') throw new Error('QA commit invalid');
+      response.end(JSON.stringify(await readRepositoryCommit(fixture.directory, input.commitId))); return;
+    }
+    if (!('path' in input) || typeof input.path !== 'string') throw new Error('QA path invalid');
+    const commitId = 'commitId' in input && typeof input.commitId === 'string' ? input.commitId : undefined;
+    response.end(JSON.stringify({ text: commitId ? await readRepositoryCommitDiff(fixture.directory, commitId, input.path) : await readRepositoryTaskDiff(fixture.directory, input.taskId, input.path) })); return;
   }
   response.statusCode = 404; response.end(JSON.stringify({ error: 'Not found' }));
 })().catch(problem => { response.statusCode = 400; response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ error: problem instanceof Error ? problem.message : 'QA failure' })); }); });

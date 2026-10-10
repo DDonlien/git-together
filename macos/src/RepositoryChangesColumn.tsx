@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { Icon, IconButton, Menu, MenuItem } from './ui';
 import { RepositoryColumnHeading } from './RepositoryColumnHeading';
-import { RepositoryChanges, type ReadTaskDiff } from './RepositoryChanges';
+import { RepositoryChanges } from './RepositoryChanges';
 import { RepositoryRemoteChanges } from './RepositoryRemoteChanges';
 import type { RepositoryCommit, RepositoryTask } from './repository-model';
 import type { RemoteCommitState } from './use-remote-commits';
+import type { LocalCommitState } from './local-commit-model';
 
-export function RepositoryChangesColumn({ tasks, selection, commit, remoteCommits, selectedFiles, onSelect, search, focus, onFocus, localChoice, onLocalChoice, localPath, loading, readDiff }: {
+export function RepositoryChangesColumn({ tasks, selection, commit, remoteCommits, localCommits = {}, selectedFiles, onSelect, search, focus, onFocus, localChoice, onLocalChoice, localPath, loading }: {
   tasks: RepositoryTask[]; selection: { taskId: string; commitId: string } | null; commit?: RepositoryCommit;
   remoteCommits: Record<string, RemoteCommitState>; selectedFiles: Record<string, string | undefined>;
+  localCommits?: Record<string, LocalCommitState>;
   onSelect: (taskId: string, path?: string) => void; search: string; focus: string | null; onFocus: (taskId: string | null) => void;
   localChoice: string | null; onLocalChoice: (taskId: string) => void;
-  localPath?: string; loading: boolean; readDiff: ReadTaskDiff;
+  localPath?: string; loading: boolean;
 }) {
   const [grouped, setGrouped] = useState(false);
   const localTasks = tasks.filter(task => !task.remote);
@@ -31,7 +33,7 @@ export function RepositoryChangesColumn({ tasks, selection, commit, remoteCommit
       {tasks.map(task => {
         const selectedCommit = selection?.taskId === task.id ? commit : undefined;
         return <div key={task.id} className="repository-task-slot" hidden={activeId !== task.id}>
-          {task.remote ? <RepositoryRemoteChanges task={task} commitId={selection?.taskId === task.id ? selection.commitId : ''} selectedCommit={selectedCommit} state={remoteCommits[task.id]} selected={selectedFiles[task.id]} onSelect={path => onSelect(task.id, path)} search={search} grouped={grouped} /> : <RepositoryChanges task={task} selectedCommit={selectedCommit} selected={selectedFiles[task.id]} onSelect={path => onSelect(task.id, path)} search={search} grouped={grouped} focused={focus === task.id} onFocus={() => onFocus(focus === task.id ? null : task.id)} readDiff={readDiff} loading={loading} linked={!!localPath} active={activeId === task.id} showFocus={localTasks.length > 1} />}
+          {task.remote ? <RepositoryRemoteChanges task={task} commitId={selection?.taskId === task.id ? selection.commitId : ''} selectedCommit={selectedCommit} state={remoteCommits[task.id]} selected={selectedFiles[task.id]} onSelect={path => onSelect(task.id, path)} search={search} grouped={grouped} /> : <RepositoryChanges task={task} selectedCommit={selectedCommit} historyState={localCommits[task.id]} selected={selectedFiles[task.id]} onSelect={path => onSelect(task.id, path)} search={search} grouped={grouped} focused={focus === task.id} onFocus={() => onFocus(focus === task.id ? null : task.id)} loading={loading} linked={!!localPath} showFocus={localTasks.length > 1} />}
         </div>;
       })}
       {!activeId && <div className="repository-column-empty" role="status"><Icon name="commit" size={28} /><p>选择一个提交查看差异</p><small>关联本地目录后可查看未提交更改</small></div>}

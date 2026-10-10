@@ -15,7 +15,7 @@ export function diagnosticsMiddleware(log: LocalDiagnostics, open: (path: string
       for await (const part of req) { size += part.length; if (size > 4096) { res.statusCode = 413; throw new Error('日志请求过大。'); } parts.push(Buffer.from(part)); }
       const input: unknown = JSON.parse(Buffer.concat(parts).toString('utf8'));
       const method = req.url.slice('/api/diagnostics/'.length);
-      if (!['status', 'record', 'open'].includes(method)) { res.statusCode = 404; throw new Error('不支持该日志操作。'); }
+      if (!['status', 'record', 'open', 'copy'].includes(method)) { res.statusCode = 404; throw new Error('不支持该日志操作。'); }
       const value = await diagnosticsCommand(log, method, input, open);
       res.end(JSON.stringify({ ok: true, value }));
     } catch (problem) { if (res.statusCode === 200) res.statusCode = 400; res.end(JSON.stringify({ ok: false, error: problem instanceof SyntaxError ? '日志请求格式无效。' : problem instanceof Error ? problem.message : '日志操作失败。' })); }
