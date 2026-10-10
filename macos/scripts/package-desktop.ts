@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { sign } from '@electron/osx-sign';
 import { releaseBranch, updateSource } from '../src/update-model';
+import { notarizationResult, prepareDesktopRelease } from './desktop-release';
 
 const clientRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -19,10 +20,11 @@ const electronVersion = (require('electron/package.json') as { version: string }
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('此打包入口需要 Apple Silicon macOS。');
 const sourceEntries = ['src', 'server', 'electron', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
+const notaryProfile = process.env.GITTOGETHER_NOTARY_PROFILE || 'gittogether-notary';
 const git = promisify(execFile);
 const sourceBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
 if (sourceBranch !== releaseBranch) throw new Error(`更新包必须从 ${releaseBranch} 分支构建，当前为 ${sourceBranch}。`);
-const sourceStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts'], { cwd: clientRoot })).stdout;
+const sourceStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts'], { cwd: clientRoot })).stdout;
 if (sourceStatus) throw new Error('打包源码有未提交改动，请先检查并提交到 main。');
 const sourceCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
 
@@ -54,9 +56,20 @@ async function run(command: string, args: string[], cwd: string) {
 
 const buildRoot = resolve(clientRoot, '..', '..', '_builds');
 await mkdir(buildRoot, { recursive: true });
-const output = await mkdtemp(join(buildRoot, `gittogether-${manifest.version}-macos-arm64-`));
-const temporary = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-package-')));
+const releaseLock = join(buildRoot, 'gittogether-release.lock');
+await mkdir(releaseLock).catch(error => {
+  if (error.code === 'EEXIST') throw new Error('另一个桌面发布正在运行，请待其完成；若上次进程中断，请确认后移除gittogether-release.lock。');
+  throw error;
+});
+let temporary: string | undefined;
 try {
+  console.log(`发布 GitTogether ${manifest.version}：正在检查main、发布权限和Apple公证配置…`);
+  const release = await prepareDesktopRelease(clientRoot, manifest.version, sourceCommit);
+  await git('/usr/bin/xcrun', ['notarytool', 'history', '--keychain-profile', notaryProfile, '--output-format', 'json'], { cwd: clientRoot });
+  await run('npm', ['run', 'check'], clientRoot);
+  await run('npm', ['test'], clientRoot);
+  const output = await mkdtemp(join(buildRoot, `gittogether-${manifest.version}-macos-arm64-`));
+  temporary = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-package-')));
   // An isolated source snapshot avoids touching Vite's watched config, dependencies or credentials.
   const source = join(temporary, 'source');
   const application = join(temporary, 'application');
@@ -98,20 +111,21 @@ try {
     optionsForFile: () => ({ entitlements: join(source, 'electron', 'entitlements.plist'), hardenedRuntime: true }) });
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath], clientRoot);
   if (await sourceDigest(clientRoot) !== sourceSha256) throw new Error('打包期间源文件发生变化，请重新打包；没有交付过期快照。');
-  const finalStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts'], { cwd: clientRoot })).stdout;
+  const finalStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts'], { cwd: clientRoot })).stdout;
   const finalBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
   const finalCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
   if (finalStatus || finalBranch !== sourceBranch || finalCommit !== sourceCommit) throw new Error('打包期间main源码或提交发生变化，请重新检查并打包。');
   const zipPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.zip`);
   await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
-  let notarized = false;
-  if (process.env.GITTOGETHER_NOTARY_PROFILE) {
-    await run('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', process.env.GITTOGETHER_NOTARY_PROFILE, '--wait'], clientRoot);
-    await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath], clientRoot);
-    await run('/usr/bin/xcrun', ['stapler', 'validate', applicationPath], clientRoot);
-    await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
-    notarized = true;
-  }
+  console.log('签名完成，正在提交Apple公证并等待结果…');
+  const submission = await git('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', notaryProfile, '--wait', '--output-format', 'json'], { cwd: clientRoot, maxBuffer: 1024 * 1024 });
+  const notarization = notarizationResult(submission.stdout);
+  await writeFile(join(output, 'notarization.json'), JSON.stringify(notarization, null, 2) + '\n');
+  await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath], clientRoot);
+  await run('/usr/bin/xcrun', ['stapler', 'validate', applicationPath], clientRoot);
+  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath], clientRoot);
+  await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
+  const notarized = true;
   const bytes = await readFile(zipPath);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const sha512 = createHash('sha512').update(bytes).digest('base64');
@@ -121,7 +135,12 @@ try {
   await writeFile(updateMetadataPath, JSON.stringify(updateMetadata, null, 2) + '\n');
   const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, electronVersion, architecture: 'arm64', signature: 'Developer ID', notarized };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(result, null, 2) + '\n');
-  console.log(JSON.stringify(result, null, 2));
+  console.log('公证通过，正在上传完整资产并发布GitHub正式更新…');
+  const publication = await release.publish({ ...result, size: bytes.length });
+  const completed = { ...result, ...publication };
+  await writeFile(join(output, 'build-info.json'), JSON.stringify(completed, null, 2) + '\n');
+  console.log(JSON.stringify(completed, null, 2));
 } finally {
-  await rm(temporary, { recursive: true, force: true });
+  if (temporary) await rm(temporary, { recursive: true, force: true });
+  await rm(releaseLock, { recursive: true });
 }

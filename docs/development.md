@@ -1,5 +1,7 @@
 # 本地开发
 
+0.17.2（2026-10-10）将现有桌面打包入口接成完整正式发布流程：main来源与远端提交检查、类型和完整回归、生产构建、Developer ID签名、Apple公证、附加凭证、资产上传和正式latest发布，最后从无需登录的公共更新源下载校验。仅推送源码不触发打包；在main上运行打包入口即执行整套流程。此前各版只生成本地包的结果仍是历史记录。
+
 0.17.1（2026-10-10）完成本地变更整合到main：437/437回归、类型检查、生产构建和Sites4/4通过，b87c50b源码正常快进推送main并回读一致。签名ARM64包位于项目容器_builds/gittogether-0.17.1-macos-arm64-iM2MFe/，build-info记录main及完整提交；签名与ZIP/摘要核对通过。当前包未公证或公开发布，未替换安装版；应用内更新仍需发布完整公证资产。此前各版本的源码限定验收是历史记录，不作为此次打包/发布结论。
 
 后续开发使用`main`并跟踪`origin/main`。当前工作区仍为`codex-standalone-ts/`，保留历史目录名；同层`main/`是旧`git-together/main`工作区，不作为新版开发基线。打包前先将生产源码提交到main，打包入口拒绝其他分支或未提交的输入；build-info.json记录sourceBranch、sourceCommit和sourceSha256。后续更新发布的tag必须指向该main提交，不能从旧分支构建资产。
@@ -22,15 +24,15 @@
 
 0.12.0（2026-10-10）补齐Dashboard隐藏/恢复，并固定列表行尾操作区，解决0.11.0在展开侧栏时只看到前三个图标的问题。已生成Developer ID签名的本地ARM64包并实际打开；设置页版本、仓库/分支隐藏与恢复、重新加载后的隐藏记录、更新日期正反排序及2账号/58仓库/16关联均在该包核对。未公证或发布公共更新；七个Git动作仍禁用，真实执行单独追踪。开发预览与授权助手已恢复为0.12.0，已有加密应用配置正常读回；浏览器0账号会话和原生账号存储保持各自边界。
 
-Apple Silicon macOS在macos/运行 `npm run package:desktop`。脚本从package.json读取版本，在临时快照构建；首次可能从官方npm获取固定Electron Packager。GITTOGETHER_ELECTRON_ZIP_DIR可指定对应Electron ZIP缓存目录。默认使用本机Developer ID；GITTOGETHER_SIGN_IDENTITY可选择已安装证书，必须与已发布版本保持同一身份。缺少证书或签名失败直接报错，不回退ad-hoc。仅保留Electron运行需要的JIT权限，不增加摄像头/位置等权限。
+Apple Silicon macOS在macos/运行 `npm run package:desktop`，默认完成正式发布，而非只生成本地ZIP。先递增package.json版本并将源码提交、推送到main；脚本要求本地和远端main提交相同，执行类型检查及完整测试后在临时快照构建。首次可能从官方npm获取固定Electron Packager。GITTOGETHER_ELECTRON_ZIP_DIR可指定对应Electron ZIP缓存目录。默认使用本机Developer ID；GITTOGETHER_SIGN_IDENTITY可选择已安装证书，必须与已发布版本保持同一身份。缺少证书或签名失败直接报错，不回退ad-hoc。仅保留Electron运行需要的JIT权限，不增加摄像头/位置等权限。
 
-产物在项目容器_builds/gittogether-版本-macos-arm64-随机后缀/：独立.app、ZIP、latest-mac.yml与build-info.json。安装版不需要Node、Vite或4173；建议移到可写的应用程序目录，不从ZIP/只读磁盘运行。脚本不覆盖已安装App。默认Developer ID签名；Apple公证需开发者在本机配置notarytool钥匙串profile，并通过GITTOGETHER_NOTARY_PROFILE传入其名称，不把密码或API私钥放源码/包。没有profile的包notarized=false，不能作为正式公共更新发布；完成公证后仍可能有系统首次启动确认，不关闭Gatekeeper或移除隔离属性冒充验收。profile只需配置一次，每个新的安装包都需提交公证；这是Apple自动扫描，不是App Store人工审核。
+产物在项目容器_builds/gittogether-版本-macos-arm64-随机后缀/：独立.app、ZIP、latest-mac.yml、notarization.json与build-info.json。安装版不需要Node、Vite或4173；建议移到可写的应用程序目录，不从ZIP/只读磁盘运行。脚本不覆盖已安装App。Apple公证强制执行，默认复用本机已配置的gittogether-notary；GITTOGETHER_NOTARY_PROFILE只用于选择其他已配置profile。没有profile或公证未Accepted就停止，不跳过公证、不把密码或API私钥放源码/包。profile只需配置一次，每个新的安装包都需提交公证；这是Apple自动扫描，不是App Store人工审核。脚本自动staple/validate、复核签名并重新压缩，更新清单只使用最终包的校验值。
 
 ## App 内更新
 
 第一次需手动替换旧版为0.9.0或更高版，之后在「设置 → 应用更新」检查、下载，再点击「重启并更新」。检查不自动下载/重启；更新保留账号、目录关联和偏好，未保存表单输入需先处理。账号/关联保存中先完成操作，失败可重试，不清除连接。网页预览和未打包开发窗口不安装更新。
 
-源为公共[GitHub Releases](https://github.com/DDonlien/git-together/releases)，无需用户提供更新令牌。维护者每次从main已提交源码递增macos/package.json版本、回归、签名及公证打包并发布同版本ZIP与latest-mac.yml；只push源码不会让App收到更新。公证通过、staple并重新生成ZIP及校验值后，先在draft Release上传完整资产，再发布，避免读到半成品。不可覆盖已发布同版本ZIP或更换签名身份；正式频道使用稳定semver tag（如v0.9.0），不能只发prerelease。
+源为公共[GitHub Releases](https://github.com/DDonlien/git-together/releases)，无需用户提供更新令牌。维护者完成版本递增及main提交/推送后，只需运行上述打包入口；脚本复用GitHub环境凭据或当前Git credential helper，自动创建同源码的draft、上传ZIP和latest-mac.yml，核对远端大小/digest后标为正式latest。tag固定指向此次main提交；不覆盖已公开同版本或更换签名身份，已有同源码草稿可重新打包重试。正式频道使用稳定semver tag（如v0.17.2），不是prerelease。发布后自动从无凭据的latest API、Atom列表、清单及完整ZIP检查就绪；成功的build-info带releaseUrl和publicUpdateVerified=true，终端失败不应当作完整发布成功。安装仍由App使用者选择。
 
 0.10.1区分发布信息不可用、检查网络失败、下载/校验失败和安装失败；检查阶段不再混入目录权限/签名提示。发布前先确认提交及远端tag对应已打包源码，核对build-info.json的sourceSha256、ZIP SHA-512和latest-mac.yml；先上传ZIP及清单至draft，齐备后公开。发布后回读公共latest、清单与资产，再从旧签名版实际检查/下载/重启安装；这一步不能用本地测试feed替代。未完成Apple公证的签名包需明确标注，不能关闭Gatekeeper或清除隔离属性作为验收。
 

@@ -110,7 +110,9 @@ Electron main/preload 只开放有限 import、目录选择器、系统主题、
 
 生产 `.app` 通过 `app.isPackaged` 加载 `app.getAppPath()/client/index.html`，不用开发 URL，也不启动 Vite/HTTP 服务；账号服务直接在 Electron main 中运行。预览环境变量只影响开发启动。`renderer-source.ts` 对文件来源比较精确的绝对页面路径，不能把所有 origin 为 `null` 的 file URL 视为同源；开发版仍比较指定 HTTP(S) origin。保持 contextIsolation、sandbox 与 nodeIntegration 禁用，不扩大 preload 能力。
 
-`scripts/package-desktop.ts` 在系统临时目录构建有限源码/锁文件快照，Vite使用相对资源路径并禁用开发env注入，esbuild编译main/preload。产物只有client（含本地字体）、desktop与package.json，不复制.env、日志、测试、用户数据或账号。版本统一读取macos/package.json.version；源码/ZIP摘要写入包外build-info.json，拒绝交付构建期间变化的源码。Electron Packager生成arm64应用，osx-sign以Developer ID逐项签名，保留hardened runtime和必要JIT权限，不降级ad-hoc。可通过本机notarytool钥匙串profile公证并staple；未配置时明确notarized=false。公共app-update.yml放在Resources；latest-mac.yml记录ZIP的SHA-512、大小和版本，不含账号数据。
+`scripts/package-desktop.ts` 在系统临时目录构建有限源码/锁文件快照，Vite使用相对资源路径并禁用开发env注入，esbuild编译main/preload。产物只有client（含本地字体）、desktop与package.json，不复制.env、日志、测试、用户数据或账号。版本统一读取macos/package.json.version；源码/ZIP摘要写入包外build-info.json，拒绝交付构建期间变化的源码。Electron Packager生成arm64应用，osx-sign以Developer ID逐项签名，保留hardened runtime和必要JIT权限，不降级ad-hoc。打包默认使用已配置的gittogether-notary（可通过GITTOGETHER_NOTARY_PROFILE选择其他profile），强制要求Apple JSON结果Accepted，随后staple/validate并再次验证签名、重新压缩和计算校验值。缺失配置或失败直接停止，不生成宣称完成的更新发布。公共app-update.yml放在Resources；latest-mac.yml记录最终ZIP的SHA-512、大小和版本，不含账号数据。
+
+0.17.2起打包入口同时执行类型检查、完整回归和公共更新发布。`scripts/desktop-release.ts` 只承担包外发布，不进入安装包：验证main提交已推送、版本递增及tag对应；用现有GitHub环境凭据或Git credential helper在子进程环境中授权，凭据不进入参数、日志或产物。只在对应源码的draft上传ZIP和清单，核对uploaded状态、大小与GitHub SHA-256 digest后标为stable/latest。已公开版本不可覆盖，同版本草稿可重试；本机独占发布锁避免两个打包同时写同版本。发布后无凭据回读latest、应用更新器使用的Atom列表、清单及完整ZIP，验证SHA-256/SHA-512与大小；全部通过后才在build-info写publicUpdateVerified。打包不安装、重启或读取用户账号存储。
 
 ### 桌面更新与数据保留
 
