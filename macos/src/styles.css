@@ -516,7 +516,14 @@ button.repository-count-action:disabled { opacity: .7; }
 .ogui-select__control { border-radius: var(--radius-control); background: var(--surface); border: 1px solid var(--strong-line); box-shadow: none; min-height: var(--control-height); }
 .ogui-select select { padding: 5px 26px 5px 10px; min-height: var(--control-height); font-size: 12px; }
 .search-field { display: grid; min-width: 0; }
-.material-text-field { width: 100%; -webkit-app-region: no-drag; }
+/* 13px entry/empty labels fit this desktop UI; keep official line heights and field geometry. */
+.material-text-field {
+  width: 100%; -webkit-app-region: no-drag;
+  --md-outlined-text-field-input-text-size: 13px;
+  --md-outlined-text-field-label-text-size: 13px;
+  --md-outlined-text-field-label-text-populated-size: 11px;
+  --md-outlined-text-field-supporting-text-size: 11px;
+}
 .material-textarea { resize: vertical; max-height: 160px; }
 /* Search bar is a spec-based composition of official Material Web components. */
 .material-search-bar {

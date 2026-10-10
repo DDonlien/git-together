@@ -569,3 +569,13 @@ final result for UI-04-sidebar-header-icon-only: passed
 - 表头/胶囊中心实际分别1167、1239、1296、1380px，一致；无额外Dashboard批量toolbar。侧栏32px且上下padding为0；真实800×588窄视口Submit弹窗边界150/22.6/650/565.4px，按钮底541.4px，均可见。暗色实际截图artifacts/release-audit/real-ai-submit-narrow.png；官方字段shadow root已加载。隔离数据不冒充私有账号或安装包验收。
 - Pull预览补齐remote-arrival.txt并实际ff完成；Clean确认删除新增临时文件；linked Get Latest得到depth1/count1，其他主目录count3历史保留。超过十分钟预览会拒绝并重新预览，实际重新预览成功。QA服务器/renderer及临时仓库已关闭清理，未写用户项目。
 - 主预览/授权助手恢复0.21.0，账号服务0账号/0仓库/0关联，configured=true；没有重放凭据。正式签名/公证/公共更新与安装验收另记RUN-01-recent-delivery。
+
+## 2026-10-10 提交字段紧凑字号（R-05-commit-composer-compact-type）
+
+- Summary与Description继续使用官方Material Web描边字段，仅通过公开字号令牌将输入/空态从16px收至13px，浮动标签/字数提示从12px收至11px；未改变搜索、字段行高、内缩、描边或容器几何。
+- 隔离生产App/AccountService/有限HTTP与真实临时双分支Git，亮暗1280×720实际核对中栏及Commit/Submit弹窗空态、中文/多行正文、Tab焦点和逐分支编辑。实际shadow root输入与placeholder为13px，静态标签13px、浮动标签11px、counter11px，Summary/Description含计数区仍为76px/100px；空Summary禁用Commit，填写后恢复。
+- 截图位于macos/artifacts/commit-field-type：empty-dark.png、popup-empty-dark.png、popup-filled-dark.png、popup-filled-light.png、empty-light.png和filled-light.png。AI采用确定性测试预填；合成远端的证书错误提示保留，未冒充真实账号或安装版界面验收。
+- 类型检查和生产构建通过；保留既有大于500KB的chunk提示，不新增镜像测试。QA控制台无warn/error；取消后mainChanged=false、featureUnchanged=true、3+1更改保持，临时Git及页面已清理。未点击提交确认、未执行真实AI或写入用户仓库。
+- 原生签名、公证与公共更新源验收另见本次agent-log；依最新持续授权只验证最终包与更新源，不操作用户已安装App。
+
+final result for R-05-commit-composer-compact-type runtime: passed
