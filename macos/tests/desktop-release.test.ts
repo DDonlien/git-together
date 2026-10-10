@@ -141,3 +141,15 @@ test('public verification remains reusable and gives complete ZIP transfers a bo
   assert.match(source, /bytes.length !== artifact.size/);
   assert.match(source, /finally.*await rm\(temporary/);
 });
+
+test('public feed and metadata checks use bounded macOS HTTPS requests with response status', () => {
+  const source = readFileSync(new URL('../scripts/desktop-release.ts', import.meta.url), 'utf8');
+  const read = source.slice(source.indexOf('async function publicRead('), source.indexOf('export async function prepareDesktopRelease('));
+  assert.match(read, /promisify\(execFile\)\('\/usr\/bin\/curl'/);
+  assert.match(read, /'--proto', '=https', '--proto-redir', '=https'/);
+  assert.match(read, /'--max-time', '180'/);
+  assert.match(read, /'--write-out', '\\n%\{http_code\}'/);
+  assert.match(read, /new Response\(stdout.slice\(0, separator\), \{ status \}\)/);
+  assert.match(read, /status < 100 \|\| status > 599/);
+  assert.doesNotMatch(read, /await fetch\(/);
+});

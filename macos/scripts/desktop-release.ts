@@ -106,7 +106,17 @@ async function publicRead(url: string, ready?: (response: Response) => Promise<b
     try {
       const address = new URL(url);
       address.searchParams.set('noCache', Date.now().toString());
-      const response = await fetch(address, { signal: AbortSignal.timeout(180_000), headers: { 'Cache-Control': 'no-cache' } });
+      // Use the same macOS HTTPS transport as the complete ZIP check. Node's
+      // HTTP/2 connection to GitHub can close even while these URLs work in curl.
+      const { stdout } = await promisify(execFile)('/usr/bin/curl', [
+        '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https',
+        '--connect-timeout', '30', '--max-time', '180', '--header', 'Cache-Control: no-cache',
+        '--write-out', '\n%{http_code}', address.toString(),
+      ], { timeout: 200_000, maxBuffer: 8 * 1024 * 1024 });
+      const separator = stdout.lastIndexOf('\n');
+      const status = Number(stdout.slice(separator + 1));
+      if (separator < 0 || !Number.isInteger(status) || status < 100 || status > 599) throw new Error('公开更新源返回无效的HTTP状态。');
+      const response = new Response(stdout.slice(0, separator), { status });
       if (response.ok) {
         if (!ready || await ready(response.clone())) return response;
         await response.body?.cancel();
