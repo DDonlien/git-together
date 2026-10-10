@@ -2,6 +2,8 @@
 
 0.17.3（2026-10-10）将现有桌面打包入口接成完整正式发布流程：main来源与远端提交检查、类型和完整回归、生产构建、Developer ID签名、Apple公证、附加凭证、资产上传和正式latest发布，最后从无需登录的公共更新源下载校验。仅推送源码不触发打包；在main上运行打包入口即执行整套流程。此前各版只生成本地包的结果仍是历史记录。
 
+0.17.3已于2026-10-10公开为stable/latest，tag对应main的725a037e6d37909215e7e90b7a8219d7c8292837。Apple公证87d8de2b-8f13-458c-ad95-cd26beb10381为Accepted，staple/validate、deep/strict签名通过；451/451最终回归及类型检查通过。公共latest、Atom、清单与完整110892436字节ZIP校验通过，SHA-256为dbc0c1a8effef733490aacec01d3cd6806c008a49aad73fee46ff71991dba29c，build-info标记publicUpdateVerified=true。原生0.12.0实际检查显示发现新版本0.17.3并提供下载更新；未执行安装升级。 包目录为项目容器_builds/gittogether-0.17.3-macos-arm64-ma8ShN/。首轮公共大文件回读超时后，使用同一已发布公证包只读恢复完整校验；没有重新上传或改写tag/源码记录。发布脚本的二进制回读统一使用macOS HTTPS下载器，15分钟时限及两次有限重试；其结果必须通过完整大小和双摘要核对。收尾只更新包外发布模块、回归和说明，不改已公开App的生产输入。
+
 0.17.1（2026-10-10）完成本地变更整合到main：437/437回归、类型检查、生产构建和Sites4/4通过，b87c50b源码正常快进推送main并回读一致。签名ARM64包位于项目容器_builds/gittogether-0.17.1-macos-arm64-iM2MFe/，build-info记录main及完整提交；签名与ZIP/摘要核对通过。当前包未公证或公开发布，未替换安装版；应用内更新仍需发布完整公证资产。此前各版本的源码限定验收是历史记录，不作为此次打包/发布结论。
 
 后续开发使用`main`并跟踪`origin/main`。当前工作区仍为`codex-standalone-ts/`，保留历史目录名；同层`main/`是旧`git-together/main`工作区，不作为新版开发基线。打包前先将生产源码提交到main，打包入口拒绝其他分支或未提交的输入；build-info.json记录sourceBranch、sourceCommit和sourceSha256。后续更新发布的tag必须指向该main提交，不能从旧分支构建资产。

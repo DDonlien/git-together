@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 import { basename, dirname, join } from 'node:path';
 import { releaseBranch, updateSource } from '../src/update-model';
 
@@ -258,27 +260,46 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       await assertTag(false);
 
       console.log('正式版本已公开，正在验证无需登录的应用更新源…');
-      const publicLatest = await (await publicRead(`https://api.github.com/repos/${repository}/releases/latest`, async response => {
-        const current = await response.json() as Release;
-        return current.tag_name === tag && !current.draft && !current.prerelease;
-      })).json() as Release;
-      if (publicLatest.tag_name !== tag || publicLatest.draft || publicLatest.prerelease) throw new Error('公共latest尚未指向此次正式版本。');
-      verifyReleaseAssets(publicLatest.assets, expected);
-      const feed = await (await publicRead(`https://github.com/${repository}/releases.atom`, async response => (await response.text()).includes(`/releases/tag/${tag}`))).text();
-      if (!feed.includes(`/releases/tag/${tag}`)) throw new Error('应用更新器使用的公开版本列表尚未包含新版。');
-      const base = `https://github.com/${repository}/releases/download/${tag}`;
-      verifyUpdateMetadata(await (await publicRead(`${base}/latest-mac.yml`)).json(), artifact);
-      const download = await publicRead(`${base}/${basename(artifact.zipPath)}`);
-      const sha256 = createHash('sha256'), sha512 = createHash('sha512');
-      let size = 0;
-      const reader = download.body!.getReader();
-      for (;;) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        size += chunk.value.length; sha256.update(chunk.value); sha512.update(chunk.value);
-      }
-      if (size !== artifact.size || sha256.digest('hex') !== artifact.sha256 || sha512.digest('base64') !== artifact.sha512) throw new Error('公共安装包的大小或校验值不一致。');
-      return { releaseUrl: publicLatest.html_url, tag, publicUpdateVerified: true };
+      return verifyPublicDesktopRelease(artifact);
     },
   };
+}
+
+// Reusable after a published release's public download was interrupted. This
+// phase reads and verifies the original artifact without recreating assets.
+export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Promise<{ releaseUrl: string; tag: string; publicUpdateVerified: true }> {
+  const tag = 'v' + artifact.version;
+  if (!artifact.notarized) throw new Error('只能核对已完成公证的正式包。');
+  const metadata = await readFile(artifact.updateMetadataPath);
+  verifyUpdateMetadata(JSON.parse(metadata.toString()), artifact);
+  const expected = [
+    { name: basename(artifact.zipPath), size: artifact.size, sha256: artifact.sha256 },
+    { name: basename(artifact.updateMetadataPath), size: metadata.length, sha256: createHash('sha256').update(metadata).digest('hex') },
+  ];
+  const publicLatest = await (await publicRead('https://api.github.com/repos/' + repository + '/releases/latest', async response => {
+    const current = await response.json() as Release;
+    return current.tag_name === tag && !current.draft && !current.prerelease;
+  })).json() as Release;
+  verifyReleaseAssets(publicLatest.assets, expected);
+  const commit = await (await publicRead('https://api.github.com/repos/' + repository + '/commits/' + tag)).json() as { sha: string };
+  if (commit.sha !== artifact.sourceCommit) throw new Error('公开tag与原始打包源码不一致。');
+  const feedUrl = 'https://github.com/' + repository + '/releases.atom';
+  const feed = await (await publicRead(feedUrl, async response => (await response.text()).includes('/releases/tag/' + tag))).text();
+  if (!feed.includes('/releases/tag/' + tag)) throw new Error('应用更新器使用的公开版本列表尚未包含新版。');
+  const base = 'https://github.com/' + repository + '/releases/download/' + tag;
+  verifyUpdateMetadata(await (await publicRead(base + '/latest-mac.yml')).json(), artifact);
+  const temporary = await mkdtemp(join(tmpdir(), 'gittogether-public-check-'));
+  try {
+    const downloaded = join(temporary, 'app.zip');
+    // Use macOS's HTTPS downloader for binary transfers, with a separate large
+    // file deadline. A range from byte zero still retrieves the entire ZIP.
+    await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error',
+      '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900',
+      '--retry', '2', '--retry-delay', '2', '--retry-max-time', '900', '--range', '0-',
+      '--output', downloaded, base + '/' + basename(artifact.zipPath)], { timeout: 2_800_000 });
+    const bytes = await readFile(downloaded);
+    if (bytes.length !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256
+      || createHash('sha512').update(bytes).digest('base64') !== artifact.sha512) throw new Error('公共安装包的大小或校验值不一致。');
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+  return { releaseUrl: publicLatest.html_url, tag, publicUpdateVerified: true };
 }

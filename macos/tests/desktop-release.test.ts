@@ -58,8 +58,8 @@ test('publication protects main provenance and exposes only verified stable asse
   assert.match(source, /verifyReleaseAssets\(uploaded.assets, expected\)/);
   assert.match(source, /draft: false, prerelease: false, make_latest: 'true'/);
   assert.match(source, /await assertTag\(false\)/);
-  assert.match(source, /publicRead\(`https:\/\/github.com\/\$\{repository\}\/releases.atom`,/);
-  assert.match(source, /sha512.digest\('base64'\) !== artifact.sha512/);
+  assert.match(source, /publicRead\(feedUrl,/);
+  assert.match(source, /update\(bytes\).digest\('base64'\) !== artifact.sha512/);
   assert.doesNotMatch(source, /NODE_TLS_REJECT_UNAUTHORIZED|--insecure|rejectUnauthorized:\s*false|GH_TOKEN:.*console/);
 });
 
@@ -129,4 +129,15 @@ test('acknowledged writes wait for delayed visibility without replaying', async 
   assert.equal(writes, 1);
   assert.equal(reads, 3);
   assert.equal(waits, 1);
+});
+
+test('public verification remains reusable and gives complete ZIP transfers a bounded deadline', () => {
+  const source = readFileSync(new URL('../scripts/desktop-release.ts', import.meta.url), 'utf8');
+  assert.match(source, /return verifyPublicDesktopRelease\(artifact\)/);
+  assert.match(source, /export async function verifyPublicDesktopRelease/);
+  assert.match(source, /commit.sha !== artifact.sourceCommit/);
+  assert.match(source, /'--max-time', '900'/);
+  assert.match(source, /'--proto-redir', '=https'/);
+  assert.match(source, /bytes.length !== artifact.size/);
+  assert.match(source, /finally.*await rm\(temporary/);
 });
