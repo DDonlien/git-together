@@ -89,16 +89,27 @@ export async function reconcileReleaseMutation(
       await wait(attempt);
       continue;
     }
-    if (!await complete()) throw new Error('GitHub发布操作完成后，服务器状态未通过核对。');
+    // A successful write may precede visibility in GitHub's release listing.
+    // Poll the result without replaying the acknowledged mutation.
+    for (let verification = 0; !await complete(); verification++) {
+      if (verification === 2) throw new Error('GitHub发布操作完成后，服务器状态未通过核对。');
+      await wait(verification);
+    }
     return;
   }
 }
 
-async function publicRead(url: string): Promise<Response> {
+async function publicRead(url: string, ready?: (response: Response) => Promise<boolean>): Promise<Response> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(180_000), headers: { 'Cache-Control': 'no-cache' } });
-      if (response.ok) return response;
+      const address = new URL(url);
+      address.searchParams.set('noCache', Date.now().toString());
+      const response = await fetch(address, { signal: AbortSignal.timeout(180_000), headers: { 'Cache-Control': 'no-cache' } });
+      if (response.ok) {
+        if (!ready || await ready(response.clone())) return response;
+        await response.body?.cancel();
+        throw new Error('公开更新源尚未显示新版。');
+      }
       if (response.status < 500 && response.status !== 404 && response.status !== 429) throw new Error(`公开更新源返回HTTP ${response.status}。`);
       await response.body?.cancel();
       throw new Error(`公开更新源尚未就绪（HTTP ${response.status}）。`);
@@ -114,7 +125,9 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
   const tag = `v${version}`;
   const credential = await githubCredential(cwd);
   const request = async <T>(url: string, init: RequestInit = {}, allowMissing = false): Promise<T | null> => {
-    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(240_000), headers: {
+    const address = new URL(url);
+    if (!init.method || init.method === 'GET') address.searchParams.set('noCache', Date.now().toString());
+    const response = await fetch(address, { ...init, signal: AbortSignal.timeout(240_000), headers: {
       Accept: 'application/vnd.github+json', Authorization: `Bearer ${credential}`,
       'X-GitHub-Api-Version': '2022-11-28', 'Cache-Control': 'no-cache', ...init.headers,
     } });
@@ -186,13 +199,13 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       await reconcileReleaseMutation(
         async () => {
           await assertMain(); await assertTag(true);
-          return request<Release>(endpoint('releases'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+          draft = await request<Release>(endpoint('releases'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
             tag_name: tag, target_commitish: sourceCommit, draft: true, prerelease: false, make_latest: 'false',
             name: `GitTogether ${version}`, body: await readFile(notes, 'utf8'),
           }) });
         },
         async () => {
-          draft = await tagRelease();
+          draft = draft ? await api<Release>(`releases/${draft.id}`) : await tagRelease();
           if (draft && (!draft.draft || draft.target_commitish !== sourceCommit)) throw new Error('版本草稿状态或源码已改变，停止上传。');
           return draft !== null;
         },
@@ -238,17 +251,20 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
           const current = await matchingRelease(false);
           verifyReleaseAssets(current.assets, expected);
           if (current.draft) return false;
-          if (current.prerelease || (await api<Release>('releases/latest'))?.id !== releaseId) throw new Error('正式版本或latest状态不符。');
+          if (current.prerelease) throw new Error('正式版本状态不符。');
           return true;
         },
       );
       await assertTag(false);
 
       console.log('正式版本已公开，正在验证无需登录的应用更新源…');
-      const publicLatest = await (await publicRead(`https://api.github.com/repos/${repository}/releases/latest`)).json() as Release;
+      const publicLatest = await (await publicRead(`https://api.github.com/repos/${repository}/releases/latest`, async response => {
+        const current = await response.json() as Release;
+        return current.tag_name === tag && !current.draft && !current.prerelease;
+      })).json() as Release;
       if (publicLatest.tag_name !== tag || publicLatest.draft || publicLatest.prerelease) throw new Error('公共latest尚未指向此次正式版本。');
       verifyReleaseAssets(publicLatest.assets, expected);
-      const feed = await (await publicRead(`https://github.com/${repository}/releases.atom`)).text();
+      const feed = await (await publicRead(`https://github.com/${repository}/releases.atom`, async response => (await response.text()).includes(`/releases/tag/${tag}`))).text();
       if (!feed.includes(`/releases/tag/${tag}`)) throw new Error('应用更新器使用的公开版本列表尚未包含新版。');
       const base = `https://github.com/${repository}/releases/download/${tag}`;
       verifyUpdateMetadata(await (await publicRead(`${base}/latest-mac.yml`)).json(), artifact);

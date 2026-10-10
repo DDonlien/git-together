@@ -58,7 +58,7 @@ test('publication protects main provenance and exposes only verified stable asse
   assert.match(source, /verifyReleaseAssets\(uploaded.assets, expected\)/);
   assert.match(source, /draft: false, prerelease: false, make_latest: 'true'/);
   assert.match(source, /await assertTag\(false\)/);
-  assert.match(source, /publicRead\(`https:\/\/github.com\/\$\{repository\}\/releases.atom`\)/);
+  assert.match(source, /publicRead\(`https:\/\/github.com\/\$\{repository\}\/releases.atom`,/);
   assert.match(source, /sha512.digest\('base64'\) !== artifact.sha512/);
   assert.doesNotMatch(source, /NODE_TLS_REJECT_UNAUTHORIZED|--insecure|rejectUnauthorized:\s*false|GH_TOKEN:.*console/);
 });
@@ -121,4 +121,12 @@ test('successful writes still require a verified readback', async () => {
   let writes = 0;
   await assert.rejects(reconcileReleaseMutation(async () => { writes++; }, async () => false, async () => {}), /服务器状态未通过核对/);
   assert.equal(writes, 1);
+});
+
+test('acknowledged writes wait for delayed visibility without replaying', async () => {
+  let writes = 0, reads = 0, waits = 0;
+  await reconcileReleaseMutation(async () => { writes++; }, async () => ++reads >= 3, async () => { waits++; });
+  assert.equal(writes, 1);
+  assert.equal(reads, 3);
+  assert.equal(waits, 1);
 });

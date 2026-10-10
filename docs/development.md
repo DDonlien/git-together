@@ -1,6 +1,6 @@
 # 本地开发
 
-0.17.2（2026-10-10）将现有桌面打包入口接成完整正式发布流程：main来源与远端提交检查、类型和完整回归、生产构建、Developer ID签名、Apple公证、附加凭证、资产上传和正式latest发布，最后从无需登录的公共更新源下载校验。仅推送源码不触发打包；在main上运行打包入口即执行整套流程。此前各版只生成本地包的结果仍是历史记录。
+0.17.3（2026-10-10）将现有桌面打包入口接成完整正式发布流程：main来源与远端提交检查、类型和完整回归、生产构建、Developer ID签名、Apple公证、附加凭证、资产上传和正式latest发布，最后从无需登录的公共更新源下载校验。仅推送源码不触发打包；在main上运行打包入口即执行整套流程。此前各版只生成本地包的结果仍是历史记录。
 
 0.17.1（2026-10-10）完成本地变更整合到main：437/437回归、类型检查、生产构建和Sites4/4通过，b87c50b源码正常快进推送main并回读一致。签名ARM64包位于项目容器_builds/gittogether-0.17.1-macos-arm64-iM2MFe/，build-info记录main及完整提交；签名与ZIP/摘要核对通过。当前包未公证或公开发布，未替换安装版；应用内更新仍需发布完整公证资产。此前各版本的源码限定验收是历史记录，不作为此次打包/发布结论。
 
@@ -32,7 +32,7 @@ Apple Silicon macOS在macos/运行 `npm run package:desktop`，默认完成正�
 
 第一次需手动替换旧版为0.9.0或更高版，之后在「设置 → 应用更新」检查、下载，再点击「重启并更新」。检查不自动下载/重启；更新保留账号、目录关联和偏好，未保存表单输入需先处理。账号/关联保存中先完成操作，失败可重试，不清除连接。网页预览和未打包开发窗口不安装更新。
 
-源为公共[GitHub Releases](https://github.com/DDonlien/git-together/releases)，无需用户提供更新令牌。维护者完成版本递增及main提交/推送后，只需运行上述打包入口；脚本复用GitHub环境凭据或当前Git credential helper，自动创建同源码的draft、上传ZIP和latest-mac.yml，核对远端大小/digest后标为正式latest。tag固定指向此次main提交；不覆盖已公开同版本或更换签名身份，已有同源码草稿可重新打包重试。正式频道使用稳定semver tag（如v0.17.2），不是prerelease。发布后自动从无凭据的latest API、Atom列表、清单及完整ZIP检查就绪；成功的build-info带releaseUrl和publicUpdateVerified=true，终端失败不应当作完整发布成功。安装仍由App使用者选择。
+源为公共[GitHub Releases](https://github.com/DDonlien/git-together/releases)，无需用户提供更新令牌。维护者完成版本递增及main提交/推送后，只需运行上述打包入口；脚本复用GitHub环境凭据或当前Git credential helper，自动创建同源码的draft、上传ZIP和latest-mac.yml，核对远端大小/digest后标为正式latest。tag固定指向此次main提交；不覆盖已公开同版本或更换签名身份，已有同源码草稿可重新打包重试。发布统一走HTTPS REST，临时断线先回读结果，最多三次重试；已成功的创建或上传不重复执行，草稿被修改或权限失败就停止。正式频道使用稳定semver tag（如v0.17.3），不是prerelease。发布后自动从无凭据的latest API、Atom列表、清单及完整ZIP检查就绪；成功的build-info带releaseUrl和publicUpdateVerified=true，终端失败不应当作完整发布成功。安装仍由App使用者选择。
 
 0.10.1区分发布信息不可用、检查网络失败、下载/校验失败和安装失败；检查阶段不再混入目录权限/签名提示。发布前先确认提交及远端tag对应已打包源码，核对build-info.json的sourceSha256、ZIP SHA-512和latest-mac.yml；先上传ZIP及清单至draft，齐备后公开。发布后回读公共latest、清单与资产，再从旧签名版实际检查/下载/重启安装；这一步不能用本地测试feed替代。未完成Apple公证的签名包需明确标注，不能关闭Gatekeeper或清除隔离属性作为验收。
 
