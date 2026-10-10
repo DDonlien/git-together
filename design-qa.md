@@ -578,4 +578,6 @@ final result for UI-04-sidebar-header-icon-only: passed
 - 类型检查和生产构建通过；保留既有大于500KB的chunk提示，不新增镜像测试。QA控制台无warn/error；取消后mainChanged=false、featureUnchanged=true、3+1更改保持，临时Git及页面已清理。未点击提交确认、未执行真实AI或写入用户仓库。
 - 原生签名、公证与公共更新源验收另见本次agent-log；依最新持续授权只验证最终包与更新源，不操作用户已安装App。
 
-final result for R-05-commit-composer-compact-type runtime: passed
+正式交付：v0.21.1已从53ddf7e的干净main快照签名、公证并发布，502/502回归通过；Accepted、公证票据staple/validate、深度严格签名、公开latest/Atom/清单及完整ZIP回读大小/SHA-256/SHA-512均通过。重建包内13/13/11/11令牌已核对；验证安装包和更新源，不操作已安装App。
+
+final result for R-05-commit-composer-compact-type: passed and released
