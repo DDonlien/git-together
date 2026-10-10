@@ -1,5 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { parseArgs } from 'node:util';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { parseArgs, promisify } from 'node:util';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
@@ -7,6 +7,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { homedir } from 'node:os';
 import { request as loopbackRequest } from 'node:http';
 import pkg from '../package.json';
+const execute = promisify(execFile);
 
 export function developmentOptions(args: string[]) {
   const { values } = parseArgs({ args, options: { host: { type: 'string', default: '127.0.0.1' }, port: { type: 'string', default: '4173' }, strictPort: { type: 'boolean', default: true }, mode: { type: 'string', default: 'development' } } });
@@ -38,13 +39,30 @@ async function status(): Promise<boolean> {
   }
 }
 async function run() {
-  let server: ViteDevServer | undefined; let service: ChildProcess | undefined; let stopping = false;
-  const stop = async (code = 0) => { if (stopping) return; stopping = true; process.exitCode = code; service?.kill('SIGINT'); await server?.close(); };
+  let server: ViteDevServer | undefined; let service: ChildProcess | undefined; let builder: ChildProcess | undefined; let stopping = false;
+  const stop = async (code = 0) => { if (stopping) return; stopping = true; process.exitCode = code; builder?.kill('SIGINT'); service?.kill('SIGINT'); await server?.close(); };
   process.once('SIGINT', () => void stop()); process.once('SIGTERM', () => void stop());
   try {
     if (!await status()) {
       const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
-      service = spawn(cargo, ['run', '--manifest-path', 'src-tauri/Cargo.toml', '--bin', 'gittogether-service'], { stdio: 'inherit' });
+      await new Promise<void>((accept, reject) => {
+        builder = spawn(cargo, ['build', '--manifest-path', 'src-tauri/Cargo.toml', '--locked', '--bin', 'gittogether-service'], { stdio: 'inherit' });
+        builder.once('error', reject); builder.once('exit', code => code === 0 ? accept() : reject(new Error('Rust 开发后台编译未完成。')));
+      });
+      builder = undefined;
+      if (stopping) return;
+      const metadata = JSON.parse((await execute(cargo, ['metadata', '--manifest-path', 'src-tauri/Cargo.toml', '--no-deps', '--format-version', '1'])).stdout) as { target_directory: string };
+      const binary = join(metadata.target_directory, 'debug/gittogether-service');
+      // Reuse the normal application identity when this developer certificate
+      // is available. Keychain ACLs and user consent are never changed.
+      const identity = process.env.GITTOGETHER_PREVIEW_SIGN_IDENTITY || process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
+      const identities = (await execute('/usr/bin/security', ['find-identity', '-v', '-p', 'codesigning'])).stdout;
+      if (identities.includes(`"${identity}"`)) {
+        await execute('/usr/bin/codesign', ['--force', '--options', 'runtime', '--timestamp', '--identifier', 'com.gittogether.standalone', '--entitlements', 'src-tauri/entitlements.plist', '--sign', identity, binary]);
+        await execute('/usr/bin/codesign', ['--verify', '--strict', binary]);
+      }
+      if (stopping) return;
+      service = spawn(binary, [], { stdio: 'inherit' });
       service.once('error', () => void stop(1));
       service.once('exit', () => { if (!stopping) { process.stderr.write('Rust 服务已退出，开发环境停止。\n'); void stop(1); } });
       const deadline = Date.now() + 10 * 60_000;

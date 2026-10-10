@@ -41,7 +41,7 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 ## 当前状态
 
-0.22.0迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
+0.22.0已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.0)公开。安装ZIP约4.2MB。框架迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
 当前源码0.22.0支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。

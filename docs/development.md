@@ -17,6 +17,10 @@
 
 正式应用沿用原bundle ID、Developer ID、账号加密文件及目录关联；启动时读取旧v10密文，在正常保存时使用新认证加密。旧偏好只导入本应用的固定键且不覆盖WKWebView已有值；网页账号不会自动复制到桌面。GitHub应用配置仍为开发者一次性安全配置，用户账号同意与组织授权由用户自己完成。Keychain不可用则保留原文件，不弹解锁或绕过安全设置。兼容代码不代表真实用户升级已经验收。
 
+0.22.0已公开为stable/latest。main/tag源码为70219b54fb1b48c2c1bb12c58014080fa19c2604；Apple公证dede49cc-8166-49d8-a780-12bd11ff4b81为Accepted，staple/validate及deep/strict签名通过。正式App仅一个Rust入口、约12MiB；ZIP 4204936字节，SHA-256为0c8267126a0c754acd780f774cace4c1f3b0370701eff36b5013089b2aac43bd；Tauri tar 4200163字节，SHA-256为2aa6d6bb725a21a11dd5f181d87db20697d1ebe5f0af2fa50b3d89737ff78819。两套公开清单、签名、Atom及完整下载回读通过，build-info标记publicUpdateVerified=true。交付目录为项目容器_builds/gittogether-0.22.0-macos-arm64-73OpSa/；未操作已安装应用，未执行真实账号升级或Git写操作验收。
+
+原开发服务已正常停止。React4173及Rust4174/4175均为0.22.0，API backend=rust；网页账号为独立空会话。Rust开发程序沿用正常Developer ID及bundle identity签名后，授权配置公开状态configured=true，无解锁/权限修改或密钥重填，不能据此声称用户账号已授权。后续浏览器开发入口在冷启动时先编译Rust程序，有既有开发者证书时自动签名后启动；缺失证书时不改变Keychain权限。原生开发窗口仍是开发身份，正式更新仅正式包可用。
+
 ## 历史版本记录
 
 以下是迁移之前的实际操作记录，旧入口及测试结论不作为0.22.0的当前运行说明。
