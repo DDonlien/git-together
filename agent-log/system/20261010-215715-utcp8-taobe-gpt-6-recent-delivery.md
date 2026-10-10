@@ -3,7 +3,8 @@
 - 用户请求：检查最近对话的功能是否都好了，好了的话推送打包，让我能更新到。
 - 范围确认：用户选择补齐Pull、Get Latest、Clean和后台实际Git fetch后再发布。
 - 执行者：taobe；模型：gpt-6（未推测更细型号）。
-- 开始：2026-10-10 17:25:47 UTC+8；当前检查记录：2026-10-10 19:06:14 UTC+8；交付结束时间待实际发布完成后补记。
+- 开始：2026-10-10 17:25:47 UTC+8；恢复发布：2026-10-10 21:38:09 UTC+8；发布核验完成：2026-10-10 21:57:15 UTC+8。
+- 结束时执行提交：是；产品实现与文档已推送main，公共校验修复83b8f58也已正常推送。本文作为交付收尾记录同步。
 - 根目录：/Users/taobe/Projects/GitHub/Personal/git-together/codex-standalone-ts；main；起始HEAD95527b84055ffe54bf7032ec8fed8f27d9ca5ea7。
 - 阅读根及macos规则，模板v1.9.1-260916-010202一致；只读最近相关对话，未发送消息、重置或丢弃并行改动。
 - 需求：RUN-01-recent-delivery、IMPORT-14-operation-execution、IMPORT-14-production-submit-runtime、IMPORT-14-header-alignment-runtime。
@@ -35,3 +36,16 @@
 - RUN-01-recent-delivery保持未完成，待安全公证凭据恢复后重跑原入口，完成公证、stable/latest发布和公开清单/完整ZIP验证；现有App未安装/重启。
 
 - 本轮暂停记录时间：2026-10-10 19:35:52 UTC+8。任务未完成；等待本机公证凭据恢复。
+
+## 安全恢复与正式交付
+
+- 用户补充原文：「已解锁」「已恢复，但有一说一这不能每次要我手动操作吧」。21:38开始复核，两个新notarytool进程读取同名profile均成功，历史4项；Git main干净且与origin/main相同，完整SHA为e86dc9face68d18573dd9c08de0586e9a8be3eea。发布入口默认复用gittogether-notary，源码没有删除凭据的步骤。此次正常发布不再输入凭据；此前读取失败原因没有得到证实，不把锁屏推断成确定原因，也不读取、导出或记录密码。
+- 重跑原桌面发布入口，501/501回归、类型和生产构建通过（仅既有bundle大小警告）；隔离源快照、Developer ID签名和deep/strict校验完成。Apple公证131b0111-1cb1-46b1-932f-de2eb6b52199为Accepted，staple/validate及后续签名校验通过。
+- 21:46公开回读确认v0.21.0为stable/latest且非draft/prerelease，tag和打包源码均为e86dc9face68d18573dd9c08de0586e9a8be3eea。最终ZIP为110946064字节，SHA-256为eccfc4479ee5f43e0825c7d54efadc9501606596bb06983a452e6d90af127959。两正式资产完整上传，GitHub远端digest与本机一致；发行说明已补充最近界面、实际Git操作、AI/Commit/Push与历史保护行为并公开回读。
+- 发布完成后的公共校验因Node连接被关闭而退出，记录UND_ERR_SOCKET（HTTP/2栈）及独立探测的UND_ERR_CONNECT_TIMEOUT；同URL系统curl访问正常。最小修复scripts/desktop-release.ts，让公开API/Atom/清单使用与ZIP一致的macOS HTTPS下载工具，保留HTTPS/重定向限制、超时、HTTP状态和完整校验，不改代理或TLS。
+- 修复后类型、15/15发布回归及502/502收尾全套通过。使用既有可重入verifyPublicDesktopRelease只读核对已发布资产，公共latest、tag、Atom、清单及完整ZIP的大小/SHA-256/SHA-512均相同，build-info写入publicUpdateVerified=true；没有重建或替换已发布包。自动公共校验修复83b8f58已提交并推送main，后续发布直接使用修复流程。
+- 产品版本仍0.21.0：此处仅修复未装入App的发布校验脚本和文档，正式App/ZIP保持原签名、公证、源码摘要及tag来源；不把收尾main提交冒称0.21.0的原始打包提交。
+- 本地预览与授权助手实际回读同为0.21.0，configured=true，继续保持运行。README日志入口改为界面实际的「设置 → 日志 → 打开日志文件夹」，补充复制日志文件入口。
+- 用户回复解锁后，CUA应用操作接口仍两次返回Mac locked且自动解锁失败；已经异步请求再次解锁并保持到检查结束，尚未收到新回复。因此未观察安装版页面发现0.21.0；该项独立保留RUN-01-recent-installed-check。未替用户下载到安装器、安装、替换或重启现有App，不把公共更新源验证冒称安装版观察。
+- RUN-01-recent-delivery交付完成，补记RUN-01-notary-reuse并保持正常自动复用；记录实际故障才安全处理，不保证凭据永久有效。完整发布链接：https://github.com/DDonlien/git-together/releases/tag/v0.21.0 。
+- 本地产物：项目容器_builds/gittogether-0.21.0-macos-arm64-AQRvMl；恢复打包日志/tmp/gittogether-021-package-restored.log、公共恢复/tmp/gittogether-021-public-recovery.log及收尾回归/tmp/gittogether-021-release-recovery-*.log，均未进入版本资产。
