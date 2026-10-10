@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer, type ViteDevServer } from 'vite';
 import { setTimeout as pause } from 'node:timers/promises';
 import { homedir } from 'node:os';
+import { request as loopbackRequest } from 'node:http';
 import pkg from '../package.json';
 
 export function developmentOptions(args: string[]) {
@@ -14,15 +15,25 @@ export function developmentOptions(args: string[]) {
 }
 async function status(): Promise<boolean> {
   try {
-    const response = await fetch('http://127.0.0.1:4175/api/import/status', {
-      method: 'POST', headers: { Host: '127.0.0.1:4173', 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: '{}', signal: AbortSignal.timeout(2000),
+    // Node's fetch normalizes Host; use a fixed local status request so the
+    // Rust proxy boundary can retain the same Host guard as real UI requests.
+    const response = await new Promise<{ status: number; body: string }>((accept, reject) => {
+      const req = loopbackRequest('http://127.0.0.1:4175/api/import/status', {
+        method: 'POST', headers: { Host: '127.0.0.1:4173', 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, signal: AbortSignal.timeout(2000),
+      }, res => {
+        let body = ''; res.setEncoding('utf8');
+        res.on('data', part => { body += part; if (body.length > 32768) res.destroy(new Error('Rust 服务状态过大。')); });
+        res.once('error', reject); res.once('end', () => accept({ status: res.statusCode ?? 0, body }));
+      });
+      req.once('error', reject); req.end('{}');
     });
-    const result: unknown = await response.json();
-    if (!response.ok || !result || typeof result !== 'object' || !('ok' in result) || result.ok !== true || !('value' in result) || !result.value || typeof result.value !== 'object' || !('version' in result.value)) throw new Error('Rust 服务状态无效。');
+    if (response.status !== 200) throw new Error('Rust 服务状态无效。');
+    let result: unknown; try { result = JSON.parse(response.body); } catch { throw new Error('Rust 服务状态无效。'); }
+    if (!result || typeof result !== 'object' || !('ok' in result) || result.ok !== true || !('value' in result) || !result.value || typeof result.value !== 'object' || !('version' in result.value)) throw new Error('Rust 服务状态无效。');
     if (result.value.version !== pkg.version || !('backend' in result.value) || result.value.backend !== 'rust') throw new Error('Rust 服务身份或版本与页面不一致；未停止占用进程。');
     return true;
   } catch (error) {
-    if (error instanceof TypeError && 'cause' in error && (error.cause as { code?: string })?.code === 'ECONNREFUSED') return false;
+    if (error instanceof Error && 'code' in error && error.code === 'ECONNREFUSED') return false;
     throw error;
   }
 }

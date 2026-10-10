@@ -19,3 +19,11 @@
 - 本对话表头角标修正先独立提交697af58，再处理迁移，保留原修改范围。
 - 当前源码：npm run check通过；cargo check（含--locked）通过；npm run build通过，262模块；git diff --check通过。未新增或运行测试，未据此声称真实账号、实际Git操作或用户升级验收。
 - 开发服务4173/4174确认由本项目旧Node/Electron持有，授权助手公开状态版本0.21.2且configured=true；需恢复为0.22.0 Rust服务，不能把原公开配置状态等同于新运行已恢复。
+
+## 首轮构建与修正
+
+- 277e4d05b4e6087479530177fab2ea6e6998ec0c提交并推送main，远端回读一致。优化Rust构建完成（首次1分54秒），Tauri默认把辅助Cargo binaries同时装入App。
+- 首轮Apple公证3c19ebb8-0f92-442a-b7b9-004494f574a1为Invalid：仅指出gittogether-service和gittogether-release-verify两个辅助程序没有Developer ID/安全时间戳；没有公开发布。修正最终App仅保留gittogether原生入口，开发服务及公钥校验器留在构建目录外；额外二进制检查在发布前阻断。
+- 开发就绪检测改用固定Node HTTP请求（仅启动工具），保留Rust的Host边界；Node fetch会重写Host，首轮因此403，已修正。网页业务仍完全为Rust。
+- 确认旧开发进程属于本项目后正常停止，0.22.0 Rust服务持有4174/4175，React预览4173恢复。页面/status/catalog均200，backend=rust，账号0、仓库0、storage=session；没有恢复或重放旧网页账号。
+- 未签名的Rust开发服务对旧开发配置Keychain读取返回明确不可用；原加密文件保留，未弹解锁或绕过安全设置，未声称配置已恢复或真实授权成功。正式包沿用原Developer ID/bundle ID，实际用户账号升级仍不操作安装版验收。

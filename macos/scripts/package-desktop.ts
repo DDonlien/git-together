@@ -71,9 +71,13 @@ try {
   // a development/build tool; no Electron, Node sidecar or credentials are copied.
   await run(join(clientRoot, 'node_modules/.bin/tauri'), ['build', '--target', 'aarch64-apple-darwin', '--bundles', 'app', '--config', JSON.stringify({ build: { beforeBuildCommand: null }, bundle: { createUpdaterArtifacts: false } })], source, { CARGO_TARGET_DIR: targetRoot, PATH: `${dirname(cargo)}:${process.env.PATH || ''}`, APPLE_SIGNING_IDENTITY: '-' });
   const binaryRoot = join(targetRoot, 'aarch64-apple-darwin/release');
-  await run(cargo, ['build', '--manifest-path', 'src-tauri/Cargo.toml', '--release', '--locked', '--target', 'aarch64-apple-darwin', '--features', 'custom-protocol', '--bin', 'gittogether-release-verify', '--bin', 'gittogether-service'], source, { CARGO_TARGET_DIR: targetRoot });
   const applicationPath = join(output, 'GitTogether.app');
   await cp(join(binaryRoot, 'bundle/macos/GitTogether.app'), applicationPath, { recursive: true });
+  // Cargo also builds the browser service and the release verifier. Tauri's
+  // bundler discovers all binaries; these tools stay outside the shipped app.
+  for (const tool of ['gittogether-service', 'gittogether-release-verify']) await rm(join(applicationPath, 'Contents/MacOS', tool), { force: true });
+  const bundledBinaries = await readdir(join(applicationPath, 'Contents/MacOS'));
+  if (bundledBinaries.length !== 1 || bundledBinaries[0] !== 'gittogether') throw new Error('正式包包含额外运行程序，停止发布。');
   await run('/usr/bin/codesign', ['--force', '--options', 'runtime', '--timestamp', '--entitlements', join(source, 'src-tauri/entitlements.plist'), '--sign', identity, applicationPath]);
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath]);
   const signature = (await execute('/usr/bin/codesign', ['-d', '--verbose=4', applicationPath])).stderr;
