@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { notarizationResult, verifyReleaseAssets, verifyUpdateMetadata, type ReleasePackage } from '../scripts/desktop-release';
+import { notarizationResult, reconcileReleaseMutation, verifyReleaseAssets, verifyUpdateMetadata, type ReleasePackage } from '../scripts/desktop-release';
 
 const artifact: ReleasePackage = {
   version: '0.17.2', sourceCommit: 'a'.repeat(40), zipPath: '/build/GitTogether-0.17.2-macOS-arm64.zip',
@@ -54,11 +54,71 @@ test('publication protects main provenance and exposes only verified stable asse
   const source = readFileSync(new URL('../scripts/desktop-release.ts', import.meta.url), 'utf8');
   assert.match(source, /main\?\.object.sha !== sourceCommit/);
   assert.match(source, /existing && \(!existing.draft \|\| existing.target_commitish !== sourceCommit\)/);
-  assert.match(source, /'--draft', '--target', sourceCommit/);
+  assert.match(source, /tag_name: tag, target_commitish: sourceCommit, draft: true/);
   assert.match(source, /verifyReleaseAssets\(uploaded.assets, expected\)/);
-  assert.match(source, /'--draft=false', '--prerelease=false', '--latest'/);
+  assert.match(source, /draft: false, prerelease: false, make_latest: 'true'/);
   assert.match(source, /await assertTag\(false\)/);
   assert.match(source, /publicRead\(`https:\/\/github.com\/\$\{repository\}\/releases.atom`\)/);
   assert.match(source, /sha512.digest\('base64'\) !== artifact.sha512/);
   assert.doesNotMatch(source, /NODE_TLS_REJECT_UNAUTHORIZED|--insecure|rejectUnauthorized:\s*false|GH_TOKEN:.*console/);
+});
+
+test('an already completed release mutation is not replayed', async () => {
+  let writes = 0;
+  await reconcileReleaseMutation(async () => { writes++; }, async () => true, async () => {});
+  assert.equal(writes, 0);
+});
+
+test('a lost success response is recovered by readback without duplicate writes', async () => {
+  let writes = 0, complete = false, waits = 0;
+  await reconcileReleaseMutation(async () => {
+    writes++; complete = true; throw new TypeError('fetch failed');
+  }, async () => complete, async () => { waits++; });
+  assert.equal(writes, 1);
+  assert.equal(waits, 0);
+});
+
+test('a confirmed incomplete mutation can retry after a transient connection failure', async () => {
+  let writes = 0, complete = false, waits = 0;
+  await reconcileReleaseMutation(async () => {
+    writes++;
+    if (writes === 1) throw new TypeError('fetch failed');
+    complete = true;
+  }, async () => complete, async () => { waits++; });
+  assert.equal(writes, 2);
+  assert.equal(waits, 1);
+});
+
+test('release mutation retries are bounded and preserve the final error', async () => {
+  let writes = 0, reads = 0, waits = 0;
+  const failure = new TypeError('fetch failed');
+  await assert.rejects(reconcileReleaseMutation(async () => { writes++; throw failure; },
+    async () => { reads++; return false; }, async () => { waits++; }), error => error === failure);
+  assert.equal(writes, 3);
+  assert.equal(reads, 6);
+  assert.equal(waits, 2);
+});
+
+test('permanent release failures are not retried', async () => {
+  let writes = 0, reads = 0;
+  const failure = new Error('permission denied');
+  await assert.rejects(reconcileReleaseMutation(async () => { writes++; throw failure; },
+    async () => { reads++; return false; }, async () => {}), error => error === failure);
+  assert.equal(writes, 1);
+  assert.equal(reads, 1);
+});
+
+test('a changed protected draft during recovery prevents replay', async () => {
+  let writes = 0;
+  await assert.rejects(reconcileReleaseMutation(async () => { writes++; throw new TypeError('fetch failed'); }, async () => {
+    if (writes) throw new Error('draft no longer belongs to this source');
+    return false;
+  }, async () => {}), /draft no longer belongs/);
+  assert.equal(writes, 1);
+});
+
+test('successful writes still require a verified readback', async () => {
+  let writes = 0;
+  await assert.rejects(reconcileReleaseMutation(async () => { writes++; }, async () => false, async () => {}), /服务器状态未通过核对/);
+  assert.equal(writes, 1);
 });

@@ -1,14 +1,12 @@
 import { createHash } from 'node:crypto';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { promisify } from 'node:util';
 import { releaseBranch, updateSource } from '../src/update-model';
 
-const execute = promisify(execFile);
 const repository = `${updateSource.owner}/${updateSource.repo}`;
 
-interface ReleaseAsset { name: string; size: number; state: string; digest: string | null }
+interface ReleaseAsset { id?: number; name: string; size: number; state: string; digest: string | null }
 interface Release { id: number; tag_name: string; draft: boolean; prerelease: boolean; target_commitish: string; html_url: string; assets: ReleaseAsset[] }
 export interface ReleasePackage {
   version: string; sourceCommit: string; zipPath: string; updateMetadataPath: string;
@@ -21,10 +19,14 @@ export function notarizationResult(output: string): { id: string; status: 'Accep
   return { id: result.id, status: 'Accepted' };
 }
 
+function assetMatches(asset: ReleaseAsset, file: { name: string; size: number; sha256: string }) {
+  return asset.name === file.name && asset.state === 'uploaded' && asset.size === file.size && asset.digest === `sha256:${file.sha256}`;
+}
+
 export function verifyReleaseAssets(assets: ReleaseAsset[], expected: { name: string; size: number; sha256: string }[]) {
   for (const file of expected) {
     const matches = assets.filter(asset => asset.name === file.name);
-    if (matches.length !== 1 || matches[0].state !== 'uploaded' || matches[0].size !== file.size || matches[0].digest !== `sha256:${file.sha256}`) {
+    if (matches.length !== 1 || !assetMatches(matches[0], file)) {
       throw new Error(`GitHub资产未完整上传或校验值不符：${file.name}，停止发布。`);
     }
   }
@@ -40,11 +42,12 @@ export function verifyUpdateMetadata(metadata: unknown, artifact: ReleasePackage
   }
 }
 
-async function githubEnvironment(cwd: string): Promise<NodeJS.ProcessEnv> {
-  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) return { ...process.env };
+async function githubCredential(cwd: string): Promise<string> {
+  const configured = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (configured) return configured;
   // Reuse the repository's existing credential helper. The credential stays in
-  // memory and the gh child environment, never in arguments or build resources.
-  const credential = await new Promise<string>((resolveCredential, reject) => {
+  // memory and authenticated HTTPS headers, never in arguments or build resources.
+  return new Promise<string>((resolveCredential, reject) => {
     const child = spawn('git', ['credential', 'fill'], { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: ['pipe', 'pipe', 'pipe'] });
     let output = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', chunk => { output += chunk; });
@@ -57,7 +60,38 @@ async function githubEnvironment(cwd: string): Promise<NodeJS.ProcessEnv> {
     });
     child.stdin.end('protocol=https\nhost=github.com\n\n');
   });
-  return { ...process.env, GH_TOKEN: credential };
+}
+
+class GitHubRequestError extends Error {
+  constructor(readonly status: number) { super(`GitHub发布接口返回HTTP ${status}。`); }
+}
+
+function transientReleaseError(error: unknown) {
+  if (error instanceof GitHubRequestError) return error.status >= 500 || error.status === 429;
+  if (error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)) return true;
+  return error instanceof TypeError && error.message === 'fetch failed';
+}
+
+// A lost response does not imply that GitHub rejected the mutation. Read back
+// the protected release before replaying create, upload or publication.
+export async function reconcileReleaseMutation(
+  operation: () => Promise<unknown>, complete: () => Promise<boolean>,
+  wait: (attempt: number) => Promise<void> = attempt => new Promise(resolveWait => setTimeout(resolveWait, 1000 * 2 ** attempt)),
+) {
+  for (let attempt = 0; ; attempt++) {
+    if (await complete()) return;
+    try { await operation(); }
+    catch (error) {
+      if (!transientReleaseError(error)) throw error;
+      if (await complete()) return;
+      if (attempt === 2) throw error;
+      console.log(`GitHub发布连接中断，已核对服务器结果，正在重试（${attempt + 2}/3）…`);
+      await wait(attempt);
+      continue;
+    }
+    if (!await complete()) throw new Error('GitHub发布操作完成后，服务器状态未通过核对。');
+    return;
+  }
 }
 
 async function publicRead(url: string): Promise<Response> {
@@ -78,17 +112,35 @@ async function publicRead(url: string): Promise<Response> {
 export async function prepareDesktopRelease(cwd: string, version: string, sourceCommit: string) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('正式更新必须使用稳定的语义版本号。');
   const tag = `v${version}`;
-  const env = await githubEnvironment(cwd);
-  const gh = async (args: string[]) => (await execute('gh', args, { cwd, env, timeout: 240_000, maxBuffer: 8 * 1024 * 1024 })).stdout;
+  const credential = await githubCredential(cwd);
+  const request = async <T>(url: string, init: RequestInit = {}, allowMissing = false): Promise<T | null> => {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(240_000), headers: {
+      Accept: 'application/vnd.github+json', Authorization: `Bearer ${credential}`,
+      'X-GitHub-Api-Version': '2022-11-28', 'Cache-Control': 'no-cache', ...init.headers,
+    } });
+    if (allowMissing && response.status === 404) { await response.body?.cancel(); return null; }
+    if (!response.ok) { await response.body?.cancel(); throw new GitHubRequestError(response.status); }
+    return response.status === 204 ? null : await response.json() as T;
+  };
+  const endpoint = (path: string) => `https://api.github.com/repos/${repository}/${path}`;
   const api = async <T>(path: string, allowMissing = false): Promise<T | null> => {
     for (let attempt = 0; ; attempt++) {
-      try { return JSON.parse(await gh(['api', `repos/${repository}/${path}`])) as T; }
+      try { return await request<T>(endpoint(path), {}, allowMissing); }
       catch (error) {
-        const stderr = (error as { stderr?: string }).stderr ?? '';
-        if (allowMissing && /HTTP 404/.test(stderr)) return null;
-        if (attempt === 2 || !/EOF|connection reset|TLS handshake timeout|HTTP 50[234]/.test(stderr)) throw error;
+        if (attempt === 2 || !transientReleaseError(error)) throw error;
         await new Promise(resolveWait => setTimeout(resolveWait, 1000 * 2 ** attempt));
       }
+    }
+  };
+  // Draft releases are included in this authenticated listing for users with
+  // push access; a tag lookup alone is insufficient for unpublished drafts.
+  const tagRelease = async () => {
+    for (let page = 1; ; page++) {
+      const releases = (await api<Release[]>(`releases?per_page=100&page=${page}`))!;
+      const matches = releases.filter(release => release.tag_name === tag);
+      if (matches.length > 1) throw new Error('同版本存在多个发布草稿，停止操作。');
+      if (matches.length) return matches[0];
+      if (releases.length < 100) return null;
     }
   };
   const assertMain = async () => {
@@ -105,7 +157,7 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
   };
   await assertMain();
   await assertTag(true);
-  const existing = await api<Release>(`releases/tags/${tag}`, true);
+  const existing = await tagRelease();
   if (existing && (!existing.draft || existing.target_commitish !== sourceCommit)) throw new Error('此版本已发布或草稿对应其他源码，请递增版本；不覆盖正式资产。');
   const latest = await api<Release>('releases/latest', true);
   if (latest) {
@@ -130,21 +182,66 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       ];
       const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
       await writeFile(notes, `# GitTogether ${version}\n\nmacOS Apple Silicon 正式更新，已完成 Developer ID 签名及 Apple 公证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
-      let draft = await api<Release>(`releases/tags/${tag}`, true);
-      if (!draft) {
-        await gh(['release', 'create', tag, '--repo', repository, '--draft', '--target', sourceCommit, '--title', `GitTogether ${version}`, '--notes-file', notes]);
-        draft = await api<Release>(`releases/tags/${tag}`);
-      }
-      if (!draft?.draft || draft.target_commitish !== sourceCommit) throw new Error('版本草稿状态或源码已改变，停止上传。');
+      let draft: Release | null = null;
+      await reconcileReleaseMutation(
+        async () => {
+          await assertMain(); await assertTag(true);
+          return request<Release>(endpoint('releases'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+            tag_name: tag, target_commitish: sourceCommit, draft: true, prerelease: false, make_latest: 'false',
+            name: `GitTogether ${version}`, body: await readFile(notes, 'utf8'),
+          }) });
+        },
+        async () => {
+          draft = await tagRelease();
+          if (draft && (!draft.draft || draft.target_commitish !== sourceCommit)) throw new Error('版本草稿状态或源码已改变，停止上传。');
+          return draft !== null;
+        },
+      );
+      const releaseId = (draft as Release | null)!.id;
+      const matchingRelease = async (requireDraft: boolean) => {
+        const current = await api<Release>(`releases/${releaseId}`);
+        if (!current || current.id !== releaseId || current.tag_name !== tag || current.target_commitish !== sourceCommit || (requireDraft && !current.draft)) {
+          throw new Error('发布草稿已改变，停止操作。');
+        }
+        return current;
+      };
       // Only our matching draft is replaceable, so a failed upload can be retried
       // without exposing half a release or replacing a published installation.
-      await gh(['release', 'upload', tag, artifact.zipPath, artifact.updateMetadataPath, '--repo', repository, '--clobber']);
-      const uploaded = await api<Release>(`releases/tags/${tag}`);
-      if (!uploaded?.draft || uploaded.id !== draft.id || uploaded.target_commitish !== sourceCommit) throw new Error('发布草稿已改变，停止公开。');
+      for (const [index, file] of expected.entries()) {
+        const bytes = await readFile(index === 0 ? artifact.zipPath : artifact.updateMetadataPath);
+        await reconcileReleaseMutation(
+          async () => {
+            const current = await matchingRelease(true);
+            for (const asset of current.assets.filter(asset => asset.name === file.name)) {
+              await request(endpoint(`releases/assets/${asset.id}`), { method: 'DELETE' });
+            }
+            return request(`https://uploads.github.com/repos/${repository}/releases/${releaseId}/assets?name=${encodeURIComponent(file.name)}`, {
+              method: 'POST', headers: { 'Content-Type': index === 0 ? 'application/zip' : 'application/yaml' }, body: new Uint8Array(bytes),
+            });
+          },
+          async () => {
+            const matches = (await matchingRelease(true)).assets.filter(asset => asset.name === file.name);
+            return matches.length === 1 && assetMatches(matches[0], file);
+          },
+        );
+      }
+      const uploaded = await matchingRelease(true);
       verifyReleaseAssets(uploaded.assets, expected);
-      await assertMain();
-      await assertTag(true);
-      await gh(['release', 'edit', tag, '--repo', repository, '--draft=false', '--prerelease=false', '--latest']);
+      await reconcileReleaseMutation(
+        async () => {
+          await assertMain(); await assertTag(true);
+          verifyReleaseAssets((await matchingRelease(true)).assets, expected);
+          return request(endpoint(`releases/${releaseId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ draft: false, prerelease: false, make_latest: 'true' }) });
+        },
+        async () => {
+          const current = await matchingRelease(false);
+          verifyReleaseAssets(current.assets, expected);
+          if (current.draft) return false;
+          if (current.prerelease || (await api<Release>('releases/latest'))?.id !== releaseId) throw new Error('正式版本或latest状态不符。');
+          return true;
+        },
+      );
       await assertTag(false);
 
       console.log('正式版本已公开，正在验证无需登录的应用更新源…');
