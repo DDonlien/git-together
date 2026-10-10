@@ -6,7 +6,7 @@ import type { RepositoryActionMode, RepositoryActionTarget } from './repository-
 export type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
 
 type SavedDraft = { draft: CommitDraft; edited: Record<keyof CommitDraft, boolean>; generated: boolean; head: string; changeKey?: string };
-type Entry = RepositoryActionTarget & SavedDraft & { commitOperation: string; pushOperation: string; committed?: LocalSubmitResult; pushed?: boolean; error?: string };
+type Entry = RepositoryActionTarget & SavedDraft & { commitOperation: string; pushOperation: string; committed?: LocalSubmitResult; pushed?: boolean };
 const DraftsContext = createContext<Map<string, SavedDraft> | null>(null);
 
 export function RepositoryActionDraftsProvider({ sessionId, children }: { sessionId: string; children: ReactNode }) {
@@ -90,31 +90,27 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   async function confirm() {
     if (!ready || running.current) return;
     running.current = true; setBusy(true); setError('');
+    let activeTarget = '';
     try {
       for (let index = 0; index < current.current.length; index++) {
         let entry = current.current[index];
-        update(index, { error: undefined });
-        try {
-          if (mode !== 'push' && !entry.committed) {
-            const committed = await onCommit({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, operationId: entry.commitOperation, ...entry.draft });
-            update(index, { committed }); entry = current.current[index];
-            onCommitted?.(entry, committed);
-            if (committed.warning) throw new Error(committed.warning);
-          }
-          if (mode !== 'commit' && !entry.pushed) {
-            const commitId = entry.committed?.commitId || entry.commitId || entry.task.head;
-            const result = await onPush({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.committed?.commitId || entry.task.head, commitId, operationId: entry.pushOperation });
-            update(index, { pushed: true });
-            if (result.warning) throw new Error(result.warning);
-          }
-        } catch (problem) {
-          update(index, { error: problem instanceof Error ? problem.message : '操作未完成。' });
-          throw problem;
+        activeTarget = `${entry.repositoryName} · ${entry.task.branch}`;
+        if (mode !== 'push' && !entry.committed) {
+          const committed = await onCommit({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, operationId: entry.commitOperation, ...entry.draft });
+          update(index, { committed }); entry = current.current[index];
+          onCommitted?.(entry, committed);
+          if (committed.warning) throw new Error(committed.warning);
+        }
+        if (mode !== 'commit' && !entry.pushed) {
+          const commitId = entry.committed?.commitId || entry.commitId || entry.task.head;
+          const result = await onPush({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.committed?.commitId || entry.task.head, commitId, operationId: entry.pushOperation });
+          update(index, { pushed: true });
+          if (result.warning) throw new Error(result.warning);
         }
       }
       onComplete?.(mode === 'commit' ? `已创建 ${current.current.length} 个本地提交。` : `已推送 ${current.current.length} 个工作目录的所选提交。`);
       running.current = false; onClose();
-    } catch (problem) { setError(problem instanceof Error ? problem.message : '操作未完成。'); }
+    } catch (problem) { setError(`${activeTarget}：${problem instanceof Error ? problem.message : '操作未完成。'}`); }
     finally { running.current = false; setBusy(false); }
   }
   const pushOnly = mode === 'push' || mode === 'submit' && entries.length > 0 && entries.every(entry => entry.committed);
@@ -134,7 +130,6 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
           </ul>}
           {entry.committed && <p className="repository-submit-result" role="status">已 Commit · {entry.committed.commitId.slice(0, 8)}{entry.pushed ? ' · 已 Push' : mode === 'submit' ? ' · 待 Push' : ''}</p>}
           {mode === 'push' && entry.pushed && <p className="repository-submit-result" role="status">已 Push</p>}
-          {entry.error && <p className="repository-submit-result">{entry.error}</p>}
         </section>)}
       </div>
       {!entries.length && <p>当前范围内没有可执行的更改。</p>}

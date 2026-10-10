@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { gitToolEnvironment } from './git-environment';
 
 // Wait for the process group to exit before reporting cancellation or releasing
 // an index lock. Hooks and signing helpers must not continue after a timeout.
@@ -8,7 +9,7 @@ export async function runGitProcess(root: string, args: string[], options: { env
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete env[key];
   Object.assign(env, options.env);
   return new Promise((accept, reject) => {
-    const child = spawn('git', ['-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', root, ...args], { env, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('git', ['-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false', '-c', 'core.pager=cat', '-C', root, ...args], { env: gitToolEnvironment(env), detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
     const output: Buffer[] = [], errors: Buffer[] = [];
     let bytes = 0, errorBytes = 0, failure: Error | undefined, force: ReturnType<typeof setTimeout> | undefined;
     const kill = (signal: NodeJS.Signals) => { if (child.pid) { try { process.platform === 'win32' ? child.kill(signal) : process.kill(-child.pid, signal); } catch { child.kill(signal); } } };

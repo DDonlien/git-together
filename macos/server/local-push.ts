@@ -48,10 +48,13 @@ export async function pushLocalCommit(root: string, input: LocalPushInput, repos
   } catch (problem) {
     const error = problem && typeof problem === 'object' ? problem as Record<string, unknown> : {};
     const stderr = [error.stderr, error.stdout].filter(value => typeof value === 'string').join('\n');
+    if (/git-lfs.*(?:not found|command not found)|git: 'lfs' is not a git command/i.test(stderr)) {
+      throw Object.assign(new Error('未找到可运行的 Git LFS，请检查本机 Git LFS 安装。本地提交已保留。'), { code: 'git-lfs-missing' });
+    }
     const message = /non-fast-forward|fetch first|rejected.*stale/i.test(stderr) ? '远端已有新提交，请先处理分支差异后重试 Push。本地提交已保留。' :
       /Authentication failed|could not read Username|HTTP (401|403)|access denied|permission denied/i.test(stderr) ? '远端拒绝推送，请检查账号写入权限和分支保护。本地提交已保留。' :
       /certificate|SSL/i.test(stderr) ? '推送时证书验证失败，请检查服务器证书。本地提交已保留。' :
-      problem instanceof Error && /已变化|取消|超时|无法确认/.test(problem.message) ? problem.message : 'Push 未确认完成，请检查网络、Git LFS、推送钩子和分支权限。本地提交已保留。';
+      problem instanceof Error && /已变化|取消|超时|无法确认/.test(problem.message) ? problem.message : 'Push 未确认完成，请检查网络和推送钩子。本地提交已保留。';
     throw new Error(message);
   }
 }

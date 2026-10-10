@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createGitNetworkFixture } from './git-network-fixture';
 import { readRepositoryWorkspace } from '../server/repository-reader';
@@ -10,6 +10,7 @@ import { prepareRepositorySync, applyRepositorySync } from '../server/repository
 import type { RepositorySyncPlan, RepositorySyncResult } from '../src/repository-sync-model';
 import type { LocalSubmitResult, LocalPushResult } from '../src/local-submit-model';
 import { downloadBranchWorktree } from '../server/branch-download';
+import { diagnosticCode } from '../src/diagnostics-model';
 
 const task = async (f: Awaited<ReturnType<typeof createGitNetworkFixture>>, root = f.directory) => (await readRepositoryWorkspace(root, new Set([root]))).tasks.find(t => t.path === root)!;
 const prepare = async (f: Awaited<ReturnType<typeof createGitNetworkFixture>>, mode: 'pull' | 'latest' | 'clean') => f.service.handle('prepareSync', { repositoryId: f.repository.id, taskId: (await task(f)).id, mode }) as Promise<RepositorySyncPlan>;
@@ -139,6 +140,25 @@ test('non-fast-forward Push preserves the local commit and remote branch', async
   const remote = await f.advance('diverged remote\n');
   await assert.rejects(f.service.handle('pushCommit', { repositoryId: f.repository.id, taskId: change.id, expectedHead: committed.commitId, commitId: committed.commitId, operationId: randomUUID() }), /远端已有新提交.*本地提交已保留/);
   assert.equal(await f.git(f.directory, ['rev-parse', 'HEAD']), committed.commitId); assert.equal(await f.git(f.bare, ['rev-parse', 'main']), remote);
+});
+
+test('an unavailable LFS hook produces a specific safe error and keeps the commit for a Push-only retry', async t => {
+  const f = await createGitNetworkFixture(); t.after(f.cleanup);
+  const remote = await f.git(f.bare, ['rev-parse', 'main']);
+  await writeFile(join(f.directory, 'local.txt'), 'local'); const change = await task(f);
+  const committed = await f.service.handle('submitCommit', { repositoryId: f.repository.id, taskId: change.id, expectedHead: change.head, changeKey: change.changeKey, operationId: randomUUID(), summary: 'local', description: '' }) as LocalSubmitResult;
+  const hooks = join(f.root, 'hooks'); await mkdir(hooks); await f.git(f.directory, ['config', 'core.hooksPath', hooks]);
+  const hook = join(hooks, 'pre-push');
+  await writeFile(hook, '#!/bin/sh\nprintf "This repository is configured for Git LFS but git-lfs was not found. PRIVATE_PROVIDER_RESPONSE\\n" >&2\nexit 2\n'); await chmod(hook, 0o700);
+  const input = { repositoryId: f.repository.id, taskId: change.id, expectedHead: committed.commitId, commitId: committed.commitId, operationId: randomUUID() };
+  await assert.rejects(f.service.handle('pushCommit', input), problem => {
+    assert.ok(problem instanceof Error); assert.match(problem.message, /未找到可运行的 Git LFS.*本地提交已保留/);
+    assert.doesNotMatch(problem.message, /PRIVATE_PROVIDER_RESPONSE|分支权限/); assert.equal(diagnosticCode(problem), 'git-lfs-missing'); return true;
+  });
+  assert.equal(await f.git(f.directory, ['rev-parse', 'HEAD']), committed.commitId); assert.equal(await f.git(f.bare, ['rev-parse', 'main']), remote);
+  await rm(hook); const pushed = await f.service.handle('pushCommit', input) as LocalPushResult;
+  assert.equal(pushed.commitId, committed.commitId); assert.equal(await f.git(f.bare, ['rev-parse', 'main']), committed.commitId);
+  assert.equal(await f.git(f.directory, ['rev-parse', 'HEAD']), committed.commitId);
 });
 
 test('Get Latest preserves unpublished commits and rejects another index writer', async t => {

@@ -210,3 +210,5 @@ AccountService 从已保存仓库、账号与关联定位真实 worktree，复�
 controller 在提交前后递增本地读取版本，丢弃写入前轮询的迟到响应；成功立即重新读取共享 localWorkspace，再触发一次仓库远端状态检查，不清空其他任务选择和草稿。图谱从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
 
 commit-generator 仅收集当前任务最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。使用本机已登录 Codex CLI 的 exec，在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 运行，忽略用户 config/rules，禁用 shell、多 agent、apps、plugins、hooks、web search 与 MCP；不读取聊天账号令牌，不执行仓库命令。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。150秒超时及显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。原始 CLI 输出和提交正文不进入诊断日志。
+
+macOS Git工具环境与操作错误（2026-10-10，IMPORT-14-push-lfs-errors）：git-process和branch-download共用gitToolEnvironment，在各Git子进程环境中追加用户.local/bin、Apple Silicon及Intel Homebrew目录，保留继承PATH优先级并去重；不执行登录shell、不改全局环境或Git配置。LFS钩子与filter继承相同环境。RepositoryActionDialog删除Entry.error和重复catch，仅由弹窗error保存失败信息，带失败仓库/分支并用共享Notice展示；Commit/Push结果与UUID继续用于跳过已完成步骤。已知LFS缺失返回固定安全提示及git-lfs-missing诊断分类，不回显Git原始输出，也不将泛化失败误分类为分支权限。

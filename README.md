@@ -41,7 +41,7 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 ## 当前状态
 
-当前源码0.21.1支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
+当前源码0.21.2支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
 
 Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示按远端恢复、补齐和删除的具体文件（包含忽略的本地文件），确认后执行，保留本地提交和暂存区。Get Latest核验最新文件及LFS后替换为深度1的新目录，并实际删除可独立回收的旧历史与缓存；未推送提交、其他分支、标签或共享主目录会阻止清理，独立分支worktree可整理成单层目录，其他目录需要的共享历史保留并如实报告。后台每5分钟及变化触发实际Git fetch，不合并或改工作文件；保留已有数量、检查反馈、离线暂停及失败退避。未关联分支继续通过下载入口创建并关联目录。在线协作仍在开发中。
 
@@ -70,3 +70,5 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 [产品范围与进展](REQUIREMENTS.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，支持即时筛选、清空和Cmd/Ctrl+K；Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
+
+Commit / Submit / Push失败时，弹窗只显示一处统一错误提示，注明失败仓库和分支；本地Commit保留，重试继续Push。macOS从Finder启动也会在用户`~/.local/bin`和Homebrew的`/opt/homebrew/bin`、`/usr/local/bin`查找Git LFS，供推送钩子、下载及同步使用，保留已有PATH优先级；无需重复安装已可运行的LFS。

@@ -7,6 +7,7 @@ import type { Account, RemoteRepository } from '../src/import-model';
 import { isDownloadFolderName } from '../src/branch-download-model';
 import { remoteIdentity } from './git-identity';
 import { readWorktrees } from './repository-reader';
+import { gitToolEnvironment } from './git-environment';
 
 // The helper handles only this account's origin. Tokens travel in the child
 // environment, never in Git arguments, saved remote URLs, config or logs.
@@ -54,8 +55,8 @@ export async function downloadBranchWorktree(input: DownloadInput): Promise<stri
   if (parts.length !== 2 || parts.some(part => !part || part === '.' || part === '..')) throw new Error('仓库身份无效，请刷新列表。');
   const url = new URL(`${account.host}/${parts.map(encodeURIComponent).join('/')}.git`);
   if (url.username || url.password || remoteIdentity(url.href) !== remoteIdentity(repository.url)) throw new Error('仓库远端与账号不匹配，请刷新列表。');
-  const env = { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', GIT_ASKPASS: '', SSH_ASKPASS: '',
-    GITTOGETHER_DOWNLOAD_ORIGIN: url.origin, GITTOGETHER_DOWNLOAD_USER: account.login, GITTOGETHER_DOWNLOAD_TOKEN: token };
+  const env = gitToolEnvironment({ ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', GIT_ASKPASS: '', SSH_ASKPASS: '',
+    GITTOGETHER_DOWNLOAD_ORIGIN: url.origin, GITTOGETHER_DOWNLOAD_USER: account.login, GITTOGETHER_DOWNLOAD_TOKEN: token });
   // A surrounding checkout must not redirect writes out of the managed store.
   for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete (env as NodeJS.ProcessEnv)[key];
   async function git(path: string, args: string[], stdin?: string, cancellation: AbortSignal | null = signal ?? null, cleanup = false): Promise<string> {
