@@ -1,4 +1,31 @@
-# TypeScript 客户端架构
+# Tauri / Rust / React 架构
+
+## 当前运行结构（0.22.0）
+
+桌面入口是`macos/src-tauri/src/main.rs`及`lib.rs`，使用Tauri 2 / WKWebView运行已打包React资源。`src/native-bridge.ts`安装既有有限协议，由Tauri命令调用Rust服务。生产不启动HTTP业务服务、Electron或Node sidecar；Node仅用于前端开发与发布工具。`macos/electron/`、`macos/server/`及相关旧回归保留为迁移前的参考，不进入当前桌面入口或安装包，不能据其结果声称Rust后台通过回归。
+
+| Rust模块 | 职责 |
+| --- | --- |
+| service | 账号目录、关联、上下文身份复核、幂等结果及按真实git-common-dir串行写入 |
+| provider | GitHub/Gitea只读请求、分页及SHA缓存；构造受限同origin Git凭据 |
+| git / operations | 有界Git子进程、worktree/历史/Diff、Commit/Push、浅下载及Pull/Clean/Get Latest预览与应用 |
+| ai | 每分支当前更改生成Summary/Description，沿用本机Codex配置，返回前复核任务 |
+| credentials / preferences | Keychain、旧Electron密文读取、新AES-GCM原子存储和限定偏好迁移 |
+| oauth | Rust loopback网页授权与设备授权，PKCE/state、实例绑定及加密开发配置 |
+| diagnostics | 24小时本机有限日志、打开文件夹及复制日志文件 |
+| updates | Tauri签名更新、版本绑定、操作完成后安装与重启 |
+
+保留`com.gittogether.standalone`、原Developer ID及`GitTogether-Standalone-Demo`数据目录。正式应用启动时兼容`accounts-v2.encrypted`旧v10密文，保存采用认证加密；Keychain不可用时保留原文件并返回错误，不弹解锁或明文降级。只迁移本应用偏好键，WKWebView已有值不覆盖。开发账号保持会话存储，不读取正式账号。迁移源与实际用户升级结果分别记录。
+
+每五秒本地扫描及每五分钟/本地变化触发fetch继续由已有React调度器管理；Rust同仓库身份的在途fetch共享结果，并按真实公共对象库串行。检查完成才发布数据，失败保留前次成功数量及退避。Git操作前后校验保存的账号、仓库、关联与任务；Commit开始后不因窗口请求取消中断事务。Clean和Get Latest先核验远端快照/LFS、再复核当前状态，使用备份与回滚，不能只删除shallow标志冒充空间回收。
+
+正式发布从已推送main生成独立源码快照，构建Rust release及React资源，Developer ID签名、Apple公证并附加凭证后生成两套更新资产：旧Electron版读取ZIP和`latest-mac.yml`，新Tauri版读取最终已公证的`.app.tar.gz`、`.sig`和`latest.json`。Tauri签名绑定版本，内置公钥匹配仓库外0600私钥；发布后完整回读两套公共资产并核对摘要。开发版禁用安装更新。不会为交付启动或修改用户已安装应用。
+
+浏览器开发由Vite将有限`/api`转发到Rust服务4175；授权回调4174也由Rust持有。受限Host/Origin、请求体上限和断连取消仍保留；桌面通过IPC直接调用同一Service，不依赖这些端口。类型检查覆盖当前React和发布工具，Rust使用独立Cargo检查。
+
+## 历史实施记录（0.21及以前）
+
+以下保留旧TypeScript/Electron实现及各阶段的证据边界；当前入口以上述Rust结构为准。
 
 2026-10-10完整仓库操作：repository-network从服务保存的账号、仓库和真实关联构造同origin凭据与Git命令，fetchRepository实际获取关联分支引用/对象，use-remote-repository沿用五分钟、变化触发、取消和退避。AccountService以git-common-dir队列串行Commit/Push/fetch/预览/应用，避免后台读取触发的fetch阻断Submit后续Push。repository-sync的prepare/apply/discard有限协议保存十分钟预览，绑定账号/任务、HEAD、引用、工作目录、index和文件指纹；应用前复核本地和远端，过期重新预览。Pull仅ff并补齐LFS；Clean用已核验远端快照与回滚备份恢复/补齐/删除文件，不改HEAD/index；Get Latest先核验depth1快照及当前LFS，再替换选中目录并删除可独立回收的旧对象/缓存，未推送或共享主目录拒绝，linked worktree迁移成独立clone且保留其他分支需要的对象库。前端RepositoryOperationDialog固定目标，逐目录预览、一次确认、失败停止并保留已完成结果。commit-generator沿用正常CLI配置，禁用工具/插件/钩子、忽略exec rules，在空私有目录按JSON schema生成；取消和返回后重新验证任务，错误不输出底层诊断。
 

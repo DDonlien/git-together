@@ -385,9 +385,9 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 ## 技术栈与命令
 
-- React / TypeScript / Vite；Electron TypeScript 桌面外壳；Phosphor 图标；Material 3 主题、Roboto 本地字体和 `open-glass-ui` 公共 classic/CSS 交互原语。不加载 electron-liquid-glass，不混装第二套组件库；OpenGlass 只承接可访问交互契约，不延续玻璃视觉。
-- `macos/` 是同一客户端的开发与浏览器预览入口；业务状态在 `macos/src/`；桌面桥在 `macos/electron/`。
-- `npm run dev` 启动预览；`npm run desktop` 启动桌面窗口；`npm run check`、`npm test`、`npm run build` 分别验证类型、业务与构建。
+- React / TypeScript / Vite；Tauri 2桌面外壳与Rust后台；Phosphor 图标；Material 3 主题、Roboto 本地字体和 `open-glass-ui` 公共 classic/CSS 交互原语。不加载 electron-liquid-glass，不混装第二套组件库；OpenGlass 只承接可访问交互契约，不延续玻璃视觉。
+- `macos/` 是同一客户端的开发与浏览器预览入口；界面状态在 `macos/src/`；桌面桥在 `macos/src/native-bridge.ts`，后台在 `macos/src-tauri/src/`。
+- `npm run dev` 启动React与Rust预览；`npm run desktop` 启动Tauri开发窗口；两者择一，不能同时占用4173。`npm run check`、`npm run check:rust`、`npm run build` 分别检查当前类型、Rust编译与构建。旧后台测试只作历史参考，本轮不运行。
 - 页面应有真实的内部状态变化，失败保留输入，可取消异步动作，各 worktree 状态与表单隔离，刷新后本地保存可恢复。
 - 2026-10-10最新交付授权：检查最近需求，补齐Pull / Get Latest / Clean及后台实际Git fetch后推送main、签名、公证并发布更新。后台只fetch引用/对象，不合并或改工作文件；写动作固定用户打开时的筛选/任务范围，具体覆盖/删除/历史整理必须先预览并由应用内确认。Commit仅本地提交，Submit确认后Commit再Push；AI沿用本机CLI模型和登录，只生成可编辑说明。保护未推送提交、其他分支、共享worktree和当前LFS，Get Latest回收须有真实磁盘证据，失败不删除原目录。Presence不属于此次范围。
 - 没有明确提交/推送请求时，不执行代码commit或push。当前稳定分支为main，不再按初始orphan/unborn状态操作。
@@ -424,3 +424,11 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 2026-10-09（最新细节）：侧栏32px开关与首页/仓库页首卡片顶边对齐，展开时右侧显示GitTogether名称；开关到Dashboard图标框固定8px，两态纵向位置不变。普通内容卡片亮暗色均无投影，用色调与细边缘区分；菜单/弹窗保留独立层级。保留既有图标尺寸、红绿灯、可访问性与挂载状态；取代顶部无品牌/60px留白方向。
 - 2026-10-09（最新）：实际客户端采用已认可的 Material 3（非 Expressive）样稿，覆盖浏览器与 Electron。侧栏透明、融入共享画布，没有独立悬浮卡片；首页、仓库页和设置语义分组轻微浮起，表格/文件行不各自套卡。统一亮暗色、Roboto/中文系统回退、Material 控件、菜单和弹窗；不透明表面不提供无作用的减少透明度开关。此条取代2026-10-03的悬浮侧栏及后续Ring回滚/H5-only材质方向。保留真实数据、外置系统红绿灯、32px导航框、56px收起列、三栏独立开关、12px内容内缩、隐藏滚动条与所有选择/草稿/安全边界；原生包另行打包。
  
+
+
+## Tauri与Rust运行方向（2026-10-11，最新用户要求）
+
+- 用户明确要求后台也使用Rust。当前桌面入口为macos/src-tauri，React通过有限Tauri命令调用同进程Rust；浏览器开发也使用Rust服务。生产禁止Electron或Node业务sidecar。旧electron/server源码及旧后台测试仅保留历史参考，不能进入生产包或冒称Rust回归。
+- 沿用Material 3、原bundle ID、Developer ID、数据目录及账号/目录关联；兼容旧加密文件和固定偏好键，不将真实用户升级等同于源码编译。Git CLI与Git LFS从Rust调用，保留正常钩子、签名及用户配置。
+- 正式main打包继续完整签名、公证、发布和公共回读；同时提供旧Electron过渡ZIP/清单与Tauri最终tar/签名/清单。更新私钥仅存仓库外，不输出或打包，未来版本继续匹配内置公钥。开发版不安装更新。
+- 延续发布持续授权和安装版不操作约定；本次不新增或运行测试，执行类型/Cargo检查、生产构建及包和公开更新源校验。

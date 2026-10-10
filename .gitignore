@@ -1,6 +1,9 @@
 **/node_modules/
 **/dist/
 **/dist-electron/
+**/target/
+**/src-tauri/gen/
+macos/src-tauri/*.key
 .DS_Store
 artifacts/
 *.log

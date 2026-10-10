@@ -1,146 +1,114 @@
 import { build as buildClient } from 'vite';
 import react from '@vitejs/plugin-react';
-import { build as buildDesktop } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile, stat } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, resolve, basename, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { sign } from '@electron/osx-sign';
 import { releaseBranch, updateSource } from '../src/update-model';
 import { notarizationResult, prepareDesktopRelease } from './desktop-release';
 
 const clientRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
-const manifest = JSON.parse(await readFile(join(clientRoot, 'package.json'), 'utf8')) as { name: string; version: string };
-const electronVersion = (require('electron/package.json') as { version: string }).version;
+const manifest = JSON.parse(await readFile(join(clientRoot, 'package.json'), 'utf8')) as { version: string };
+const tauri = JSON.parse(await readFile(join(clientRoot, 'src-tauri/tauri.conf.json'), 'utf8')) as { plugins: { updater: { pubkey: string } } };
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('此打包入口需要 Apple Silicon macOS。');
-const sourceEntries = ['src', 'server', 'electron', 'public', 'index.html', 'package.json', 'package-lock.json'];
+const sourceEntries = ['src', 'src-tauri', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
 const notaryProfile = process.env.GITTOGETHER_NOTARY_PROFILE || 'gittogether-notary';
-const git = promisify(execFile);
-const sourceBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
-if (sourceBranch !== releaseBranch) throw new Error(`更新包必须从 ${releaseBranch} 分支构建，当前为 ${sourceBranch}。`);
-const sourceStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts'], { cwd: clientRoot })).stdout;
-if (sourceStatus) throw new Error('打包源码有未提交改动，请先检查并提交到 main。');
-const sourceCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
+const signingKey = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
+const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
+const execute = promisify(execFile);
+const git = async (args: string[]) => (await execute('git', args, { cwd: clientRoot })).stdout.trim();
+const inputPaths = [...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts', 'vite.config.mjs'];
+const sourceBranch = await git(['symbolic-ref', '--short', 'HEAD']);
+if (sourceBranch !== releaseBranch) throw new Error(`更新包必须从 ${releaseBranch} 构建，当前为 ${sourceBranch}。`);
+if (await git(['status', '--porcelain=v1', '--untracked-files=all', '--', ...inputPaths])) throw new Error('打包源码有未提交改动，请先检查并提交到 main。');
+const sourceCommit = await git(['rev-parse', 'HEAD']);
 
+function included(path: string) { return !path.split(/[\\/]/).some(part => ['target', 'node_modules', '.git'].includes(part)) && !path.replaceAll('\\', '/').includes('src-tauri/gen/') && !path.endsWith('.key'); }
 async function sourceDigest(root: string) {
   const hash = createHash('sha256');
-  async function visit(relative: string) {
-    const absolute = join(root, relative);
-    const entries = await readdir(absolute, { withFileTypes: true }).catch(error => {
-      if (error.code === 'ENOTDIR') return null;
-      throw error;
-    });
-    if (entries) {
-      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) await visit(join(relative, entry.name));
-    } else {
-      hash.update(relative + '\0'); hash.update(await readFile(absolute)); hash.update('\0');
-    }
+  async function visit(path: string) {
+    if (!included(path)) return;
+    const absolute = join(root, path), info = await stat(absolute);
+    if (info.isDirectory()) { for (const entry of (await readdir(absolute)).sort()) await visit(join(path, entry)); }
+    else { hash.update(path + '\0'); hash.update(await readFile(absolute)); hash.update('\0'); }
   }
   for (const entry of sourceEntries) await visit(entry);
   return hash.digest('hex');
 }
-
-async function run(command: string, args: string[], cwd: string) {
-  await new Promise<void>((resolveRun, reject) => {
-    const child = spawn(command, args, { cwd, stdio: 'inherit' });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => code === 0 ? resolveRun() : reject(new Error(`${command} failed (${signal ?? code})`)));
+async function run(command: string, args: string[], cwd = clientRoot, environment: NodeJS.ProcessEnv = {}) {
+  await new Promise<void>((done, reject) => {
+    const child = spawn(command, args, { cwd, stdio: 'inherit', env: { ...process.env, ...environment } });
+    child.once('error', reject); child.once('exit', (code, signal) => code === 0 ? done() : reject(new Error(`${basename(command)} 未完成（${signal ?? code}）。`)));
   });
 }
-
 const buildRoot = resolve(clientRoot, '..', '..', '_builds');
 await mkdir(buildRoot, { recursive: true });
 const releaseLock = join(buildRoot, 'gittogether-release.lock');
-await mkdir(releaseLock).catch(error => {
-  if (error.code === 'EEXIST') throw new Error('另一个桌面发布正在运行，请待其完成；若上次进程中断，请确认后移除gittogether-release.lock。');
-  throw error;
-});
+await mkdir(releaseLock).catch(error => { if (error.code === 'EEXIST') throw new Error('另一个桌面发布正在运行，请待其完成。'); throw error; });
 let temporary: string | undefined;
 try {
-  console.log(`发布 GitTogether ${manifest.version}：正在检查main、发布权限和Apple公证配置…`);
+  console.log(`发布 GitTogether ${manifest.version}：核对 main、更新签名和 Apple 公证配置…`);
   const release = await prepareDesktopRelease(clientRoot, manifest.version, sourceCommit);
-  await git('/usr/bin/xcrun', ['notarytool', 'history', '--keychain-profile', notaryProfile, '--output-format', 'json'], { cwd: clientRoot });
-  await run('npm', ['run', 'check'], clientRoot);
-  await run('npm', ['test'], clientRoot);
+  const keyInfo = await stat(signingKey);
+  if (!keyInfo.isFile() || (keyInfo.mode & 0o077)) throw new Error('Tauri 更新签名密钥必须是仅当前用户可读的文件。');
+  if ((await readFile(signingKey + '.pub', 'utf8')).trim() !== tauri.plugins.updater.pubkey) throw new Error('Tauri 更新密钥与应用内置公钥不一致，停止发布。');
+  await execute('/usr/bin/xcrun', ['notarytool', 'history', '--keychain-profile', notaryProfile, '--output-format', 'json']);
+  await run('npm', ['run', 'check']);
+  await run(cargo, ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--locked']);
   const output = await mkdtemp(join(buildRoot, `gittogether-${manifest.version}-macos-arm64-`));
-  temporary = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-package-')));
-  // An isolated source snapshot avoids touching Vite's watched config, dependencies or credentials.
-  const source = join(temporary, 'source');
-  const application = join(temporary, 'application');
-  await mkdir(source);
-  await mkdir(application);
-  for (const name of sourceEntries) {
-    await cp(join(clientRoot, name), join(source, name), { recursive: true });
-  }
+  temporary = await realpath(await mkdtemp(join(tmpdir(), 'gittogether-tauri-package-')));
+  const source = join(temporary, 'source'); await mkdir(source);
+  for (const name of sourceEntries) await cp(join(clientRoot, name), join(source, name), { recursive: true, filter: path => included(relative(clientRoot, path)) });
   const sourceSha256 = await sourceDigest(source);
   await symlink(join(clientRoot, 'node_modules'), join(source, 'node_modules'), 'dir');
-  await buildClient({
-    configFile: false, root: source, base: './', envPrefix: [], plugins: [react()],
-    build: { outDir: join(application, 'client'), emptyOutDir: true, sourcemap: false },
-  });
-  await buildDesktop({
-    absWorkingDir: source, entryPoints: ['electron/main.ts', 'electron/preload.ts'], bundle: true,
-    platform: 'node', target: 'node22', format: 'cjs', outdir: join(application, 'desktop'),
-    outExtension: { '.js': '.cjs' }, external: ['electron'], sourcemap: false,
-  });
-
-  // Desktop main is bundled; no optical native modules are needed. Never copy
-  // checkout dependencies, .env, tests or user data into the application.
-  await writeFile(join(application, 'package.json'), JSON.stringify({
-    name: manifest.name, version: manifest.version, productName: 'GitTogether',
-    private: true, main: 'desktop/main.cjs',
-  }, null, 2) + '\n');
-  const updateConfig = join(temporary, 'app-update.yml');
-  // JSON is a YAML subset. This resource contains only public update metadata.
-  await writeFile(updateConfig, JSON.stringify({ ...updateSource, updaterCacheDirName: 'gittogether-updater' }, null, 2));
-  const args = ['--yes', '@electron/packager@20.3.0', application, 'GitTogether',
-    '--platform=darwin', '--arch=arm64', '--no-asar', `--electron-version=${electronVersion}`,
-    '--app-bundle-id=com.gittogether.standalone', `--app-version=${manifest.version}`, `--out=${output}`, `--extra-resource=${updateConfig}`];
-  if (process.env.GITTOGETHER_ELECTRON_ZIP_DIR) args.push(`--electron-zip-dir=${process.env.GITTOGETHER_ELECTRON_ZIP_DIR}`);
-  await run('npx', args, clientRoot);
-  const applicationPath = join(output, 'GitTogether-darwin-arm64', 'GitTogether.app');
-  // Never fall back to ad-hoc signing: native macOS updates require the same
-  // Developer ID identity on both the running app and its replacement.
-  await sign({ app: applicationPath, platform: 'darwin', identity, type: 'distribution',
-    optionsForFile: () => ({ entitlements: join(source, 'electron', 'entitlements.plist'), hardenedRuntime: true }) });
-  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath], clientRoot);
-  if (await sourceDigest(clientRoot) !== sourceSha256) throw new Error('打包期间源文件发生变化，请重新打包；没有交付过期快照。');
-  const finalStatus = (await git('git', ['status', '--porcelain=v1', '--untracked-files=all', '--', ...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts'], { cwd: clientRoot })).stdout;
-  const finalBranch = (await git('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: clientRoot })).stdout.trim();
-  const finalCommit = (await git('git', ['rev-parse', 'HEAD'], { cwd: clientRoot })).stdout.trim();
-  if (finalStatus || finalBranch !== sourceBranch || finalCommit !== sourceCommit) throw new Error('打包期间main源码或提交发生变化，请重新检查并打包。');
+  await buildClient({ configFile: false, root: source, base: './', envPrefix: [], plugins: [react()], build: { outDir: join(source, 'dist/client'), emptyOutDir: true, sourcemap: false, target: 'esnext' } });
+  const targetRoot = join(buildRoot, 'tauri-target');
+  // Only the React resources and Rust application enter the bundle. Node stays
+  // a development/build tool; no Electron, Node sidecar or credentials are copied.
+  await run(join(clientRoot, 'node_modules/.bin/tauri'), ['build', '--target', 'aarch64-apple-darwin', '--bundles', 'app', '--config', JSON.stringify({ build: { beforeBuildCommand: null }, bundle: { createUpdaterArtifacts: false } })], source, { CARGO_TARGET_DIR: targetRoot, PATH: `${dirname(cargo)}:${process.env.PATH || ''}`, APPLE_SIGNING_IDENTITY: '-' });
+  const binaryRoot = join(targetRoot, 'aarch64-apple-darwin/release');
+  await run(cargo, ['build', '--manifest-path', 'src-tauri/Cargo.toml', '--release', '--locked', '--target', 'aarch64-apple-darwin', '--features', 'custom-protocol', '--bin', 'gittogether-release-verify', '--bin', 'gittogether-service'], source, { CARGO_TARGET_DIR: targetRoot });
+  const applicationPath = join(output, 'GitTogether.app');
+  await cp(join(binaryRoot, 'bundle/macos/GitTogether.app'), applicationPath, { recursive: true });
+  await run('/usr/bin/codesign', ['--force', '--options', 'runtime', '--timestamp', '--entitlements', join(source, 'src-tauri/entitlements.plist'), '--sign', identity, applicationPath]);
+  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath]);
+  const signature = (await execute('/usr/bin/codesign', ['-d', '--verbose=4', applicationPath])).stderr;
+  if (!signature.includes('Identifier=com.gittogether.standalone') || !signature.includes('TeamIdentifier=86J7X3KZ5Z')) throw new Error('应用身份或开发者团队与旧版本不一致。');
+  const entries = (await execute('/usr/bin/find', [applicationPath, '-type', 'f'])).stdout;
+  if (/Electron Framework|\.asar\b|\/node_modules\/|\/node(?:\.exe)?\n/.test(entries)) throw new Error('原生包中意外包含旧运行时，停止发布。');
+  if (await sourceDigest(clientRoot) !== sourceSha256 || await git(['status', '--porcelain=v1', '--untracked-files=all', '--', ...inputPaths]) || await git(['symbolic-ref', '--short', 'HEAD']) !== sourceBranch || await git(['rev-parse', 'HEAD']) !== sourceCommit) throw new Error('打包期间 main 源码发生变化，未发布过期快照。');
   const zipPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.zip`);
-  await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
-  console.log('签名完成，正在提交Apple公证并等待结果…');
-  const submission = await git('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', notaryProfile, '--wait', '--output-format', 'json'], { cwd: clientRoot, maxBuffer: 1024 * 1024 });
+  await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath]);
+  console.log('Rust 应用已签名，正在等待 Apple 公证…');
+  const submission = await execute('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', notaryProfile, '--wait', '--output-format', 'json'], { maxBuffer: 1024 * 1024 });
   const notarization = notarizationResult(submission.stdout);
   await writeFile(join(output, 'notarization.json'), JSON.stringify(notarization, null, 2) + '\n');
-  await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath], clientRoot);
-  await run('/usr/bin/xcrun', ['stapler', 'validate', applicationPath], clientRoot);
-  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath], clientRoot);
-  await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath], clientRoot);
-  const notarized = true;
-  const bytes = await readFile(zipPath);
-  const sha256 = createHash('sha256').update(bytes).digest('hex');
-  const sha512 = createHash('sha512').update(bytes).digest('base64');
-  const zipName = `GitTogether-${manifest.version}-macOS-arm64.zip`;
-  const updateMetadata = { version: manifest.version, files: [{ url: zipName, sha512, size: bytes.length }], path: zipName, sha512, releaseDate: new Date().toISOString() };
+  await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath]);
+  await run('/usr/bin/xcrun', ['stapler', 'validate', applicationPath]);
+  await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', applicationPath]);
+  await run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', applicationPath]);
+  await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath]);
+  const bytes = await readFile(zipPath), sha256 = createHash('sha256').update(bytes).digest('hex'), sha512 = createHash('sha512').update(bytes).digest('base64');
   const updateMetadataPath = join(output, 'latest-mac.yml');
-  await writeFile(updateMetadataPath, JSON.stringify(updateMetadata, null, 2) + '\n');
-  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, electronVersion, architecture: 'arm64', signature: 'Developer ID', notarized };
+  await writeFile(updateMetadataPath, JSON.stringify({ version: manifest.version, files: [{ url: basename(zipPath), sha512, size: bytes.length }], path: basename(zipPath), sha512, releaseDate: new Date().toISOString() }, null, 2) + '\n');
+  const tarPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.app.tar.gz`);
+  await run('/usr/bin/tar', ['-czf', tarPath, '-C', output, 'GitTogether.app']);
+  // Sign the final, stapled bytes and bind this exact version to the signature.
+  await run(join(clientRoot, 'node_modules/.bin/tauri'), ['signer', 'sign', '--private-key-path', signingKey, '--password', '', '--app-version', manifest.version, tarPath]);
+  const signaturePath = tarPath + '.sig';
+  await run(join(binaryRoot, 'gittogether-release-verify'), [join(source, 'src-tauri/tauri.conf.json'), tarPath, signaturePath, manifest.version]);
+  const tarBytes = await readFile(tarPath), tarSignature = (await readFile(signaturePath, 'utf8')).trim();
+  const tauriManifestPath = join(output, 'latest.json');
+  await writeFile(tauriManifestPath, JSON.stringify({ version: manifest.version, notes: `GitTogether ${manifest.version}`, pub_date: new Date().toISOString(), platforms: { 'darwin-aarch64': { signature: tarSignature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(tarPath)}` } } }, null, 2) + '\n');
+  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, framework: 'Tauri 2', backend: 'Rust', architecture: 'arm64', signature: 'Developer ID', notarized: true, size: bytes.length, tauri: { tarPath, signaturePath, manifestPath: tauriManifestPath, signature: tarSignature, sha256: createHash('sha256').update(tarBytes).digest('hex'), size: tarBytes.length } };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(result, null, 2) + '\n');
-  console.log('公证通过，正在上传完整资产并发布GitHub正式更新…');
-  const publication = await release.publish({ ...result, size: bytes.length });
+  console.log('公证及更新签名通过，正在发布并核对两种公开更新源…');
+  const publication = await release.publish(result);
   const completed = { ...result, ...publication };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(completed, null, 2) + '\n');
   console.log(JSON.stringify(completed, null, 2));
-} finally {
-  if (temporary) await rm(temporary, { recursive: true, force: true });
-  await rm(releaseLock, { recursive: true });
-}
+} finally { if (temporary) await rm(temporary, { recursive: true, force: true }); await rm(releaseLock, { recursive: true }); }

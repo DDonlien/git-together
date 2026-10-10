@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "GitTogether main window and its finite native bridge",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-start-dragging", "dialog:allow-open"]
+}

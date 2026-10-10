@@ -1,15 +1,19 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.21.2",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx scripts/dev.ts",
+    "dev:ui": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "dev:rust": "cargo run --manifest-path src-tauri/Cargo.toml --bin gittogether-service",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "desktop": "tsx electron/launch.ts",
+    "desktop": "tauri dev",
+    "tauri": "tauri",
+    "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "package:desktop": "tsx scripts/package-desktop.ts",
     "test:sites": "node --test tests/sites-worker.test.mjs"
   },
@@ -18,8 +22,9 @@
     "@lit/react": "1.0.8",
     "@material/web": "2.5.0",
     "@phosphor-icons/react": "2.1.10",
+    "@tauri-apps/api": "2.12.3",
+    "@tauri-apps/plugin-dialog": "2.8.2",
     "@vitejs/plugin-react": "5.0.4",
-    "electron-updater": "6.8.9",
     "open-glass-ui": "0.4.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -27,13 +32,17 @@
   },
   "devDependencies": {
     "@electron/osx-sign": "2.7.1",
+    "@tauri-apps/cli": "2.12.1",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "electron": "^39.2.7",
     "esbuild": "^0.25.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "electron-updater": "6.8.9"
   },
-  "main": "dist-electron/main.cjs"
+  "engines": {
+    "node": ">=22"
+  }
 }

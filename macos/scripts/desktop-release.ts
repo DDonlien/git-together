@@ -13,6 +13,7 @@ interface Release { id: number; tag_name: string; draft: boolean; prerelease: bo
 export interface ReleasePackage {
   version: string; sourceCommit: string; zipPath: string; updateMetadataPath: string;
   sha256: string; sha512: string; size: number; notarized: boolean;
+  tauri?: { tarPath: string; signaturePath: string; manifestPath: string; signature: string; sha256: string; size: number };
 }
 
 export function notarizationResult(output: string): { id: string; status: 'Accepted' } {
@@ -42,6 +43,34 @@ export function verifyUpdateMetadata(metadata: unknown, artifact: ReleasePackage
     || data.files[0].size !== artifact.size || data.files[0].sha512 !== artifact.sha512) {
     throw new Error('公开更新清单与最终公证安装包不一致。');
   }
+}
+
+export function verifyTauriMetadata(metadata: unknown, artifact: ReleasePackage) {
+  if (!artifact.tauri) throw new Error('Tauri 更新资产缺失。');
+  const data = metadata as { version?: string; pub_date?: string; platforms?: Record<string, { url?: string; signature?: string }> } | null;
+  const platform = data?.platforms?.['darwin-aarch64'];
+  const url = `https://github.com/${repository}/releases/download/v${artifact.version}/${basename(artifact.tauri.tarPath)}`;
+  if (data?.version !== artifact.version || !data.pub_date || !Number.isFinite(Date.parse(data.pub_date)) ||
+    platform?.url !== url || platform.signature !== artifact.tauri.signature) throw new Error('Tauri 公开更新清单与最终签名包不一致。');
+}
+async function releaseFiles(artifact: ReleasePackage) {
+  const metadata = await readFile(artifact.updateMetadataPath);
+  verifyUpdateMetadata(JSON.parse(metadata.toString()), artifact);
+  const files = [
+    { path: artifact.zipPath, name: basename(artifact.zipPath), size: artifact.size, sha256: artifact.sha256, contentType: 'application/zip' },
+    { path: artifact.updateMetadataPath, name: basename(artifact.updateMetadataPath), size: metadata.length, sha256: createHash('sha256').update(metadata).digest('hex'), contentType: 'application/yaml' },
+  ];
+  if (artifact.tauri) {
+    verifyTauriMetadata(JSON.parse(await readFile(artifact.tauri.manifestPath, 'utf8')), artifact);
+    if ((await readFile(artifact.tauri.signaturePath, 'utf8')).trim() !== artifact.tauri.signature) throw new Error('Tauri 签名文件不一致。');
+    for (const [path, contentType] of [[artifact.tauri.tarPath, 'application/gzip'], [artifact.tauri.signaturePath, 'text/plain'], [artifact.tauri.manifestPath, 'application/json']]) {
+      const bytes = await readFile(path);
+      const hash = createHash('sha256').update(bytes).digest('hex');
+      if (path === artifact.tauri.tarPath && (bytes.length !== artifact.tauri.size || hash !== artifact.tauri.sha256)) throw new Error('Tauri 签名包校验值不一致。');
+      files.push({ path, name: basename(path), size: bytes.length, sha256: hash, contentType });
+    }
+  }
+  return files;
 }
 
 async function githubCredential(cwd: string): Promise<string> {
@@ -199,14 +228,9 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       if (!artifact.notarized || artifact.sourceCommit !== sourceCommit || artifact.version !== version) throw new Error('只有本次main构建且通过公证的包可以发布。');
       await assertMain();
       await assertTag(true);
-      const metadata = await readFile(artifact.updateMetadataPath);
-      verifyUpdateMetadata(JSON.parse(metadata.toString()), artifact);
-      const expected = [
-        { name: basename(artifact.zipPath), size: artifact.size, sha256: artifact.sha256 },
-        { name: basename(artifact.updateMetadataPath), size: metadata.length, sha256: createHash('sha256').update(metadata).digest('hex') },
-      ];
+      const expected = await releaseFiles(artifact);
       const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
-      await writeFile(notes, `# GitTogether ${version}\n\nmacOS Apple Silicon 正式更新，已完成 Developer ID 签名及 Apple 公证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
+      await writeFile(notes, `# GitTogether ${version}\n\nmacOS Apple Silicon 正式更新，已完成 Developer ID 签名及 Apple 公证。${artifact.tauri ? '\n\n桌面框架迁移到 Tauri 2，Git、账号、授权、文件和 AI 服务运行在 Rust 后台。保留现有 React 界面、自动 Fetch、逐分支提交及已关联工作目录。更新资产同时支持旧版 Electron 的过渡升级和 Tauri 签名更新。' : ''}\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
       let draft: Release | null = null;
       await reconcileReleaseMutation(
         async () => {
@@ -232,8 +256,8 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       };
       // Only our matching draft is replaceable, so a failed upload can be retried
       // without exposing half a release or replacing a published installation.
-      for (const [index, file] of expected.entries()) {
-        const bytes = await readFile(index === 0 ? artifact.zipPath : artifact.updateMetadataPath);
+      for (const file of expected) {
+        const bytes = await readFile(file.path);
         await reconcileReleaseMutation(
           async () => {
             const current = await matchingRelease(true);
@@ -241,7 +265,7 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
               await request(endpoint(`releases/assets/${asset.id}`), { method: 'DELETE' });
             }
             return request(`https://uploads.github.com/repos/${repository}/releases/${releaseId}/assets?name=${encodeURIComponent(file.name)}`, {
-              method: 'POST', headers: { 'Content-Type': index === 0 ? 'application/zip' : 'application/yaml' }, body: new Uint8Array(bytes),
+              method: 'POST', headers: { 'Content-Type': file.contentType }, body: new Uint8Array(bytes),
             });
           },
           async () => {
@@ -280,12 +304,7 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
 export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Promise<{ releaseUrl: string; tag: string; publicUpdateVerified: true }> {
   const tag = 'v' + artifact.version;
   if (!artifact.notarized) throw new Error('只能核对已完成公证的正式包。');
-  const metadata = await readFile(artifact.updateMetadataPath);
-  verifyUpdateMetadata(JSON.parse(metadata.toString()), artifact);
-  const expected = [
-    { name: basename(artifact.zipPath), size: artifact.size, sha256: artifact.sha256 },
-    { name: basename(artifact.updateMetadataPath), size: metadata.length, sha256: createHash('sha256').update(metadata).digest('hex') },
-  ];
+  const expected = await releaseFiles(artifact);
   const publicLatest = await (await publicRead('https://api.github.com/repos/' + repository + '/releases/latest', async response => {
     const current = await response.json() as Release;
     return current.tag_name === tag && !current.draft && !current.prerelease;
@@ -298,6 +317,11 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
   if (!feed.includes('/releases/tag/' + tag)) throw new Error('应用更新器使用的公开版本列表尚未包含新版。');
   const base = 'https://github.com/' + repository + '/releases/download/' + tag;
   verifyUpdateMetadata(await (await publicRead(base + '/latest-mac.yml')).json(), artifact);
+  if (artifact.tauri) {
+    verifyTauriMetadata(await (await publicRead(base + '/latest.json')).json(), artifact);
+    verifyTauriMetadata(await (await publicRead('https://github.com/' + repository + '/releases/latest/download/latest.json')).json(), artifact);
+    if ((await (await publicRead(base + '/' + basename(artifact.tauri.signaturePath))).text()).trim() !== artifact.tauri.signature) throw new Error('公共 Tauri 签名文件不一致。');
+  }
   const temporary = await mkdtemp(join(tmpdir(), 'gittogether-public-check-'));
   try {
     const downloaded = join(temporary, 'app.zip');
@@ -310,6 +334,12 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
     const bytes = await readFile(downloaded);
     if (bytes.length !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256
       || createHash('sha512').update(bytes).digest('base64') !== artifact.sha512) throw new Error('公共安装包的大小或校验值不一致。');
+    if (artifact.tauri) {
+      const downloadedTar = join(temporary, 'app.tar.gz');
+      await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900', '--retry', '2', '--output', downloadedTar, base + '/' + basename(artifact.tauri.tarPath)], { timeout: 2_800_000 });
+      const tar = await readFile(downloadedTar);
+      if (tar.length !== artifact.tauri.size || createHash('sha256').update(tar).digest('hex') !== artifact.tauri.sha256) throw new Error('公共 Tauri 更新包的大小或校验值不一致。');
+    }
   } finally { await rm(temporary, { recursive: true, force: true }); }
   return { releaseUrl: publicLatest.html_url, tag, publicUpdateVerified: true };
 }

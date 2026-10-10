@@ -1,5 +1,26 @@
 # 本地开发
 
+## 0.22.0：Tauri 2与Rust后台（2026-10-11）
+
+当前开发、生产入口均已迁到Rust后台，React/Material界面和有限DTO保持。桌面直接调用同进程Rust；浏览器开发使用Rust服务4175及授权回调4174，Vite仅提供界面和有限代理。旧Electron/server目录及旧后台回归保留为历史参考，未进入生产包；旧回归不证明Rust实现。本轮按用户要求未新增或运行测试。
+
+准备Node.js 22+、npm、Rust 1.90+、Xcode Command Line Tools、Git；LFS仓库另需Git LFS。`macos/package.json`是版本权威来源，Cargo版本随其同步，Tauri配置与Rust编译版本直接读取该文件。
+
+- 浏览器开发：`cd macos && npm install && npm run dev`。自动等待Rust服务后提供127.0.0.1:4173；后台账号只在内存中，重启需要用户正常重连。
+- 桌面开发：在macos运行`npm run desktop`，Tauri自动启动自己的界面服务；不要同时运行前一入口占用4173。开发模式使用会话账号并禁用应用更新。
+- 当前源码检查：`npm run check`、`npm run check:rust`；前端生产构建：`npm run build`。这不等于用户账号/Git操作或实际升级验收。
+- 正式交付：先将生产改动提交并推送main，再运行`npm run package:desktop`。入口自动检查、构建、Developer ID签名、Apple公证、附加凭证、更新签名、发布及完整公共回读。仅push源码仍不触发安装包发布。
+
+复用`gittogether-notary`和既有Developer ID。Tauri更新密钥默认位于`~/.config/gittogether/release/tauri-updater.key`及对应`.pub`（0700目录/0600文件），也可通过`GITTOGETHER_TAURI_SIGNING_KEY`指定；密钥留在仓库外，不打包、不输出。保留此密钥，未来版本必须继续匹配应用内置公钥。官方更新签名附带版本，`requireSignedVersion`开启。
+
+最终ZIP及`latest-mac.yml`给Electron旧版提供过渡更新；`.app.tar.gz`/`.sig`及`latest.json`供Tauri新版使用。每一发布资产都从最终已公证且附加凭证的App生成，并核对版本/main tag、签名、公证、公共清单及完整下载的大小和摘要。构建缓存和交付位于项目容器`_builds/`，不操作用户已安装App。
+
+正式应用沿用原bundle ID、Developer ID、账号加密文件及目录关联；启动时读取旧v10密文，在正常保存时使用新认证加密。旧偏好只导入本应用的固定键且不覆盖WKWebView已有值；网页账号不会自动复制到桌面。GitHub应用配置仍为开发者一次性安全配置，用户账号同意与组织授权由用户自己完成。Keychain不可用则保留原文件，不弹解锁或绕过安全设置。兼容代码不代表真实用户升级已经验收。
+
+## 历史版本记录
+
+以下是迁移之前的实际操作记录，旧入口及测试结论不作为0.22.0的当前运行说明。
+
 0.17.3（2026-10-10）将现有桌面打包入口接成完整正式发布流程：main来源与远端提交检查、类型和完整回归、生产构建、Developer ID签名、Apple公证、附加凭证、资产上传和正式latest发布，最后从无需登录的公共更新源下载校验。仅推送源码不触发打包；在main上运行打包入口即执行整套流程。此前各版只生成本地包的结果仍是历史记录。
 
 0.17.3已于2026-10-10公开为stable/latest，tag对应main的725a037e6d37909215e7e90b7a8219d7c8292837。Apple公证87d8de2b-8f13-458c-ad95-cd26beb10381为Accepted，staple/validate、deep/strict签名通过；451/451最终回归及类型检查通过。公共latest、Atom、清单与完整110892436字节ZIP校验通过，SHA-256为dbc0c1a8effef733490aacec01d3cd6806c008a49aad73fee46ff71991dba29c，build-info标记publicUpdateVerified=true。原生0.12.0实际检查显示发现新版本0.17.3并提供下载更新；未执行安装升级。 包目录为项目容器_builds/gittogether-0.17.3-macos-arm64-ma8ShN/。首轮公共大文件回读超时后，使用同一已发布公证包只读恢复完整校验；没有重新上传或改写tag/源码记录。发布脚本的二进制回读统一使用macOS HTTPS下载器，15分钟时限及两次有限重试；其结果必须通过完整大小和双摘要核对。收尾只更新包外发布模块、回归和说明，不改已公开App的生产输入。
