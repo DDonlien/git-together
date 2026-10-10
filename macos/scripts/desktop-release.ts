@@ -96,8 +96,12 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
     if (main?.object.sha !== sourceCommit) throw new Error('打包提交必须与已推送的远端main一致，请先检查并推送源码。');
   };
   const assertTag = async (allowMissing: boolean) => {
-    const commit = await api<{ sha: string }>(`commits/${tag}`, allowMissing);
-    if (commit?.sha !== sourceCommit && !(allowMissing && !commit)) throw new Error('版本tag与main打包源码不一致，不能覆盖。');
+    const ref = await api<{ object: { sha: string } }>(`git/ref/tags/${tag}`, allowMissing);
+    if (allowMissing && !ref) return;
+    // The ref endpoint distinguishes a missing tag with 404; commits/<tag>
+    // uses 422 for unknown refs and also resolves existing annotated tags.
+    const commit = await api<{ sha: string }>(`commits/${tag}`);
+    if (commit?.sha !== sourceCommit) throw new Error('版本tag与main打包源码不一致，不能覆盖。');
   };
   await assertMain();
   await assertTag(true);
