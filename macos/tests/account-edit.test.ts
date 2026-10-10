@@ -150,7 +150,7 @@ function controllerFor(value: Catalog, busy: Record<string, boolean> = {}): Work
   return { catalog: value, busy, localStates: {}, remoteStates: {}, preferences: { theme: 'system', reducedGlass: false, collapsedAccounts: [] }, loading: false, error: '', storageError: '', needsReload: false,
     service: { instanceId: value.instanceId, version: pkg.version, githubWebAuth: false }, updatePreferences: () => {}, reload: async () => {},
     connect: async () => value, updateAccount: async () => value, refresh: async () => value, removeAccount: async () => value, link: async () => value, matchAccountRepositories: async () => [], unlink: async () => value,
-    downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
+    submitCommit: async () => { throw new Error('Unused fixture operation'); }, applySync: async () => { throw new Error("unused"); }, pushCommit: async () => { throw new Error('Unused fixture operation'); }, downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
     startGithubAuthorization: async () => ({ id: 'fixture', userCode: 'ABCD-EFGH', verificationURL: githubVerificationURL, expiresAt: Date.now() + 900000, interval: 5 }),
     pollGithubAuthorization: async () => ({ status: 'pending', retryAfter: 5 }), cancelGithubAuthorization: async () => ({ cancelled: true }) };
 }

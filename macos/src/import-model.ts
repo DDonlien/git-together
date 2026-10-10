@@ -1,6 +1,8 @@
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
 import type { RepositoryWorkspace } from './repository-model';
 import type { LocalCommitDetails } from './local-commit-model';
+import type { CommitDraft, LocalSubmitInput, LocalSubmitResult, LocalPushInput, LocalPushResult } from './local-submit-model';
+import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
 
 export type Provider = 'github' | 'gitea';
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
@@ -56,11 +58,20 @@ export type ApiInputs = {
   snapshot: { repositoryId: string };
   localWorkspace: { repositoryId: string };
   localCommit: { repositoryId: string; taskId: string; commitId: string };
+  submitCommit: LocalSubmitInput;
+  pushCommit: LocalPushInput;
+  fetchRepository: { repositoryId: string };
+  prepareSync: { repositoryId: string; taskId: string; mode: RepositorySyncMode };
+  applySync: { repositoryId: string; taskId: string; planId: string; operationId: string };
+  discardSync: { repositoryId: string; taskId: string; planId: string };
+  generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string };
+  cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
+  openDirectory: { repositoryId: string; taskId: string };
 };
 export type ApiOutputs = {
   status: ServiceInfo;
@@ -71,8 +82,17 @@ export type ApiOutputs = {
   link: Catalog; downloadBranch: Catalog; matchAccountRepositories: { catalog: Catalog; matchedRepositoryIds: string[] }; unlink: Catalog; snapshot: LocalSnapshot; diff: { text: string };
   localWorkspace: RepositoryWorkspace;
   localCommit: LocalCommitDetails;
+  submitCommit: LocalSubmitResult;
+  pushCommit: LocalPushResult;
+  fetchRepository: { branches: number; checkedAt: number };
+  prepareSync: RepositorySyncPlan;
+  applySync: RepositorySyncResult;
+  discardSync: { discarded: boolean };
+  generateCommitMessage: CommitDraft;
+  cancelCommitGeneration: { cancelled: boolean };
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
+  openDirectory: { opened: true };
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };

@@ -69,7 +69,7 @@ test('graph retains branch refs, merge styling, author/date, SHA and a single ke
   const markup = render();
   assert.equal((markup.match(/class="repository-graph-description" tabindex="0"/g) || []).length, 1);
   assert.equal((markup.match(/class="repository-graph-description" tabindex="-1"/g) || []).length, 4);
-  assert.match(markup, /height="36"/);
+  assert.match(markup, /height="42"/);
   assert.match(markup, /graph-merge-node/);
   assert.match(markup, /graph-remote-ref/);
   assert.match(markup, /graph-head-marker/);
@@ -101,7 +101,7 @@ test('graph text, search and refs are escaped rather than rendered as markup', (
 
 test('local graph styles preserve lane continuity, flat selection, hidden scrollbars and fixed two-line density', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /repository-graph-scroll \{ --graph-row-height: 36px/);
+  assert.match(css, /repository-graph-scroll \{ --graph-row-height: 42px/);
   assert.doesNotMatch(css, /is-compact|repository-graph-tools/);
   assert.doesNotMatch(css, /tr.graph-dimmed \{ opacity/);
   assert.match(css, /graph-boundary \{ stroke-dasharray/);

@@ -29,7 +29,7 @@ test('missing default branch is not injected and a truly empty remote has no fab
   assert.match(markup, /此仓库暂无远端分支/); assert.doesNotMatch(markup, /dashboard-branch-row|>main</);
 });
 
-test('unlinked branches expose only Download and Hide while linked ones retain seven Git controls', () => {
+test('unlinked branches expose only Download and Hide while linked ones retain six Git controls', () => {
   const markup = renderToStaticMarkup(createElement(RepositoryBranchRows, { repository, state: ready(), onDownload: () => {}, onToggleHidden: () => {} }));
   assert.equal((markup.match(/data-action-name="下载"/g) || []).length, 3);
   assert.equal((markup.match(/data-action-name="隐藏"/g) || []).length, 3);
@@ -37,7 +37,7 @@ test('unlinked branches expose only Download and Hide while linked ones retain s
   const linked = renderToStaticMarkup(createElement(RepositoryBranchRows, { repository, state: ready(), link: { repositoryId: repository.id, path: '/qa/main', worktrees: [{ path: '/qa/main', branch: 'main' }] }, onDownload: () => {}, onToggleHidden: () => {} }));
   assert.equal((linked.match(/data-action-name="Commit"/g) || []).length, 1);
   assert.equal((linked.match(/data-action-name="下载"/g) || []).length, 2);
-  assert.equal((linked.match(/aria-disabled="true"/g) || []).length, 7);
+  assert.equal((linked.match(/aria-disabled="true"/g) || []).length, 6);
 });
 
 test('initial loading and a blocked service are status messages, not empty branches or default-name rows', () => {
@@ -90,7 +90,7 @@ test('disclosure reuses the finite remote reader, instance-bound identity and in
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.remote-repo-table th:nth-child\(4\), \.remote-repo-table th:nth-child\(5\) \{ width: 10%/);
   assert.match(css, /\.remote-repo-table th:nth-child\(6\) \{ width: 13%/);
-  assert.match(css, /\.remote-repo-table th:nth-child\(7\) \{ width: 276px/);
+  assert.match(css, /\.remote-repo-table th:nth-child\(7\) \{ width: 296px/);
 });
 
 test('the existing folder tile is the only disclosure, without an extra arrow or a changed hit-area size', () => {

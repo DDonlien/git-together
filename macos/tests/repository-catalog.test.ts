@@ -8,6 +8,7 @@ import { RepositoryView } from '../src/RepositoryView';
 import { githubVerificationURL, type Catalog } from '../src/import-model';
 import type { WorkspaceController } from '../src/use-workspace';
 import pkg from '../package.json';
+import { hiddenEntryKey } from '../src/branch-links';
 
 const catalog: Catalog = {
   instanceId: 'catalog-test', revision: 1, credentialStorage: 'session',
@@ -31,7 +32,7 @@ function controllerFor(value: Catalog): WorkspaceController {
     updatePreferences: () => {}, reload: async () => {},
     connect: async () => value, updateAccount: async () => value, refresh: async () => value, removeAccount: async () => value,
     link: async () => value, matchAccountRepositories: async () => [], unlink: async () => value,
-    downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
+    submitCommit: async () => { throw new Error('Unused fixture operation'); }, applySync: async () => { throw new Error("unused"); }, pushCommit: async () => { throw new Error('Unused fixture operation'); }, downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
     startGithubAuthorization: async () => ({ id: 'catalog-test', userCode: 'ABCD-EFGH', verificationURL: githubVerificationURL, expiresAt: Date.now() + 900000, interval: 5 }),
     pollGithubAuthorization: async () => ({ status: 'pending', retryAfter: 5 }),
     cancelGithubAuthorization: async () => ({ cancelled: true }),
@@ -42,13 +43,49 @@ function sidebar(value = catalog, collapsedAccounts: string[] = [], selectedRepo
   return renderToStaticMarkup(createElement(AccountSidebar, { catalog: value, collapsedAccounts, selectedRepositoryId, loading: false, onToggleAccount: () => {}, onOpen: () => {} }));
 }
 
-function dashboard(value = catalog, globalSearch = '') {
-  return renderToStaticMarkup(createElement(Dashboard, { controller: controllerFor(value), globalSearch, onSearchChange: () => {}, onSettings: () => {}, onConfigure: () => {}, onOpen: () => {} }));
+function dashboard(value = catalog, globalSearch = '', overrides: Partial<WorkspaceController> = {}) {
+  return renderToStaticMarkup(createElement(Dashboard, { controller: { ...controllerFor(value), ...overrides }, globalSearch, onSearchChange: () => {}, onSettings: () => {}, onConfigure: () => {}, onOpen: () => {} }));
 }
 
 function rows(markup: string) {
   return [...markup.matchAll(/<tr class="dashboard-repository-row">([\s\S]*?)<\/tr>/g)].map(match => match[1]);
 }
+
+function statistics(markup: string) {
+  return Object.fromEntries([...markup.matchAll(/class="stat-card"><span>([^<]+)<\/span><strong>(\d+)<\/strong>/g)].map(match => [match[1], Number(match[2])]));
+}
+
+test('hidden repositories are excluded from all repository cards without changing account identity or saved associations', () => {
+  const value = { ...catalog, links: [{ repositoryId: 'work:1', path: '/qa/work', worktrees: [{ branch: 'develop', path: '/qa/work' }] }] };
+  const preferences = { ...controllerFor(value).preferences, hiddenEntries: [hiddenEntryKey('work:1')] };
+  assert.deepEqual(statistics(dashboard(value)), { '账号': 2, '可访问仓库': 2, '已关联本地': 1, '未关联本地': 1 });
+  assert.deepEqual(statistics(dashboard(value, '', { preferences })), { '账号': 2, '可访问仓库': 1, '已关联本地': 0, '未关联本地': 1 });
+  assert.equal(rows(dashboard(value, '', { preferences })).length, 2);
+  const hideUnlinked = { ...preferences, hiddenEntries: [hiddenEntryKey('personal:1')] };
+  assert.deepEqual(statistics(dashboard(value, '', { preferences: hideUnlinked })), { '账号': 2, '可访问仓库': 1, '已关联本地': 1, '未关联本地': 0 });
+  assert.equal(value.links.length, 1); assert.equal(value.repositories.length, 3);
+});
+
+test('hiding the last local branch moves its visible repository from linked to unlinked; restoring it restores counts', () => {
+  const value = { ...catalog, links: [{ repositoryId: 'work:1', path: '/qa/work', worktrees: [{ branch: 'develop', path: '/qa/work' }] }] };
+  const preferences = { ...controllerFor(value).preferences, hiddenEntries: [hiddenEntryKey('work:1', 'develop')] };
+  const markup = dashboard(value, '', { preferences });
+  assert.deepEqual(statistics(markup), { '账号': 2, '可访问仓库': 2, '已关联本地': 0, '未关联本地': 2 });
+  const row = rows(markup).find(row => row.includes('Work</strong>'))!;
+  assert.match(row, /尚未关联/); assert.match(row, /\/qa\/work/);
+  assert.deepEqual(statistics(dashboard(value, '', { preferences: { ...preferences, hiddenEntries: [] } })), { '账号': 2, '可访问仓库': 2, '已关联本地': 1, '未关联本地': 1 });
+});
+
+test('partial branch hiding and ordinary search retain global counts; inaccessible linked repositories retain their existing card semantics', () => {
+  const value = { ...catalog, links: [
+    { repositoryId: 'work:1', path: '/qa/work', worktrees: [{ branch: 'main', path: '/qa/work/main' }, { branch: 'develop', path: '/qa/work/develop' }] },
+    { repositoryId: 'personal:2', path: '/qa/archive' },
+  ] };
+  const preferences = { ...controllerFor(value).preferences, hiddenEntries: [hiddenEntryKey('work:1', 'main'), hiddenEntryKey('personal:1', 'develop')] };
+  assert.deepEqual(statistics(dashboard(value, 'no-matching-repository', { preferences })), { '账号': 2, '可访问仓库': 2, '已关联本地': 2, '未关联本地': 1 });
+  assert.equal(rows(dashboard(value, 'no-matching-repository', { preferences })).length, 0);
+  assert.deepEqual(statistics(dashboard(value, '', { preferences: { ...preferences, hiddenEntries: catalog.repositories.map(repo => hiddenEntryKey(repo.id)) } })), { '账号': 2, '可访问仓库': 0, '已关联本地': 0, '未关联本地': 0 });
+});
 
 test('zero local links still display every repository and complete counts under its account', () => {
   const markup = sidebar();
@@ -86,7 +123,8 @@ test('Dashboard has seven columns including sortable remote/local dates and inli
   assert.equal((markup.match(/<table\b/g) || []).length, 1);
   const headers = [...markup.matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map(match => match[1]);
   assert.deepEqual(headers.slice(0, 6).map(header => header.match(/class="repository-sort-button">([^<]+)/)![1]), ['仓库', '组织 / 用户', '账号', '更新日期', '修改日期', '本地目录']);
-  assert.equal(headers[6], '<span class="sr-only">Git 操作与隐藏</span>');
+  assert.deepEqual([...headers[6].matchAll(/class="dashboard-sort-label">([^<]+)<\/span>/g)].map(match => match[1]), ['远端内容', '待提交', '本地内容', '隐藏']);
+  assert.equal((headers[6].match(/data-signal=/g) || []).length, 4);
   assert.match(markup, /aria-sort="ascending"/);
   assert.doesNotMatch(markup, /remote-account-heading|remote-account-group/);
   const repositories = rows(markup);
@@ -242,11 +280,11 @@ test('account errors preserve cached repository rows in the same unified table',
 test('unlinked repository browsing does not claim a local association is required for remote contents', () => {
   const markup = renderToStaticMarkup(createElement(RepositoryView, { repository: catalog.repositories[2], account: catalog.accounts[1], globalSearch: '', onConfigure: () => {} }));
   assert.match(markup, /<h1>shared<\/h1>/);
-  assert.match(markup, /repository-overview-description">Work copy<\/p>/);
+  assert.doesNotMatch(markup, /repository-overview-description">Work copy<\/p>/);
   assert.match(markup, /aria-label="仓库信息"/);
-  assert.match(markup, /<dt>访问账号<\/dt><dd[^>]*>Work<\/dd>/);
+  assert.doesNotMatch(markup, /<dt>访问账号<\/dt><dd[^>]*>Work<\/dd>/);
   assert.match(markup, /<p title="https:\/\/git.example.test:10443\/org\/shared">https:\/\/git.example.test:10443\/org\/shared<\/p>/);
-  assert.match(markup, /<dt>默认分支<\/dt>/);
+  assert.doesNotMatch(markup, /<dt>默认分支<\/dt>/);
   assert.match(markup, /develop/);
   assert.doesNotMatch(markup, /<dt>本地目录<\/dt>/);
   assert.match(markup, /aria-label="分支图"/);
@@ -261,7 +299,11 @@ test('unlinked repository browsing does not claim a local association is require
 
 test('a linked path alone does not claim loaded Git content while inaccessible unlinked repositories show cached information', () => {
   const linked = renderToStaticMarkup(createElement(RepositoryView, { repository: catalog.repositories[2], account: catalog.accounts[1], localPath: '/projects/work/shared', globalSearch: '', onConfigure: () => {} }));
-  assert.doesNotMatch(linked.split('aria-label="仓库信息"')[1].split('</section>')[0], /<button|<dt>本地目录<\/dt>/);
+  const overview = linked.split('aria-label="仓库信息"')[1].split('</section>')[0];
+  assert.doesNotMatch(overview, /<dt>本地目录<\/dt>/);
+  const commit = [...overview.matchAll(/<button\b([^>]*)>/g)].find(action => /aria-label="Commit/.test(action[1]));
+  assert.ok(commit);
+  assert.match(commit[1], /disabled=""/);
   assert.match(linked, /更改与 Diff/);
   assert.match(linked, /分支图/);
   assert.match(linked, /远端内容接口等待服务更新/);

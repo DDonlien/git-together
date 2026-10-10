@@ -86,11 +86,13 @@ test('local history hides but does not discard its original draft composer and r
   const props = { task: local, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false };
   const history = renderToStaticMarkup(createElement(RepositoryChanges, { ...props, selectedCommit: commit }));
   assert.match(history, /class="repository-commit-composer" hidden=""/);
-  assert.match(history, /<textarea/);
+  assert.match(history, /<md-outlined-text-field[^>]*aria-label="Description：main"/);
   assert.match(history, /提交详情：main/);
   const current = renderToStaticMarkup(createElement(RepositoryChanges, props));
-  assert.match(current, /class="repository-commit-composer"><label/);
-  assert.doesNotMatch(current, /hidden=""|提交详情：main|<textarea[^>]*disabled/);
+  assert.match(current, /<form class="repository-commit-composer"[^>]*aria-label="提交说明：main"/);
+  assert.match(current, /aria-label="Summary：main"/);
+  assert.match(current, /aria-label="Description：main"/);
+  assert.doesNotMatch(current, /hidden=""|提交详情：main|<md-outlined-text-field[^>]*tabIndex="-1"/);
   const view = readFileSync(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
   const column = readFileSync(new URL('../src/RepositoryChangesColumn.tsx', import.meta.url), 'utf8');
   assert.equal((column.match(/selectedCommit=\{selectedCommit\}/g) || []).length, 2);

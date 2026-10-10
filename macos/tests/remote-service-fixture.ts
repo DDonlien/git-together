@@ -5,9 +5,11 @@ import { isCatalog, type Provider } from '../src/import-model';
 import { createGitRemoteFixture } from './git-remote-fixture';
 import type { FileOpener } from '../server/system-file-open';
 import type { LocalDiagnostics } from '../server/diagnostics';
+import type { CommitGenerator } from '../server/commit-generator';
 
-export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean; diagnostics?: LocalDiagnostics; historyBody?: string } = {}) {
+export async function createRemoteServiceFixture(provider: Provider, options: { openFile?: FileOpener; treeChanges?: boolean; diagnostics?: LocalDiagnostics; historyBody?: string; commitGenerator?: CommitGenerator; freezeHeads?: boolean } = {}) {
   const git = await createGitRemoteFixture(provider, { treeChanges: options.treeChanges, historyBody: options.historyBody });
+  const remoteBranches = options.freezeHeads ? await git.transport('/repos/qa/project/branches?page=1', 'json') : undefined;
   const requests: { url: URL; authorization: string; signal?: AbortSignal | null }[] = [];
   let failure = 0;
   let failWhere: (url: URL) => boolean = () => true;
@@ -17,6 +19,7 @@ export async function createRemoteServiceFixture(provider: Provider, options: { 
     requests.push({ url, authorization: new Headers(init?.headers).get('Authorization') || '', signal: init?.signal });
     if (url.pathname.endsWith('/user')) return Response.json({ login: 'qa', name: '隔离测试账号' });
     if (url.pathname.endsWith('/user/repos')) return Response.json(url.searchParams.get('page') === '1' ? [{ id: 1, name: 'project', full_name: 'qa/project', default_branch: 'main', private: false, description: '隔离 Git 测试' }] : []);
+    if (remoteBranches && url.pathname.endsWith('/branches')) return Response.json(url.searchParams.get('page') === '1' ? remoteBranches.value : []);
     if (hold) { const pending = hold; hold = undefined; await pending(); }
     init?.signal?.throwIfAborted();
     if (failure && failWhere(url)) return new Response('provider diagnostic and credentials must not leak', { status: failure });

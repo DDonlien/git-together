@@ -46,7 +46,7 @@ function BranchFilter({ branches, selection, onChange, title }: { branches: Grap
   </Popover>;
 }
 
-export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, emptyLabel }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; emptyLabel?: string }) {
+export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, emptyLabel }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; emptyLabel?: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -67,7 +67,8 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
   const branchName = branchSelection === null ? '全部分支' : selectedBranches.length === 1 ? selectedBranches[0].branch : selectedBranches.length ? `${selectedBranches.length} 个分支` : '未选择分支';
   const headIds = new Set(workspace.tasks.filter(item => item.path).map(item => item.head));
   const cursorId = cursor && byId.has(cursor) ? cursor : rows[0]?.commit.id;
-  const rowHeight = 36;
+  // Match the 30px text stack plus 6px padding on both sides in styles.css.
+  const rowHeight = 42;
   const choose = useCallback((id: string | null, toggle = false) => {
     const next = toggle && id === selected ? null : id;
     if (id) { setCursor(id); buttons.current.get(id)?.focus({ preventScroll: true }); buttons.current.get(id)?.closest('tr')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
@@ -111,23 +112,23 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
   }, [query.term, matches, byId, selected, rows, choose]);
   return <>
     <RepositoryColumnHeading title={branchName} disclosureLabel="分支图" icon="branch" controls="repository-graph-column" titleContent={
-      <BranchFilter branches={branches} selection={branchSelection} title={branchName} onChange={selection => { setBranchSelection(selection); setContext(null); }} />
+      <BranchFilter branches={branches} selection={branchSelection} title={branchName} onChange={selection => { setBranchSelection(selection); onBranchFilterChange?.(selection); setContext(null); }} />
     } />
     {feedback && <p className="repository-data-note" role="status">{feedback}</p>}
     {!workspace.complete && !workspace.source && workspace.commits.length > 0 && <p className="repository-data-note">最近提交；完整分支关系等待服务更新。</p>}
     <div ref={scrollRef} className="repository-graph-scroll">
-      {rows.length ? <table className="repository-graph-table" aria-label="提交历史"><colgroup><col style={{ width: lanes * 14 + 20 }} /><col /><col style={{ width: 66 }} /></colgroup><tbody>
-        {rows.map(({ commit, lane, color, incoming, edges }, index) => {
+      {rows.length ? <table className="repository-graph-table" aria-label="提交历史"><colgroup><col style={{ width: lanes * 14 + 20 }} /><col /><col style={{ width: 78 }} /></colgroup><tbody>
+        {rows.map(({ commit, lane, color, incoming, incomingLocal, edges }, index) => {
           const workingTask = commit.workingTask;
           const isHead = headIds.has(commit.id);
           const missingParent = edges.some(edge => edge.boundary);
           const label = workingTask ? `${commit.summary} · ${workingTask.branch} · ${workingTask.path}` : `${commit.summary} · ${commit.author} · ${commit.id}${commit.refs.length ? ` · ${commit.refs.join(', ')}` : ''}${isHead ? ' · HEAD' : ''}${commit.unpublished ? ' · 未推送' : commit.localOnly ? ' · 本地提交' : ''}${missingParent ? ' · 父提交未读取' : ''}`;
           return <tr key={commit.id} data-commit-id={workingTask ? undefined : commit.id} data-working-task={workingTask?.id} className={`${selected === commit.id ? 'selected' : ''} ${query.term && !matchSet.has(index) ? 'graph-dimmed' : ''} ${task?.head === commit.id ? 'graph-task-head' : ''} ${workingTask ? 'graph-working-row' : ''}`} onClick={() => choose(commit.id, true)} onContextMenu={event => { event.preventDefault(); choose(commit.id); if (!workingTask) setContext({ id: commit.id, x: event.clientX, y: event.clientY }); }}>
             <td className="repository-graph-lane"><svg width={lanes * 14 + 14} height={rowHeight} viewBox={`0 0 ${lanes * 14 + 14} ${rowHeight}`} aria-hidden="true">
-              {edges.map((edge, edgeIndex) => <path key={edgeIndex} d={edge.from === edge.to ? `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} V ${edge.boundary ? rowHeight - 3 : rowHeight}` : `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} C ${edge.from * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight}`} className={`graph-line graph-color-${edge.color}${edge.boundary ? ' graph-boundary' : ''}${workingTask && edge.node ? ' graph-working-edge' : ''}`} />)}
-              {incoming && <path d={`M ${lane * 14 + 12} 0 V ${rowHeight / 2}`} className={`graph-line graph-color-${color}`} />}
-              {isHead && <circle cx={lane * 14 + 12} cy={rowHeight / 2} r="6" className="graph-head-marker" />}
-              <circle cx={lane * 14 + 12} cy={rowHeight / 2} r={workingTask || commit.parents.length > 1 ? 4 : 3.5} className={`graph-node graph-color-${color}${workingTask ? ' graph-working-node' : commit.parents.length > 1 ? ' graph-merge-node' : ''}`} />
+              {edges.map((edge, edgeIndex) => <path key={edgeIndex} d={edge.from === edge.to ? `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} V ${edge.boundary ? rowHeight - 3 : rowHeight}` : `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} C ${edge.from * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight}`} className={`graph-line graph-color-${edge.color}${edge.boundary ? ' graph-boundary' : ''}${edge.local ? ' graph-local-edge' : ''}`} />)}
+              {incoming && <path d={`M ${lane * 14 + 12} 0 V ${rowHeight / 2}`} className={`graph-line graph-color-${color}${incomingLocal ? ' graph-local-edge' : ''}`} />}
+              {isHead && !commit.unpublished && <circle cx={lane * 14 + 12} cy={rowHeight / 2} r="6" className="graph-head-marker" />}
+              <circle cx={lane * 14 + 12} cy={rowHeight / 2} r={workingTask || commit.unpublished || commit.parents.length > 1 ? 4 : 3.5} className={`graph-node graph-color-${color}${workingTask ? ' graph-working-node' : commit.unpublished ? ' graph-unpublished-node' : commit.parents.length > 1 ? ' graph-merge-node' : ''}`} />
             </svg></td>
             <td><button ref={element => { if (element) buttons.current.set(commit.id, element); else buttons.current.delete(commit.id); }} className="repository-graph-description" tabIndex={cursorId === commit.id ? 0 : -1} onFocus={() => setCursor(commit.id)} onKeyDown={event => keyboard(event, index)} aria-pressed={selected === commit.id} aria-label={label} title={`${label}${workingTask ? '' : `\n${new Date(commit.time).toLocaleString()}`}\n↑ ↓ 导航 · ← 父提交 · → 子提交 · Esc 取消`}>
               <strong><GraphText text={commit.summary} term={query.term} /></strong>

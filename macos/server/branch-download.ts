@@ -10,7 +10,7 @@ import { readWorktrees } from './repository-reader';
 
 // The helper handles only this account's origin. Tokens travel in the child
 // environment, never in Git arguments, saved remote URLs, config or logs.
-const credentialHelper = '!f() { test "$1" = get || exit 0; protocol=; host=; while IFS="=" read -r key value; do case "$key" in protocol) protocol="$value";; host) host="$value";; esac; done; if test "$protocol://$host" = "$GITTOGETHER_DOWNLOAD_ORIGIN"; then printf "username=%s\\npassword=%s\\n" "$GITTOGETHER_DOWNLOAD_USER" "$GITTOGETHER_DOWNLOAD_TOKEN"; fi; }; f';
+export const credentialHelper = '!f() { test "$1" = get || exit 0; protocol=; host=; while IFS="=" read -r key value; do case "$key" in protocol) protocol="$value";; host) host="$value";; esac; done; if test "$protocol://$host" = "$GITTOGETHER_DOWNLOAD_ORIGIN"; then printf "username=%s\\npassword=%s\\n" "$GITTOGETHER_DOWNLOAD_USER" "$GITTOGETHER_DOWNLOAD_TOKEN"; fi; }; f';
 const downloadTimeout = 30 * 60_000; // Large asset checkouts get up to 30 minutes, not the read API's 3-minute limit.
 
 type DownloadInput = {

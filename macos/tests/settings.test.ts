@@ -21,7 +21,7 @@ test('settings retain accounts and appearance without guide, material or storage
       updatePreferences: () => {}, reload: async () => {},
       connect: async () => catalog, updateAccount: async () => catalog, refresh: async () => catalog,
       removeAccount: async () => catalog, link: async () => catalog, matchAccountRepositories: async () => [], unlink: async () => catalog,
-      downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
+      submitCommit: async () => { throw new Error('Unused fixture operation'); }, applySync: async () => { throw new Error("unused"); }, pushCommit: async () => { throw new Error('Unused fixture operation'); }, downloadBranch: async () => { throw new Error('This fixture does not download branches.'); },
       startGithubAuthorization: async () => ({ id: 'test-session', userCode: 'ABCD-EFGH', verificationURL: githubVerificationURL, expiresAt: Date.now() + 900000, interval: 5 }),
       pollGithubAuthorization: async () => ({ status: 'pending', retryAfter: 5 }),
       cancelGithubAuthorization: async () => ({ cancelled: true }),

@@ -48,8 +48,8 @@ test('local working files retain selection and the editable draft without any co
   for (const selected of [undefined, 'changed.ts', 'scene.uasset', 'unchanged.ts']) {
     const html = renderToStaticMarkup(createElement(RepositoryChanges, { task: local, selected, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false }));
     assert.doesNotMatch(html, /repository-inline-diff|is-history-diff|<pre\b|关闭 Diff|正在读取 Diff|这个文件没有未提交的更改/);
-    assert.match(html, /changed.ts/); assert.match(html, /scene.uasset/); assert.match(html, /填写提交说明/);
-    assert.doesNotMatch(html, /<textarea[^>]*disabled/);
+    assert.match(html, /changed.ts/); assert.match(html, /scene.uasset/); assert.match(html, /aria-label="Summary：main"/); assert.match(html, /aria-label="Description：main"/);
+    assert.doesNotMatch(html, /<md-outlined-text-field[^>]*disabled/);
     assert.match(html, new RegExp(`class="readonly-file${selected === 'changed.ts' ? ' selected' : ''}\\s*"[^>]*aria-pressed="${selected === 'changed.ts'}"`));
   }
 });

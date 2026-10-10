@@ -23,7 +23,7 @@ test('commit graph starts with records without a header row and retains dynamic 
     assert.doesNotMatch(markup, /<thead|<th[ >]|作者 \/ 日期|>说明<|>图</);
     assert.match(markup, /<table class="repository-graph-table" aria-label="提交历史"><colgroup>/);
     assert.match(markup, new RegExp(`<col style="width:${lanes * 14 + 20}px"/>`));
-    assert.match(markup, /<col style="width:66px"\/><\/colgroup><tbody>/);
+    assert.match(markup, /<col style="width:78px"\/><\/colgroup><tbody>/);
     assert.equal((markup.match(/<tr[ >]/g) || []).length, commits.length);
     assert.equal((markup.match(/class="graph-node /g) || []).length, commits.length);
     assert.equal((markup.match(/aria-pressed="false"/g) || []).length, commits.length);
@@ -48,16 +48,14 @@ test('three persistent columns follow graph, changes/composer, tree after a span
   assert.doesNotMatch(app, /<header className="topbar/);
 });
 
-test('overview shows the provider remote URL and access account without association, path or identity subline', () => {
+test('overview shows the provider URL and accessible action identity without redundant metadata or a local path', () => {
   for (const provider of ['gitea', 'github'] as const) {
     const url = provider === 'gitea' ? 'https://git.example.test:10443/owner/project' : 'https://github.com/owner/project';
     const markup = renderToStaticMarkup(createElement(RepositoryView, { repository: { ...repository, url }, account: { ...account, provider }, localPath: '/qa/main', globalSearch: '', onConfigure: () => {} }));
     const overview = markup.split('aria-label="仓库信息"')[1].split('</section>')[0];
     assert.ok(overview.includes(`<p title="${url}">${url}</p>`));
-    assert.match(overview, /<dt>访问账号<\/dt><dd[^>]*>QA<\/dd>/);
-    assert.match(overview, /<dt>默认分支<\/dt>/);
-    assert.equal((overview.match(/<dt>/g) || []).length, 2);
-    assert.doesNotMatch(overview, /<small>|<button|<dt>账号<\/dt>|本地目录|尚未关联|\/qa\/main/);
+    assert.ok(overview.includes(`aria-label="Git 操作：${repository.fullName} · 当前筛选分支`));
+    assert.doesNotMatch(overview, /<small>|<dt>|本地目录|\/qa\/main/);
   }
 });
 
@@ -67,7 +65,10 @@ test('linked local file trees omit the removed bottom actions even when remote a
   const tree = markup.split('aria-label="文件树"')[1];
   assert.match(tree, /aria-label="文件树：main"/);
   assert.doesNotMatch(tree, /repository-tree-actions|配置本地目录/);
-  assert.doesNotMatch(markup.split('aria-label="仓库信息"')[1].split('</section>')[0], /<button/);
+  const overview = markup.split('aria-label="仓库信息"')[1].split('</section>')[0];
+  const actions = [...overview.matchAll(/<button\b([^>]*)>/g)];
+  assert.equal(actions.length, 6);
+  for (const action of actions) assert.match(action[1], /disabled=""/);
 });
 
 test('unlinked association reuses the configuration callback only in the local tree empty state with access guard', () => {
@@ -80,10 +81,10 @@ test('unlinked association reuses the configuration callback only in the local t
   assert.match(app, /configuring && <LocalRepositoryModal/);
 });
 
-test('overview layout has two shrinking metadata columns and no stale path or identity-subline rules', () => {
+test('overview layout keeps a shrinking title and independent actions without stale metadata rules', () => {
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /\.repository-overview dl \{[^}]*grid-template-columns: repeat\(2,minmax\(0,1fr\)\);/);
-  assert.doesNotMatch(css, /\.repository-overview-path|\.repository-overview dd small/);
+  assert.match(css, /\.repository-overview-title \{ flex: 1; min-width: 0; \}/);
+  assert.doesNotMatch(css, /\.repository-overview-path|\.repository-overview d[ldt]|\.repository-overview-description|\.repository-task-count/);
 });
 
 test('all worktree cards stay mounted with independent drafts while only one change context is visible', () => {
@@ -98,7 +99,7 @@ test('all worktree cards stay mounted with independent drafts while only one cha
     assert.match(markup, new RegExp(`aria-label="文件树：${branch}"`));
     assert.match(markup, new RegExp(`>提交说明：${branch}<`));
   }
-  assert.equal((markup.match(/<textarea/g) || []).length, 3);
+  assert.equal((markup.match(/<md-outlined-text-field[^>]*aria-label="Description：/g) || []).length, 3);
   assert.equal((markup.match(/repository-task-slot" hidden=""/g) || []).length, 2);
   assert.match(markup, /未检出 · 分支快照/);
   assert.doesNotMatch(markup, /完整目录等待服务更新/);

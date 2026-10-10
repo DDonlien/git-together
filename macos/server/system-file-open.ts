@@ -5,7 +5,7 @@ export type FileOpenTarget = { source: 'local' | 'remote'; value: string };
 export type FileOpener = (target: FileOpenTarget) => Promise<void>;
 const execute = promisify(execFile);
 
-// Only AccountService supplies a validated absolute file or provider URL.
+// Only AccountService supplies a validated absolute file/directory or provider URL.
 // macOS chooses the default application; no shell, application name or flags
 // are accepted from the renderer.
 export const openSystemFile: FileOpener = async target => {

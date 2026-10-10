@@ -1,3 +1,34 @@
+# 三栏10%步进比例 QA（2026-10-10）
+
+final result: passed（真实组件的局部源码与隔离浏览器验证，非用户账号或原生包验收）
+
+- 保留Material 3卡片、12px间隔和三栏内容，仅在两条间隔悬停/键盘焦点时显示居中4×48px抓手、相邻比例及左右调整指针。默认30%/40%/30%，两条分隔线仅改变相邻两栏，严格10%档位；最小可读宽度230/290/216px限制档位。键盘左右每次一档，Home/End到边界，Escape恢复拖动前比例。
+- mixed隔离预览采用本轮新建真实Git，不使用用户凭据。1280×720实测30/40/30→40/30/30及30/30/40，第三栏不变；21px微拖不跨档、极限拖动安全停在可用档位，松开与Escape后拖动态清除。收起后44px窄栏保留，两条比例条暂隐藏，全展开恢复40/30/30。草稿「比例调整保留草稿」、README选择、docs折叠与远端树来源均保持。
+- 亮暗色实际截图目视通过，暗色抓手沿用主题中性色，激活使用primary。769×853时内部三栏791px、容器521px，保持真正30/40/30且最小宽度，不把比例夹成非10%；无可用移动档位时辅助状态disabled。内部scrollbar-width为none、app-frame无溢出；该窄窗document.scrollWidth仍多126px，本轮未归因或修复全局既有溢出，不声称根级无溢出。正常1280px根页面溢出0。
+- 新增8项回归；相关24/24、仓库144/144回归、strict、0.19.1生产构建和差异检查通过。扩大回归曾遇到其他并行顶部/Commit入口修改导致5条旧断言失效，对方更新后重跑144/144通过，本轮未改那些功能。实际Escape取消已测；pointercancel/失去捕获的事件处理由契约回归覆盖，内置浏览器不支持Input.dispatchTouchEvent，未声称真实触摸取消验收。控制台warn/error为0。
+- 临时页、服务、viewport覆盖和测试Git已清理，HEAD/index未变；没有重启用户4173/4174服务、修改凭据/关联或执行用户Git写操作。4173 status/catalog均HTTP200且ok，真实开发模块含分隔条；不以隔离数据证明用户账号或安装包更新。本轮不提交、推送或打包。比例仅在当前挂载工作台保持，不承诺跨退出持久化。
+- 效果：[亮色三栏抓手与40%/30%档位](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/column-resize-cards.png)、[暗色默认比例](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/column-resize-dark.png)。
+
+# 三栏横向收起箭头 QA（2026-10-10）
+
+final result: passed（局部源码与隔离浏览器验证，非原生包验收）
+
+- 仅把共享栏标题的展开态向下箭头换为Phosphor向左箭头，收起态仍向右；无CSS、尺寸、配色或状态逻辑修改。
+- mixed隔离真实Git预览实测三栏左→右→左，全部28×28px按钮、收起栏44px；实际点击、Enter、Space展开正常，main草稿及远端树保持，隐藏内容不进入辅助树。12/12相关回归、strict、0.17.7生产构建及差异检查通过；随后并行任务将源码版本递增至0.17.8，本轮不覆盖。
+- 临时页和服务已关闭，临时Git清理且HEAD/index未变；不重启账号服务、不打包、不推送。效果：[三栏横向箭头](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/column-horizontal-carets.png)。
+
+# 文件树底部身份行 QA（2026-10-10，0.17.6）
+
+final result: passed（本轮局部UI与隔离目录打开；不代表安装包或真实账号验收）
+
+- 对照用户的顶部/本地两张裁图及最新底部裁图，落实最新批注：顶部身份及第二行路径移除，每个任务只保留底部一行；分支左、SHA右、路径紧跟分支。保持既有Material配色、字体/Phosphor图标、三栏与来源控件，底部不是旧配置操作栏。截图示例使用临时Git，不复刻附件的真实仓库数据。
+- 使用现有remote-integration-preview --file-open，生产构建App通过真实AccountService/HTTP/DTO读取临时Git，provider为不联网的synthetic Gitea，无用户凭据。1280×720亮色本地及872×853暗色本地截图目视通过；三项远端任务DOM均为1个footer且无顶部identity。窄窗收起图栏的现有行为保留。
+- 本地信息行与SHA同中心线，左右12px内缩，SHA48.2px固定宽。原621px路径在100px/47.6px文本盒内nowrap+ellipsis，完整路径仍在title/可访问名称；树栏270.5/218.1px宽，根页面溢出0。docs折叠、README选择、提交草稿经来源切换保持。没有改树HEAD基准或写入Git。
+- 点击路径实际打开Finder，路径栏和内容对应本轮临时main worktree；请求中共享文件打开锁使相关按钮暂时禁用，完成后恢复，无错误提示。本轮Finder窗口已关闭。键盘真实打开和浏览器失败提示未实测；服务/HTTP/客户端负面回归已覆盖任意路径、失效、打开失败和错误成功回执。
+- strict、相关59/59回归、生产构建与git diff --check通过。初期并行提交功能尚未补齐类型时check失败，最终重跑通过，未修改该任务逻辑。浏览器console warn/error为0，临时页/viewport/服务/仓库已清理，HEAD/index不变。
+- 本轮不重启用户账号服务、不重放凭据、不提交/推送或打包。4173实读openDirectory对空输入返回身份校验错误而非未知方法，0账号/0仓库/0关联；源码版本递增不等于安装包更新。
+- 效果证据：[亮色完整页面](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/tree-footer-local.jpg)、[暗色窄窗口](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/tree-footer-dark-narrow.jpg)。
+
 # 远端内容完整链路 QA（2026-10-07，0.5.0，R-05-remote-integration）
 
 - 用户明确回复「重启」；主 4173 已更新到 0.5.0，新 instance c24d4f14-3f2a-4504-a9e5-32ec0a0f25d1。旧网页账号会话清空，最终 0/0/0；未重放令牌、操作用户 Git、重打桌面包或重启授权助手。
@@ -494,3 +525,47 @@ final result for IMPORT-13-branches-folder: passed
 - 主/助手HTTP200、0.8.7、实例fead0bc8-c050-4969-a84e-46b9b8491305，1账号/38仓库/0关联/失败账号0及configured=true保持。只做前端热更新，没有重启、版本依赖更新、凭据迁移、Git提交/推送或安装包生成；此前main推送已完成，本次更改仍在本地。
 
 final result for UI-04-sidebar-header-icon-only: passed
+
+## 2026-10-10 本地提交与提交区反馈（R-05-local-submit）
+
+- 生产App与实际AccountService/受保护HTTP、本轮临时Git worktree共同运行，provider是合成传输；AI使用本机已登录Codex CLI 0.162.0-alpha.2。真实生成 Summary/Description、取消及重新生成成功，不作为用户真实远端账号或安装版验收。
+- main提交钩子拒绝时保留两个字段、原HEAD和更改数量；移除本轮临时钩子后成功创建c2c10545，立即清空该目录更改，图中标记未推送。task/search的HEAD、更改与草稿保留，远端引用未推送。
+- 逐目录草稿、选择/取消历史、收起/展开栏目、Dashboard分支Commit定位，以及仓库页Commit自动展开提交区均经实际点击核对。
+- 1280×720亮暗与920×640短窗口核对，根无横向溢出，短窗口提交区底部619px低于640px；输入未聚焦中性色、聚焦主色边框/标签，字段尺寸不变。AI32×32圆形，左邻Commit8px；选中行两端8px圆角、右侧辅助文字12px留白。工作目录圈2/2虚线、未推送圈实线空心，本地连接3/3虚线跨行连续。
+- 效果图：macos/artifacts/local-submit/after-light.jpg、after-dark.jpg、after-narrow.jpg。截图是临时仓库的实际UI；测试页面/仓库已清理，临时viewport已恢复，最终QA控制台无warn/error。
+- 最终strict、481/481业务测试、Sites4/4、生产构建及差异检查通过。共享源码当前0.19.1；本轮功能递增minor至0.18.0，后续其他任务的0.19.x保留。4173账号服务与4174授权助手均200/0.19.1，后者configured=true；主预览0账号/0仓库/0关联保持，未重放凭据。未执行源码commit/push、原生打包或安装更新。
+
+生成忙碌时补查提交快捷键：先填有效旧摘要，启动真实Codex生成，Meta+Enter不会中断生成或提交；Commit仍禁用，临时main和task/search的HEAD与3+1更改保持，取消后摘要保留。修正后strict、481/481测试和构建重新通过。
+
+## 2026-10-10 输入框描边后续反馈（R-05-commit-composer-thin-outline）
+
+- 0.19.2共享单行/多行输入取消聚焦时的内阴影叠线，保持单层1px边框、主色标签与错误色规则，字段几何不变。
+- 隔离实际App亮暗主题核对：聚焦1px主色、未聚焦1px中性色，box-shadow:none与outline:none；Summary/Description高度40/56px均不变。Tab进入多行字段后主色焦点可辨识，控制台warn/error为空。亮暗截图位于macos/artifacts/local-submit/input-outline-light.jpg和input-outline-dark.jpg。
+- 类型检查、生产构建及14项现有相关回归通过，差异检查通过。未执行AI/Commit，临时Git HEAD不变且已清理；生产主预览/助手状态与catalog均HTTP200/ok:true，未重启账号服务，未更新安装版。
+
+## 2026-10-10 Graph选中行上下留白（R-05-graph-local-states-vertical-padding）
+
+- 0.19.3图中文字上下各6px，选中与未选中均42px行高，SVG与键盘翻页同步42px。保留横向内缩、8px选中圆角及真实本地节点样式。
+- 隔离实际App亮暗主题：选中工作更改/普通历史及未选中行都测得上下6px；所有行/SVG为42px，SVG顶边与行顶一致，相邻SVG间隙0。ArrowDown实际切换选中历史行后留白不变，控制台warn/error为空。截图macos/artifacts/local-submit/graph-row-padding-light.jpg和graph-row-padding-dark.jpg。
+- 类型检查、生产构建、25项相关回归及差异检查通过。更新3处旧36px期望，没有新增镜像测试。未执行AI/Commit/Push，临时Git HEAD不变且已清理；主预览/助手状态及catalog均HTTP200/ok:true，未重启生产服务或更新安装版。
+
+## 2026-10-10 官方M3字段与顶部搜索（R-05-commit-composer-official-m3）
+
+- 0.20.3使用官方Material Web 2.5.0与Lit React 1.0.8。中栏与逐分支提交弹窗共用官方描边字段，Summary必填单行、Description选填多行；浮动标签、4px圆角与默认焦点描边保留。搜索由官方填充字段和图标按钮按M3 Search bar组合，官方Web库没有独立Search bar。
+- 隔离生产App/AccountService/有限HTTP与真实临时Git核对，AI为确定性测试预填。搜索输入→空结果→清空恢复、清空后焦点、Cmd+K、中文及多行编辑、必填按钮状态、逐task草稿独立、取消/重开保留弹窗修改、Tab及Escape焦点恢复均通过；未执行真实AI、Commit或Push。
+- 亮暗1280×720：搜索360×56px，输入正文16px/24px，字段含计数区高度76px/100px。移除外部overflow裁切后浮动标签及内部纵向调整把手正确显示。920×640含错误提示：字段独立滚动，Tab可滚入Description，操作区底边607px，文件列表保留42.5px，根横溢出0。短窗口中的字段不会同时完整展示，底部按钮保持可见；弹窗末尾字段可滚入视区。
+- 实际截图：[亮色](/Users/taobe/Projects/GitHub/Personal/git-together/codex-standalone-ts/macos/artifacts/official-m3-inputs/official-m3-light.png)、[暗色](/Users/taobe/Projects/GitHub/Personal/git-together/codex-standalone-ts/macos/artifacts/official-m3-inputs/official-m3-dark.png)、[窄窗](/Users/taobe/Projects/GitHub/Personal/git-together/codex-standalone-ts/macos/artifacts/official-m3-inputs/official-m3-narrow.png)、[提交弹窗](/Users/taobe/Projects/GitHub/Personal/git-together/codex-standalone-ts/macos/artifacts/official-m3-inputs/official-m3-submit-light.png)。截图使用隔离仓库；最新并行Git同步接入尝试读取合成远端而收到证书错误，原样保留提示，并据此验证短窗口布局，不表示用户账号错误。
+- 类型、生产构建及19项直接相关回归通过。扩展45项中38通过，7项旧操作名称/禁用/数量断言在修改前基线同样失败。构建保留大于500KB的chunk提示，不称全套检查通过。当前54521页无新增控制台warn/error，较早52262页的诊断服务不可用警告单独保留。
+- 主预览4173与授权助手4174均HTTP200/ok:true/0.20.3，主实例ae62d238-3a38-4397-878b-6d8f3043e5ca，目录0账号/0仓库/0关联，助手configured=true。开始时两个端口没有监听，已从既有统一入口恢复；没有重放账号凭据，保留源码/运行预览与安装版边界。
+
+收尾复查：并行Git操作任务修正旧断言并将共享版本递增至0.21.0；最终类型、生产构建和46/46相关回归全部通过。主与助手均HTTP200/ok:true/0.21.0，主实例d9420ab4-4059-447d-af56-20e163b6b639、0账号/0仓库/0关联，助手configured=true；复用已恢复的匹配服务，未再停止其它任务服务。两临时Git的HEAD不变、3+1更改保持，临时仓库与测试标签已清理，viewport恢复；差异检查通过，安装版未更新。
+
+
+## 2026-10-10 最近需求交付核对（0.21.0）
+
+- 最终501/501回归、Sites4/4、类型检查、生产构建和git diff --check通过；18项真实Git smart HTTP/LFS验证实际fetch、ff Pull、Clean保留HEAD/index、Get Latest真实旧对象和历史LFS回收、共享worktree/未推送提交/嵌套仓库/锁/失败保护，以及精确选中SHA Push。
+- 生产App以隔离账号/真实临时双分支运行：Submit手工修改关闭重开保留；两分支各自Commit→Push，远端摘要回读；中栏只提交选中main，Push后显示已在远端。修复后台fetch与Commit/Push抢锁导致失败，改为git-common-dir等待队列，重验连续链路通过。
+- 真实Codex CLI先因忽略用户配置请求401，恢复正常模型/provider/login配置后，main生成README修改说明、feature生成新增文件说明；实际官方字段预填、手工追加已核对、一次确认后远端两分支的完整消息与最终编辑一致，两个目录干净。错误分类不再把普通login字样误报为登录过期。
+- 表头/胶囊中心实际分别1167、1239、1296、1380px，一致；无额外Dashboard批量toolbar。侧栏32px且上下padding为0；真实800×588窄视口Submit弹窗边界150/22.6/650/565.4px，按钮底541.4px，均可见。暗色实际截图artifacts/release-audit/real-ai-submit-narrow.png；官方字段shadow root已加载。隔离数据不冒充私有账号或安装包验收。
+- Pull预览补齐remote-arrival.txt并实际ff完成；Clean确认删除新增临时文件；linked Get Latest得到depth1/count1，其他主目录count3历史保留。超过十分钟预览会拒绝并重新预览，实际重新预览成功。QA服务器/renderer及临时仓库已关闭清理，未写用户项目。
+- 主预览/授权助手恢复0.21.0，账号服务0账号/0仓库/0关联，configured=true；没有重放凭据。正式签名/公证/公共更新与安装验收另记RUN-01-recent-delivery。

@@ -85,13 +85,13 @@ test('a linked working directory is the default context while all separate task 
   const local: RepositoryTask[] = ['main', 'search', 'review'].map(branch => ({ id: `local:${branch}`, branch, head: 'b'.repeat(40), path: `/isolated/${branch}`, files: [{ path: `${branch}.ts`, status: ' M', tracked: true }], tree: [`${branch}.ts`], error: '' }));
   const html = render({ tasks: [...tasks, ...local], localPath: '/isolated/search' });
   assert.deepEqual(slots(html).filter(slot => !slot.hidden), [{ hidden: false, label: '更改任务：search' }]);
-  assert.equal((html.match(/<textarea/g) || []).length, 3);
+  assert.equal((html.match(/aria-label="Description：/g) || []).length, 3);
   for (const branch of ['main', 'search', 'review']) assert.ok(html.includes(`提交说明：${branch}`));
   assert.match(html, /aria-label="选择本地工作目录"/);
   assert.doesNotMatch(html, /选择一个提交查看差异/);
   const history = render({ tasks: [...tasks, ...local], localPath: '/isolated/search', selection: { taskId: tasks[7].id, commitId: commit.id }, commit });
   assert.deepEqual(slots(history).filter(slot => !slot.hidden), [{ hidden: false, label: '远端提交：task/7' }]);
-  assert.equal((history.match(/<textarea/g) || []).length, 3);
+  assert.equal((history.match(/aria-label="Description：/g) || []).length, 3);
 });
 
 test('local history does not pass working changes off as a commit Diff or poll its file', () => {

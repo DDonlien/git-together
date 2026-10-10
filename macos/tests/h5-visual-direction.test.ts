@@ -19,7 +19,7 @@ test('Material elevation applies to semantic content groups, not individual repo
 
 test('Material visual direction leaves the three-column workspace and narrow-window scrolling unchanged', () => {
   assert.match(css, /\.repository-columns-scroll \{ flex: 1; min-height: 380px; overflow-x: auto; display: flex; \}/);
-  assert.match(css, /\.repository-columns \{[^}]*grid-template-columns: var\(--graph-width\) var\(--changes-width\) var\(--tree-width\);/);
+  assert.match(css, /\.repository-columns \{[^}]*grid-template-columns: var\(--graph-width\) 12px var\(--changes-width\) 12px var\(--tree-width\);/);
   assert.doesNotMatch(css, /:root:not\(\[data-desktop='true'\]\)\s+\.repository-columns(?:-scroll)?\s*\{/);
   assert.match(css, /\.repository-column-heading\.is-collapsed > h2 \{[^}]*writing-mode: vertical-rl;/);
 });

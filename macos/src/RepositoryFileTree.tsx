@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Icon, IconButton } from './ui';
+import { Button, Icon, IconButton } from './ui';
 import type { RepositoryTask } from './repository-model';
 import type { Account, RemoteRepository } from './import-model';
 import { importAPI } from './import-api';
@@ -27,10 +27,18 @@ function TreeNode({ node, depth, selected, onSelect, actions }: { node: Decorate
 export function RepositoryFileTree({ task, selected, onSelect, complete, changes, repository, account }: { task: RepositoryTask; selected?: string; onSelect: (path: string) => void; complete: boolean; changes?: FileTreeChange[]; repository?: RemoteRepository; account?: Account }) {
   const nodes = useMemo(() => decoratedFileTree(task.tree, changes || task.files), [task.tree, changes, task.files]);
   const [opening, setOpening] = useState<string | null>(null);
+  const [openingDirectory, setOpeningDirectory] = useState(false);
   const [openError, setOpenError] = useState('');
   const inFlight = useRef(false);
+  const openDirectory = () => {
+    if (inFlight.current || !repository) return;
+    inFlight.current = true; setOpeningDirectory(true); setOpenError('');
+    void importAPI('openDirectory', { repositoryId: repository.id, taskId: task.id })
+      .catch(problem => setOpenError(problem instanceof Error ? problem.message : '目录打开失败。'))
+      .finally(() => { inFlight.current = false; setOpeningDirectory(false); });
+  };
   const actions: FileActions | undefined = repository && account ? {
-    opening,
+    opening: openingDirectory ? '' : opening,
     label: path => task.remote ? `在 ${account.provider === 'github' ? 'GitHub' : 'Gitea'} 打开 ${path}` : `用默认应用打开 ${path}`,
     unavailable: node => node.missing ? '当前目录中不存在，无法打开' : !repository.available ? '当前账号无权访问' : task.remote ? repositoryFileURL(account, repository, task.head, node.path) ? '' : '远端文件地址不可用' : task.path ? '' : '这个分支未检出到本地',
     open: path => {
@@ -48,12 +56,15 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
     },
   } : undefined;
   return <section className="repository-tree-task" aria-label={`文件树：${task.branch}`}>
-    <div className="repository-tree-identity"><span className="repository-tree-branch"><Icon name="branch" size={14} /><strong title={task.branch}>{task.branch}</strong></span>{!task.remote && <small>{task.path ? 'worktree' : '分支'}</small>}<code title={task.head || undefined}>{task.head.slice(0, 8) || '未读取'}</code></div>
-    {!task.remote && <p className="repository-task-path" title={task.path || undefined}>{task.path || '未检出'}</p>}
     <div className="repository-task-tree">{nodes.length ? nodes.map(node => <TreeNode key={node.path} node={node} depth={0} selected={selected} onSelect={onSelect} actions={actions} />) : <p className="repository-tree-empty">{task.error ? '文件树暂不可用。' : task.remote ? complete ? '所选远端分支没有文件。' : '正在读取远端文件树…' : task.path ? '没有可显示的文件。' : '分支文件树读取等待服务更新。'}</p>}</div>
     {openError && <p className="repository-task-error" role="alert">{openError}</p>}
     {!complete && task.path && <p className="repository-data-note">当前仅列出更改文件；完整目录等待服务更新。</p>}
     {task.remote && task.treeComplete === false && task.tree.length > 0 && <p className="repository-data-note">文件树不完整，显示已读取部分。</p>}
     {task.error && <p className="repository-task-error" role="alert">{task.error}</p>}
+    <footer className="repository-tree-identity">
+      <span className="repository-tree-branch"><Icon name="branch" size={14} /><strong title={task.branch}>{task.branch}</strong></span>
+      {!task.remote && (task.path ? <Button variant="quiet" className="repository-tree-path" title={task.path} aria-label={`在文件浏览器中打开 ${task.path}`} disabled={!repository?.available || !account || openingDirectory || opening !== null} aria-busy={openingDirectory || undefined} onClick={openDirectory}>{task.path}</Button> : <small>未检出</small>)}
+      <code title={task.head || undefined}>{task.head.slice(0, 8) || '未读取'}</code>
+    </footer>
   </section>;
 }

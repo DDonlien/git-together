@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { connectAfterServiceCheck, importAPI, LocalServiceError, verifyServiceVersion } from './import-api';
-import { emptyCatalog, isRecord, latestCatalog, type Catalog, type ConnectInput, type LocalSnapshot, type ServiceInfo, type UpdateAccountInput } from './import-model';
+import { emptyCatalog, isRecord, latestCatalog, type ApiInputs, type ApiOutputs, type Catalog, type ConnectInput, type LocalSnapshot, type ServiceInfo, type UpdateAccountInput } from './import-model';
 import { syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
 import { useRemoteRepositories } from './use-remote-repository';
@@ -18,6 +18,7 @@ export function useWorkspace() {
   const catalogRef = useRef<Catalog>(emptyCatalog);
   const [localStates, setLocalStates] = useState<Record<string, LocalRepositoryState>>({});
   const localChanges = useRef(new Map<string, Map<string, string>>());
+  const localReadVersions = useRef(new Map<string, number>());
   const [changeVersions, setChangeVersions] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,9 +116,10 @@ export function useWorkspace() {
       const [instanceId, repositoryId, path, worktrees] = JSON.parse(resource) as [string, string, string, unknown];
       const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path && JSON.stringify(link.worktrees) === JSON.stringify(worktrees === null ? undefined : worktrees));
       if (!currentLink()) return;
+      const readVersion = localReadVersions.current.get(resource) || 0;
       try {
         const workspace = await importAPI('localWorkspace', { repositoryId }, signal);
-        if (signal.aborted || !currentLink()) return;
+        if (signal.aborted || !currentLink() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
         const previousChanges = localChanges.current.get(resource);
         const nextChanges = new Map<string, string>();
         let changed = false;
@@ -139,7 +141,7 @@ export function useWorkspace() {
           return { ...current, [repositoryId]: { path, mappingKey: resource, snapshot: null, workspace: stable, loading: false, error: '', checkedAt: Date.now() } };
         });
       } catch (problem) {
-        if (signal.aborted || !currentLink()) return;
+        if (signal.aborted || !currentLink() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
         setLocalStates(current => {
           const previous = current[repositoryId];
           const sameMapping = previous?.mappingKey === resource;
@@ -153,6 +155,7 @@ export function useWorkspace() {
   useEffect(() => {
     const resources = new Set(catalogRef.current.links.map(link => JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees])));
     for (const resource of localChanges.current.keys()) if (!resources.has(resource)) localChanges.current.delete(resource);
+    for (const resource of localReadVersions.current.keys()) if (!resources.has(resource)) localReadVersions.current.delete(resource);
     setChangeVersions(current => {
       const retained = Object.fromEntries(Object.entries(current).filter(([id]) => catalogRef.current.links.some(link => link.repositoryId === id)));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
@@ -181,8 +184,41 @@ export function useWorkspace() {
     try { return await run(); }
     catch (problem) { if (mounted.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
   }
+  async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
+    await ensureService();
+    const link = catalogRef.current.links.find(link => link.repositoryId === input.repositoryId);
+    if (!link) throw new Error('请先关联本地目录。');
+    if (running.current.has(input.repositoryId)) throw new Error('这个仓库正在执行操作，请稍后重试。');
+    const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees]);
+    const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees]) === resource);
+    running.current.add(input.repositoryId); setBusy(current => ({ ...current, [input.repositoryId]: true }));
+    localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
+    try {
+      const result = await importAPI(method, input);
+      const readVersion = (localReadVersions.current.get(resource) || 0) + 1;
+      localReadVersions.current.set(resource, readVersion);
+      if (currentLink()) {
+        setChangeVersions(current => ({ ...current, [input.repositoryId]: (current[input.repositoryId] || 0) + 1 }));
+        try {
+          const workspace = await importAPI('localWorkspace', { repositoryId: input.repositoryId });
+          if (currentLink() && readVersion === localReadVersions.current.get(resource)) {
+            const baseline = new Map(localChanges.current.get(resource));
+            const paths = new Set(workspace.tasks.filter(task => !task.remote && task.path).map(task => task.path!));
+            for (const path of baseline.keys()) if (!paths.has(path)) baseline.delete(path);
+            for (const task of workspace.tasks) if (!task.remote && task.path && !task.error) baseline.set(task.path, JSON.stringify([task.branch, task.changeKey || [task.head, task.files, task.tree]]));
+            localChanges.current.set(resource, baseline);
+            setLocalStates(current => ({ ...current, [input.repositoryId]: { path: link.path, mappingKey: resource, snapshot: null, workspace: preserveLocalWorkspace(current[input.repositoryId]?.workspace, workspace), loading: false, error: '', checkedAt: Date.now() } }));
+          }
+        } catch { result.warning = [result.warning, `${method === 'pushCommit' ? '推送已完成' : method === 'applySync' ? '操作已完成' : '提交已创建'}，文件列表刷新失败；正在自动重新读取。`].filter(Boolean).join(' '); }
+      }
+      return result;
+    } finally { running.current.delete(input.repositoryId); if (mounted.current) setBusy(current => ({ ...current, [input.repositoryId]: false })); }
+  }
   return {
     catalog, localStates, remoteStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload,
+    submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
+    pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
+    applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),
     connect: (input: ConnectInput) => task('connect', () => connectAfterServiceCheck(input, ensureService)),
     updateAccount: (input: UpdateAccountInput) => task(input.accountId, async () => { await ensureService(); return importAPI('updateAccount', input); }),
     startGithubAuthorization: (name: string) => connectionTask(async () => { await ensureService(); return importAPI('githubAuthStart', { name }); }),

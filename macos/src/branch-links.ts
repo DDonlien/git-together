@@ -3,26 +3,41 @@ import type { RepositoryTask } from './repository-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import type { LocalRepositoryState } from './use-workspace';
 
+export const hiddenEntryKey = (repositoryId: string, branch?: string) => JSON.stringify([repositoryId, branch ?? null]);
+
 // Current HEAD owns the directory after a real read, not the saved branch label.
-export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState): RepositoryTask[] {
+export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState, hiddenEntries?: ReadonlySet<string>): RepositoryTask[] {
   if (!link) return [];
   const paths = new Set((link.worktrees || [{ path: link.path }]).map(item => item.path));
-  if (local?.workspace && local.path === link.path) return local.workspace.tasks.filter(task => task.path && paths.has(task.path));
-  return (link.worktrees || [{ path: link.path, branch: '未读取分支' }]).map(item => ({ ...item, id: `worktree:${item.branch}:${item.path}`, head: '', tree: [], files: [], error: '正在验证工作目录…' }));
+  const tasks = local?.workspace && local.path === link.path
+    ? local.workspace.tasks.filter(task => task.path && paths.has(task.path))
+    : (link.worktrees || [{ path: link.path, branch: '未读取分支' }]).map(item => ({ ...item, id: `worktree:${item.branch}:${item.path}`, head: '', tree: [], files: [], error: '正在验证工作目录…' }));
+  return tasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
 }
 
-export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState) {
+export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>) {
   if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。' };
-  const tasks = linkedTasks(link, local);
-  const expected = new Set([...(remote.workspace?.tasks.map(task => task.branch) || []), ...tasks.map(task => task.branch)]);
+  const tasks = linkedTasks(link, local, hiddenEntries);
+  const expected = new Set([...(remote.workspace?.tasks.map(task => task.branch) || []), ...tasks.map(task => task.branch)].filter(branch => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, branch))));
   const linked = new Set(tasks.filter(task => !task.error).map(task => task.branch));
   const completeBranches = !!remote.workspace && !remote.error && !remote.workspace.warnings.some(warning => warning.startsWith('分支超过'));
   const complete = completeBranches && expected.size > 0 && [...expected].every(branch => linked.has(branch)) && tasks.every(task => !task.error) && !local?.error;
-  return { label: complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || '?'} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || link.path}` };
+  return { label: !tasks.length ? '尚未关联' : complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || link.path}` };
 }
 
 export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };
 export type GitSignals = Record<'commit' | 'fetch' | 'pull' | 'push' | 'latest' | 'reconcile' | 'clear', ActionSignal>;
+
+export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
+  const keys: (keyof GitSignals)[] = ['commit', 'fetch', 'pull', 'push', 'latest', 'reconcile', 'clear'];
+  return Object.fromEntries(keys.map(key => {
+    const signals = entries.map(entry => entry[key]);
+    const count = signals.reduce((sum, signal) => sum + (signal.count || 0), 0);
+    const reading = signals.some(signal => signal.status === 'reading'), error = signals.some(signal => signal.status === 'error');
+    return [key, { tone: count ? 'warning' : 'off', ...(count ? { count } : {}), detail: signals.slice(0, 4).map(signal => signal.detail).join(' '),
+      ...(reading || error ? { status: reading ? 'reading' : 'error', statusDetail: signals.map(signal => signal.statusDetail).filter(Boolean).slice(0, 4).join(' ') } : {}) }];
+  })) as GitSignals;
+}
 
 function contains(commits: Map<string, string[]>, head: string, ancestor: string): boolean {
   const pending = [head]; const visited = new Set<string>();

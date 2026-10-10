@@ -104,7 +104,7 @@ test('error badges reuse theme roles and row checking breathes with reduced-moti
   assert.doesNotMatch(css, /git-action-read-spinner|git-action-reading/);
   assert.match(css, /\.git-action-read-badge \{[^}]*pointer-events: none/);
   const html = render(gitSignals([task], { ...remote, loading: true }, local));
-  assert.equal((html.match(/aria-disabled="true"/g) || []).length, 7);
+  assert.equal((html.match(/aria-disabled="true"/g) || []).length, 6);
   assert.doesNotMatch(html, /role="tooltip"|title="[^\"]+"/);
 });
 

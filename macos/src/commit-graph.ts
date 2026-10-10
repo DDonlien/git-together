@@ -1,9 +1,9 @@
 import { reachableCommitIds, type RepositoryCommit, type RepositoryTask, type RepositoryWorkspace } from './repository-model';
 
-export type GraphEdge = { from: number; to: number; node: boolean; color: number; boundary?: boolean };
+export type GraphEdge = { from: number; to: number; node: boolean; color: number; boundary?: boolean; local?: boolean };
 export type GraphCommit = RepositoryCommit & { workingTask?: RepositoryTask; localOnly?: boolean; unpublished?: boolean };
 export type GraphBranch = { branch: string; localHeads: string[]; remoteHeads: string[]; tasks: RepositoryTask[] };
-export type GraphRow = { commit: GraphCommit; lane: number; color: number; incoming: boolean; edges: GraphEdge[]; width: number };
+export type GraphRow = { commit: GraphCommit; lane: number; color: number; incoming: boolean; incomingLocal?: boolean; edges: GraphEdge[]; width: number };
 
 export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBranch[] {
   const branches = new Map<string, GraphBranch>();
@@ -53,28 +53,31 @@ export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches:
 export function layoutCommitGraph(commits: GraphCommit[]): GraphRow[] {
   const known = new Set(commits.map(commit => commit.id));
   const incoming = new Set(commits.flatMap(commit => commit.parents));
-  const lanes: ({ id: string; color: number } | null)[] = [];
+  const lanes: ({ id: string; color: number; local?: boolean } | null)[] = [];
   let nextColor = 0;
   return commits.map(commit => {
     let lane = lanes.findIndex(track => track?.id === commit.id);
     if (lane < 0) { lane = lanes.indexOf(null); if (lane < 0) lane = lanes.length; lanes[lane] = { id: commit.id, color: nextColor++ % 6 }; }
     const color = lanes[lane]!.color;
+    const incomingLocal = lanes[lane]!.local;
+    const local = !!commit.workingTask || !!commit.unpublished;
     const before = [...lanes];
     lanes[lane] = null;
     const parents = commit.parents.filter(parent => known.has(parent));
     parents.forEach((parent, index) => {
-      if (lanes.some(track => track?.id === parent)) return;
+      const existing = lanes.find(track => track?.id === parent);
+      if (existing) { existing.local = existing.local && local; return; }
       let slot = index === 0 && lanes[lane] === null ? lane : lanes.indexOf(null);
       if (slot < 0) slot = lanes.length;
-      lanes[slot] = { id: parent, color: index === 0 ? color : nextColor++ % 6 };
+      lanes[slot] = { id: parent, color: index === 0 ? color : nextColor++ % 6, local };
     });
     const edges: GraphEdge[] = [];
-    before.forEach((track, from) => { if (track && track.id !== commit.id) edges.push({ from, to: lanes.findIndex(item => item?.id === track.id), color: track.color, node: false }); });
-    parents.forEach(parent => { const to = lanes.findIndex(track => track?.id === parent); edges.push({ from: lane, to, color: lanes[to]!.color, node: true }); });
-    if (parents.length < commit.parents.length) edges.push({ from: lane, to: lane, color, node: true, boundary: true });
+    before.forEach((track, from) => { if (track && track.id !== commit.id) edges.push({ from, to: lanes.findIndex(item => item?.id === track.id), color: track.color, node: false, ...(track.local ? { local: true } : {}) }); });
+    parents.forEach(parent => { const to = lanes.findIndex(track => track?.id === parent); edges.push({ from: lane, to, color: lanes[to]!.color, node: true, ...(local ? { local: true } : {}) }); });
+    if (parents.length < commit.parents.length) edges.push({ from: lane, to: lane, color, node: true, boundary: true, ...(local ? { local: true } : {}) });
     const width = Math.max(before.length, lanes.length, 1);
     while (lanes.length && lanes[lanes.length - 1] === null) lanes.pop();
-    return { commit, lane, color, incoming: incoming.has(commit.id), edges, width };
+    return { commit, lane, color, incoming: incoming.has(commit.id), ...(incomingLocal ? { incomingLocal: true } : {}), edges, width };
   });
 }
 

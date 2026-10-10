@@ -1,16 +1,21 @@
 import { useState } from 'react';
-import { Button, Icon, Notice, Textarea } from './ui';
+import { Button, Icon, Notice } from './ui';
+import { RepositoryCommitComposer } from './RepositoryCommitComposer';
+import { RepositoryActionDialog } from './RepositoryActionDialog';
+import type { GenerateCommitMessage, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { RepositoryCommitDetails } from './RepositoryCommitDetails';
 import { RepositoryChangedFiles } from './RepositoryChangedFiles';
 import type { RepositoryCommit, RepositoryTask } from './repository-model';
 import type { LocalCommitState } from './local-commit-model';
 
-export function RepositoryChanges({ task, selectedCommit, historyState, selected, onSelect, search, grouped = false, focused, onFocus, loading, linked, showFocus }: {
+export function RepositoryChanges({ task, selectedCommit, historyState, selected, onSelect, search, grouped = false, focused, onFocus, loading, linked, showFocus, repositoryId, repositoryName, onSubmit, onGenerate, onPush, onCommitted, published = false }: {
   task: RepositoryTask; selectedCommit?: RepositoryCommit; selected?: string; onSelect: (path?: string) => void; search: string;
   grouped?: boolean; focused: boolean; onFocus: () => void; loading: boolean; linked: boolean; showFocus: boolean;
   historyState?: LocalCommitState;
+  repositoryId?: string; onSubmit?: SubmitLocalCommit; onGenerate?: GenerateCommitMessage;
+  repositoryName?: string; onPush?: PushLocalCommit; onCommitted?: (taskId: string, commitId: string) => void; published?: boolean;
 }) {
-  const [description, setDescription] = useState('');
+  const [pushPopup, setPushPopup] = useState(false), [pushFeedback, setPushFeedback] = useState('');
   const history = selectedCommit && historyState?.id === selectedCommit.id ? historyState : undefined;
   const details = history?.details;
   return <section className="repository-change-task" aria-label={`更改任务：${task.branch}`}>
@@ -32,10 +37,12 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
       {task.error && <Notice kind="error">{task.error}</Notice>}
       </div>
     </div>
-    <div className="repository-commit-composer" hidden={!!selectedCommit}>
-      <Textarea label={`提交说明：${task.branch}`} placeholder="填写提交说明…" value={description} onChange={event => setDescription(event.target.value)} rows={3} disabled={!task.path} />
-      <div className="repository-commit-actions"><small>Git 提交尚未接入</small><Button variant="primary" disabled title="Git 写操作尚未接入，不会修改仓库">Commit</Button></div>
-    </div>
-    {selectedCommit && <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />}
+    <RepositoryCommitComposer hidden={!!selectedCommit} task={task} repositoryId={repositoryId} repositoryName={repositoryName} onSubmit={onSubmit} onGenerate={onGenerate} onPush={onPush} onCommitted={onCommitted} />
+    {selectedCommit && <>
+      <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />
+      <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || !onGenerate} onClick={() => setPushPopup(true)}><Icon name="arrowUp" size={14} />Push</Button></div>
+      {pushFeedback && <p className="repository-commit-feedback" role="status">{pushFeedback}</p>}
+      {pushPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="push" targets={[{ repositoryId, repositoryName: repositoryName || '', task, commitId: selectedCommit.id }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onComplete={setPushFeedback} onClose={() => setPushPopup(false)} />}
+    </>}
   </section>;
 }

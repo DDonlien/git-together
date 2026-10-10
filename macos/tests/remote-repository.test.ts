@@ -125,7 +125,7 @@ test('the unlinked three-column view renders remote branches, history and trees 
     const account = { id: 'qa', provider: 'gitea' as const, host: 'https://fixture.example.test', login: 'qa', name: 'QA', updatedAt: '' };
     const repository = { id: 'qa:1', remoteId: 1, accountId: 'qa', name: 'project', fullName: 'qa/project', description: '', defaultBranch: 'main', private: true, url: 'https://fixture.example.test/qa/project', available: true };
     const markup = renderToStaticMarkup(createElement(RepositoryView, { repository, account, remoteState: { workspace, loading: false, error: '' }, globalSearch: '', onConfigure: () => {} }));
-    assert.match(markup, /Merge search task/); assert.match(markup, /task\/search/); assert.match(markup, /src/); assert.match(markup, /3 个任务/); assert.match(markup, /远端提交：main/);
+    assert.match(markup, /Merge search task/); assert.match(markup, /task\/search/); assert.match(markup, /src/); assert.doesNotMatch(markup, /3 个任务/); assert.match(markup, /远端提交：main/);
     assert.match(markup, /选择一个提交查看差异/);
     assert.doesNotMatch(markup, /正在读取本地|没有未提交的更改|<textarea/);
     const details = await remote.commit(workspace.tasks[0].head);

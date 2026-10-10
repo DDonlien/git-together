@@ -2,8 +2,10 @@ import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMet
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
+import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
+import { isRepositorySyncPlan, isRepositorySyncResult } from './repository-sync-model';
 
 export class LocalServiceError extends Error {
   constructor(readonly code: 'connection' | 'timeout' | 'unsupported' | 'server' | 'version' | 'session', message: string, readonly status?: number) { super(message); this.name = 'LocalServiceError'; }
@@ -15,6 +17,16 @@ export async function connectAfterServiceCheck(input: ApiInputs['connect'], chec
   await check();
   return importAPI('connect', input);
 }
+// The finite cancel API also stops native CLI work, where renderer AbortSignal
+// cannot itself cross Electron IPC. It never cancels another task's generation.
+export const generateCommitMessage: GenerateCommitMessage = async (input, signal) => {
+  signal.throwIfAborted();
+  const generationId = crypto.randomUUID();
+  const cancel = () => { void importAPI('cancelCommitGeneration', { repositoryId: input.repositoryId, taskId: input.taskId, generationId }).catch(() => {}); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try { const result = await importAPI('generateCommitMessage', { ...input, generationId }, signal); signal.throwIfAborted(); return result; }
+  finally { signal.removeEventListener('abort', cancel); }
+};
 export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal): Promise<ApiOutputs[M]> {
   const requestId = crypto.randomUUID(); const started = performance.now();
   logDiagnostic({ event: 'api', outcome: 'start', method, requestId });
@@ -35,7 +47,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'downloadBranch' ? 30 * 60_000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : ['downloadBranch', 'prepareSync', 'applySync'].includes(method) ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -69,8 +81,26 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isLocalWorkspace(value)) throw new Error('本地工作目录返回格式无效。');
   } else if (method === 'localCommit') {
     if (!isLocalCommitDetails(value) || !('commitId' in input) || value.commit.id !== input.commitId) throw new Error('本地提交返回格式无效。');
+  } else if (method === 'submitCommit') {
+    if (!isLocalSubmitResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('提交结果返回格式无效，请检查本地提交历史。');
+  } else if (method === 'pushCommit') {
+    if (!isLocalPushResult(value) || !('taskId' in input) || value.taskId !== input.taskId || !('commitId' in input) || value.commitId !== input.commitId) throw new Error('推送结果返回格式无效，请检查远端提交。');
+  } else if (method === 'prepareSync') {
+    if (!isRepositorySyncPlan(value) || !('taskId' in input) || value.taskId !== input.taskId || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('mode' in input) || value.mode !== input.mode) throw new Error('文件预览返回格式无效。');
+  } else if (method === 'applySync') {
+    if (!isRepositorySyncResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('操作结果返回格式无效，请重新读取目录。');
+  } else if (method === 'fetchRepository') {
+    if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt)) throw new Error('后台获取结果返回格式无效。');
+  } else if (method === 'discardSync') {
+    if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('预览取消结果返回格式无效。');
+  } else if (method === 'generateCommitMessage') {
+    if (!isCommitDraft(value)) throw new Error('AI 提交说明返回格式无效。');
+  } else if (method === 'cancelCommitGeneration') {
+    if (!isRecord(value) || typeof value.cancelled !== 'boolean') throw new Error('AI 取消结果返回格式无效。');
   } else if (method === 'openFile') {
     if (!isRecord(value) || value.opened !== true) throw new Error('文件打开结果无效。');
+  } else if (method === 'openDirectory') {
+    if (!isRecord(value) || value.opened !== true) throw new Error('目录打开结果无效。');
   } else if (method === 'remoteWorkspace') {
     if (!isRemoteWorkspace(value)) throw new Error('远端工作台返回格式无效。');
   } else if (method === 'remoteCommit') {

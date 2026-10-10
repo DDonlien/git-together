@@ -380,7 +380,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 项目名称：GitTogether Standalone。
 - 当前工作区：`codex-standalone-ts/`；分支：`main`，跟踪`origin/main`。2026-10-10用户指定main为后续开发和更新包来源；本次保留历史工作区目录作为命名例外，不覆盖`main/`中旧`git-together/main`工作区。后续从main继续，不退回旧分支。
 - 以用户提供的 Wireframes v0.1 为产品范围。用户 2026-10-02 明确要求从头实现，不继承 GitButler 代码、组件、工作流或产品限制。
-- 此版已接入真实账号、远端和关联worktree只读浏览，并支持用户明确请求的未关联分支下载。七项常规/自定义Git行尾动作尚未接入执行，AI与在线协作尚未接入真实服务；不能将模拟成功显示为真实Git、Push、AI服务或Presence结果。
+- 此版已接入真实账号、远端和关联worktree只读浏览，并支持用户明确请求的未关联分支下载。Commit 已按用户 2026-10-10 请求接通当前关联工作目录的真实本地提交，AI 说明使用本机已登录 Codex CLI；其余六项行尾Git动作与在线协作仍未接入执行；不能将模拟成功显示为真实Git、Push、AI服务或Presence结果。
 - 用户要求 TS 与 macOS Liquid Glass。视觉参照 Apple 当前材料规范；本机 macOS 26.6.2，不能将本地运行称为已验证 macOS 27。
 
 ## 技术栈与命令
@@ -389,7 +389,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - `macos/` 是同一客户端的开发与浏览器预览入口；业务状态在 `macos/src/`；桌面桥在 `macos/electron/`。
 - `npm run dev` 启动预览；`npm run desktop` 启动桌面窗口；`npm run check`、`npm test`、`npm run build` 分别验证类型、业务与构建。
 - 页面应有真实的内部状态变化，失败保留输入，可取消异步动作，各 worktree 状态与表单隔离，刷新后本地保存可恢复。
-- 后台检查保持Git只读；只有用户在下载入口明确选择新位置时才创建应用管理的worktree，不覆盖其他用户仓库。其他Git写入及真实AI/Presence接入仍属新增范围。
+- 2026-10-10最新交付授权：检查最近需求，补齐Pull / Get Latest / Clean及后台实际Git fetch后推送main、签名、公证并发布更新。后台只fetch引用/对象，不合并或改工作文件；写动作固定用户打开时的筛选/任务范围，具体覆盖/删除/历史整理必须先预览并由应用内确认。Commit仅本地提交，Submit确认后Commit再Push；AI沿用本机CLI模型和登录，只生成可编辑说明。保护未推送提交、其他分支、共享worktree和当前LFS，Get Latest回收须有真实磁盘证据，失败不删除原目录。Presence不属于此次范围。
 - 没有明确提交/推送请求时，不执行代码commit或push。当前稳定分支为main，不再按初始orphan/unborn状态操作。
 
 ## 文档入口与范围

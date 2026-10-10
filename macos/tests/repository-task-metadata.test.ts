@@ -43,7 +43,7 @@ test('removing remote focus wiring preserves the overview exit and persistent lo
   const column = await readFile(new URL('../src/RepositoryChangesColumn.tsx', import.meta.url), 'utf8');
   const remote = column.split('<RepositoryRemoteChanges ')[1]?.split(' />')[0];
   assert.ok(remote); assert.doesNotMatch(remote, /focused=|onFocus=|showFocus=/);
-  assert.match(view, /显示全部任务/); assert.match(view, /onClick=\{\(\) => setFocusedTask\(null\)\}/);
+  assert.match(view, /取消聚焦/); assert.match(view, /onClick=\{\(\) => setFocusedTask\(null\)\}/);
   assert.match(view, /key=\{task.id\} className="repository-task-slot" hidden=/);
   const local = column.split('<RepositoryChanges ')[1]?.split(' />')[0];
   assert.ok(local); assert.match(local, /onFocus=/);
@@ -57,7 +57,7 @@ test('metadata removal preserves remote loading, failure and search notices plus
   assert.match(cached, /Read failed/); assert.match(cached, /显示上次读取的提交/); assert.match(cached, /没有符合搜索条件的文件/); assert.match(cached, /Existing warning/);
   assert.doesNotMatch(pending + cached, /repository-remote-commit|repository-task-header|repository-task-path/);
   const local = renderToStaticMarkup(createElement(RepositoryChanges, { task: { ...task, id: 'local:main', remote: false, path: '/isolated/qa' }, onSelect() {}, search: '', focused: false, onFocus() {}, loading: false, linked: true, showFocus: false }));
-  assert.match(local, /class="branch-label"/); assert.match(local, /repository-task-path/); assert.match(local, /\/isolated\/qa/); assert.match(local, /填写提交说明/);
+  assert.match(local, /class="branch-label"/); assert.match(local, /repository-task-path/); assert.match(local, /\/isolated\/qa/); assert.match(local, /aria-label="Description：main"/);
   const css = await readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /\.repository-remote-commit|\.repository-task-controls/);
 });

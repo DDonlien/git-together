@@ -11,6 +11,15 @@ import { repositoryFileURL } from '../src/repository-file-url';
 import { readLocalGit, readRepositoryWorkspace, readRepositoryTaskDiff, readRepositoryCommit, readRepositoryCommitDiff, readWorktrees, readFailure, repositoryTaskFile } from './repository-reader';
 import { discoverLocalRepositories, discoverLocalWorktrees } from './local-discovery';
 import { downloadBranchWorktree } from './branch-download';
+import { submitLocalCommit } from './local-submit';
+import { pushLocalCommit } from './local-push';
+import { repositoryNetwork, fetchRepositoryBranches, networkFailure } from './repository-network';
+import { prepareRepositorySync, applyRepositorySync, discardRepositorySync, type SavedSyncPlan } from './repository-sync';
+import type { RepositorySyncMode, RepositorySyncResult } from '../src/repository-sync-model';
+import { runGitProcess } from './git-process';
+import { isCommitDraft, type LocalSubmitInput, type LocalSubmitResult, type LocalPushInput, type LocalPushResult } from '../src/local-submit-model';
+import { uuidPattern } from '../src/diagnostics-model';
+import { generateCommitDraft, generateWithCodex, type CommitGenerator } from './commit-generator';
 import { remoteIdentity } from './git-identity';
 import { topologicalCommits, type RepositoryWorkspace } from '../src/repository-model';
 import { openSystemFile, type FileOpener } from './system-file-open';
@@ -61,10 +70,19 @@ export class AccountService {
   private openFile: FileOpener;
   private diagnostics?: LocalDiagnostics;
   private downloadRoot: string;
-  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener; diagnostics?: LocalDiagnostics; downloadRoot?: string } = {}) {
+  private commitRequests = new Map<string, { identity: string; result: LocalSubmitResult }>();
+  private pushRequests = new Map<string, { identity: string; result: LocalPushResult }>();
+  private gitLocks = new Map<string, Promise<void>>();
+  private syncPlans = new Map<string, { plan: SavedSyncPlan; identity: string; timer: ReturnType<typeof setTimeout> }>();
+  private syncRequests = new Map<string, { identity: string; result: RepositorySyncResult }>();
+  private fetching = new Map<string, Promise<{ branches: number; checkedAt: number }>>();
+  private generating = new Map<string, { id: string; cancellation: AbortController }>();
+  private commitGenerator: CommitGenerator;
+  constructor(private store: CredentialStore = sessionStore(), private request: typeof fetch = fetch, options: { githubClientId?: string; now?: () => number; openFile?: FileOpener; diagnostics?: LocalDiagnostics; downloadRoot?: string; commitGenerator?: CommitGenerator } = {}) {
     this.openFile = options.openFile || openSystemFile;
     this.downloadRoot = options.downloadRoot || join(homedir(), '.gittogether', 'repositories');
     this.diagnostics = options.diagnostics;
+    this.commitGenerator = options.commitGenerator || generateWithCodex;
     this.ready = (this.diagnostics ? this.diagnostics.run('storage', {}, () => this.restore()) : this.restore()).catch(error => { this.restoreError = error instanceof Error ? error.message : '无法读取账号存储。'; });
     this.githubAuthorization = new GitHubDeviceAuthorization(options.githubClientId ?? process.env.GITTOGETHER_GITHUB_CLIENT_ID ?? '', credential => this.connect({ provider: 'github', host: 'https://github.com', token: credential.token, name: credential.name }, credential), request, options.now);
   }
@@ -520,6 +538,108 @@ export class AccountService {
     }
     throw new Error('这个任务不属于已关联工作目录。');
   }
+  private networkContext(id: string) {
+    const repository = this.repository(id), link = this.state.links.find(item => item.repositoryId === id);
+    const saved = this.state.accounts.find(item => item.account.id === repository.accountId);
+    if (!saved || !repository.available) throw new Error('访问账号目前不可用，请在设置中检查仓库权限。');
+    const identity = JSON.stringify([saved.account.id, saved.account.host, saved.account.login, saved.token, repository.accountId, repository.fullName, repository.url, link]);
+    const validate = () => {
+      const current = this.state.accounts.find(item => item.account.id === repository.accountId), target = this.repository(id);
+      if (!current || !target.available || JSON.stringify([current.account.id, current.account.host, current.account.login, current.token, target.accountId, target.fullName, target.url, this.state.links.find(item => item.repositoryId === id)]) !== identity) throw new Error('账号、仓库或目录关联已变化，请重新预览。');
+    };
+    return { repository, link, identity, validate, network: repositoryNetwork(repository, saved.account, saved.token) };
+  }
+  private async claimGit(root: string, signal?: AbortSignal) {
+    // A change-triggered fetch can start between Commit and Push. Queue on the
+    // shared object store instead of failing the user's confirmed Submit.
+    // Re-resolve after waiting: Get Latest may replace this root's .git.
+    const deadline = AbortSignal.timeout(180_000);
+    while (true) {
+      signal?.throwIfAborted(); deadline.throwIfAborted();
+      const common = await realpath(resolve(root, (await runGitProcess(root, ['rev-parse', '--git-common-dir'])).trim()));
+      const previous = this.gitLocks.get(common);
+      if (previous) {
+        const cancellation = signal ? AbortSignal.any([signal, deadline]) : deadline;
+        await new Promise<void>((accept, reject) => {
+          const abort = () => { cancellation.removeEventListener('abort', abort); reject(new Error('等待当前 Git 操作已取消或超时，请稍后重试。')); };
+          cancellation.addEventListener('abort', abort, { once: true });
+          previous.then(() => { cancellation.removeEventListener('abort', abort); accept(); });
+          if (cancellation.aborted) abort();
+        });
+        continue;
+      }
+      let done!: () => void;
+      const pending = new Promise<void>(accept => { done = accept; });
+      this.gitLocks.set(common, pending);
+      return () => { this.gitLocks.delete(common); done(); };
+    }
+  }
+  private async fetchRepository(id: string, signal?: AbortSignal) {
+    const context = this.networkContext(id);
+    const key = id + '\0' + context.identity;
+    const previous = this.fetching.get(key);
+    if (previous) return previous;
+    const job = (async () => {
+      const groups = new Map<string, { root: string; branches: string[] }>();
+      for (const item of context.link?.worktrees || (context.link ? [{ path: context.link.path, branch: '' }] : [])) {
+        const root = await this.validatePath(context.repository, item.path);
+        const task = (await readWorktrees(root)).find(t => t.path === root);
+        if (!task || task.branch === 'Detached HEAD') continue;
+        const common = await realpath(resolve(root, (await runGitProcess(root, ['rev-parse', '--git-common-dir'])).trim()));
+        const group = groups.get(common) || { root, branches: [] }; group.branches.push(task.branch); groups.set(common, group);
+      }
+      let branches = 0;
+      for (const group of groups.values()) {
+        const release = await this.claimGit(group.root, signal);
+        try { await fetchRepositoryBranches(group.root, group.branches, context.network, context.validate, signal); branches += new Set(group.branches).size; }
+        finally { release(); }
+      }
+      context.validate(); return { branches, checkedAt: Date.now() };
+    })().catch(p => { throw networkFailure(p); });
+    this.fetching.set(key, job);
+    try { return await job; } finally { if (this.fetching.get(key) === job) this.fetching.delete(key); }
+  }
+  private async syncOperation(method: 'prepareSync' | 'applySync' | 'discardSync', value: Record<string, unknown>, signal?: AbortSignal) {
+    const allowed = method === 'prepareSync' ? ['repositoryId', 'taskId', 'mode'] : method === 'applySync' ? ['repositoryId', 'taskId', 'planId', 'operationId'] : ['repositoryId', 'taskId', 'planId'];
+    if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error('操作仅接受已关联仓库、任务和预览标识。');
+    const id = field(value, 'repositoryId', 160), taskId = field(value, 'taskId');
+    if (method === 'discardSync') {
+      const planId = field(value, 'planId', 100), entry = this.syncPlans.get(planId);
+      if (!entry) return { discarded: false };
+      if (entry.plan.public.repositoryId !== id || entry.plan.public.taskId !== taskId) throw new Error('预览不属于此仓库任务。');
+      const release = await this.claimGit(entry.plan.root);
+      try { this.syncPlans.delete(planId); clearTimeout(entry.timer); await discardRepositorySync(entry.plan); return { discarded: true }; }
+      finally { release(); }
+    }
+    const context = this.networkContext(id);
+    if (method === 'applySync') {
+      const planId = field(value, 'planId', 100), operationId = field(value, 'operationId', 100);
+      if (!uuidPattern.test(operationId)) throw new Error('操作标识无效，请重新预览。');
+      const identity = JSON.stringify([id, taskId, planId, context.identity]), previous = this.syncRequests.get(operationId);
+      if (previous) { if (previous.identity !== identity) throw new Error('操作标识已被使用。'); return previous.result; }
+      const entry = this.syncPlans.get(planId);
+      if (!entry || entry.identity !== context.identity || entry.plan.public.repositoryId !== id || entry.plan.public.taskId !== taskId) throw new Error('预览已过期或关联已变化，请重新预览。');
+      const root = await this.taskRoot(id, taskId), release = await this.claimGit(root, signal);
+      if (this.syncPlans.get(planId) !== entry) { release(); throw new Error('预览已过期，请重新预览。'); }
+      this.syncPlans.delete(planId); clearTimeout(entry.timer);
+      try {
+        const result = await applyRepositorySync(entry.plan, context.network, context.validate, signal);
+        this.syncRequests.set(operationId, { identity, result });
+        if (this.syncRequests.size > 128) this.syncRequests.delete(this.syncRequests.keys().next().value!);
+        return result;
+      } finally { release(); }
+    }
+    if (typeof value.mode !== 'string' || !['pull', 'latest', 'clean'].includes(value.mode)) throw new Error('操作类型无效。');
+    if (this.branchDownloads.has(id)) throw new Error('这个仓库正在下载分支，请等待下载完成后再预览。');
+    const root = await this.taskRoot(id, taskId), release = await this.claimGit(root, signal);
+    try {
+      const plan = await prepareRepositorySync(root, { repositoryId: id, taskId, mode: value.mode as RepositorySyncMode }, context.network, this.downloadRoot, context.validate, signal);
+      const timer = setTimeout(() => { const entry = this.syncPlans.get(plan.public.id); if (entry) { this.syncPlans.delete(plan.public.id); void discardRepositorySync(entry.plan).catch(() => { console.warn('GitTogether：到期操作预览清理失败，请检查目录权限。'); }); } }, 10 * 60_000); timer.unref();
+      this.syncPlans.set(plan.public.id, { plan, identity: context.identity, timer });
+      if (this.syncPlans.size > 64) { const oldest = this.syncPlans.keys().next().value!; const entry = this.syncPlans.get(oldest)!; this.syncPlans.delete(oldest); clearTimeout(entry.timer); await discardRepositorySync(entry.plan); }
+      return plan.public;
+    } finally { release(); }
+  }
   private async snapshot(id: string): Promise<LocalSnapshot> {
     const path = await this.linkedPath(id);
     const [branch, status, history] = await Promise.all([
@@ -572,6 +692,11 @@ export class AccountService {
       case 'githubAuthCancel': return this.githubAuthorization.cancel(field(value, 'sessionId', 100));
       case 'refresh': return this.refresh(field(value, 'accountId', 100));
       case 'downloadBranch': return this.downloadBranch(value, signal);
+      case 'fetchRepository': {
+        if (Object.keys(value).some(key => key !== 'repositoryId')) throw new Error('后台获取仅接受仓库标识。');
+        return this.fetchRepository(field(value, 'repositoryId', 160), signal);
+      }
+      case 'prepareSync': case 'applySync': case 'discardSync': return this.syncOperation(method, value, signal);
       case 'removeAccount': {
         const id = field(value, 'accountId', 100);
         return this.mutate(next => { const repoIds = new Set(next.repositories.filter(r => r.accountId === id).map(r => r.id)); next.accounts = next.accounts.filter(a => a.account.id !== id); next.repositories = next.repositories.filter(r => r.accountId !== id); next.links = next.links.filter(l => !repoIds.has(l.repositoryId)); });
@@ -646,6 +771,80 @@ export class AccountService {
       }); }
       case 'snapshot': return this.snapshot(field(value, 'repositoryId', 160));
       case 'localWorkspace': return this.localWorkspace(field(value, 'repositoryId', 160), signal);
+      case 'cancelCommitGeneration': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'generationId'].includes(key)) || typeof value.generationId !== 'string' || !uuidPattern.test(value.generationId)) throw new Error('AI 取消标识无效。');
+        const root = await this.taskRoot(field(value, 'repositoryId', 160), field(value, 'taskId'));
+        const generation = this.generating.get(root);
+        if (generation?.id !== value.generationId) return { cancelled: false };
+        generation.cancellation.abort(); return { cancelled: true };
+      }
+      case 'generateCommitMessage': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'expectedHead', 'changeKey', 'generationId'].includes(key))) throw new Error('AI 生成仅接受当前仓库任务和已读取状态。');
+        if (typeof value.expectedHead !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.expectedHead) || typeof value.changeKey !== 'string' || !/^[a-f0-9]{64}$/.test(value.changeKey) || typeof value.generationId !== 'string' || !uuidPattern.test(value.generationId)) throw new Error('工作目录状态无效，请刷新后重试。');
+        const id = field(value, 'repositoryId', 160), taskId = field(value, 'taskId');
+        const repository = this.repository(id), link = this.state.links.find(item => item.repositoryId === id);
+        const root = await this.taskRoot(id, taskId);
+        const validate = () => { if (!this.repository(id).available || this.repository(id).url !== repository.url || this.state.links.find(item => item.repositoryId === id) !== link) throw new Error('仓库访问或工作目录关联已变化，请刷新后重试。'); };
+        validate(); if (this.generating.has(root)) throw new Error('这个工作目录正在生成提交说明，请稍后重试。');
+        const cancellation = new AbortController(); this.generating.set(root, { id: value.generationId, cancellation });
+        try { return await generateCommitDraft(root, { taskId, expectedHead: value.expectedHead, changeKey: value.changeKey }, validate, signal ? AbortSignal.any([signal, cancellation.signal]) : cancellation.signal, this.commitGenerator); }
+        finally { this.generating.delete(root); }
+      }
+      case 'submitCommit': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'expectedHead', 'changeKey', 'operationId', 'summary', 'description'].includes(key))) throw new Error('提交仅接受当前仓库任务、已读取状态和提交说明。');
+        if (!isCommitDraft(value) || typeof value.expectedHead !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.expectedHead) ||
+          typeof value.changeKey !== 'string' || !/^[a-f0-9]{64}$/.test(value.changeKey) || typeof value.operationId !== 'string' || !uuidPattern.test(value.operationId)) throw new Error('提交说明或工作目录状态无效，请刷新后重试。');
+        const id = field(value, 'repositoryId', 160), taskId = field(value, 'taskId');
+        const input: LocalSubmitInput = { repositoryId: id, taskId, expectedHead: value.expectedHead, changeKey: value.changeKey, operationId: value.operationId, summary: value.summary.trim(), description: value.description };
+        const identity = JSON.stringify(input), previous = this.commitRequests.get(input.operationId);
+        if (previous && previous.identity !== identity) throw new Error('提交请求标识已被使用，请刷新后重试。');
+        const repository = this.repository(id), link = this.state.links.find(item => item.repositoryId === id);
+        const root = await this.taskRoot(id, taskId);
+        const validate = () => {
+          if (!this.repository(id).available || this.repository(id).url !== repository.url || this.state.links.find(item => item.repositoryId === id) !== link) throw new Error('仓库访问或工作目录关联已变化，请刷新后重试。');
+        };
+        validate(); if (previous) return previous.result;
+        const release = await this.claimGit(root, signal);
+        try {
+          const completed = this.commitRequests.get(input.operationId);
+          if (completed) { if (completed.identity !== identity) throw new Error('提交请求标识已被使用。'); return completed.result; }
+          const result = await submitLocalCommit(root, input, validate, signal);
+          this.commitRequests.set(input.operationId, { identity, result });
+          if (this.commitRequests.size > 128) this.commitRequests.delete(this.commitRequests.keys().next().value!);
+          return result;
+        } finally { release(); }
+      }
+      case 'pushCommit': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'expectedHead', 'commitId', 'operationId'].includes(key))) throw new Error('推送仅接受仓库任务和所选提交身份。');
+        if (typeof value.expectedHead !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.expectedHead) ||
+          typeof value.commitId !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.commitId) || /^0+$/.test(value.commitId) ||
+          typeof value.operationId !== 'string' || !uuidPattern.test(value.operationId)) throw new Error('推送状态无效，请刷新后重试。');
+        const id = field(value, 'repositoryId', 160), taskId = field(value, 'taskId');
+        const input: LocalPushInput = { repositoryId: id, taskId, expectedHead: value.expectedHead, commitId: value.commitId, operationId: value.operationId };
+        const identity = JSON.stringify(input), previous = this.pushRequests.get(input.operationId);
+        if (previous && previous.identity !== identity) throw new Error('推送请求标识已被使用，请刷新后重试。');
+        const repository = this.repository(id), link = this.state.links.find(item => item.repositoryId === id);
+        const saved = this.state.accounts.find(item => item.account.id === repository.accountId);
+        if (!saved || !repository.available || repository.permissions?.push === false) throw new Error('访问账号目前没有此仓库的推送权限。');
+        const root = await this.taskRoot(id, taskId);
+        const validate = () => {
+          const current = this.state.accounts.find(item => item.account.id === repository.accountId);
+          const target = this.repository(id);
+          if (!current || current.token !== saved.token || current.account.host !== saved.account.host || current.account.login !== saved.account.login ||
+            !target.available || target.permissions?.push === false || target.accountId !== repository.accountId || target.url !== repository.url || target.fullName !== repository.fullName ||
+            this.state.links.find(item => item.repositoryId === id) !== link) throw new Error('账号、仓库或工作目录关联已变化，请刷新后重试。');
+        };
+        validate(); if (previous) return previous.result;
+        const release = await this.claimGit(root, signal);
+        try {
+          const completed = this.pushRequests.get(input.operationId);
+          if (completed) { if (completed.identity !== identity) throw new Error('推送请求标识已被使用。'); return completed.result; }
+          const result = await pushLocalCommit(root, input, repository, saved.account, saved.token, validate, signal);
+          this.pushRequests.set(input.operationId, { identity, result });
+          if (this.pushRequests.size > 128) this.pushRequests.delete(this.pushRequests.keys().next().value!);
+          return result;
+        } finally { release(); }
+      }
       case 'localCommit': {
         if (Object.keys(value).some(key => !['repositoryId', 'taskId', 'commitId'].includes(key))) throw new Error('本地提交仅接受仓库、任务和提交标识。');
         const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
@@ -658,6 +857,19 @@ export class AccountService {
         return details;
       }
       case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
+      case 'openDirectory': {
+        if (Object.keys(value).some(key => !['repositoryId', 'taskId'].includes(key))) throw new Error('打开目录仅接受仓库和已关联任务身份。');
+        const id = field(value, 'repositoryId', 160); const repository = this.repository(id);
+        if (!repository.available) throw new Error('该账号目前无法访问这个仓库。');
+        const account = this.state.accounts.find(item => item.account.id === repository.accountId);
+        if (!account) throw new Error('访问账号已移除。');
+        const link = this.state.links.find(item => item.repositoryId === id);
+        const root = await this.taskRoot(id, field(value, 'taskId'));
+        signal?.throwIfAborted();
+        if (this.state.links.find(item => item.repositoryId === id) !== link || this.state.accounts.find(item => item.account.id === repository.accountId) !== account || !this.repository(id).available || this.repository(id).url !== repository.url) throw new Error('仓库关联或访问账号已更新，请重试。');
+        await this.openFile({ source: 'local', value: root });
+        return { opened: true };
+      }
       case 'openFile': {
         const source = value.source;
         if (source !== 'remote' && source !== 'local') throw new Error('无效的文件来源。');

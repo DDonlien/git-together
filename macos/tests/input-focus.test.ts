@@ -7,12 +7,14 @@ import { SearchInput, TextField, Textarea } from '../src/ui';
 
 const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
-test('search and text fields replace the external blue halo with a single neutral border', () => {
-  const focus = css.match(/\.ogui-field > input:focus,\s*\.ogui-field > textarea:focus,\s*\.ogui-search:focus-within\s*\{([^}]+)\}/)?.[1];
+test('legacy search stays neutral while form focus uses one blue border without an external halo', () => {
+  const focus = css.match(/\.ogui-search:focus-within\s*\{([^}]+)\}/)?.[1];
   assert.ok(focus);
   assert.match(focus, /border-color:\s*var\(--strong-line\)/);
   assert.match(focus, /box-shadow:\s*none/);
   assert.doesNotMatch(focus, /--blue|--ogui-focus|outline/);
+  assert.match(css, /\.ogui-field > input:focus, \.ogui-field > textarea:focus \{ border-color: var\(--blue\); box-shadow: none; \}/);
+  assert.match(css, /\.ogui-field:focus-within > :where\(span,label\):first-child \{ color: var\(--blue\)/);
   const outline = css.match(/\.ogui-field > input:focus,\s*\.ogui-field > textarea:focus,\s*\.ogui-search input:focus\s*\{([^}]+)\}/)?.[1];
   assert.ok(outline);
   assert.match(outline, /outline:\s*none/);

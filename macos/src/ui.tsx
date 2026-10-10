@@ -6,6 +6,7 @@ import { SquaresFourIcon } from '@phosphor-icons/react/dist/csr/SquaresFour';
 import { GitBranchIcon } from '@phosphor-icons/react/dist/csr/GitBranch';
 import { FolderSimpleIcon } from '@phosphor-icons/react/dist/csr/FolderSimple';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { CaretLeftIcon } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretDownIcon } from '@phosphor-icons/react/dist/csr/CaretDown';
 import { MagnifyingGlassIcon } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
 import { ArrowDownIcon } from '@phosphor-icons/react/dist/csr/ArrowDown';
@@ -13,6 +14,7 @@ import { ArrowUpIcon } from '@phosphor-icons/react/dist/csr/ArrowUp';
 import { ArrowsClockwiseIcon } from '@phosphor-icons/react/dist/csr/ArrowsClockwise';
 import { CloudArrowDownIcon } from '@phosphor-icons/react/dist/csr/CloudArrowDown';
 import { CloudArrowUpIcon } from '@phosphor-icons/react/dist/csr/CloudArrowUp';
+import { DownloadSimpleIcon } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { PlusIcon } from '@phosphor-icons/react/dist/csr/Plus';
 import { XIcon } from '@phosphor-icons/react/dist/csr/X';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/csr/DotsThree';
@@ -40,12 +42,11 @@ import { MoonIcon } from '@phosphor-icons/react/dist/csr/Moon';
 import { SunIcon } from '@phosphor-icons/react/dist/csr/Sun';
 import { GitCommitIcon } from '@phosphor-icons/react/dist/csr/GitCommit';
 import { ListBulletsIcon } from '@phosphor-icons/react/dist/csr/ListBullets';
-import { GitDiffIcon } from '@phosphor-icons/react/dist/csr/GitDiff';
 import { BroomIcon } from '@phosphor-icons/react/dist/csr/Broom';
 import { EyeIcon } from '@phosphor-icons/react/dist/csr/Eye';
 import { EyeSlashIcon } from '@phosphor-icons/react/dist/csr/EyeSlash';
 
-const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon, reconcile: GitDiffIcon, clear: BroomIcon, eye: EyeIcon, eyeSlash: EyeSlashIcon };
+const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, left: CaretLeftIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, downloadSimple: DownloadSimpleIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon, clear: BroomIcon, eye: EyeIcon, eyeSlash: EyeSlashIcon };
 export type IconName = keyof typeof icons;
 export function Icon({ name, size = 18, className = '', style }: { name: IconName | 'squares'; size?: number; className?: string; style?: CSSProperties }) { const Component = name === 'squares' ? SquaresFourIcon : icons[name]; return <Component size={size} weight="regular" className={className} style={style} aria-hidden="true" />; }
 // Reuse accessible interaction/portal contracts, not optical glass recipes.

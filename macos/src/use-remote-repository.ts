@@ -34,6 +34,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
       const [, repositoryId] = JSON.parse(key) as [string, string];
       let taskFailures = false;
       try {
+        await importAPI('fetchRepository', { repositoryId }, signal);
         const workspace = await importAPI('remoteWorkspace', { repositoryId }, signal);
         if (signal.aborted || !current.current.has(key)) return;
         setStates(previous => {

@@ -81,7 +81,24 @@ test('each dirty directory has a separate view node linked to its own HEAD with 
   assert.equal((markup.match(/data-working-task=/g) || []).length, 2);
   assert.equal((markup.match(/data-commit-id=/g) || []).length, workspace.commits.length);
   assert.match(markup, /graph-working-node/); assert.match(markup, /未推送/);
+  assert.match(markup, /graph-unpublished-node/); assert.match(markup, /graph-local-edge/);
   assert.doesNotMatch(markup, /Invalid Date|dateTime=""|<code>working:/);
+});
+
+test('dirty and unpublished connections stay dashed through intervening rows and the parent incoming segment', () => {
+  const source = { ...workspace, tasks: workspace.tasks.map(item => item.path ? { ...item, files: [{ path: `${item.id}.ts`, status: 'M', tracked: true }] } : item) };
+  const rows = layoutCommitGraph(graph(source));
+  for (const row of rows.filter(row => row.commit.workingTask || row.commit.unpublished)) assert.ok(row.edges.filter(edge => edge.node).every(edge => edge.local));
+  for (const node of graph(source).filter(node => node.workingTask)) {
+    const parent = rows.find(row => row.commit.id === node.parents[0])!;
+    assert.equal(parent.incomingLocal, true);
+  }
+  const unpublished = rows.find(row => row.commit.id === 'local')!;
+  assert.ok(unpublished.commit.unpublished);
+  assert.ok(unpublished.edges.some(edge => edge.node && edge.local));
+  const published = rows.find(row => row.commit.id === 'remote')!;
+  assert.equal(published.commit.unpublished, false);
+  assert.ok(published.edges.every(edge => !edge.node || !edge.local));
 });
 
 test('an unborn HEAD has a working node without a fake zero-hash parent', () => {
@@ -95,7 +112,7 @@ test('working-node choice selects the matching mounted local context and preserv
   const source = { ...workspace, tasks: workspace.tasks.map(item => item.path ? { ...item, files: [{ path: `${item.id}.ts`, status: 'M', tracked: true }] } : item) };
   const markup = renderToStaticMarkup(createElement(RepositoryChangesColumn, { tasks: source.tasks, selection: null, remoteCommits: {}, selectedFiles: {}, onSelect() {}, search: '', focus: null, onFocus() {}, localChoice: 'search', onLocalChoice() {}, localPath: '/qa/local', loading: false }));
   assert.match(markup, /class="repository-task-slot"><section class="repository-change-task" aria-label="更改任务：task\/search"/);
-  assert.equal((markup.match(/<textarea/g) || []).length, 2);
+  assert.equal((markup.match(/aria-label="Description：/g) || []).length, 2);
 });
 
 test('real Git supplies staged, unstaged, untracked, two directories and unpublished history without graph writes', async t => {
