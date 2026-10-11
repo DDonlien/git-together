@@ -80,7 +80,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const organizationOptions = organizations.flatMap(group => group.options);
   const accountsById = new Map(accounts.map(account => [account.id, account]));
   const mapped = new Map(links.map(link => [link.repositoryId, link.path]));
-  // Showing hidden rows is a recovery view; only restoring them changes counts.
+  // Showing hidden rows is a recovery view; only restoring them changes global stats.
   const countedRepositories = repositories.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
   const countedRepositoryIds = new Set(countedRepositories.map(repo => repo.id));
   const countedLinkedIds = new Set(links.filter(link => countedRepositoryIds.has(link.repositoryId) && linkedTasks(link, controller.localStates[link.repositoryId], hiddenEntries).length > 0).map(link => link.repositoryId));
@@ -97,7 +97,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const incompleteClassification = coverage.unknown > 0 || coverage.errors.length > 0;
   const scopedTasks = (repo: RemoteRepository) => linkedTasks(links.find(link => link.repositoryId === repo.id), controller.localStates[repo.id], hiddenEntries).filter(task => repositorySearchText(repo, accountsById.get(repo.accountId)!).includes(globalSearch.toLowerCase()) || taskMatchesSearch(task, globalSearch));
   const rowSignals = (repo: RemoteRepository) => gitSignals(scopedTasks(repo), controller.remoteStates[repo.id] || emptyRemoteState, controller.localStates[repo.id], undefined, repo.available);
-  const hiddenCount = (repo: RemoteRepository) => [...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).length;
+  const hiddenCount = (repo: RemoteRepository) => showHidden ? [...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).length : 0;
   const actionRepositories = filtered.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
   const batchSignals = aggregateGitSignals(actionRepositories.map(rowSignals));
   const openAction = (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => { setActionFeedback(''); setAction({ mode, targets }); };
