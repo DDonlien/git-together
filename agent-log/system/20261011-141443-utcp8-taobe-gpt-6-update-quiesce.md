@@ -2,7 +2,7 @@
 
 - 用户原始prompt：「这什么鬼」，附0.22.0应用更新截图：按钮退回检查更新，红色提示「请等待当前 Git 操作或账号授权完成，再安装更新。」
 - 模型：gpt-6；环境仅可确认此版本标识。执行者：taobe。
-- 开始：2026-10-11 14:01:51 UTC+8（首次登记时间）；结束：进行中；是否提交：尚未。
+- 开始：2026-10-11 14:01:51 UTC+8（首次登记时间）；结束：2026-10-11 14:14:43 UTC+8；是否提交：功能提交6c486cf89e32d8d7370c30b5a7fbbd03642f0fc5已推送main，交付记录另行归档提交。
 - 工作区：codex-standalone-ts/main；起始HEAD a3f2997cca，源码0.22.3；fetch后ahead/behind为0/0。已有REQUIREMENTS.md中IMPORT-13-main与motion两行顺序变动，保留且不归属本次。
 - 需求：RUN-01-update-quiesce，归属既有RUN-01-update。
 
@@ -21,3 +21,13 @@
 - 只读查看已安装版本的保留日志，最近截取范围有727次localWorkspace:start、732次success及26组status/catalog调用，与日常读取持续进入共享active计数相符；未调用其更新器或操作窗口，未导出账号/凭据/仓库内容。此证据不宣称看到截图发生时的确切在途请求。
 - 本轮修复按SemVer递增patch至0.22.4（package.json权威，同步npm/Cargo锁文件和Cargo.toml）；README当前源码与架构同步。安装器错误早于此版存在，新包发布不会改变仍在运行的0.22.0安装逻辑。
 - 14:07出现另一对话的RUN-01-tauri-parity日志，该任务正在全局检查本地关联/自动刷新/远端读取。保留其日志和既有需求行序变动；本次仅提交更新安装修复及对应记录，计划先独立发布0.22.4。
+- 功能提交6c486cf89e32d8d7370c30b5a7fbbd03642f0fc5已正常推送main。REQUIREMENTS仅暂存新增需求项，保留原行序改动。为避免并行服务修复影响打包，复制此已提交main为项目容器内隔离源码快照，继续使用公共_builds发布锁、现有依赖和GitHub远端；正式打包入口已开始并再次完成类型、Cargo --locked及263模块构建。未改写原工作区或将其他未提交内容打入包。
+
+## 正式发布与交付
+
+- 0.22.4已在https://github.com/DDonlien/git-together/releases/tag/v0.22.4公开；远端tag回读为6c486cf89e32d8d7370c30b5a7fbbd03642f0fc5，与已推送main构建来源一致。
+- 正式产物目录：`../_builds/gittogether-0.22.4-macos-arm64-S9Fwi8/`。包内只保留gittogether；应用标识、Developer ID团队、最终deep/strict签名、staple/validate及版本绑定的Tauri签名核对通过。Apple公证e82ace38-43b5-40d3-b2c6-a568af378457为Accepted。spctl识别Notarized Developer ID，本机已有security disabled状态未被本任务修改，不据此声称默认Gatekeeper首次安装验收。
+- 发布入口回读两套公共更新源和完整资产后返回publicUpdateVerified=true。ZIP为4207102字节，SHA-256 `839092563a15a92f6097472ea1b5cc6d80d0f912e8d0710e38974106ab8605c2`；tar.gz为4205354字节，SHA-256 `4b1646b406ed75a8021b9ea5021c6bbd6a8f0a10fe1d17948470304c09d2df40`。
+- 14:14独立公开回读latest.json为0.22.4，darwin-aarch64地址及签名与最终元数据相同；再次完整下载公开ZIP，字节数和SHA-256一致。未操作用户安装版，不把源码检查、包验证或日志观察冒充实际安装重启验收。
+- README公开版状态更新至0.22.4。用户当前0.22.0的旧安装器不会自动获得这段修复，交付提供已核对安装ZIP链接，手动替换一次后继续使用内置更新；安装由用户自行选择和执行。
+- 并行parity任务的Git、provider、service及远端hook改动与日志均保留，不归入本次文档收尾。隔离源码副本在发布完成后清理；正式安装包和构建证据保留在_builds。RUN-01-update-quiesce无剩余源码或发布工作，最后仅归档记录，不为纯文档收尾重复打包。
