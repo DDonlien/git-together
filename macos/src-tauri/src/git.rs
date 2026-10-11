@@ -260,7 +260,7 @@ pub async fn history(root: &Path) -> Result<Vec<Value>> {
     }
     Ok(output?.lines().filter_map(|row|{
         let parts:Vec<&str>=row.split('\0').collect();if parts.len()<5{return None;}
-        let names:Vec<String>=refs.lines().filter_map(|row|{let (name,head)=row.split_once('\0')?;if head!=parts[0] {return None;}Some(name.strip_prefix("refs/heads/").or_else(||name.strip_prefix("refs/remotes/")).unwrap_or(name).to_owned())}).collect();
+        let names:Vec<String>=refs.lines().filter_map(|row|{let (name,head)=row.split_once('\0')?;if head!=parts[0] {return None;}Some(name.strip_prefix("refs/heads/").or_else(||name.strip_prefix("refs/remotes/").filter(|remote|remote.starts_with("origin/"))).unwrap_or(name).to_owned())}).collect();
         Some(json!({"id":parts[0],"parents":parts[1].split_whitespace().collect::<Vec<_>>(),"summary":parts[2],"author":parts[3],"time":parts[4],"refs":names}))
     }).collect())
 }

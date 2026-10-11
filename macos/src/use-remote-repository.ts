@@ -33,21 +33,29 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     run: async (key, signal) => {
       const [, repositoryId] = JSON.parse(key) as [string, string];
       let taskFailures = false;
+      let fetchFailure: Error | undefined;
       try {
-        await importAPI('fetchRepository', { repositoryId }, signal);
+        try { await importAPI('fetchRepository', { repositoryId }, signal); }
+        catch (problem) {
+          if (signal.aborted) throw problem;
+          fetchFailure = new Error(problem instanceof Error ? problem.message : '本地远端引用更新失败。');
+        }
+        signal.throwIfAborted();
         const workspace = await importAPI('remoteWorkspace', { repositoryId }, signal);
         if (signal.aborted || !current.current.has(key)) return;
         setStates(previous => {
           // Removed mappings and restarted services cannot inherit old contents.
           const retained = Object.entries(previous).filter(([id]) => known.current.has(id) && id !== key);
-          return { ...Object.fromEntries(retained), [key]: { workspace: preserveRemoteWorkspace(previous[key]?.workspace || null, workspace), loading: false, error: '' } };
+          return { ...Object.fromEntries(retained), [key]: { workspace: preserveRemoteWorkspace(previous[key]?.workspace || null, workspace), loading: false, error: fetchFailure ? `远端提交已读取；本地远端引用更新未完成：${fetchFailure.message}` : '' } };
         });
         taskFailures = workspace.tasks.some(task => !!task.error);
       } catch (problem) {
         if (signal.aborted || !current.current.has(key)) return;
-        setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: false, error: problem instanceof Error ? problem.message : '读取远端仓库失败。' } }));
+        const message = problem instanceof Error ? problem.message : '读取远端仓库失败。';
+        setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: false, error: [fetchFailure?.message, message].filter(Boolean).join('；') } }));
         throw problem;
       }
+      if (fetchFailure) throw fetchFailure;
       // Partial branch failures retain their own feedback and successful
       // siblings, but new local changes must still respect the retry deadline.
       if (taskFailures) throw new Error('部分远端分支读取失败，正在等待下次检查。');

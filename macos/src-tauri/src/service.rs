@@ -34,6 +34,19 @@ pub struct Context {
     pub identity: String,
     pub network: Network,
 }
+struct PendingFetch {
+    result: watch::Receiver<Option<Result<Value>>>,
+    cancel: CancellationToken,
+    waiters: AtomicUsize,
+}
+struct FetchWaiter(Arc<PendingFetch>);
+impl Drop for FetchWaiter {
+    fn drop(&mut self) {
+        if self.0.waiters.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.0.cancel.cancel();
+        }
+    }
+}
 pub struct Service {
     pub instance: String,
     pub root: PathBuf,
@@ -48,7 +61,7 @@ pub struct Service {
     results: Mutex<VecDeque<(String, String, Value)>>,
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
-    fetching: Mutex<BTreeMap<String, watch::Receiver<Option<Result<Value>>>>>,
+    fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
     pub active: AtomicUsize,
     pub installing: AtomicBool,
 }
@@ -127,14 +140,20 @@ impl Service {
         let home = std::env::var_os("HOME").ok_or("无法读取用户目录。")?;
         Ok(PathBuf::from(home).join(".gittogether/repositories"))
     }
-    async fn materialized_link(&self, context: &Context) -> Result<Value> {
+    async fn materialized_link(
+        &self,
+        context: &Context,
+        cancel: &CancellationToken,
+    ) -> Result<Value> {
         let mut link = context.link.clone();
         if !link.is_null() && !link["worktrees"].is_array() {
-            let root = self
-                .validate_path(&context.repository, text(&link, "path"))
-                .await?;
-            let task = git::task(&root).await?;
-            link["worktrees"] = json!([{"path":task["path"],"branch":task["branch"]}]);
+            let workspace = self.local_workspace(context, cancel).await?;
+            link["worktrees"] = json!(workspace["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|task| json!({"path":task["path"],"branch":task["branch"]}))
+                .collect::<Vec<_>>());
         }
         Ok(link)
     }
@@ -416,7 +435,13 @@ impl Service {
             self.client.clone(),
         );
         let result = p.repositories(cancel, None).await;
+        if cancel.is_cancelled() {
+            return Err("账号刷新已取消。".into());
+        }
         self.mutate(|next| {
+            if cancel.is_cancelled() {
+                return Err("账号刷新已取消。".into());
+            }
             let i = next["accounts"]
                 .as_array()
                 .unwrap()
@@ -526,17 +551,22 @@ impl Service {
     ) -> Result<Value> {
         let key = format!("{}:{}", text(&context.repository, "id"), context.identity);
         let mut pending = self.fetching.lock().await;
-        let mut result = if let Some(existing) = pending.get(&key) {
+        let entry = if let Some(existing) = pending.get(&key) {
             existing.clone()
         } else {
             if pending.len() >= 128 {
                 return Err("正在检查的仓库较多，请稍后重试。".into());
             }
             let (sender, receiver) = watch::channel(None);
-            pending.insert(key.clone(), receiver.clone());
+            let entry = Arc::new(PendingFetch {
+                result: receiver,
+                cancel: CancellationToken::new(),
+                waiters: AtomicUsize::new(0),
+            });
+            pending.insert(key.clone(), entry.clone());
             let service = self.clone();
             let context = context.clone();
-            let cancel = cancel.clone();
+            let cancel = entry.cancel.clone();
             self.active.fetch_add(1, Ordering::SeqCst);
             tokio::spawn(async move {
                 let _active = Active(&service.active);
@@ -544,8 +574,11 @@ impl Service {
                 sender.send_replace(Some(value));
                 service.fetching.lock().await.remove(&key);
             });
-            receiver
+            entry
         };
+        entry.waiters.fetch_add(1, Ordering::SeqCst);
+        let mut result = entry.result.clone();
+        let _waiter = FetchWaiter(entry);
         drop(pending);
         loop {
             let completed = result.borrow_and_update().clone();
@@ -729,7 +762,11 @@ impl Service {
             "link" => {
                 util::allowed(input, &["repositoryId", "path", "branch"])?;
                 let selected = util::absolute(&util::field(input, "path", 4096)?)?;
-                let branch = input["branch"].as_str();
+                let branch = input
+                    .get("branch")
+                    .map(|_| util::field(input, "branch", 1024))
+                    .transpose()?;
+                let branch = branch.as_deref();
                 let found = discover(
                     &selected,
                     std::slice::from_ref(&context.repository),
@@ -742,7 +779,7 @@ impl Service {
                 if found.is_empty() {
                     return Err("未找到目标仓库及分支的工作目录，没有保存关联。".into());
                 }
-                let previous = self.materialized_link(&context).await?;
+                let previous = self.materialized_link(&context, cancel).await?;
                 self.validate(&context).await?;
                 return self
                     .mutate(|next| {
@@ -760,7 +797,11 @@ impl Service {
             }
             "unlink" => {
                 util::allowed(input, &["repositoryId", "branch"])?;
-                let branch = input["branch"].as_str();
+                let branch = input
+                    .get("branch")
+                    .map(|_| util::field(input, "branch", 1024))
+                    .transpose()?;
+                let branch = branch.as_deref();
                 let actual = if branch.is_some() && !context.link.is_null() {
                     self.local_workspace(&context, cancel).await?["tasks"]
                         .as_array()
@@ -803,7 +844,7 @@ impl Service {
                 let mut existing = if context.link.is_null() {
                     Vec::new()
                 } else {
-                    roots(&self.materialized_link(&context).await?)?
+                    roots(&self.materialized_link(&context, cancel).await?)?
                 };
                 let branch = util::field(input, "branch", 1024)?;
                 if existing.iter().any(|w| text(w, "branch") == branch) || existing.len() >= 64 {
@@ -841,6 +882,9 @@ impl Service {
                     .unwrap()
                     .first()
                     .ok_or("本地目录尚未关联。")?;
+                if !text(t, "error").is_empty() {
+                    return Err(text(t, "error").to_owned());
+                }
                 return Ok(
                     json!({"path":t["path"],"branch":t["branch"],"files":t["files"],"commits":w["commits"]}),
                 );
@@ -1117,7 +1161,7 @@ impl Service {
         for r in &contexts {
             if found.get(text(r, "id")).is_some_and(|v| !v.is_empty()) {
                 let c = self.context(text(r, "id")).await?;
-                let previous = self.materialized_link(&c).await?;
+                let previous = self.materialized_link(&c, cancel).await?;
                 expected.push((c, previous));
             }
         }

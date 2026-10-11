@@ -633,9 +633,13 @@ impl Provider {
                 }
             }
         }
-        Ok(self
-            .remember(key, json!({"entries":entries,"complete":complete}))
-            .await)
+        let result = json!({"entries":entries,"complete":complete});
+        // Only complete immutable snapshots may satisfy future refreshes.
+        if complete {
+            Ok(self.remember(key, result).await)
+        } else {
+            Ok(result)
+        }
     }
     pub async fn branches(
         &self,
@@ -847,7 +851,13 @@ impl Provider {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        Ok(self.remember(key,json!({"commit":commit,"files":files,"diff":diff,"tree":tree_paths(&t),"treeComplete":t["complete"],"warnings":warnings})).await)
+        let cacheable = t["complete"] == true && warnings.is_empty();
+        let result = json!({"commit":commit,"files":files,"diff":diff,"tree":tree_paths(&t),"treeComplete":t["complete"],"warnings":warnings});
+        if cacheable {
+            Ok(self.remember(key, result).await)
+        } else {
+            Ok(result)
+        }
     }
     pub async fn file(
         &self,
@@ -964,16 +974,83 @@ fn commit_value(v: &Value) -> Result<Value> {
     )
 }
 fn attach_patches(diff: &str, files: &mut [Value]) {
-    let sections: Vec<_> = diff.split("diff --git ").skip(1).collect();
-    for f in files {
-        let path = text(f, "path").to_owned();
-        if let Some(s) = sections.iter().find(|s| {
-            s.lines()
-                .any(|l| l == format!("+++ b/{path}") || l == format!("--- a/{path}"))
-        }) {
-            f["patch"] = json!(format!("diff --git {}", s.trim_end()));
+    let mut patches = BTreeMap::new();
+    for (index, section) in diff.split("\ndiff --git ").enumerate() {
+        let section = if index == 0 {
+            section.to_owned()
+        } else {
+            format!("diff --git {section}")
+        };
+        let new_path = section
+            .lines()
+            .find_map(|line| line.strip_prefix("+++ "))
+            .and_then(diff_path)
+            .filter(|path| path != "/dev/null");
+        let path = new_path.or_else(|| {
+            section
+                .lines()
+                .find_map(|line| line.strip_prefix("--- "))
+                .and_then(diff_path)
+                .filter(|path| path != "/dev/null")
+        });
+        if let Some(path) = path {
+            patches.insert(path, section.trim_end().to_owned());
         }
     }
+    for f in files {
+        if let Some(patch) = patches.get(text(f, "path")) {
+            f["patch"] = json!(patch);
+        }
+    }
+}
+fn diff_path(value: &str) -> Option<String> {
+    let decoded = if let Some(quoted) = value.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        let source = quoted.as_bytes();
+        let mut bytes = Vec::with_capacity(source.len());
+        let mut index = 0;
+        while index < source.len() {
+            if source[index] != b'\\' || index + 1 == source.len() {
+                bytes.push(source[index]);
+                index += 1;
+                continue;
+            }
+            let next = source[index + 1];
+            if matches!(next, b'0'..=b'7') {
+                let mut octal = 0u16;
+                let mut digits = 0;
+                index += 1;
+                while index < source.len() && digits < 3 && matches!(source[index], b'0'..=b'7') {
+                    octal = octal * 8 + u16::from(source[index] - b'0');
+                    index += 1;
+                    digits += 1;
+                }
+                bytes.push(u8::try_from(octal).ok()?);
+            } else {
+                match next {
+                    b't' => bytes.push(b'\t'),
+                    b'n' => bytes.push(b'\n'),
+                    b'r' => bytes.push(b'\r'),
+                    b'\\' | b'"' => bytes.push(next),
+                    _ => {
+                        bytes.push(b'\\');
+                        index += 1;
+                        continue;
+                    }
+                }
+                index += 2;
+            }
+        }
+        String::from_utf8(bytes).ok()?
+    } else {
+        value.to_owned()
+    };
+    Some(
+        decoded
+            .strip_prefix("a/")
+            .or_else(|| decoded.strip_prefix("b/"))
+            .unwrap_or(&decoded)
+            .to_owned(),
+    )
 }
 pub fn transport_error(e: reqwest::Error) -> String {
     if e.is_timeout() {
