@@ -33,28 +33,32 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     run: async (key, signal) => {
       const [, repositoryId] = JSON.parse(key) as [string, string];
       let taskFailures = false;
-      let fetchFailure: Error | undefined;
+      let readFailure: Error | undefined;
+      // Provider contents do not depend on local remote-tracking refs. Keep
+      // both requests owned by this refresh, but publish the API result first.
+      const fetching = importAPI('fetchRepository', { repositoryId }, signal).then(
+        () => null,
+        problem => problem instanceof Error ? problem : new Error('本地远端引用更新失败。'),
+      );
       try {
-        try { await importAPI('fetchRepository', { repositoryId }, signal); }
-        catch (problem) {
-          if (signal.aborted) throw problem;
-          fetchFailure = new Error(problem instanceof Error ? problem.message : '本地远端引用更新失败。');
-        }
-        signal.throwIfAborted();
         const workspace = await importAPI('remoteWorkspace', { repositoryId }, signal);
         if (signal.aborted || !current.current.has(key)) return;
         setStates(previous => {
           // Removed mappings and restarted services cannot inherit old contents.
           const retained = Object.entries(previous).filter(([id]) => known.current.has(id) && id !== key);
-          return { ...Object.fromEntries(retained), [key]: { workspace: preserveRemoteWorkspace(previous[key]?.workspace || null, workspace), loading: false, error: fetchFailure ? `远端提交已读取；本地远端引用更新未完成：${fetchFailure.message}` : '' } };
+          return { ...Object.fromEntries(retained), [key]: { workspace: preserveRemoteWorkspace(previous[key]?.workspace || null, workspace), loading: true, error: '' } };
         });
         taskFailures = workspace.tasks.some(task => !!task.error);
       } catch (problem) {
         if (signal.aborted || !current.current.has(key)) return;
-        const message = problem instanceof Error ? problem.message : '读取远端仓库失败。';
-        setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: false, error: [fetchFailure?.message, message].filter(Boolean).join('；') } }));
-        throw problem;
+        const failure = problem instanceof Error ? problem : new Error('读取远端仓库失败。');
+        readFailure = failure;
+        setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: true, error: failure.message } }));
       }
+      const fetchFailure = await fetching;
+      if (signal.aborted || !current.current.has(key)) return;
+      setStates(previous => ({ ...previous, [key]: { ...previous[key], loading: false, error: [readFailure?.message, fetchFailure ? `${readFailure ? '' : '远端内容已读取；'}本地远端引用更新未完成：${fetchFailure.message}` : ''].filter(Boolean).join(' ') } }));
+      if (readFailure) throw readFailure;
       if (fetchFailure) throw fetchFailure;
       // Partial branch failures retain their own feedback and successful
       // siblings, but new local changes must still respect the retry deadline.
