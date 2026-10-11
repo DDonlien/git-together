@@ -4,8 +4,8 @@
 - 模型：gpt-6（运行环境仅暴露此标识，无法获得更具体版本）
 - 启动分支与版本：main，3d2c9742d5，0.22.0；fetch后与origin/main一致，工作区干净
 - 开始：2026-10-11 12:52:53 UTC+8
-- 结束：进行中，交付时按完成时间重命名
-- 是否提交：尚未
+- 结束：2026-10-11 13:16:11 UTC+8（发布验收于13:07:46完成，本次仅收尾文档）
+- 是否提交：已提交并推送源码0b6bca1b940b793ffbb2830aa6111fe131dda1a8；后续文档收尾提交另记
 
 ## 上下文与成功标准
 
@@ -27,3 +27,14 @@
 - Tauri配置的版本为package.json相对引用，保持原引用，仅同步package/lock与Cargo/lock为0.22.1。最初ASCII文档脚本在此引用断言失败前已更新package及lock；后续补齐其余版本与文档，没有覆盖其他任务的工作区改动。
 - 开发统一入口尝试编译/正常签名后，确认4174由用户已安装App的PID 55548占用；未停止或操作它。Rust开发服务无法与该固定授权端口共存，本轮以独立无后台Dashboard数据核对前端，另启动4173的界面入口；不把页面可用声称为账号服务已恢复。正式包与更新源验收不依赖操作安装版。
 - 同一共享文件中的其他搜索/动效/读取健康改动仅留在工作区；将从HEAD基线只暂存本次隐藏函数、对应文档与版本，随后用独立干净main快照打包，防止携带其他未完成改动。
+
+## 正式交付
+
+- 已推送main源码0b6bca1b940b793ffbb2830aa6111fe131dda1a8。独立干净main快照仅包含本次隐藏计数及对应版本、文档；源码SHA-256为db3013bc753bd609db51d0f46e8cb55f722c4f04c9724d0e3ee03b09c530eb86。标准Tauri/Rust入口再次通过类型、Cargo --locked与生产构建。
+- 最终包版本0.22.1、标识com.gittogether.standalone，仅有gittogether可执行文件，无Electron/Node。Apple公证5d934d24-ba0f-4967-a25c-baedaa4c0fef为Accepted；staple/validate及最终deep/strict签名通过。spctl报告Notarized Developer ID及本机原有security-disabled override；本轮未改变设置，不声称其他设备Gatekeeper验收。
+- 最终ZIP为4205840字节，SHA-256 a68635bae8574833feea38154f7fe387698f0afeee974c6f53eda3d6015a00c6，CRC完整；Tauri tar为4201879字节，SHA-256 ff4990fe746fd590dcb3e38e458b44a7e71163d5cca2371815a425dae84e14b0，更新签名与版本绑定校验通过。
+- https://github.com/DDonlien/git-together/releases/tag/v0.22.1 正式公开，publicUpdateVerified=true。无需登录的latest/Atom/tag、两套更新清单/签名及完整ZIP/tar下载大小/摘要全部匹配。未操作已安装App，未执行用户Git写入。
+- 截图保留macos/artifacts/hidden-header-count/hidden-off-detail.png等。临时浏览器页、隔离预览源码和独立干净打包checkout已清理；共享4173预览及其他任务改动保留。ARCHITECTURE补充列表表头与顶部关联统计的区别。
+- 公共包验收后另一项0.22.2发布已持有共享发布锁；仅准备文档记录，待锁释放后提交/推送，避免使其远端main来源检查失效。正式0.22.1交付已完成，不将并行发布计入本次工作。
+
+- 发布锁释放后，在同一短期锁下提交并推送本次验收记录，保护并行源码与发布来源；纯文档不生成新包。
