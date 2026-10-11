@@ -53,7 +53,7 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 0.22.7修正从Finder启动时Git没有继承系统代理的问题，沿用已配置的macOS代理及绕过规则，同时保留仓库自己的代理设置。读取日志增加真实Git失败类别、退出码和部分任务失败信息，通用Git错误不再归为账号权限失效。同样环境的公开仓库读取及隔离实际fetch、取消/恢复已验证，安装包和公共更新源完成核验；没有将这些证据扩大为逐私有账号或安装版运行验收。
 
-0.22.10已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.10)公开。最终公开更新包的下载、验签及同版官方安装器隔离安装通过，安装结果的版本、签名及公证票据再次核对。远端内容与后台Fetch并行读取，平台返回即展示分支/历史/文件树；Fetch失败时保留内容，并说明本地远端引用更新未完成。安装ZIP约4.6MB。框架迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
+0.22.11已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.11)公开。安装ZIP与Tauri更新包完成公共下载摘要回读、验签及解压后版本、签名、公证票据核对，ZIP约4.6MB。推送改为分支与仓库图标的上传动画和短暂成功勾，区分全部/部分本地目录；弹窗与详情提供细进度条。Commit/Submit支持Tracked/Untracked分组与多选，真实提交和AI只处理选中范围，保留未选暂存内容。桌面采用Tauri 2和Rust后台，生产包只包含原生程序及React资源；Git通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
 当前源码0.22.11支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
