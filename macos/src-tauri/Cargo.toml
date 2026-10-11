@@ -1,6 +1,6 @@
 [package]
 name = "gittogether"
-version = "0.22.2"
+version = "0.22.3"
 edition = "2021"
 rust-version = "1.90"
 default-run = "gittogether"
@@ -37,6 +37,7 @@ base64 = "0.22"
 minisign-verify = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 url = "2"
+percent-encoding = "2"
 tempfile = "3"
 walkdir = "2"
 rusty-leveldb = "4"

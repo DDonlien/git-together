@@ -74,20 +74,29 @@ pub fn digest(data: impl AsRef<[u8]>) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 pub fn identity(value: &str) -> Option<String> {
-    let source = value.trim().trim_end_matches('/').trim_end_matches(".git");
-    if let Ok(url) = url::Url::parse(source) {
-        return Some(
-            format!(
-                "{}{}{}",
-                url.host_str()?,
-                url.port().map(|p| format!(":{p}")).unwrap_or_default(),
-                url.path()
-            )
-            .to_lowercase(),
-        );
+    let source = value.trim();
+    let address = if source.contains("://") {
+        source.to_owned()
+    } else {
+        let (host, path) = source.split_once(':')?;
+        format!("ssh://{host}/{path}")
+    };
+    let url = url::Url::parse(&address).ok()?;
+    if !matches!(url.scheme(), "https" | "http" | "ssh" | "git") {
+        return None;
     }
-    let (host, path) = source.split_once(':')?;
-    Some(format!("{}/{}", host.rsplit('@').next()?, path).to_lowercase())
+    let path = percent_encoding::percent_decode_str(url.path())
+        .decode_utf8()
+        .ok()?
+        .trim_matches('/')
+        .to_lowercase();
+    // Preserve the existing repository identity across SSH/HTTPS transports.
+    // Credentials remain bound to the actual HTTP origin in Network::new.
+    Some(format!(
+        "{}/{}",
+        url.host_str()?.to_lowercase(),
+        path.strip_suffix(".git").unwrap_or(&path)
+    ))
 }
 pub fn tool_path() -> String {
     format!("{}/.local/bin:{}/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{}", std::env::var("HOME").unwrap_or_default(), std::env::var("HOME").unwrap_or_default(), std::env::var("PATH").unwrap_or_default())
