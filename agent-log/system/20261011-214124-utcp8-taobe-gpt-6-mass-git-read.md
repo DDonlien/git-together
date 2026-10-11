@@ -17,3 +17,10 @@
 - 首次临时诊断编译发现Provider构造返回Self而非Result及digest需限定util命名空间，已纠正后编译通过；初次隔离API502是诊断环境缺少loopback排除，已按上条修正，不将这些尝试计为通过或实际账号故障。
 - 前端类型、Cargo --locked及生产构建通过（263模块，仅既有大chunk提示）；当前新版本同步后最终检查与正式签名发布待继续。未新增/运行项目测试套件。
 - 0.22.7最终类型、Cargo --locked和263模块生产构建全部通过；安全分类说明保持普通中文，内部代码仅写有限日志。最终隔离诊断再次完成上述实际fetch/失败/取消/恢复及日志核对；最小Finder环境公开仓库读取725ms成功。没有扩大为逐账号/私有仓库或安装版运行验收。
+- 源码提交ca72e63949418a5fe454e11bdeb1698dabcff58f已正常推送main，远端回读一致；只暂存本轮15个文件/段落，REQ其他任务的行序改动保留。正式构建使用已提交main的独立干净克隆，不切换共享工作区或加入其他未提交输入。
+- 正式0.22.7构建再次通过类型/Cargo --locked、前端和Rust生产编译；最终包Developer ID为86J7X3KZ5Z，标识com.gittogether.standalone。Apple公证233fbb2d-ee34-4e12-9b3d-0fdb3ba03086为Accepted，staple/validate、deep/strict签名及Gatekeeper核对通过（仍返回系统既有security disabled override，本轮未更改安全设置）。
+- https://github.com/DDonlien/git-together/releases/tag/v0.22.7已公开为stable/latest；tag与main源码ca72e63一致。公共latest/Atom、latest-mac.yml、latest.json、更新签名及完整ZIP/tar大小和摘要全部核对，build-info的publicUpdateVerified=true。ZIP为4226562字节、SHA-256=99cc517a438eedbf5b0af16c9039b0002b0066b9152e9d676ad39a6f59447f6a；tar为4220860字节、SHA-256=e1129c450ae4ca1cd53e1e37da39582d4822f3c1b753718c69b85a690b96bcbd。
+- 从最终ZIP另行解包核对0.22.7、标识和团队，包内仅gittogether；解包后deep/strict签名及stapler validate通过。额外匿名回读最新latest.json与本地完全一致。正式包保留在_builds/gittogether-0.22.7-macos-arm64-TxYPsm，独立证据保留在忽略的macos/artifacts/mass-git-read/release-proof.json。
+- 未启动、操作、替换或重启安装版，未更改真实用户仓库或账号配置；已移除本轮在真实日志目录生成的单条read-inspection日志，仅删明确匹配本轮session/time/version的文件。隔离Smart HTTP服务/临时仓库已结束，正式签名、公证、发布和公共回读均完成；收尾文档单独同步，剩余REQ行序改动属于其他任务。
+
+- 结束：2026-10-11 21:41:24 UTC+8；RUN-01-tauri-git-network全部完成。
