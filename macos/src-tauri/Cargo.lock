@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "gittogether"
-version = "0.22.9"
+version = "0.22.10"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1321,10 +1321,12 @@ dependencies = [
  "cbc",
  "chrono",
  "core-foundation 0.10.1",
+ "flate2",
  "libc",
  "minisign-verify 0.2.5",
  "pbkdf2",
  "percent-encoding",
+ "regex",
  "reqwest",
  "rusty-leveldb",
  "security-framework",
@@ -1332,6 +1334,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "tar",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

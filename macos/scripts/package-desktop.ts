@@ -100,7 +100,8 @@ try {
   const updateMetadataPath = join(output, 'latest-mac.yml');
   await writeFile(updateMetadataPath, JSON.stringify({ version: manifest.version, files: [{ url: basename(zipPath), sha512, size: bytes.length }], path: basename(zipPath), sha512, releaseDate: new Date().toISOString() }, null, 2) + '\n');
   const tarPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.app.tar.gz`);
-  await run('/usr/bin/tar', ['-czf', tarPath, '-C', output, 'GitTogether.app']);
+  // BSD tar otherwise adds root AppleDouble entries which Tauri cannot unpack.
+  await run('/usr/bin/tar', ['-czf', tarPath, '-C', output, 'GitTogether.app'], clientRoot, { COPYFILE_DISABLE: '1' });
   // Sign the final, stapled bytes and bind this exact version to the signature.
   await run(join(clientRoot, 'node_modules/.bin/tauri'), ['signer', 'sign', '--private-key-path', signingKey, '--password', '', '--app-version', manifest.version, tarPath]);
   const signaturePath = tarPath + '.sig';

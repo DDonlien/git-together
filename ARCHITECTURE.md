@@ -2,7 +2,7 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.22.9）
+## 当前运行结构（0.22.10）
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
@@ -30,6 +30,8 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 本地关联以服务器主机和解码后的仓库路径匹配，沿用旧版对SSH/HTTPS及不同传输端口的同仓库识别；不因Gitea的SSH2222/HTTPS10443差异拒绝已有目录。身份匹配与凭据边界分开：Git网络操作仍只向保存账号的实际HTTP origin提供凭据。未保存关联的仓库保持远端浏览，在更改栏直接提供已有本地配置入口，不自动扫描或写入用户目录。
 
 正式发布从已推送main生成独立源码快照，构建Rust release及React资源，Developer ID签名、Apple公证并附加凭证后生成两套更新资产：旧Electron版读取ZIP和`latest-mac.yml`，新Tauri版读取最终已公证的`.app.tar.gz`、`.sig`和`latest.json`。Tauri签名绑定版本，内置公钥匹配仓库外0600私钥；发布后完整回读两套公共资产并核对摘要。开发版禁用安装更新。不会为交付启动或修改用户已安装应用。
+
+更新包与错误诊断（RUN-01-update-diagnostics）：最终tar通过COPYFILE_DISABLE禁止AppleDouble元数据；发布验签工具及安装前共用update_archive，要求唯一GitTogether.app根目录、真实Info.plist/主程序和正常相对路径，拒绝._元数据。官方安装器去掉第一路径层，旧包的根._GitTogether.app因此被解压到临时目录自身，实际返回EPERM/errno 1，尚未开始应用替换。Updates直接持有Diagnostics，记录检查/下载/安装起止、目标版本、错误类型、脱敏source链、系统errno及HTTP状态；原生有限字段不接受渲染层输入。UpdateFailure保留透明Io包装的直接errno，并区分解压包、签名/版本、网络、磁盘、访问限制及未知错误。安装失败保留下载与重试，不推断所有失败均为权限，不更改系统权限。
 
 安装预约（RUN-01-update-immediate，取代0.22.4通用等待）：useWorkspace持有跨页面的useUpdates状态；确认重启时立即设置安装标志，停止自动账号、本地和远端检查。安装状态仅由更新卡片展示，正常关闭入口或IPC退出不生成顶部连接错误。Service.installing原子关闭新请求入口，独立Foreground守卫记录真正的提交、推送、文件变更、下载及配置保存；已有前台事务只返回具体原因，不排队等待。其余在途读取及独立fetch通过后台CancellationToken取消，安装不等待Service.active归零；该计数仍用于实际请求生命周期。预约以Drop释放并更新后台取消代次，安装失败恢复新请求、保留已下载Update及字节，以ready状态和“重试安装”直接重试。前端确认前仍禁用真实前台操作/授权期间的重启入口。
 

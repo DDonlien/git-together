@@ -219,7 +219,7 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
     let outcome = text(v, "outcome");
     if !["lifecycle","api","provider-read","git-read","git-write","storage","authorization","update","refresh","renderer","ui-action"].contains(&event)||!"start success partial failure cancelled paused resumed retry online offline hidden visible blocked received accepted complete rejected failed current available ready installing".split_whitespace().any(|s|s==outcome)||(renderer&&!["api","refresh","renderer","ui-action"].contains(&event)){return None;}
     let mut clean = json!({"event":event,"outcome":outcome});
-    let allowed=[("method","fetchRepository prepareSync applySync discardSync submitCommit pushCommit submit generateCommitMessage cancelCommitGeneration status catalog connect updateAccount refresh removeAccount matchAccountRepositories link downloadBranch unlink snapshot localWorkspace localCommit remoteWorkspace remoteCommit remoteFile openFile openDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files rev-parse for-each-ref config fetch ls-remote clone push other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
+    let allowed=[("method","fetchRepository prepareSync applySync discardSync submitCommit pushCommit submit generateCommitMessage cancelCommitGeneration status catalog connect updateAccount refresh removeAccount matchAccountRepositories link downloadBranch unlink snapshot localWorkspace localCommit remoteWorkspace remoteCommit remoteFile openFile openDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files rev-parse for-each-ref config fetch ls-remote clone push other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED ERR_UPDATER_INVALID_ARCHIVE ERR_UPDATER_VERSION ERR_UPDATER_HTTP ERR_UPDATER_TEMP_DIR ERR_UPDATER_RESTORE EXDEV EROFS EBUSY INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
     for (key, list) in allowed {
         if v[key].is_string() && list.split_whitespace().any(|s| s == text(v, key)) {
             clean[key] = v[key].clone();
@@ -251,6 +251,25 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
     {
         clean["resource"] = v["resource"].clone();
+    }
+    if !renderer && event == "update" {
+        if ["check", "download", "install", "extract"].contains(&text(v, "updateStage")) {
+            clean["updateStage"] = v["updateStage"].clone();
+        }
+        if ["Io", "Reqwest", "Signature", "Version", "Restore", "Updater"].contains(&text(v, "updaterError")) {
+            clean["updaterError"] = v["updaterError"].clone();
+        }
+        if v["systemCode"].as_i64().is_some_and(|n| (0..=i32::MAX as i64).contains(&n)) {
+            clean["systemCode"] = v["systemCode"].clone();
+        }
+        let version = text(v, "updateVersion");
+        if !version.is_empty() && version.len() <= 64 && version.bytes().all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b)) {
+            clean["updateVersion"] = v["updateVersion"].clone();
+        }
+        if let Some(chain) = v["errorChain"].as_array() {
+            clean["errorChain"] = json!(chain.iter().take(8).filter_map(Value::as_str)
+                .map(|s| s.chars().take(1024).collect::<String>()).collect::<Vec<_>>());
+        }
     }
     Some(clean)
 }

@@ -2,6 +2,8 @@ pub const VERSION: &str = env!("GITTOGETHER_VERSION");
 pub mod ai;
 pub mod credentials;
 pub mod diagnostics;
+pub mod update_archive;
+pub mod update_error;
 pub mod git;
 pub mod oauth;
 pub mod operations;
@@ -121,8 +123,9 @@ pub fn run() {
             let root = data_root().map_err(std::io::Error::other)?;
             let service = Service::new(root, !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
+            let updates = Updates::new(service.diagnostics.clone());
             app.manage(service);
-            app.manage(Updates::new());
+            app.manage(updates);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

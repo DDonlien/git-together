@@ -32,11 +32,13 @@ fn run() -> Result<(), String> {
     {
         return Err("更新签名没有绑定本次版本。".into());
     }
+    gittogether_core::update_archive::verify(&bytes)
+        .map_err(|e| format!("更新包解压结构校验失败：{e}"))?;
     Ok(())
 }
 fn main() {
     match run() {
-        Ok(()) => println!("Tauri 更新包签名和版本校验通过。"),
+        Ok(()) => println!("Tauri 更新包签名、版本及解压结构校验通过。"),
         Err(e) => {
             eprintln!("{e}");
             std::process::exit(1);
