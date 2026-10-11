@@ -70,6 +70,7 @@ export type ApiInputs = {
   remoteWorkspace: { repositoryId: string };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
+  openRepository: { repositoryId: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
   openDirectory: { repositoryId: string; taskId: string };
 };
@@ -93,6 +94,7 @@ export type ApiOutputs = {
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
   openDirectory: { opened: true };
+  openRepository: { opened: true };
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };

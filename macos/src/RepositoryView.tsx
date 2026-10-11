@@ -1,4 +1,4 @@
-import { useMemo, useState, type RefObject } from 'react';
+import { useMemo, useState, type MouseEvent, type RefObject } from 'react';
 import { generateCommitMessage as generateWithService, importAPI } from './import-api';
 import { type Account, type LocalLink, type RemoteRepository } from './import-model';
 import { Button, Icon, Notice, Segmented } from './ui';
@@ -46,6 +46,8 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const [branchSelection, setBranchSelection] = useState<ReadonlySet<string> | null>(null);
   const [action, setAction] = useState<{ mode: RepositoryActionMode; targets: RepositoryActionTarget[] } | null>(null);
   const [actionFeedback, setActionFeedback] = useState('');
+  const [repositoryOpenError, setRepositoryOpenError] = useState('');
+  const [openingRepository, setOpeningRepository] = useState(false);
   const [treeSourceChoice, setTreeSource] = useState<'remote' | 'local' | null>(null);
   const workspace = useMemo<RepositoryWorkspace>(() => {
     if (suppliedWorkspace) return suppliedWorkspace;
@@ -89,13 +91,23 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const openAction = (mode: RepositoryActionMode) => {
     setAction({ mode, targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current) });
   };
+  const openRepository = async (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!window.gittogether) return;
+    event.preventDefault();
+    if (openingRepository) return;
+    setRepositoryOpenError(''); setOpeningRepository(true);
+    try { await importAPI('openRepository', { repositoryId: repository.id }); }
+    catch (problem) { setRepositoryOpenError(problem instanceof Error ? problem.message : '仓库页面打开失败。'); }
+    finally { setOpeningRepository(false); }
+  };
   const publishedCommits = new Map(workspace.tasks.filter(task => task.remote).map(task => [task.branch, reachableCommitIds(workspace.commits, [task.head])]));
   return <main className="repository-workspace-view" aria-label="仓库工作台">
     <section className="repository-overview flat-group" aria-label="仓库信息">
-      <div className="repository-overview-heading"><div className="repository-overview-title"><h1>{repository.name}</h1><p title={repository.url}>{repository.url}</p></div><div className="repository-overview-actions"><DashboardActionNames><RepositoryRowActions itemLabel={`${repository.fullName} · 当前筛选分支`} signals={signals} hidden={!!hiddenEntries?.has(hiddenEntryKey(repository.id))} onToggleHidden={onToggleHidden} onPull={repository.available && actionTasks.length ? () => openAction('pull') : undefined} onLatest={repository.available && actionTasks.length ? () => openAction('latest') : undefined} onClean={repository.available && actionTasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!action || !repository.available} /></DashboardActionNames></div></div>
+      <div className="repository-overview-heading"><div className="repository-overview-title"><h1>{repository.name}</h1><p title={repository.url}><a className="repository-url" href={repository.url} target="_blank" rel="noopener noreferrer" aria-label={`用默认浏览器打开 ${repository.fullName}`} aria-busy={openingRepository || undefined} onClick={openRepository} onAuxClick={event => { if (event.button === 1) void openRepository(event); }}>{repository.url}</a></p></div><div className="repository-overview-actions"><DashboardActionNames><RepositoryRowActions itemLabel={`${repository.fullName} · 当前筛选分支`} signals={signals} hidden={!!hiddenEntries?.has(hiddenEntryKey(repository.id))} onToggleHidden={onToggleHidden} onPull={repository.available && actionTasks.length ? () => openAction('pull') : undefined} onLatest={repository.available && actionTasks.length ? () => openAction('latest') : undefined} onClean={repository.available && actionTasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!action || !repository.available} /></DashboardActionNames></div></div>
       {(onSearchChange || focus) && <div className="repository-overview-tools">{onSearchChange && <div className="repository-workspace-search"><SearchBar inputRef={searchRef} value={globalSearch} onChange={onSearchChange} placeholder="搜索文件或提交…" /></div>}{focus && <Button variant="quiet" onClick={() => setFocusedTask(null)}>取消聚焦</Button>}</div>}
       {!repository.available && <Notice kind="info">账号目前无权访问此仓库；这里显示上次读取的信息。</Notice>}
     </section>
+    {repositoryOpenError && <Notice kind="error">{repositoryOpenError}</Notice>}
     {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
     {action && <RepositoryOperationDialog mode={action.mode} targets={action.targets} onSync={applySync} onCommit={commit} onPush={push} onGenerate={generate} onComplete={setActionFeedback} onClose={() => setAction(null)} />}
     {current?.error && <Notice kind="error">{current.error}{snapshot && ' 显示上次读取的本地状态。'} 正在自动重试。</Notice>}

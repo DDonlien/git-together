@@ -6,6 +6,8 @@
 
 桌面入口是`macos/src-tauri/src/main.rs`及`lib.rs`，使用Tauri 2 / WKWebView运行已打包React资源。`src/native-bridge.ts`安装既有有限协议，由Tauri命令调用Rust服务。生产不启动HTTP业务服务、Electron或Node sidecar；Node仅用于前端开发与发布工具。`macos/electron/`、`macos/server/`及相关旧回归保留为迁移前的参考，不进入当前桌面入口或安装包，不能据其结果声称Rust后台通过回归。
 
+仓库网址入口（R-05-repository-browser-link）：RepositoryView保留真实链接及键盘语义，桌面激活时阻止WebView导航，只提交`openRepository(repositoryId)`。Rust从已保存Catalog定位仓库并验证http(s)地址，通过既有系统open打开默认浏览器，不接受调用者URL或依赖本地关联。浏览器预览沿用普通新标签链接；打开失败使用单处Notice。
+
 | Rust模块 | 职责 |
 | --- | --- |
 | service | 账号目录、关联、上下文身份复核、幂等结果及按真实git-common-dir串行写入 |

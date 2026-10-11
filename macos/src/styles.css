@@ -300,6 +300,10 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-overview-actions { flex-shrink: 0; max-width: 100%; padding: 4px; overflow-x: auto; -webkit-app-region: no-drag; }
 .repository-overview-heading h1 { font-size: 24px; line-height: 1.3; letter-spacing: -.025em; font-weight: 500; overflow-wrap: anywhere; }
 .repository-overview-heading p { margin-top: 3px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repository-url { color: inherit; text-decoration: none; cursor: pointer; -webkit-app-region: no-drag; }
+.repository-url:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.repository-url:focus-visible { outline: 2px solid var(--blue); outline-offset: -1px; border-radius: 2px; }
+.repository-url[aria-busy="true"] { cursor: progress; }
 .repository-overview-tools { display: flex; align-items: center; gap: 12px; margin-top: 12px; -webkit-app-region: no-drag; }
 .repository-overview-tools > .app-button { margin-left: auto; }
 .repository-workspace-search { width: min(var(--search-width),100%); }

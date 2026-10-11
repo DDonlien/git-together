@@ -693,6 +693,28 @@ impl Service {
                 util::allowed(input, &[])?;
                 return self.catalog().await;
             }
+            "openRepository" => {
+                util::allowed(input, &["repositoryId"])?;
+                let id = util::field(input, "repositoryId", 160)?;
+                let catalog = self.catalog().await?;
+                let repository = catalog["repositories"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|repository| text(repository, "id") == id)
+                    .ok_or("仓库不存在，请重新加载列表。")?;
+                let url =
+                    url::Url::parse(text(repository, "url")).map_err(|_| "远端仓库地址无效。")?;
+                if !matches!(url.scheme(), "https" | "http")
+                    || url.host_str().is_none()
+                    || !url.username().is_empty()
+                    || url.password().is_some()
+                {
+                    return Err("远端仓库地址无效。".into());
+                }
+                open(url.as_str()).await?;
+                return Ok(json!({"opened":true}));
+            }
             "connect" => return self.connect(input, None, false).await,
             "updateAccount" => return self.update_account(input, cancel).await,
             "refresh" => {
