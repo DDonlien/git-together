@@ -4,7 +4,7 @@
 - 模型：gpt-6（运行环境仅暴露此标识，无法获得更具体版本）
 - 启动分支与版本：main，3d2c9742d5，0.22.0；fetch后与origin/main一致，工作区干净
 - 开始：2026-10-11 12:52:53 UTC+8
-- 结束：2026-10-11 13:16:11 UTC+8（发布验收于13:07:46完成，本次仅收尾文档）
+- 结束：2026-10-11 13:18:35 UTC+8（首次发布验收于13:07:46完成）
 - 是否提交：已提交并推送源码0b6bca1b940b793ffbb2830aa6111fe131dda1a8；后续文档收尾提交另记
 
 ## 上下文与成功标准
@@ -38,3 +38,5 @@
 - 公共包验收后另一项0.22.2发布已持有共享发布锁；仅准备文档记录，待锁释放后提交/推送，避免使其远端main来源检查失效。正式0.22.1交付已完成，不将并行发布计入本次工作。
 
 - 发布锁释放后，在同一短期锁下提交并推送本次验收记录，保护并行源码与发布来源；纯文档不生成新包。
+
+- Final readback: subsequent public 0.22.3 is notarized Accepted and publicUpdateVerified=true. Source 021dc549686740a3d731af0078db8a11ed0a26f5 descends from the scoped 0b6bca1 commit; its Dashboard contains the same showHidden-gated hiddenCount. Unauthenticated latest.json exactly matches the 0.22.3 build manifest. Thus the current update includes this fix; no second build or installed-app operation was needed. The corresponding README public-version update was already committed by its release task.
