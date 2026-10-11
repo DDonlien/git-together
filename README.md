@@ -72,6 +72,8 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 
 [产品范围与进展](REQUIREMENTS.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
-Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，支持即时筛选、清空和Cmd/Ctrl+K；Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
+Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
 
 Commit / Submit / Push失败时，弹窗只显示一处统一错误提示，注明失败仓库和分支；本地Commit保留，重试继续Push。macOS从Finder启动也会在用户`~/.local/bin`和Homebrew的`/opt/homebrew/bin`、`/usr/local/bin`查找Git LFS，供推送钩子、下载及同步使用，保留已有PATH优先级；无需重复安装已可运行的LFS。
+
+Dashboard仓库可分别平滑展开和收起分支；分支行与仓库行等高，保留相同的上下留白，系统减少动态效果时直接切换。

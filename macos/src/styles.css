@@ -24,6 +24,7 @@
   --menu-surface: #f3f1f7; --menu-shadow: 0 4px 16px rgb(35 35 55 / 14%);
   --window-inset: 8px; --workspace-gap: 16px; --workspace-top-inset: 12px;
   --control-height: 32px; --compact-height: 28px; --icon-size: 17px; --icon-label-gap: 10px;
+  --search-height: 36px; --search-width: 300px;
   --button-padding-inline: 13px; --compact-button-padding-inline: 12px;
   --sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: 0px;
   --repository-action-button-size: 28px; --repository-action-group-padding: 3px;
@@ -93,10 +94,10 @@ kbd { font-size: 11px; border: 1px solid var(--line); border-radius: 4px; paddin
 .import-empty h2 { font-size: 19px; margin-bottom: 9px; }
 .import-empty p { font-size: 13px; color: var(--muted); line-height: 1.8; margin-bottom: 22px; }
 .import-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
-.dashboard-search { position: relative; flex: 0 1 360px; min-width: min(360px, 100%); }
+.dashboard-search { position: relative; flex: 0 1 var(--search-width); min-width: min(var(--search-width), 100%); }
 .dashboard-search .search-field { width: 100%; }
-.dashboard-search .search-shortcut { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: auto; margin: 0; }
-.dashboard-search:has(.search-shortcut) .material-search-bar { --md-filled-text-field-trailing-space: 54px; }
+.dashboard-search .search-shortcut { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: auto; margin: 0; }
+.dashboard-search:has(.search-shortcut) .material-search-bar { --md-filled-text-field-trailing-space: 44px; }
 .dashboard-filter { display: inline-flex; flex: 0 0 auto; min-width: 0; max-width: 180px; }
 .dashboard-filter .filter-trigger { min-height: var(--control-height); min-width: 0; padding: 6px var(--compact-button-padding-inline); border: 0; border-radius: var(--radius-control); box-shadow: none !important; gap: 8px; font-size: 12px; background: transparent; }
 .dashboard-filter .filter-trigger:hover, .dashboard-filter .filter-trigger[aria-expanded="true"] { background: var(--surface-hover); }
@@ -137,6 +138,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .provider-mark.gitea { color: var(--teal); background: color-mix(in srgb,var(--teal) 9%,var(--content)); }
 .remote-table-scroll { position: relative; overflow-x: auto; }
 .remote-repo-table {
+  --repository-row-height: 58px; --repository-row-padding: 8px;
   --repository-name-size: 12px; --repository-detail-size: 11px;
   --repository-text-leading: 1.45; --repository-text-gap: 3px;
   --repository-icon-size: calc((var(--repository-name-size) + var(--repository-detail-size)) * var(--repository-text-leading) + var(--repository-text-gap));
@@ -166,7 +168,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table .repository-sort-button:hover { color: var(--text); }
 .repository-sort-indicator { color: var(--blue); font-size: 10px; }
 .repository-date { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.remote-repo-table td { height: 58px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); }
+.remote-repo-table td { height: var(--repository-row-height); padding: var(--repository-row-padding) 8px var(--repository-row-padding) 0; border-bottom: 1px solid var(--line); }
 .remote-repo-table tbody:last-child tr:last-child td { border-bottom: 0; }
 .remote-repo-table td:last-child { padding-right: 0; text-align: right; }
 .remote-name {
@@ -175,13 +177,23 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-name .repository-icon-tile.repository-disclosure { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--repository-icon-size); height: var(--repository-icon-size); min-height: 0; padding: 0; border: 0; border-radius: var(--radius-control); box-shadow: none; color: var(--blue); background: var(--blue-bg); }
 .remote-name .repository-disclosure svg { width: 19px; height: 19px; }
 .remote-name .repository-disclosure:hover { background: var(--surface-hover); }
-.remote-repo-table .dashboard-branch-row td, .remote-repo-table .dashboard-branch-message td { height: 34px; padding: 6px 8px 6px 0; text-align: left; border-bottom: 0; }
-.remote-repo-table .dashboard-branch-row td { height: 46px; }
+.remote-repo-table .dashboard-branch-row td, .remote-repo-table .dashboard-branch-message td { text-align: left; border-bottom: 0; }
 .remote-repo-table .dashboard-branch-row td:first-child, .remote-repo-table .dashboard-branch-message td { padding-left: calc(var(--repository-icon-size) + var(--icon-label-gap)); }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
 .remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
 .dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
 .dashboard-repository-branches { background: transparent; }
+.dashboard-repository-branches[aria-hidden='true'] { pointer-events: none; }
+/* Animate cell contents within the original table so every column stays aligned. */
+.remote-repo-table .dashboard-repository-branches td { height: 0; padding-block: 0; transition: height 200ms ease, padding-block 200ms ease; }
+.remote-repo-table .dashboard-repository-branches.is-expanded td { height: var(--repository-row-height); padding-block: var(--repository-row-padding); }
+.dashboard-branch-cell { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 200ms ease, opacity 200ms ease; }
+.dashboard-repository-branches.is-expanded .dashboard-branch-cell { grid-template-rows: 1fr; opacity: 1; }
+.dashboard-branch-cell > div { min-height: 0; overflow: hidden; }
+/* Once open, badges and keyboard outlines can extend beyond the content box. */
+.dashboard-repository-branches.is-settled .dashboard-branch-cell > div { overflow: visible; }
+.dashboard-branch-cell-content { display: flex; align-items: center; min-width: 0; }
+.repository-action-cell .dashboard-branch-cell-content { justify-content: flex-end; }
 .dashboard-branch-content { display: flex; align-items: center; gap: var(--icon-label-gap); min-width: 0; }
 .dashboard-branch-content .branch-label { color: var(--text); }
 .dashboard-default-branch { flex-shrink: 0; color: var(--muted); font-size: 10px; }
@@ -290,7 +302,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-overview-heading p { margin-top: 3px; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repository-overview-tools { display: flex; align-items: center; gap: 12px; margin-top: 12px; -webkit-app-region: no-drag; }
 .repository-overview-tools > .app-button { margin-left: auto; }
-.repository-workspace-search { width: min(360px,100%); }
+.repository-workspace-search { width: min(var(--search-width),100%); }
 .repository-workspace-search .search-field { width: 100%; }
 .repository-columns-scroll { flex: 1; min-height: 380px; overflow-x: auto; display: flex; }
 /* Official fields scroll within the composer; notices must not push its actions below a short window. */
@@ -534,21 +546,35 @@ button.repository-count-action:disabled { opacity: .7; }
 .material-textarea { resize: vertical; max-height: 160px; }
 /* Search bar is a spec-based composition of official Material Web components. */
 .material-search-bar {
-  display: inline-flex; width: 100%; -webkit-app-region: no-drag;
+  display: inline-flex; width: 100%; height: var(--search-height); -webkit-app-region: no-drag;
   --md-filled-text-field-container-shape: 999px;
   --md-filled-text-field-container-color: var(--menu-surface);
   --md-filled-text-field-active-indicator-height: 0px;
   --md-filled-text-field-hover-active-indicator-height: 0px;
   --md-filled-text-field-focus-active-indicator-height: 0px;
   --md-filled-text-field-disabled-active-indicator-height: 0px;
-  --md-filled-text-field-leading-icon-size: 40px;
-  --md-filled-text-field-trailing-icon-size: 40px;
+  --md-filled-text-field-input-text-size: 13px;
+  --md-filled-text-field-input-text-line-height: 20px;
+  --md-filled-text-field-top-space: 8px;
+  --md-filled-text-field-bottom-space: 8px;
+  --md-filled-text-field-leading-space: 12px;
+  --md-filled-text-field-trailing-space: 12px;
+  --md-filled-text-field-with-leading-icon-leading-space: 4px;
+  --md-filled-text-field-with-trailing-icon-trailing-space: 4px;
+  --md-filled-text-field-icon-input-space: 6px;
+  --md-filled-text-field-leading-icon-size: 28px;
+  --md-filled-text-field-trailing-icon-size: 28px;
+}
+.material-search-bar md-icon-button {
+  --md-icon-button-state-layer-width: 28px;
+  --md-icon-button-state-layer-height: 28px;
+  --md-icon-button-icon-size: 18px;
 }
 .material-search-bar:focus-within { --md-filled-text-field-container-color: color-mix(in srgb, var(--blue) 4%, var(--menu-surface)); }
 .search-field > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.ogui-search { height: 36px; border-radius: 999px; background: var(--surface); border: 1px solid transparent; box-shadow: none; }
-.ogui-search input { font-size: 12px; padding: 6px; }
-.ogui-search > i { font-size: 16px; line-height: 1; }
+.ogui-search { height: var(--search-height); border-radius: 999px; background: var(--surface); border: 1px solid transparent; box-shadow: none; }
+.ogui-search input { font-size: 13px; padding: 6px; }
+.ogui-search > i { font-size: 18px; line-height: 1; }
 .ogui-search button { width: 24px; height: 24px; font-size: 15px; }
 /* Text entry keeps one quiet border, not a library halo plus an inner outline. */
 .ogui-search:focus-within { border-color: var(--strong-line); box-shadow: none; }

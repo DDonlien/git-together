@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject, type TdHTMLAttributes } from 'react';
 import { accountLabel, providerName, type Account, type LocalLink, type RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { useRemoteRepository } from './use-remote-repository';
@@ -38,6 +38,10 @@ function latestCommitTime(commits: readonly { time: string }[] | undefined) {
 function DashboardSortHeader({ label, column, sort, onSort }: { label: string; column: DashboardSortKey; sort: DashboardSort; onSort: (column: DashboardSortKey) => void }) {
   const active = sort.key === column;
   return <th scope="col" aria-sort={active ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}><button type="button" className="repository-sort-button" onClick={() => onSort(column)}>{label}<span className="repository-sort-indicator" aria-hidden="true">{active ? sort.direction === 'asc' ? '↑' : '↓' : '↕'}</span></button></th>;
+}
+
+function BranchCell({ children, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
+  return <td {...props}><div className="dashboard-branch-cell"><div><div className="dashboard-branch-cell-content">{children}</div></div></div></td>;
 }
 
 function RepositoryDate({ value, source }: { value?: string; source: string }) {
@@ -192,6 +196,27 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void;
 }) {
   const branchesId = useId();
+  const branchesRef = useRef<HTMLTableSectionElement>(null);
+  const [branchesMounted, setBranchesMounted] = useState(expanded);
+  const [branchesOpen, setBranchesOpen] = useState(false);
+  const [branchesSettled, setBranchesSettled] = useState(false);
+  useLayoutEffect(() => {
+    setBranchesSettled(false);
+    if (expanded) setBranchesMounted(true);
+    else setBranchesOpen(false);
+  }, [expanded]);
+  useLayoutEffect(() => {
+    if (!expanded || !branchesMounted) return;
+    // Establish the collapsed geometry before transitioning newly mounted rows.
+    branchesRef.current!.getBoundingClientRect();
+    setBranchesOpen(true);
+  }, [expanded, branchesMounted]);
+  useEffect(() => {
+    if (!branchesMounted) return;
+    // Reduced motion has no transitionend; also finish when the page is hidden.
+    const timeout = window.setTimeout(() => { if (expanded) setBranchesSettled(true); else setBranchesMounted(false); }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 250);
+    return () => window.clearTimeout(timeout);
+  }, [expanded, branchesMounted]);
   const ready = !controller.loading && !controller.needsReload;
   const link = controller.catalog.links.find(link => link.repositoryId === repo.id);
   // Linked rows share workspace-owned checks, including while filtered out.
@@ -215,7 +240,7 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
       <td><button className={`local-path local-path-action ${localPath ? '' : 'muted'}`} title={association.detail} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !localPath} onClick={() => onConfigure(repo)}><span>{association.label}</span>{localPath && <small>{localPath}</small>}</button></td>
       <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repo.fullName} · 当前筛选分支`} signals={signals} hidden={hidden} onPull={repo.available && tasks.length ? () => openAction('pull') : undefined} onLatest={repo.available && tasks.length ? () => openAction('latest') : undefined} onClean={repo.available && tasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!controller.busy[repo.id] || !ready} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
     </tr></tbody>
-    <tbody id={branchesId} className="dashboard-repository-branches" aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} hidden={!expanded}>{expanded && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} onOpen={onOpen} downloadBusy={!!controller.busy[repo.id]} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} taskSearch={taskSearch} onAction={onAction} />}</tbody>
+    <tbody ref={branchesRef} id={branchesId} className={`dashboard-repository-branches${branchesOpen ? ' is-expanded' : ''}${branchesSettled ? ' is-settled' : ''}`} aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} aria-hidden={!expanded} inert={!expanded} hidden={!branchesMounted} onTransitionEnd={event => { if (event.target instanceof HTMLTableCellElement && event.propertyName === 'height') { if (expanded) setBranchesSettled(true); else setBranchesMounted(false); } }}>{branchesMounted && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} onOpen={onOpen} downloadBusy={!!controller.busy[repo.id]} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} taskSearch={taskSearch} onAction={onAction} />}</tbody>
   </>;
 }
 
@@ -228,16 +253,16 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
   const searchableBranches = branches.filter(branch => showHidden || !hiddenEntries?.has(hiddenEntryKey(repository.id, branch)));
   const visibleBranches = searchableBranches.filter(branch => taskMatchesSearch({ branch, path: null }, taskSearch) || localTasks.some(task => task.branch === branch && taskMatchesSearch(task, taskSearch)));
   return <>
-    {error && <tr className="dashboard-branch-message"><td colSpan={7}><Notice kind="error">{error}{workspace ? ' 已保留上次读取的分支。' : ''} 收起后重新展开可重试。</Notice></td></tr>}
-    {!workspace && !error && <tr className="dashboard-branch-message"><td colSpan={7}><span role="status">{blocked ? '账号服务尚未就绪。' : loading ? <><Icon name="spinner" className="spin" size={13} />正在读取远端分支…</> : '正在准备远端读取…'}</span></td></tr>}
-    {workspace && !workspace.tasks.length && !error && <tr className="dashboard-branch-message"><td colSpan={7}><span role="status">此仓库暂无远端分支。</span></td></tr>}
-    {branches.length > 0 && !visibleBranches.length && !error && <tr className="dashboard-branch-message"><td colSpan={7}><span role="status">{searchableBranches.length ? '没有符合当前搜索的分支或工作目录。' : '此仓库的分支已隐藏，点击上方「已隐藏」可显示并恢复。'}</span></td></tr>}
+    {error && <tr className="dashboard-branch-message"><BranchCell colSpan={7}><Notice kind="error">{error}{workspace ? ' 已保留上次读取的分支。' : ''} 收起后重新展开可重试。</Notice></BranchCell></tr>}
+    {!workspace && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={7}><span role="status">{blocked ? '账号服务尚未就绪。' : loading ? <><Icon name="spinner" className="spin" size={13} />正在读取远端分支…</> : '正在准备远端读取…'}</span></BranchCell></tr>}
+    {workspace && !workspace.tasks.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={7}><span role="status">此仓库暂无远端分支。</span></BranchCell></tr>}
+    {branches.length > 0 && !visibleBranches.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={7}><span role="status">{searchableBranches.length ? '没有符合当前搜索的分支或工作目录。' : '此仓库的分支已隐藏，点击上方「已隐藏」可显示并恢复。'}</span></BranchCell></tr>}
     {visibleBranches.map(branch => { const tasks = localTasks.filter(task => task.branch === branch); const paths = tasks.map(task => task.path!); const key = hiddenEntryKey(repository.id, branch); const hidden = !!hiddenEntries?.has(key); return <tr className={`dashboard-branch-row${hidden ? ' dashboard-hidden-row' : ''}`} key={branch}>
-      <td colSpan={3}><div className="dashboard-branch-content"><span className="branch-label" title={branch}><Icon name="branch" size={13} /><span>{branch}</span></span>{branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}</div></td>
-      <td aria-hidden="true"></td><td aria-hidden="true"></td>
-      <td><button className={`local-path local-path-action ${paths.length ? '' : 'muted'}`} title={paths.join('\n') || '选择该分支的真实工作目录，或包含它的父目录'} aria-label={`配置分支目录：${repository.fullName} · ${branch}`} disabled={blocked || (!repository.available && !paths.length) || !onConfigure} onClick={() => onConfigure?.(repository, branch)}>{paths.length ? `${paths[0]}${paths.length > 1 ? ` +${paths.length - 1}` : ''}` : '关联工作目录'}</button></td>
-      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(tasks, state, localState, branch, repository.available)} hidden={hidden} onPull={onAction && repository.available && tasks.length ? () => onAction('pull', repositoryActionTargets(repository, tasks, 'pull', state, localState)) : undefined} onLatest={onAction && repository.available && tasks.length ? () => onAction('latest', repositoryActionTargets(repository, tasks, 'latest', state, localState)) : undefined} onClean={onAction && repository.available && tasks.length ? () => onAction('clean', repositoryActionTargets(repository, tasks, 'clean', state, localState)) : undefined} onCommit={onAction ? () => onAction('commit', repositoryActionTargets(repository, tasks, 'commit', state, localState)) : onOpen ? () => { const task = tasks.find(task => task.path && task.files.length); if (task) onOpen(repository.id, task.id); } : undefined} onSubmit={onAction ? () => onAction('submit', repositoryActionTargets(repository, tasks, 'submit', state, localState)) : undefined} onPush={onAction ? () => onAction('push', repositoryActionTargets(repository, tasks, 'push', state, localState)) : undefined} busy={blocked || downloadBusy} unlinked={!paths.length} onDownload={onDownload ? () => onDownload(repository, branch) : undefined} downloadBusy={downloadBusy} downloadBlocked={blocked || !repository.available || !workspace?.tasks.some(task => task.branch === branch) || !!(link && !link.worktrees && !localState?.workspace)} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></td>
+      <BranchCell colSpan={3}><div className="dashboard-branch-content"><span className="branch-label" title={branch}><Icon name="branch" size={13} /><span>{branch}</span></span>{branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}</div></BranchCell>
+      <BranchCell aria-hidden="true"></BranchCell><BranchCell aria-hidden="true"></BranchCell>
+      <BranchCell><button className={`local-path local-path-action ${paths.length ? '' : 'muted'}`} title={paths.join('\n') || '选择该分支的真实工作目录，或包含它的父目录'} aria-label={`配置分支目录：${repository.fullName} · ${branch}`} disabled={blocked || (!repository.available && !paths.length) || !onConfigure} onClick={() => onConfigure?.(repository, branch)}>{paths.length ? `${paths[0]}${paths.length > 1 ? ` +${paths.length - 1}` : ''}` : '关联工作目录'}</button></BranchCell>
+      <BranchCell className="repository-action-cell"><RepositoryRowActions itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(tasks, state, localState, branch, repository.available)} hidden={hidden} onPull={onAction && repository.available && tasks.length ? () => onAction('pull', repositoryActionTargets(repository, tasks, 'pull', state, localState)) : undefined} onLatest={onAction && repository.available && tasks.length ? () => onAction('latest', repositoryActionTargets(repository, tasks, 'latest', state, localState)) : undefined} onClean={onAction && repository.available && tasks.length ? () => onAction('clean', repositoryActionTargets(repository, tasks, 'clean', state, localState)) : undefined} onCommit={onAction ? () => onAction('commit', repositoryActionTargets(repository, tasks, 'commit', state, localState)) : onOpen ? () => { const task = tasks.find(task => task.path && task.files.length); if (task) onOpen(repository.id, task.id); } : undefined} onSubmit={onAction ? () => onAction('submit', repositoryActionTargets(repository, tasks, 'submit', state, localState)) : undefined} onPush={onAction ? () => onAction('push', repositoryActionTargets(repository, tasks, 'push', state, localState)) : undefined} busy={blocked || downloadBusy} unlinked={!paths.length} onDownload={onDownload ? () => onDownload(repository, branch) : undefined} downloadBusy={downloadBusy} downloadBlocked={blocked || !repository.available || !workspace?.tasks.some(task => task.branch === branch) || !!(link && !link.worktrees && !localState?.workspace)} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></BranchCell>
     </tr>; })}
-    {!!branchWarnings.length && <tr className="dashboard-branch-message"><td colSpan={7}><Notice kind="info">{branchWarnings.join(' ')}</Notice></td></tr>}
+    {!!branchWarnings.length && <tr className="dashboard-branch-message"><BranchCell colSpan={7}><Notice kind="info">{branchWarnings.join(' ')}</Notice></BranchCell></tr>}
   </>;
 }

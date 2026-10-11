@@ -32,7 +32,7 @@ export function SearchBar({ value, onChange, placeholder, inputRef }: {
     if (inputRef) inputRef.current = element;
   }, [inputRef]);
   return <FilledField ref={setRef} className="search-field material-search-bar" type="search" aria-label={placeholder} placeholder={placeholder} value={value} tabIndex={0} onValueChange={event => onChange(event.target.value)}>
-    <MaterialIconButton slot="leading-icon" aria-label="聚焦搜索" tabIndex={0} onClick={() => field.current?.focus()}><Icon name="search" size={24} /></MaterialIconButton>
-    {value && <MaterialIconButton slot="trailing-icon" aria-label="清空搜索" tabIndex={0} onClick={() => { onChange(''); field.current?.focus(); }}><Icon name="close" size={24} /></MaterialIconButton>}
+    <MaterialIconButton slot="leading-icon" aria-label="聚焦搜索" tabIndex={0} onClick={() => field.current?.focus()}><Icon name="search" size={18} /></MaterialIconButton>
+    {value && <MaterialIconButton slot="trailing-icon" aria-label="清空搜索" tabIndex={0} onClick={() => { onChange(''); field.current?.focus(); }}><Icon name="close" size={18} /></MaterialIconButton>}
   </FilledField>;
 }
