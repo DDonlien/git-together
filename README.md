@@ -39,13 +39,13 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 仓库的可见范围始终取决于账号授权与平台权限。关联本地是可选步骤，不是读取远端内容的前提。
 
-0.22.5迁移读取修正已推送main：失效的旧目录不会阻止重新关联，无法读取的目录会显示错误；本地连续保存或暂存仍自动刷新。更新本地远端引用失败时，远端提交仍继续读取并明确显示反馈。残缺文件树允许重新读取，Gitea中文文件的提交Diff可正确显示，多个同时等待的获取请求可以分别取消。安装ZIP已构建并签名，现有gittogether-notary配置暂不可读，公证及发布尚未完成；公开更新仍为0.22.4。
+此前0.22.5已完成的迁移读取修正随0.22.6公开交付：失效的旧目录不会阻止重新关联，无法读取的目录会显示错误；本地连续保存或暂存仍自动刷新。更新本地远端引用失败时，远端提交仍继续读取并明确显示反馈。残缺文件树允许重新读取，Gitea中文文件的提交Diff可正确显示，多个同时等待的获取请求可以分别取消。0.22.6安装ZIP及Tauri更新包已完成签名、公证及公共更新源核验。
 
 遇到读取或更新异常时，可在「设置 → 日志 → 打开日志文件夹」找到本机记录，也可复制日志文件到剪贴板。日志自动保留最近 24 小时，不上传，不记录令牌、密码、文件内容或明文仓库路径；空间上限 128 MB，超出后较早记录会被清理。此功能从 0.13.0 起提供，已有安装版需更新到包含此功能的版本。
 
 ## 当前状态
 
-0.22.4已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.4)公开。安装ZIP约4.2MB。框架迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
+0.22.6已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.6)公开。安装ZIP约4.2MB。框架迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
 当前源码0.22.6支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
