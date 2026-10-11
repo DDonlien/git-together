@@ -2,15 +2,16 @@ pub const VERSION: &str = env!("GITTOGETHER_VERSION");
 pub mod ai;
 pub mod credentials;
 pub mod diagnostics;
-pub mod update_archive;
-pub mod update_error;
 pub mod git;
 pub mod oauth;
 pub mod operations;
 pub mod preferences;
-pub mod proxy;
+pub mod presence;
 pub mod provider;
+pub mod proxy;
 pub mod service;
+pub mod update_archive;
+pub mod update_error;
 mod updates;
 pub mod util;
 use serde_json::{json, Value};
@@ -64,6 +65,16 @@ async fn diagnostics_command(
 #[tauri::command]
 fn environment() -> Value {
     json!({"nativeGlass":false,"platform":std::env::consts::OS.replace("macos","darwin")})
+}
+#[tauri::command]
+async fn presence_command(
+    presence: State<'_, Arc<presence::Presence>>,
+    method: String,
+    input: Option<Value>,
+) -> util::Result<Value> {
+    Ok(envelope(
+        presence.command(&method, input.unwrap_or(json!({}))).await,
+    ))
 }
 #[tauri::command]
 fn set_theme(window: tauri::WebviewWindow, theme: String) -> util::Result<()> {
@@ -121,10 +132,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let root = data_root().map_err(std::io::Error::other)?;
+            let presence = presence::Presence::new(root.clone(), !cfg!(debug_assertions))
+                .map_err(std::io::Error::other)?;
             let service = Service::new(root, !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
             let updates = Updates::new(service.diagnostics.clone());
             app.manage(service);
+            app.manage(presence);
             app.manage(updates);
             Ok(())
         })
@@ -132,6 +146,7 @@ pub fn run() {
             import_command,
             github_web,
             diagnostics_command,
+            presence_command,
             environment,
             set_theme,
             open_github_authorization,

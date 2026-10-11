@@ -1,8 +1,16 @@
 # GitTogether 独立实现需求
 
-Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求转为账号导入流程，不基于 GitButler fork；旧场景是历史验收，不再作为运行入口。账号读取真实只读接口，本地关联验证现有仓库；2026-10-10 用户授权的未关联分支下载、本地 Commit 和本机 Codex 提交说明生成已接入，其余 Git 动作与 Presence 尚未实现。
+Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求转为账号导入流程，不基于 GitButler fork；旧场景是历史验收，不再作为运行入口。账号与 Git 动作遵循当前实际服务契约；0.23.0 首次接入真实 GitPresence 插件与 NAS 服务器，不与历史演示状态混用。
 
 # 任务清单
+
+## Phase - v0.23.0 - Presence 插件与首个服务器
+
+### presence/main: 接入真实团队协作状态
+
+- [x] \[PRESENCE-01-plugin] 设置增加「插件 → Presence」，支持启用/停用、服务器地址、独立访问密钥的系统加密保存和重连；首次 NAS 配置从仓库外私有文件读取，密钥不返回界面、不入日志或安装包。类型/Cargo/构建及真实浏览器启用、NAS 连接已核对；不代表用户安装版已更新。
+- [x] \[PRESENCE-02-state] Rust 客户端只读订阅 GitPresence v1 世界快照与本机 Bridge；在设置、仓库侧栏和仓库工作台展示实际会话、分支、Git changed 与编辑器 editing。失联或过期只显示上次状态和未知有效性，停用即停止连接；App 不执行 Bridge 的 Git 写操作。两个真实登记工作区已连接，未启用的 UE/Godot 来源明确显示未接入。
+- [ ] \[PRESENCE-03-nas] NAS 部署独立 GitPresence Docker 服务，复用现有 HTTPS 的 /presence/ 路径、按仓库授权和只读非 root 容器；核对健康、真实 Bridge/观察者通信和相邻服务，完成源码与桌面更新交付。
 
 ## Phase - v0.1.0 - 独立 TypeScript 客户端
 

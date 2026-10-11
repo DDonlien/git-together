@@ -6,6 +6,7 @@ declare global {
       environment: () => Promise<{ nativeGlass: boolean; platform: string }>;
       setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
       import: (method: string, input: unknown, requestId?: string) => Promise<unknown>;
+      presence?: (method: 'status' | 'configure' | 'reconnect', input: unknown) => Promise<unknown>;
       diagnostics?: {
         status: (input?: unknown) => Promise<DiagnosticsStatus>;
         record: (input: DiagnosticInput) => Promise<boolean>;

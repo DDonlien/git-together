@@ -11,6 +11,7 @@ export async function installNativeBridge(): Promise<void> {
     environment: () => invoke('environment'),
     setTheme: theme => invoke('set_theme', { theme }),
     import: (method, input, requestId) => invoke('import_command', { method, input, requestId }),
+    presence: (method, input) => invoke('presence_command', { method, input }),
     diagnostics: {
       status: () => invoke<DiagnosticsStatus>('diagnostics_command', { method: 'status' }),
       record: input => invoke('diagnostics_command', { method: 'record', input }),

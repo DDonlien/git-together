@@ -2,7 +2,7 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.22.10）
+## 当前运行结构（0.23.0）
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
@@ -20,6 +20,7 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 | oauth | Rust loopback网页授权与设备授权，PKCE/state、实例绑定及加密开发配置 |
 | diagnostics | 24小时本机有限日志、打开文件夹及复制日志文件 |
 | updates | Tauri签名更新、版本绑定、确认后立即安装与重启 |
+| presence | 加密插件配置、远端只读观察者、本机 Bridge 读取与独立状态有效性 |
 
 保留`com.gittogether.standalone`、原Developer ID及`GitTogether-Standalone-Demo`数据目录。正式应用启动时兼容`accounts-v2.encrypted`旧v10密文，保存采用认证加密；Keychain不可用时保留原文件并返回错误，不弹解锁或明文降级。只迁移本应用偏好键，WKWebView已有值不覆盖。开发账号保持会话存储，不读取正式账号。迁移源与实际用户升级结果分别记录。
 
@@ -261,3 +262,11 @@ commit-generator 仅收集当前任务选中范围最多96KB的差异证据，�
 macOS Git工具环境与操作错误（2026-10-10，IMPORT-14-push-lfs-errors）：git-process和branch-download共用gitToolEnvironment，在各Git子进程环境中追加用户.local/bin、Apple Silicon及Intel Homebrew目录，保留继承PATH优先级并去重；不执行登录shell、不改全局环境或Git配置。LFS钩子与filter继承相同环境。RepositoryActionDialog删除Entry.error和重复catch，仅由弹窗error保存失败信息，带失败仓库/分支并用共享Notice展示；Commit/Push结果与UUID继续用于跳过已完成步骤。已知LFS缺失返回固定安全提示及git-lfs-missing诊断分类，不回显Git原始输出，也不将泛化失败误分类为分支权限。
 
 Dashboard展开呈现（2026-10-11）：DashboardRepositoryRows将展开意图、过渡期间挂载和完成展开区分。原tbody及七列表保持不变，每个分支单元格通过内部网格过渡高度，完成展开后允许角标和焦点轮廓溢出；收起立即设置aria-hidden/inert，transitionend后卸载，减少动态效果或后台页面有短延时收尾。快速反向切换取消旧收尾，原remote读取启用条件仍只跟随展开意图/关联状态，不随呈现过渡延长或新增网络检查。SearchBar继续共用官方组件，36px/13px/300px尺寸由公开CSS令牌统一控制；不修改服务或持久化字段。
+
+## Presence 插件与首个 NAS 服务（0.23.0）
+
+PRESENCE-01/02/03：Presence 独立于账号导入和 Git 写服务；有限 presence_command 与同源 /api/presence/{status,configure,reconnect} 共用 Rust Presence。私有默认配置从 ~/.config/git-presence/gittogether.local.json 发现，配置保存沿用系统加密，不把密钥返回渲染层或纳入包。更换服务器拒绝复用旧密钥；URL 限 HTTPS（loopback 例外），不接受 URL 凭据、query 或 fragment。
+
+App 为 GitPresence v1 只读 observer，只接收 welcome/world 和维护心跳。服务器 grant 同时限定角色与仓库，App 不发布、不执行 Bridge 写操作。独立 Bridge 继续是 Git/编辑器事实唯一发布者；App 也通过固定私有 connection.json 读取 loopback /v1/projects 与 /v1/view，跳转和远程地址不得承载本机密钥。没有 Node 业务 sidecar、动态插件执行或凭据迁移。
+
+Rust 以配置 generation 隔离旧连接结果，停用/配置变化立即丢弃连接任务；续期/断线保留上次快照且使有效性未知。Bridge 与远端独立，服务端按 alive 判断有效性，不用客户端时钟重新裁决来源。前端单一 PresenceProvider 在页面切换时保持状态，读取失败也撤销在线有效性。完整快照有容量、路径与类型限制，编辑器未接入不能显示已确认 clean。部署与初始两个仓库的范围见 docs/presence.md。

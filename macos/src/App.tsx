@@ -13,6 +13,7 @@ import { RepositoryActionDraftsProvider } from './RepositoryActionDialog';
 import { Button, MaterialProvider, Icon, Notice } from './ui';
 import type { RemoteRepository } from './import-model';
 import { hiddenEntryKey } from './branch-links';
+import { PresenceProvider } from './PresenceProvider';
 
 export function App() {
   const controller = useWorkspace();
@@ -69,7 +70,7 @@ export function App() {
     const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !configuring && !downloading) { event.preventDefault(); searchRef.current?.focus(); } };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [configuring, downloading]);
-  return <MaterialProvider appearance={controller.preferences.theme}><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><div className="app-frame">
+  return <MaterialProvider appearance={controller.preferences.theme}><PresenceProvider><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><div className="app-frame">
     <WindowChrome native={!!window.gittogether} />
     <div className="app-body">
     <aside id="global-sidebar" className={`global-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}><SidebarHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(value => !value)} /><nav className="global-nav"><button className={`nav-item sidebar-permanent ${page === 'dashboard' ? 'active' : ''}`} title="Dashboard" aria-label="Dashboard" onClick={showDashboard}><span className="sidebar-button-icon" aria-hidden="true"><Icon name="dashboard" size={19} /></span><span>Dashboard</span></button></nav>
@@ -82,5 +83,5 @@ export function App() {
       {page === 'repo' && repository && account && <RepositoryView key={`${controller.catalog.instanceId}:${repoId}:${localPath || ''}`} initialCommitTask={commitTask} repository={repository} account={account} localPath={localPath} localLink={localLink} hiddenEntries={hiddenEntries} onToggleHidden={() => { const next = new Set(hiddenEntries); const key = hiddenEntryKey(repoId); if (!next.delete(key)) next.add(key); controller.updatePreferences({ hiddenEntries: [...next] }); }} localState={controller.localStates[repoId]} remoteState={remote.state} readRemoteCommit={remote.readCommit} submitCommit={controller.submitCommit} pushCommit={controller.pushCommit} applySync={controller.applySync} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} onConfigure={() => setConfiguring({ repository })} />}
       {page === 'settings' && <SettingsView controller={controller} onDashboard={showDashboard} />}
     </div></div>{configuring && <LocalRepositoryModal key={`${configuring.repository.id}:${configuring.branch || ''}`} repository={controller.catalog.repositories.find(r => r.id === configuring.repository.id) || configuring.repository} branch={configuring.branch} controller={controller} onClose={() => setConfiguring(null)} />}{downloading && <BranchDownloadModal key={`${downloading.repository.id}:${downloading.branch}`} repository={controller.catalog.repositories.find(r => r.id === downloading.repository.id) || downloading.repository} branch={downloading.branch} controller={controller} onClose={() => setDownloading(null)} />}
-  </div></RepositoryActionDraftsProvider></MaterialProvider>;
+  </div></RepositoryActionDraftsProvider></PresenceProvider></MaterialProvider>;
 }

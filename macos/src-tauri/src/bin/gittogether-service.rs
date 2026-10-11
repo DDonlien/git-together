@@ -6,7 +6,7 @@ use axum::{
     routing::post,
     Router,
 };
-use gittogether_core::{data_root, service::Service, util::Result};
+use gittogether_core::{data_root, presence::Presence, service::Service, util::Result};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -88,6 +88,21 @@ async fn diagnostics(
     let input = serde_json::from_slice(&body).unwrap_or(Value::Null);
     envelope(service.diagnostics.command(&method, &input).await)
 }
+async fn presence(
+    State(presence): State<Arc<Presence>>,
+    Path(method): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !trusted(&headers) || body.len() > 4096 {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let input = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => return envelope(Err("Presence 请求无效。".into())),
+    };
+    envelope(presence.command(&method, input).await)
+}
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
@@ -97,13 +112,19 @@ async fn main() {
 }
 async fn run() -> Result<()> {
     let root = data_root()?;
+    let presence = Presence::new(root.clone(), false)?;
     let service = Service::new(root, false, "preview")?;
     service.authorization.ensure_listener().await?;
     let router = Router::new()
         .route("/api/import/{method}", post(import))
         .route("/api/diagnostics/{method}", post(diagnostics))
         .layer(axum::extract::DefaultBodyLimit::max(32_768))
-        .with_state(service.clone());
+        .with_state(service.clone())
+        .merge(
+            Router::new()
+                .route("/api/presence/{method}", post(self::presence))
+                .with_state(presence),
+        );
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 4175))
         .await
         .map_err(|_| "Rust 预览服务端口 4175 已占用，未停止其他进程。")?;

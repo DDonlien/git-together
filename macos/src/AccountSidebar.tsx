@@ -20,7 +20,7 @@ export function AccountSidebar({ catalog, collapsedAccounts, loading, selectedRe
         </button>
         {!collapsed && <div id={`account-${account.id}`} className="sidebar-account-repositories">
           {repositories.map(repo => <button key={repo.id} className={`nav-item repository-item ${repo.id === selectedRepositoryId ? 'active' : ''}`} title={repo.fullName} aria-label={repo.available ? repo.name : `${repo.name}（不可访问）`} onClick={() => onOpen(repo.id)}>
-            <RepositoryLogo /><span>{repo.name}</span>{!repo.available && <Icon name="warning" size={13} />}
+            <RepositoryLogo repository={repo} /><span>{repo.name}</span>{!repo.available && <Icon name="warning" size={13} />}
           </button>)}
           {!repositories.length && <p className="sidebar-account-empty">{account.error ? '仓库读取失败' : '此账号暂无仓库'}</p>}
         </div>}

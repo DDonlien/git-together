@@ -1,0 +1,37 @@
+.presence-plugin-name { display: flex; align-items: center; gap: 12px; }
+.presence-plugin-name > svg { color: var(--primary); flex-shrink: 0; }
+.presence-plugin-name strong { font-size: 14px; font-weight: 500; }
+.presence-plugin-heading .ogui-switch { flex-shrink: 0; }
+.presence-server-row > span:first-child { min-width: 0; }
+.presence-server-row small { max-width: none; overflow-wrap: anywhere; }
+.presence-settings-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.presence-connection { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.presence-connection i { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; flex-shrink: 0; }
+.presence-connection.connected i { background: var(--teal); }
+.presence-connection.connecting i { animation: presence-breathe 1.6s ease-in-out infinite; }
+.presence-configuration { display: grid; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.presence-feedback:has(.notice) { padding: 14px 0; }
+.presence-sessions { padding: 14px 0; }
+.presence-sessions h3 { margin: 16px 0 6px; font-size: 13px; font-weight: 500; }
+.presence-local-status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.presence-session { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.presence-session:last-child { border-bottom: 0; }
+.presence-session strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 500; }
+.presence-session small, .presence-empty { display: block; margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.presence-session-validity { color: var(--muted); font-size: 12px; font-weight: 400; }
+.repository-presence-panel { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; font-size: 13px; }
+.repository-presence-panel > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 28px; border-radius: 6px; }
+.repository-presence-panel > summary small { margin-left: auto; color: var(--muted); font-size: 12px; }
+.presence-disclosure { display: flex; align-items: center; }
+.repository-presence-panel[open] .presence-disclosure { transform: rotate(90deg); }
+.repository-presence-panel > summary:hover { background: var(--surface-hover); }
+.repository-presence-panel > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.presence-projects { max-height: 260px; overflow: auto; }
+.presence-files { list-style: none; padding: 0; margin: 6px 0 0; }
+.presence-files li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; font-size: 12px; }
+.presence-files li > span { min-width: 0; overflow-wrap: anywhere; }
+.presence-files li > small { flex-shrink: 0; }
+.presence-error { color: var(--warning); font-size: 12px; }
+@keyframes presence-breathe { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .presence-connection.connecting i { animation: none; } }
+@media (max-width: 620px) { .presence-plugin-heading, .presence-server-row { align-items: flex-start; flex-wrap: wrap; } .presence-settings-actions { justify-content: flex-start; } .presence-files li { flex-wrap: wrap; } }
