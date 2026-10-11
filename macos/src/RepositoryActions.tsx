@@ -18,26 +18,29 @@ const groups: { key: keyof GitSignals; label: string; actions: Action[] }[] = [
   { key: 'clear', label: '清理', actions: [{ key: 'clear', label: 'Clean', icon: 'clear', description: '以远端为准清理或恢复本地文件。' }] },
 ];
 
-type ActionCallbacks = { onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean };
+type ActionCallbacks = { onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>> };
 
 export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden, unlinked = false, onDownload, downloadBlocked = false, downloadBusy = false, ...callbacks }: {
   itemLabel: string; signals: GitSignals; hidden: boolean; onToggleHidden?: () => void;
   unlinked?: boolean; onDownload?: () => void; downloadBlocked?: boolean; downloadBusy?: boolean;
 } & ActionCallbacks) {
-  const reading = downloadBusy || (unlinked ? signals.fetch.status === 'reading' : Object.values(signals).some(signal => signal.status === 'reading'));
+  const reading = downloadBusy || Object.values(signals).some(signal => signal.status === 'reading');
+  const busy = callbacks.busy || reading;
   return <div className={`repository-row-actions${reading ? ' is-reading' : ''}`} aria-busy={reading || callbacks.busy}>
-    {unlinked ? <IconButton className="repository-download-action" icon="downloadSimple" label={`下载分支并关联：${itemLabel}`} data-action-name="下载" title="" disabled={downloadBlocked || downloadBusy || !onDownload} onClick={onDownload} /> : <RepositoryActions label={`Git 操作：${itemLabel}`} signals={signals} {...callbacks} />}
-    {onToggleHidden && <span className="git-action-group repository-visibility-actions"><IconButton className="repository-hide-action" icon={hidden ? 'eye' : 'eyeSlash'} label={`${hidden ? '恢复显示' : '隐藏'}：${itemLabel}`} data-action-name={hidden ? '恢复显示' : '隐藏'} title="" aria-pressed={hidden} disabled={callbacks.busy} onClick={onToggleHidden} /></span>}
+    {unlinked ? <IconButton className="repository-download-action" icon="downloadSimple" label={`下载分支并关联：${itemLabel}`} data-action-name="下载" title="" disabled={downloadBlocked || busy || !onDownload} onClick={onDownload} /> : <RepositoryActions label={`Git 操作：${itemLabel}`} signals={signals} {...callbacks} busy={busy} />}
+    {onToggleHidden && <span className="git-action-group repository-visibility-actions"><IconButton className="repository-hide-action" icon={hidden ? 'eye' : 'eyeSlash'} label={`${hidden ? '恢复显示' : '隐藏'}：${itemLabel}`} data-action-name={hidden ? '恢复显示' : '隐藏'} title="" aria-pressed={hidden} disabled={busy} onClick={onToggleHidden} /></span>}
   </div>;
 }
 
-export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, onPull, onLatest, onClean, busy = false }: { label: string; signals: GitSignals } & ActionCallbacks) {
+export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, onPull, onLatest, onClean, busy = false, actionErrors = {} }: { label: string; signals: GitSignals } & ActionCallbacks) {
+  const blocked = busy || Object.values(signals).some(signal => signal.status === 'reading');
   const [pressed, setPressed] = useState<ActionKey | null>(null);
   const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearPress = () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); releaseTimer.current = null; setPressed(null); };
   const press = (key: ActionKey) => { if (releaseTimer.current) clearTimeout(releaseTimer.current); releaseTimer.current = null; setPressed(key); };
   const pulse = (key: ActionKey) => { logDiagnostic({ event: 'ui-action', outcome: 'blocked', method: key }); press(key); releaseTimer.current = setTimeout(() => { releaseTimer.current = null; setPressed(null); }, 180); };
   useEffect(() => () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); }, []);
+  useEffect(() => { if (blocked) clearPress(); }, [blocked]);
   const callbacks = { commit: onCommit, submit: onSubmit, push: onPush, pull: onPull, latest: onLatest, clear: onClean };
   return <div className="repository-actions" role="group" aria-label={label}>
     {groups.map(group => {
@@ -46,20 +49,22 @@ export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, 
         {group.actions.map(action => {
           const ownSignal = signals[action.key === 'submit' ? 'commit' : action.key];
           const callback = action.key in callbacks ? callbacks[action.key as keyof typeof callbacks] : undefined;
-          const description = `${action.description} ${ownSignal.detail} ${ownSignal.statusDetail || ''}`;
-          if (callback) return <span key={action.key} data-action-name={action.label} className="git-action-anchor"><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={busy || (['commit', 'submit', 'push'].includes(action.key) && !hasCount)} onClick={callback} /></span>;
+          const error = actionErrors[action.key] ? `${action.label}：${actionErrors[action.key]}` : '';
+          const description = `${action.description} ${ownSignal.detail} ${ownSignal.statusDetail || ''} ${error}`;
+          const badge = error && <span className="git-action-read-badge error" role="img" aria-label={error} data-action-name={error} tabIndex={blocked ? -1 : 0} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()}>!</span>;
+          if (callback) return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${blocked ? ' is-blocked' : ''}`}><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={blocked || (['commit', 'submit', 'push'].includes(action.key) && !hasCount)} onClick={callback} />{badge}</span>;
           // Missing callbacks represent an unavailable task/scope; execution
           // is enabled only when the parent supplies a validated target range.
-          return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${pressed === action.key ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={0} aria-label={`${action.label}：${description} 当前范围没有可操作的工作目录。`}
-            onPointerDown={event => { if (event.button === 0) press(action.key); }} onPointerCancel={clearPress} onPointerLeave={clearPress}
-            onClick={() => pulse(action.key)} onBlur={clearPress}
-            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); press(action.key); } else if (event.key === 'Escape') clearPress(); }}
-            onKeyUp={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); pulse(action.key); } }}>
+          return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${blocked ? ' is-blocked' : ''}${pressed === action.key && !blocked ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={blocked ? -1 : 0} aria-label={`${action.label}：${description} 当前范围没有可操作的工作目录。`}
+            onPointerDown={event => { if (!blocked && event.button === 0) press(action.key); }} onPointerCancel={clearPress} onPointerLeave={clearPress}
+            onClick={() => { if (!blocked) pulse(action.key); }} onBlur={clearPress}
+            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (!blocked) press(action.key); } else if (event.key === 'Escape') clearPress(); }}
+            onKeyUp={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (!blocked) pulse(action.key); } }}>
             <IconButton icon={action.icon} label={action.label} title="" aria-hidden="true" tabIndex={-1} disabled />
+            {badge}
           </span>;
         })}
         {hasCount && <span aria-hidden="true" className={`git-action-badge ${signal.tone}`}>{count}</span>}
-        {group.actions.some(action => signals[action.key === 'submit' ? 'commit' : action.key].status === 'error') && <span aria-hidden="true" className="git-action-read-badge error">!</span>}
       </div>;
     })}
   </div>;

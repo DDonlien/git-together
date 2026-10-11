@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom';
 
 type Point = { x: number; y: number };
+const blockedAction = '.is-reading, .is-blocked, .repository-row-actions[aria-busy="true"]';
 
 export function actionNamePosition(point: Point, size: { width: number; height: number }, viewport: { width: number; height: number }) {
   // Keep the name beside (never under) the cursor; flip at window edges.
@@ -13,15 +14,28 @@ export function actionNamePosition(point: Point, size: { width: number; height: 
 // One table boundary covers disabled Git wrappers and enabled Hide without
 // changing either control's click, layout or accessibility contract.
 export function DashboardActionNames({ children }: { children: ReactNode }) {
-  const [name, setName] = useState<{ label: string; point: Point; target?: HTMLElement } | null>(null);
+  const [name, setName] = useState<{ label: string; point: Point; action: HTMLElement; target?: HTMLElement } | null>(null);
   const tooltip = useRef<HTMLDivElement>(null);
   const close = () => setName(null);
   useLayoutEffect(() => {
     if (!name) return;
+    if (name.action.closest(blockedAction)) { close(); return; }
     const bounds = tooltip.current!.getBoundingClientRect();
     const position = actionNamePosition(name.point, bounds, { width: window.innerWidth, height: window.innerHeight });
     Object.assign(tooltip.current!.style, { left: `${position.left}px`, top: `${position.top}px`, visibility: 'visible' });
-  }, [name]);
+  }, [name, children]);
+  useEffect(() => {
+    if (!name) return;
+    // A row's own reader can update without rerendering this table boundary.
+    // Dismiss its existing tooltip even when the pointer has not moved.
+    const action = name.action;
+    const boundary = action.closest('.repository-row-actions, .repository-icon-anchor') || action;
+    const observer = new MutationObserver(() => {
+      if (!action.isConnected || action.closest(blockedAction) || action.dataset.actionName !== name.label) close();
+    });
+    observer.observe(boundary, { attributes: true, attributeFilter: ['class', 'aria-busy', 'data-action-name'], childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [name?.action]);
   const open = name !== null;
   useEffect(() => {
     if (!open) return;
@@ -47,14 +61,14 @@ export function DashboardActionNames({ children }: { children: ReactNode }) {
     onPointerMove={event => {
       if (event.pointerType === 'touch') { close(); return; }
       const action = (event.target as Element).closest<HTMLElement>('[data-action-name]');
-      setName(action ? { label: action.dataset.actionName!, point: { x: event.clientX, y: event.clientY } } : null);
+      setName(action && !action.closest(blockedAction) ? { label: action.dataset.actionName!, point: { x: event.clientX, y: event.clientY }, action } : null);
     }}
     onPointerLeave={close} onPointerCancel={close} onPointerDownCapture={close} onClickCapture={close}
     onFocusCapture={event => {
       const action = (event.target as Element).closest<HTMLElement>('[data-action-name]');
-      if (!action) return;
+      if (!action || action.closest(blockedAction)) { close(); return; }
       const bounds = action.getBoundingClientRect();
-      setName({ label: action.dataset.actionName!, point: { x: bounds.right, y: bounds.top }, target: action });
+      setName({ label: action.dataset.actionName!, point: { x: bounds.right, y: bounds.top }, action, target: action });
     }}
     onBlurCapture={close} onKeyDownCapture={event => { if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') close(); }}>
     {children}

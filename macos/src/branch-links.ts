@@ -28,6 +28,15 @@ export function associationStatus(link: LocalLink | undefined, local: LocalRepos
 export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };
 export type GitSignals = Record<'commit' | 'fetch' | 'pull' | 'push' | 'latest' | 'reconcile' | 'clear', ActionSignal>;
 
+export function repositoryReadFeedback(signals: GitSignals) {
+  return {
+    reading: Object.values(signals).some(signal => signal.status === 'reading'),
+    // Commit and Fetch own the local and remote readers respectively. The
+    // other controls repeat those dependencies, so do not repeat their errors.
+    error: [signals.commit, signals.fetch].filter(signal => signal.status === 'error').map(signal => signal.statusDetail).filter(Boolean).join(' '),
+  };
+}
+
 export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
   const keys: (keyof GitSignals)[] = ['commit', 'fetch', 'pull', 'push', 'latest', 'reconcile', 'clear'];
   return Object.fromEntries(keys.map(key => {

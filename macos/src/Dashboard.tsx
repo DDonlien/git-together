@@ -6,6 +6,7 @@ import type { RemoteRepositoryState } from './remote-repository-model';
 import { Button, Icon, IconButton, Notice } from './ui';
 import { SearchBar } from './material-inputs';
 import { RepositoryRowActions } from './RepositoryActions';
+import { RepositoryReadBadge } from './RepositoryReadBadge';
 import { RepositoryOperationDialog } from './RepositoryOperationDialog';
 import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
 import { repositoryActionTargets } from './repository-action-model';
@@ -13,7 +14,7 @@ import { generateCommitMessage } from './import-api';
 import { DashboardActionNames } from './DashboardActionNames';
 import { MultiFilterMenu } from './MultiFilterMenu';
 import { accountOptions, isSelected, matchesRepositoryFilters, matchesRepositoryType, organizationGroups, repositorySources, repositoryTypes, repositoryTypeCoverage, repositoryVisibilities, toggleFilter, type FilterSelection } from './dashboard-filters';
-import { aggregateGitSignals, associationStatus, gitSignals, hiddenEntryKey, linkedTasks } from './branch-links';
+import { aggregateGitSignals, associationStatus, gitSignals, hiddenEntryKey, linkedTasks, repositoryReadFeedback } from './branch-links';
 import type { RepositoryTask } from './repository-model';
 import type { LocalRepositoryState } from './use-workspace';
 import { chooseLocalDirectory } from './local-directory';
@@ -201,16 +202,18 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   const association = associationStatus(link, local, state, hiddenEntries);
   const hidden = hiddenEntries.has(hiddenEntryKey(repo.id));
   const tasks = linkedTasks(link, local, hiddenEntries).filter(task => taskMatchesSearch(task, taskSearch));
+  const signals = gitSignals(tasks, state, local, undefined, repo.available);
+  const readFeedback = repositoryReadFeedback(gitSignals(linkedTasks(link, local, hiddenEntries), state, local, undefined, repo.available));
   const openAction = (mode: RepositoryActionMode) => onAction(mode, repositoryActionTargets(repo, tasks, mode, state, local));
   return <>
     <tbody><tr className={`dashboard-repository-row${hidden ? ' dashboard-hidden-row' : ''}`}>
-      <td><div className="remote-name"><IconButton className="repository-icon-tile repository-disclosure" icon="folder" label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><div><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
+      <td><div className="remote-name"><span className="repository-icon-anchor" aria-busy={readFeedback.reading}><IconButton className="repository-icon-tile repository-disclosure" icon="folder" label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><RepositoryReadBadge {...readFeedback} /></span><div><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
       <td><span className="repository-owner" title={owner}>{owner}</span></td>
       <td><div className="remote-account-cell" title={accountLabel(account)}><div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login}@{new URL(account.host).host}</small></div></div></td>
       <td><RepositoryDate value={repo.updatedAt} source="远端更新日期" /></td>
       <td><RepositoryDate value={modifiedAt} source="本地最近提交日期" /></td>
       <td><button className={`local-path local-path-action ${localPath ? '' : 'muted'}`} title={association.detail} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !localPath} onClick={() => onConfigure(repo)}><span>{association.label}</span>{localPath && <small>{localPath}</small>}</button></td>
-      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repo.fullName} · 当前筛选分支`} signals={gitSignals(tasks, state, local, undefined, repo.available)} hidden={hidden} onPull={repo.available && tasks.length ? () => openAction('pull') : undefined} onLatest={repo.available && tasks.length ? () => openAction('latest') : undefined} onClean={repo.available && tasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!controller.busy[repo.id] || !ready} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
+      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repo.fullName} · 当前筛选分支`} signals={signals} hidden={hidden} onPull={repo.available && tasks.length ? () => openAction('pull') : undefined} onLatest={repo.available && tasks.length ? () => openAction('latest') : undefined} onClean={repo.available && tasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!controller.busy[repo.id] || !ready} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
     </tr></tbody>
     <tbody id={branchesId} className="dashboard-repository-branches" aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} hidden={!expanded}>{expanded && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} onOpen={onOpen} downloadBusy={!!controller.busy[repo.id]} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} taskSearch={taskSearch} onAction={onAction} />}</tbody>
   </>;
