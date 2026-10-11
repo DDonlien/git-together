@@ -238,7 +238,7 @@ impl Service {
             readers.insert(pkey, p.clone());
             p
         };
-        let network = Network::new(&repository, &provider)?;
+        let network = Network::new(&repository, &provider)?.with_diagnostics(self.diagnostics.clone());
         Ok(Context {
             repository,
             link,
@@ -672,7 +672,18 @@ impl Service {
             false,
         );
         let result = self.dispatch(method, &input, &cancel).await;
-        self.diagnostics.record(&json!({"event":"api","outcome":if result.is_ok(){"success"}else{"failure"},"method":method,"durationMs":(util::now()-started).max(0)}),false);
+        let failures = result.as_ref().ok().and_then(|value| value["tasks"].as_array())
+            .map(|tasks| tasks.iter().filter(|task| !text(task, "error").is_empty()).count()).unwrap_or(0);
+        let mut details = json!({"event":"api","outcome":match &result {
+            Err(error) if cancel.is_cancelled() || git::diagnostic_code(error) == "aborted" => "cancelled",
+            Err(_) => "failure", Ok(_) if failures > 0 => "partial", Ok(_) => "success"
+        },"method":method,"durationMs":(util::now()-started).max(0)});
+        if let Err(error) = &result { details["code"] = json!(git::diagnostic_code(error)); }
+        if failures > 0 { details["failures"] = json!(failures); }
+        if !text(&input, "repositoryId").is_empty() {
+            details["resource"] = json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
+        }
+        self.diagnostics.record(&details, false);
         result
     }
     async fn dispatch(

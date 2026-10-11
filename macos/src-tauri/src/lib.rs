@@ -6,6 +6,7 @@ pub mod git;
 pub mod oauth;
 pub mod operations;
 pub mod preferences;
+pub mod proxy;
 pub mod provider;
 pub mod service;
 mod updates;

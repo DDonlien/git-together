@@ -1067,6 +1067,8 @@ pub const CREDENTIAL_HELPER:&str="!f() { test \"$1\" = get || exit 0; protocol=;
 pub struct Network {
     pub url: String,
     env: Vec<(String, String)>,
+    diagnostics: Option<crate::diagnostics::Diagnostics>,
+    resource: String,
 }
 impl Network {
     pub fn new(repo: &Value, p: &Provider) -> Result<Self> {
@@ -1087,6 +1089,8 @@ impl Network {
             .ascii_serialization();
         Ok(Self {
             url,
+            diagnostics: None,
+            resource: util::digest(text(repo, "id").as_bytes())[..24].into(),
             env: vec![
                 ("GITTOGETHER_DOWNLOAD_ORIGIN".into(), origin),
                 (
@@ -1098,6 +1102,10 @@ impl Network {
                 ("SSH_ASKPASS".into(), "".into()),
             ],
         })
+    }
+    pub fn with_diagnostics(mut self, diagnostics: crate::diagnostics::Diagnostics) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
     }
     pub async fn run(
         &self,
@@ -1122,6 +1130,9 @@ impl Network {
         }
         a.extend_from_slice(args);
         let mut environment = self.env.clone();
+        if let Some(proxy) = crate::proxy::environment(root, &self.url).await? {
+            environment.push(proxy);
+        }
         if !smudge {
             environment.push(("GIT_LFS_SKIP_SMUDGE".into(), "1".into()));
         }
@@ -1133,6 +1144,8 @@ impl Network {
                 timeout,
                 cancel,
                 write: true,
+                diagnostics: self.diagnostics.clone(),
+                resource: self.resource.clone(),
                 ..Default::default()
             },
         )

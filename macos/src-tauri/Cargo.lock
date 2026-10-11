@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "gittogether"
-version = "0.22.6"
+version = "0.22.7"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1320,6 +1320,7 @@ dependencies = [
  "base64 0.22.1",
  "cbc",
  "chrono",
+ "core-foundation 0.10.1",
  "libc",
  "minisign-verify 0.2.5",
  "pbkdf2",

@@ -151,6 +151,9 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
   - [x] \[UI-09-details] 压紧侧栏顶部：32px收起按钮与首页/仓库页首卡片顶边对齐，展开时右侧显示GitTogether名称；到Dashboard图标框的间距固定8px，两态不跳动。普通内容卡片在亮暗主题均以色调/细边缘区分，无投影；菜单/弹窗层级保留。不重置导航、草稿或账号。版本0.8.9；旧安装包不变。
     - [x] \[UI-09-details-test] strict、331/331回归、4/4静态包装和构建通过。1235×954/769×853生产App量测：亮暗首页/仓库、侧栏两态间距8px，开关和首卡片y=60，名称仅展开可见；仓库4块语义卡片box-shadow:none。Enter展开、原导航、收起后草稿保留通过，三栏/隐藏滚动条保留。4173/4174同0.8.9、配置已恢复；重启前后主账号/仓库均0，隔离Git无写入并清理。窄仓库展开时另观察到根scrollWidth864/viewport769，未声称无根溢出；不以此扩展修改横向工作台。没有新原生包验收。
 - [x] \[RUN-01] 新建不含 GitButler 源码的独立分支，类型检查、业务测试、构建、浏览器交互和视觉检查通过，实际启动桌面窗口并留给用户查看。
+  - [ ] \[RUN-01-tauri-git-network] 按2026-10-11最新版本批量仓库读取失败的反馈，检查安装版真实日志并修正Git与账号API的网络路径差异：从Finder启动时，Git子进程继承已配置的macOS静态HTTP/HTTPS/SOCKS代理及按目标地址判断的绕过规则，保留显式Git代理与环境配置，不写全局设置。将真实Git失败分类、退出码、耗时、匿名资源和部分任务失败记录到有限日志，避免把通用Git错误误报为账号权限失效。
+    - [x] \[RUN-01-tauri-git-network-read] 在没有终端代理环境的实际Rust链路及隔离Git Smart HTTP仓库验证读取/fetch、取消收尾、失败恢复、代理绕过和显式Git配置优先级；执行类型、Cargo --locked及生产构建，不运行旧后台测试或更改用户仓库/安装版。
+    - [ ] \[RUN-01-tauri-git-network-release] 从已推送main发布0.22.7，复用现有签名及公证配置，分别记录Apple Accepted、最终安装包和两套公开更新源/完整下载校验。
   - [x] \[RUN-01-tauri-parity] 按2026-10-11要求全局对照Tauri/Rust迁移前后契约，重点检查已有/分支worktree关联、自动扫描与变化触发fetch、远端分支/提交/文件读取及取消/缓存/错误隔离；修复可确认的遗漏，实际Rust隔离诊断与类型/Cargo/构建核验后自动推送main、公证发布并核对安装包与公开更新源，不操作用户安装版或更改真实仓库。 此前读取修正随0.22.6正式交付，签名、公证及公共更新源已核验；详见release子项。
     - [x] \[RUN-01-tauri-parity-read] 0.22.5修复9处确认的问题：失效旧目录阻断重新关联、取消刷新保存错误、残缺SHA缓存、中文引用路径patch丢失、共享fetch连带取消、非origin引用命名、fetch失败阻断API读取、snapshot错误误报无修改、无效branch扩大解除范围。实际Rust隔离诊断及生产React自动刷新核验连续保存/暂存、失败保留与恢复；类型/Cargo/构建通过，9e434f13c4已推送main。未运行旧后台测试或操作真实用户仓库/安装版。
     - [x] \[RUN-01-tauri-parity-release] 此前0.22.5已签名但未公证的读取修正已纳入0.22.6；2026-10-11既有gittogether-notary配置恢复可读，按main/4084cf046f构建约4.2MB ZIP及Tauri tar/签名/清单，Developer ID/deep-strict、Apple Accepted、staple/validate及公开latest/Atom/两套完整下载包一致性通过。公开版本0.22.6，publicUpdateVerified=true，证据在_builds/gittogether-0.22.6-macos-arm64-PSPnpa。未操作用户安装版、索要解锁或重配凭据。

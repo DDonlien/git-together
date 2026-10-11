@@ -2,7 +2,9 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.22.6）
+## 当前运行结构（0.22.7）
+
+Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
 桌面入口是`macos/src-tauri/src/main.rs`及`lib.rs`，使用Tauri 2 / WKWebView运行已打包React资源。`src/native-bridge.ts`安装既有有限协议，由Tauri命令调用Rust服务。生产不启动HTTP业务服务、Electron或Node sidecar；Node仅用于前端开发与发布工具。`macos/electron/`、`macos/server/`及相关旧回归保留为迁移前的参考，不进入当前桌面入口或安装包，不能据其结果声称Rust后台通过回归。
 

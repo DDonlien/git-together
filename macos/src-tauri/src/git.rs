@@ -19,15 +19,37 @@ pub struct Options {
     pub timeout: u64,
     pub cancel: Option<CancellationToken>,
     pub write: bool,
+    pub diagnostics: Option<crate::diagnostics::Diagnostics>,
+    pub resource: String,
 }
 fn failure(output: &[u8]) -> String {
     let out = String::from_utf8_lossy(output).to_lowercase();
     if out.contains("authentication failed")
         || out.contains("could not read username")
+        || out.contains("could not read password")
         || out.contains("http 401")
         || out.contains("http 403")
+        || out.contains("returned error: 401")
+        || out.contains("returned error: 403")
+        || out.contains("access denied")
     {
         "远端拒绝访问，请在设置中检查账号权限。"
+    } else if out.contains("couldn't find remote ref") || out.contains("could not find remote ref")
+    {
+        "Git远端分支不存在，请刷新分支列表。"
+    } else if out.contains("could not resolve host") || out.contains("could not resolve proxy") {
+        "Git无法解析远端或代理域名。"
+    } else if out.contains("timed out") || out.contains("timeout") {
+        "Git远端连接超时，请检查网络和代理后重试。"
+    } else if out.contains("connection refused") {
+        "Git远端或代理拒绝连接，请检查网络连接。"
+    } else if out.contains("couldn't connect to server") || out.contains("failed to connect to") {
+        "Git无法连接远端或代理，请检查网络连接。"
+    } else if out.contains("connection reset")
+        || out.contains("recv failure")
+        || out.contains("empty reply from server")
+    {
+        "Git远端连接中断，请稍后重试。"
     } else if out.contains("error: failed to push some refs") || out.contains("non-fast-forward") {
         "远端已有新的提交，请先检查远端状态；未强制推送。"
     } else if out.contains("author identity unknown")
@@ -48,11 +70,95 @@ fn failure(output: &[u8]) -> String {
     } else if out.contains("index.lock") {
         "当前Git暂存区正在被其他操作使用，请稍后重试。"
     } else {
-        "Git操作失败，请检查仓库状态、网络和本地目录权限。"
+        "Git操作失败，请检查仓库状态和网络连接。"
     }
     .into()
 }
+pub fn diagnostic_code(message: &str) -> &'static str {
+    if message.starts_with("Git远端分支不存在") {
+        return "git-remote-ref-missing";
+    }
+    if message.starts_with("Git无法解析") {
+        return "ENOTFOUND";
+    }
+    if message.starts_with("Git远端或代理拒绝连接") {
+        return "ECONNREFUSED";
+    }
+    if message.starts_with("Git远端连接中断") {
+        return "ECONNRESET";
+    }
+    if message.starts_with("磁盘空间不足") {
+        return "ENOSPC";
+    }
+    for code in [
+        "git-remote-ref-missing",
+        "ENOTFOUND",
+        "ECONNREFUSED",
+        "ECONNRESET",
+        "ENOSPC",
+    ] {
+        if message.contains(&format!("（{code}）")) {
+            return code;
+        }
+    }
+    if message
+        .split('，')
+        .next()
+        .unwrap_or(message)
+        .trim_end_matches('。')
+        .ends_with("已取消")
+    {
+        "aborted"
+    } else if message.contains("超时") {
+        "timeout"
+    } else if message.contains("证书验证失败") {
+        "certificate"
+    } else if message.contains("远端拒绝访问")
+        || message.contains("无权")
+        || message.contains("检查权限")
+    {
+        "permission"
+    } else if message.contains("无法连接") || message.contains("连接中断") {
+        "connection"
+    } else if message.contains("Git") {
+        "git"
+    } else {
+        "unknown"
+    }
+}
 pub async fn run(root: &Path, args: &[&str], options: Options) -> Result<String> {
+    let diagnostics = options.diagnostics.clone();
+    let started = std::time::Instant::now();
+    let mut index = 0;
+    while index < args.len() && args[index].starts_with('-') {
+        index += if args[index] == "-c" { 2 } else { 1 };
+    }
+    let verb = args.get(index).copied().unwrap_or("other");
+    let mut details = json!({"event":if options.write && verb != "ls-remote" {"git-write"}else{"git-read"},"outcome":"start","verb":verb,"spanId":uuid::Uuid::new_v4().to_string(),"resource":options.resource});
+    if let Some(log) = &diagnostics {
+        log.record(&details, false);
+    }
+    let result = run_process(root, args, options, &mut details).await;
+    details["durationMs"] = json!(started.elapsed().as_millis());
+    details["outcome"] = json!(match &result {
+        Ok(_) => "success",
+        Err(error) if diagnostic_code(error) == "aborted" => "cancelled",
+        Err(_) => "failure",
+    });
+    if let Err(error) = &result {
+        details["code"] = json!(diagnostic_code(error));
+    }
+    if let Some(log) = &diagnostics {
+        log.record(&details, false);
+    }
+    result
+}
+async fn run_process(
+    root: &Path,
+    args: &[&str],
+    options: Options,
+    details: &mut Value,
+) -> Result<String> {
     let mut command = Command::new("git");
     command
         .args([
@@ -138,7 +244,11 @@ pub async fn run(root: &Path, args: &[&str], options: Options) -> Result<String>
         .await
         .map_err(|_| "Git状态读取失败。")?
         .map_err(|_| "Git状态读取失败。")?;
-    if !wait?.success() {
+    let status = wait?;
+    if let Some(code) = status.code() {
+        details["exitCode"] = json!(code);
+    }
+    if !status.success() {
         return Err(failure(&error));
     }
     if output.len() > 16_000_000 {
