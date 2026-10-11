@@ -1,6 +1,6 @@
 use crate::{service::Service, util};
 use serde_json::{json, Value};
-use std::sync::{atomic::Ordering, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use tauri_plugin_updater::{Update, UpdaterExt};
 pub struct Updates {
     status: Arc<Mutex<Value>>,
@@ -31,6 +31,11 @@ impl Updates {
     }
     fn error(&self, message: &str) -> Value {
         self.set(json!({"phase":"error","message":message}))
+    }
+    fn retry_install(&self, version: &str, message: &str) -> Value {
+        self.set(
+            json!({"phase":"ready","availableVersion":version,"percent":100,"message":message}),
+        )
     }
     pub async fn check(&self, app: &tauri::AppHandle) -> Value {
         if cfg!(debug_assertions) {
@@ -124,14 +129,18 @@ impl Updates {
             return self.error("请先下载更新。");
         };
         service.authorization.prune().await;
-        if !service.reserve_install() {
-            return self.error("请等待当前 Git 操作或账号授权完成，再安装更新。");
-        }
+        self.set(json!({"phase":"installing","availableVersion":update.version,"message":"正在等待当前操作完成，随后自动安装更新…"}));
+        let _reservation = match service.reserve_install().await {
+            Ok(reservation) => reservation,
+            Err(message) => return self.retry_install(&update.version, &message),
+        };
         self.set(json!({"phase":"installing","availableVersion":update.version}));
         let result = update.install(bytes);
         if result.is_err() {
-            service.installing.store(false, Ordering::SeqCst);
-            return self.error("更新安装未完成，请检查应用目录权限后重试。");
+            return self.retry_install(
+                &update.version,
+                "更新安装未完成，已下载的更新已保留，请检查应用目录权限后重试。",
+            );
         }
         service.authorization.stop();
         app.restart();

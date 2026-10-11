@@ -58,6 +58,12 @@ impl Drop for Active<'_> {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
+pub struct InstallReservation<'a>(&'a AtomicBool);
+impl Drop for InstallReservation<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
 impl Service {
     pub fn new(root: PathBuf, persistent: bool, component: &str) -> Result<Arc<Self>> {
         let client = provider::client()?;
@@ -1170,15 +1176,26 @@ impl Service {
         open(url.as_str()).await?;
         Ok(json!({"opened":true}))
     }
-    pub fn reserve_install(&self) -> bool {
-        if self.installing.swap(true, Ordering::SeqCst) {
-            return false;
+    pub async fn reserve_install(&self) -> Result<InstallReservation<'_>> {
+        self.installing
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| "更新安装正在进行中。".to_string())?;
+        let reservation = InstallReservation(&self.installing);
+        // Close admission before draining. Periodic reads and fetches must not
+        // make installation race an ever-changing snapshot of active requests.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
+        loop {
+            if self.authorization.busy() {
+                return Err("请先完成或取消正在进行的账号授权，已下载的更新已保留。".into());
+            }
+            if self.active.load(Ordering::SeqCst) == 0 {
+                return Ok(reservation);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Err("当前操作尚未结束，已下载的更新已保留，请稍后重试安装。".into());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        if self.active.load(Ordering::SeqCst) > 0 || self.authorization.busy() {
-            self.installing.store(false, Ordering::SeqCst);
-            return false;
-        }
-        true
     }
     pub async fn web(&self, method: &str, input: Value) -> Result<Value> {
         if self.installing.load(Ordering::SeqCst) {

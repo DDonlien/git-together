@@ -29,11 +29,11 @@ export function UpdateSettings({ busy }: { busy: boolean }) {
     <div className="settings-group">
       <div className="setting-row update-setting-row"><span>GitTogether {status.currentVersion}</span>
         {status.phase === 'available' ? <Button onClick={() => void action('download')}>下载更新</Button>
-          : status.phase === 'ready' ? <Button disabled={busy} onClick={() => setConfirm(true)}>重启并更新</Button>
-            : <Button disabled={!bridge || status.phase === 'unavailable' || waiting} onClick={() => void action('check')}>{status.phase === 'checking' ? '检查中…' : '检查更新'}</Button>}
+          : status.phase === 'ready' ? <Button disabled={busy} onClick={() => setConfirm(true)}>{status.message ? '重试安装' : '重启并更新'}</Button>
+            : <Button disabled={!bridge || status.phase === 'unavailable' || waiting} onClick={() => void action('check')}>{status.phase === 'checking' ? '检查中…' : status.phase === 'downloading' ? '下载中…' : status.phase === 'installing' ? '安装中…' : '检查更新'}</Button>}
       </div>
       <div className="update-feedback" aria-live="polite">
-        {status.phase === 'error' ? <Notice kind="error">{updateDescription(status)}</Notice> : <p>{updateDescription(status)}</p>}
+        {status.phase === 'error' || (status.phase === 'ready' && status.message) ? <Notice kind="error">{updateDescription(status)}</Notice> : <p>{updateDescription(status)}</p>}
         {status.phase === 'downloading' && <progress aria-label="更新下载进度" value={status.percent ?? 0} max={100} />}
         {status.checkedAt && !waiting && <small>上次检查：{new Date(status.checkedAt).toLocaleString()}</small>}
       </div>

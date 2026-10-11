@@ -2,7 +2,7 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.22.3）
+## 当前运行结构（0.22.4）
 
 桌面入口是`macos/src-tauri/src/main.rs`及`lib.rs`，使用Tauri 2 / WKWebView运行已打包React资源。`src/native-bridge.ts`安装既有有限协议，由Tauri命令调用Rust服务。生产不启动HTTP业务服务、Electron或Node sidecar；Node仅用于前端开发与发布工具。`macos/electron/`、`macos/server/`及相关旧回归保留为迁移前的参考，不进入当前桌面入口或安装包，不能据其结果声称Rust后台通过回归。
 
@@ -24,6 +24,8 @@
 本地关联以服务器主机和解码后的仓库路径匹配，沿用旧版对SSH/HTTPS及不同传输端口的同仓库识别；不因Gitea的SSH2222/HTTPS10443差异拒绝已有目录。身份匹配与凭据边界分开：Git网络操作仍只向保存账号的实际HTTP origin提供凭据。未保存关联的仓库保持远端浏览，在更改栏直接提供已有本地配置入口，不自动扫描或写入用户目录。
 
 正式发布从已推送main生成独立源码快照，构建Rust release及React资源，Developer ID签名、Apple公证并附加凭证后生成两套更新资产：旧Electron版读取ZIP和`latest-mac.yml`，新Tauri版读取最终已公证的`.app.tar.gz`、`.sig`和`latest.json`。Tauri签名绑定版本，内置公钥匹配仓库外0600私钥；发布后完整回读两套公共资产并核对摘要。开发版禁用安装更新。不会为交付启动或修改用户已安装应用。
+
+安装预约（0.22.4，RUN-01-update-quiesce）：用户确认后先以Service.installing关闭新请求入口，再等待Service.active归零；该计数继续覆盖已接受请求及独立fetch任务，不能把它的瞬时非零误报为永久阻塞，也不能跳过在途Git写操作。等待最多180秒，期间通过既有更新状态显示实际等待说明；真实未完成账号授权仍须先完成或取消。预约以Drop释放，取消、超时及安装失败均恢复请求入口。失败保留已经验证并下载的Update及字节，以ready状态、具体说明和“重试安装”直接重试，不再退回检查更新。
 
 浏览器开发由Vite将有限`/api`转发到Rust服务4175；授权回调4174也由Rust持有。受限Host/Origin、请求体上限和断连取消仍保留；桌面通过IPC直接调用同一Service，不依赖这些端口。类型检查覆盖当前React和发布工具，Rust使用独立Cargo检查。
 
