@@ -46,42 +46,32 @@ pub async fn generate(
 ) -> Result<Value> {
     service.validate(context).await?;
     let task = operations::current(root, input).await?;
+    let files = operations::selected_files(&task, input)?;
+    let paths = operations::selected_paths(&files);
     let head = text(&task, "head");
-    let patch = if head.bytes().all(|b| b == b'0') {
-        git::run(
-            root,
-            &[
-                "diff",
-                "--cached",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--unified=3",
-                "--",
-            ],
-            Options {
-                cancel: Some(cancel.clone()),
-                ..Default::default()
-            },
-        )
-        .await?
-    } else {
-        git::run(
-            root,
-            &[
-                "diff",
-                "--no-ext-diff",
-                "--no-textconv",
-                "--unified=3",
-                head,
-                "--",
-            ],
-            Options {
-                cancel: Some(cancel.clone()),
-                ..Default::default()
-            },
-        )
-        .await?
-    };
+    let mut args = vec![
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--unified=3",
+        if head.bytes().all(|b| b == b'0') {
+            "--cached"
+        } else {
+            head
+        },
+        "--",
+    ];
+    args.extend(paths.iter().map(String::as_str));
+    let patch = git::run(
+        root,
+        &args,
+        Options {
+            environment: vec![("GIT_LITERAL_PATHSPECS".into(), "1".into())],
+            cancel: Some(cancel.clone()),
+            ..Default::default()
+        },
+    )
+    .await?;
     let mut end = patch.len().min(96_000);
     while !patch.is_char_boundary(end) {
         end -= 1;
@@ -90,12 +80,7 @@ pub async fn generate(
     let patch = &patch[..end];
     let mut remaining = 96_000 - end;
     let mut untracked = Vec::new();
-    for file in task["files"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|f| f["tracked"] == false)
-    {
+    for file in files.iter().filter(|f| f["tracked"] == false) {
         if remaining == 0 || untracked.len() >= 100 {
             truncated = true;
             break;
@@ -136,7 +121,6 @@ pub async fn generate(
     }
     operations::current(root, input).await?;
     service.validate(context).await?;
-    let files = task["files"].as_array().unwrap();
     let context = json!({"branch":task["branch"],"files":files.iter().take(1000).collect::<Vec<_>>(),"patch":patch,"untracked":untracked,"truncated":truncated||files.len()>1000});
     let temporary = tempfile::Builder::new()
         .prefix("gittogether-commit-ai-")

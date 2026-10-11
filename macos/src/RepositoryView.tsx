@@ -4,6 +4,7 @@ import { type Account, type LocalLink, type RemoteRepository } from './import-mo
 import { Button, Icon, Notice, Segmented } from './ui';
 import { SearchBar } from './material-inputs';
 import { RepositoryRowActions } from './RepositoryActions';
+import { PushFeedbackIcon, PushProgress, repositoryPushState, usePushActivity } from './PushFeedback';
 import { DashboardActionNames } from './DashboardActionNames';
 import { RepositoryOperationDialog } from './RepositoryOperationDialog';
 import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
@@ -85,10 +86,13 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   if (selection && !workspace.tasks.find(task => task.id === selection.taskId)?.remote) contextFiles[selection.taskId] = historyFiles[JSON.stringify([selection.taskId, selection.commitId])];
   const actionTasks = (localLink ? linkedTasks(localLink, current, hiddenEntries) : suppliedWorkspace?.tasks.filter(task => !task.remote && task.path) || []).filter(task => branchSelection === null || branchSelection.has(task.branch));
   const signals = gitSignals(actionTasks, remoteState || { workspace: null, loading: false, error: '' }, current, undefined, repository.available);
+  const pushActivity = usePushActivity(), pushRun = pushActivity.runs[repository.id];
+  const pushState = repositoryPushState(pushRun, workspace.tasks);
   const commit: SubmitLocalCommit = submitCommit || (input => importAPI('submitCommit', input));
   const push: PushLocalCommit = pushCommit || (input => importAPI('pushCommit', input));
   const generate = generateCommitMessage || generateWithService;
   const openAction = (mode: RepositoryActionMode) => {
+    setActionFeedback('');
     setAction({ mode, targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current) });
   };
   const openRepository = async (event: MouseEvent<HTMLAnchorElement>) => {
@@ -108,6 +112,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
       {!repository.available && <Notice kind="info">账号目前无权访问此仓库；这里显示上次读取的信息。</Notice>}
     </section>
     {repositoryOpenError && <Notice kind="error">{repositoryOpenError}</Notice>}
+    {pushState && <div className="repository-push-status"><PushFeedbackIcon state={pushState} />{pushState.phase === 'pushing' && <PushProgress completed={pushRun.completed.length} total={pushRun.targets.length} />}</div>}
     {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
     {action && <RepositoryOperationDialog mode={action.mode} targets={action.targets} onSync={applySync} onCommit={commit} onPush={push} onGenerate={generate} onComplete={setActionFeedback} onClose={() => setAction(null)} />}
     {current?.error && <Notice kind="error">{current.error}{snapshot && ' 显示上次读取的本地状态。'} 正在自动重试。</Notice>}

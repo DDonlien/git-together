@@ -270,10 +270,14 @@ pub fn changes(status: &str) -> Vec<Value> {
             continue;
         }
         let code = &row[..2];
-        files.push(json!({"path":&row[3..],"status":code.trim(),"tracked":code!="??"}));
+        let mut file = json!({"path":&row[3..],"status":code.trim(),"tracked":code!="??"});
         if code.contains(['R', 'C']) {
+            if let Some(previous) = records.get(i) {
+                file["previousPath"] = json!(previous);
+            }
             i += 1;
         }
+        files.push(file);
     }
     files
 }

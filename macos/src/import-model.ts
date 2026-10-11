@@ -36,7 +36,7 @@ export type GitHubAuthorization = {
 };
 export type GitHubAuthorizationProgress = { status: 'pending'; retryAfter: number } | { status: 'complete'; catalog: Catalog };
 export type GitHubAuthorizationCancellation = { cancelled: true } | { cancelled: false; catalog: Catalog };
-export type LocalFile = { path: string; status: string; tracked: boolean };
+export type LocalFile = { path: string; status: string; tracked: boolean; previousPath?: string };
 export type LocalSnapshot = {
   path: string; branch: string; files: LocalFile[];
   commits: { id: string; summary: string; author: string; time: string }[];
@@ -64,7 +64,7 @@ export type ApiInputs = {
   prepareSync: { repositoryId: string; taskId: string; mode: RepositorySyncMode };
   applySync: { repositoryId: string; taskId: string; planId: string; operationId: string };
   discardSync: { repositoryId: string; taskId: string; planId: string };
-  generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string };
+  generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string; paths?: string[] };
   cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string };

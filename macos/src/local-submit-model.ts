@@ -1,7 +1,7 @@
 import { isRecord, type ApiInputs } from './import-model';
 
 export type CommitDraft = { summary: string; description: string };
-export type LocalSubmitInput = CommitDraft & { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; operationId: string };
+export type LocalSubmitInput = CommitDraft & { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; operationId: string; paths?: string[] };
 export type LocalSubmitResult = { taskId: string; commitId: string; branch: string; warning?: string };
 export type SubmitLocalCommit = (input: LocalSubmitInput) => Promise<LocalSubmitResult>;
 export type LocalPushInput = { repositoryId: string; taskId: string; expectedHead: string; commitId: string; operationId: string };

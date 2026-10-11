@@ -1100,6 +1100,7 @@ impl Service {
                         "expectedHead",
                         "changeKey",
                         "generationId",
+                        "paths",
                     ],
                 )?;
                 util::sha(text(input, "expectedHead"))?;
@@ -1170,6 +1171,7 @@ impl Service {
                         "operationId",
                         "summary",
                         "description",
+                        "paths",
                     ],
                     "pushCommit" => vec![
                         "repositoryId",

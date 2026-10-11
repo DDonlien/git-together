@@ -15,7 +15,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
   repositoryId?: string; onSubmit?: SubmitLocalCommit; onGenerate?: GenerateCommitMessage;
   repositoryName?: string; onPush?: PushLocalCommit; onCommitted?: (taskId: string, commitId: string) => void; published?: boolean;
 }) {
-  const [pushPopup, setPushPopup] = useState(false), [pushFeedback, setPushFeedback] = useState('');
+  const [pushPopup, setPushPopup] = useState(false);
   const history = selectedCommit && historyState?.id === selectedCommit.id ? historyState : undefined;
   const details = history?.details;
   return <section className="repository-change-task" aria-label={`更改任务：${task.branch}`}>
@@ -41,8 +41,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
     {selectedCommit && <>
       <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />
       <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || !onGenerate} onClick={() => setPushPopup(true)}><Icon name="arrowUp" size={14} />Push</Button></div>
-      {pushFeedback && <p className="repository-commit-feedback" role="status">{pushFeedback}</p>}
-      {pushPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="push" targets={[{ repositoryId, repositoryName: repositoryName || '', task, commitId: selectedCommit.id }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onComplete={setPushFeedback} onClose={() => setPushPopup(false)} />}
+      {pushPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="push" targets={[{ repositoryId, repositoryName: repositoryName || '', task, commitId: selectedCommit.id }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onClose={() => setPushPopup(false)} />}
     </>}
   </section>;
 }

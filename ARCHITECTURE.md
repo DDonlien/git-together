@@ -246,15 +246,17 @@ use-local-commits仅订阅明确选中的本地task/SHA，缓存最多64份，�
 
 渲染层记录请求结果、实际退避/暂停/恢复、网络/可见性、偏好存储失败及未接入 Git 操作的 blocked；授权只记录安全阶段，更新记录 check/download/install 及终态，不存发布包内容或错误原文。进程异常监视不改变崩溃语义。日志不上传。设置的四个有限操作status/record/open/copy由本机同源HTTP检查或既有可信主frame IPC检查保护；共用`diagnosticsCommand`，打开固定日志目录而非接受调用者路径。0.14.0的copy先按既有24小时规则清理，仅读取受控文件名的普通JSONL文件，排除软链接、目录及非本功能文件；通过固定系统脚本调用macOS NSPasteboard，以NSURL文件项写入剪贴板，供文件附件粘贴使用。脚本内容固定、文件路径只作execFile参数，没有shell插值；4秒超时、空列表和系统失败明确反馈，不复制文本路径/文件内容或上传。使用Apple的[NSURL写入剪贴板方式](https://developer.apple.com/documentation/appkit/nspasteboardwriting)。纯静态部署和旧客户端无日志服务时明确提示不可用；不降级到浏览器明文存储。构建加载Vite配置不启动日志写入。账户与本地关联格式及安装应用身份保持不变。
 
-## 本地提交与 Codex 说明生成（0.18.0）
+## 本地提交与 Codex 说明生成（0.22.11，沿用0.18.0原生提交约束）
 
-`RepositoryCommitComposer` 为每个已挂载本地任务保存 Summary/Description 草稿，历史视图只隐藏表单；通过有限 submitCommit/generateCommitMessage/cancelCommitGeneration DTO 调用现有受保护 HTTP 或主 frame IPC。Dashboard 的 Commit 只导航到具体有更改的工作目录，实际提交由表单触发；文件行选择用于审阅，提交范围为该工作目录全部更改。
+`RepositoryCommitComposer` 为每个已挂载本地任务保存 Summary/Description 草稿，历史视图只隐藏表单；通过有限 submitCommit/generateCommitMessage/cancelCommitGeneration DTO 调用现有受保护 HTTP 或主 frame IPC。Dashboard及仓库页的Commit/Submit打开固定worktree快照弹窗，每个目录按Tracked/Untracked分组，复选状态作为可选paths DTO传给submitCommit/generateCommitMessage；空、重复或已不在当前更改中的路径拒绝。范围随草稿在服务会话内保留，仅相同HEAD/changeKey复用；调整范围取消旧生成，不覆盖手工字段。旧直接提交表单未提供paths时仍提交该目录全部更改。
 
-AccountService 从已保存仓库、账号与关联定位真实 worktree，复核 expectedHead/changeKey、remote 与映射身份，不接受 renderer 命令或任意路径。每个关联根串行执行；operationId 在当前服务实例内对已确认成功结果幂等，同 ID 不同内容拒绝。冲突、待完成 merge/rebase、已有 index.lock、过期快照在写入前拒绝。local-submit 使用真实 Git、私有 index 和独占 index.lock；保留原暂存内容，add --all 后再次复核快照，以标准 input 提供提交说明并保留 Git identity/hooks/signing。确认新 HEAD 的父提交与实际树后原子发布 index，失败保留原 index；已确认提交但响应/后处理有问题返回真实成功及警告。进入 commit 后不因浏览器断连取消，120秒执行上限仍保留。不会 checkout/reset/push 或修改另一个 worktree。
+AccountService 从已保存仓库、账号与关联定位真实 worktree，复核 expectedHead/changeKey、remote 与映射身份，不接受 renderer 命令或任意路径。每个关联根串行执行；operationId 在当前服务实例内对已确认成功结果幂等，同 ID 不同内容拒绝。冲突、待完成 merge/rebase、已有 index.lock、过期快照在写入前拒绝。local-submit 使用真实 Git、私有 index 和独占 index.lock；分别保存原暂存区和从HEAD（unborn使用空树）建立的提交索引；GIT_LITERAL_PATHSPECS防止文件名被当作模式，仅对选中路径add --all，重命名附带原路径，之后再次复核快照，以标准 input 提供提交说明并保留 Git identity/hooks/signing。确认新HEAD的父提交与实际树后，在保存索引中仅将选中路径更新到新HEAD，再原子发布index，未选文件的已暂存内容（包括部分暂存）保持，失败保留原 index；已确认提交但响应/后处理有问题返回真实成功及警告。进入 commit 后不因浏览器断连取消，120秒执行上限仍保留。不会checkout、移动HEAD的reset、push或修改另一个worktree；路径限定的reset仅更新保存索引条目，不改HEAD或工作文件。
 
 controller 在提交前后递增本地读取版本，丢弃写入前轮询的迟到响应；成功立即重新读取共享 localWorkspace，再触发一次仓库远端状态检查，不清空其他任务选择和草稿。图谱从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
 
-commit-generator 仅收集当前任务最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。使用本机已登录 Codex CLI 的 exec，在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 运行，忽略用户 config/rules，禁用 shell、多 agent、apps、plugins、hooks、web search 与 MCP；不读取聊天账号令牌，不执行仓库命令。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。150秒超时及显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。原始 CLI 输出和提交正文不进入诊断日志。
+commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。使用本机已登录 Codex CLI 的 exec，在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 运行，忽略用户 config/rules，禁用 shell、多 agent、apps、plugins、hooks、web search 与 MCP；不读取聊天账号令牌，不执行仓库命令。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。150秒超时及显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。原始 CLI 输出和提交正文不进入诊断日志。
+
+推送反馈（0.22.11）：RepositoryActionDraftsProvider内的PushFeedbackProvider保存服务会话级临时状态，统一Dashboard、仓库详情和更改栏Push/Submit入口。批次UUID与实际repository/task/path绑定；成功才记录completed，失败清除未完成pending，旧批次定时器不能覆盖新操作。仓库全部/部分覆盖按所有本地worktree判断，分支固定实线/双勾；成功标识约2600ms后消失。原有逐worktree Commit→Push顺序、操作幂等和错误重试不变；push/submit不调用横条成功回调，commit仍可提示本地提交已创建。官方Material Web LinearProgress使用不确定型，批量数字仅表示完成目录数。
 
 macOS Git工具环境与操作错误（2026-10-10，IMPORT-14-push-lfs-errors）：git-process和branch-download共用gitToolEnvironment，在各Git子进程环境中追加用户.local/bin、Apple Silicon及Intel Homebrew目录，保留继承PATH优先级并去重；不执行登录shell、不改全局环境或Git配置。LFS钩子与filter继承相同环境。RepositoryActionDialog删除Entry.error和重复catch，仅由弹窗error保存失败信息，带失败仓库/分支并用共享Notice展示；Commit/Push结果与UUID继续用于跳过已完成步骤。已知LFS缺失返回固定安全提示及git-lfs-missing诊断分类，不回显Git原始输出，也不将泛化失败误分类为分支权限。
 

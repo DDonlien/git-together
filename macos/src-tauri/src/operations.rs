@@ -71,6 +71,42 @@ pub fn draft(v: &Value) -> Result<()> {
     }
     Ok(())
 }
+pub fn selected_files<'a>(task: &'a Value, input: &Value) -> Result<Vec<&'a Value>> {
+    let files = task["files"].as_array().ok_or("工作目录无法读取。")?;
+    let Some(paths) = input.get("paths") else {
+        return Ok(files.iter().collect());
+    };
+    let paths = paths.as_array().ok_or("提交文件范围无效。")?;
+    if paths.is_empty() {
+        return Err("请至少选择一个更改。".into());
+    }
+    let mut selected = BTreeSet::new();
+    for path in paths {
+        let path = path.as_str().ok_or("提交文件路径无效。")?;
+        if !selected.insert(path) || !files.iter().any(|file| text(file, "path") == path) {
+            return Err("提交文件范围已变化，请重新检查更改。".into());
+        }
+    }
+    Ok(files
+        .iter()
+        .filter(|file| selected.contains(text(file, "path")))
+        .collect())
+}
+pub fn selected_paths(files: &[&Value]) -> Vec<String> {
+    files
+        .iter()
+        .flat_map(|file| {
+            std::iter::once(text(file, "path")).chain(
+                file["previousPath"]
+                    .as_str()
+                    .filter(|_| text(file, "status").contains('R')),
+            )
+        })
+        .map(String::from)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
 struct IndexLock {
     path: PathBuf,
     file: Option<fs::File>,
@@ -117,6 +153,7 @@ pub async fn submit(
     }
     draft(&json!({"summary":input["summary"],"description":input["description"]}))?;
     let before = current(root, input).await?;
+    let paths = selected_paths(&selected_files(&before, input)?);
     let index = PathBuf::from(
         git::read(
             root,
@@ -131,6 +168,7 @@ pub async fn submit(
         .tempdir_in(index.parent().ok_or("Git index 路径无效。")?)
         .map_err(|_| "无法创建提交暂存区。")?;
     let private = temporary.path().join("index");
+    let preserved = temporary.path().join("preserved-index");
     if index.exists() {
         if !fs::symlink_metadata(&index)
             .map_err(|_| "Git index 无法读取。")?
@@ -138,12 +176,34 @@ pub async fn submit(
         {
             return Err("Git index 无效。".into());
         }
-        fs::copy(&index, &private).map_err(|_| "无法复制暂存状态。")?;
+        fs::copy(&index, &preserved).map_err(|_| "无法复制暂存状态。")?;
     }
-    let env = vec![("GIT_INDEX_FILE".into(), private.to_string_lossy().into())];
+    let env = vec![
+        ("GIT_INDEX_FILE".into(), private.to_string_lossy().into()),
+        ("GIT_LITERAL_PATHSPECS".into(), "1".into()),
+    ];
+    // Start from HEAD so an unselected, already staged change cannot leak into
+    // this commit. The original index is retained separately for publication.
+    let baseline = if text(&before, "head").bytes().all(|v| v == b'0') {
+        "--empty"
+    } else {
+        text(&before, "head")
+    };
     git::run(
         root,
-        &["add", "--all", "--", "."],
+        &["read-tree", baseline],
+        Options {
+            environment: env.clone(),
+            write: true,
+            ..Default::default()
+        },
+    )
+    .await?;
+    let mut add = vec!["add", "--all", "--"];
+    add.extend(paths.iter().map(String::as_str));
+    git::run(
+        root,
+        &add,
         Options {
             environment: env.clone(),
             cancel: Some(cancel.clone()),
@@ -208,11 +268,29 @@ pub async fn submit(
     if feedback.is_err() {
         result["warning"] = json!("提交已创建，但 Git 后续反馈未完成；请检查本机提交钩子。");
     }
-    if fs::read(&private)
-        .map_err(|_| "无法读取新暂存区。".to_string())
-        .and_then(|data| lock.publish(&index, &data))
-        .is_err()
-    {
+    let publication: Result<()> = async {
+        let mut reset = vec!["reset", "--quiet", head, "--"];
+        reset.extend(paths.iter().map(String::as_str));
+        // Updating only selected entries preserves the user's staged versions
+        // of every excluded file, including partial staging.
+        git::run(
+            root,
+            &reset,
+            Options {
+                environment: vec![
+                    ("GIT_INDEX_FILE".into(), preserved.to_string_lossy().into()),
+                    ("GIT_LITERAL_PATHSPECS".into(), "1".into()),
+                ],
+                write: true,
+                ..Default::default()
+            },
+        )
+        .await?;
+        let data = fs::read(&preserved).map_err(|_| "无法读取新暂存区。".to_string())?;
+        lock.publish(&index, &data)
+    }
+    .await;
+    if publication.is_err() {
         result["warning"] = json!("提交已创建，但更新暂存状态失败；请检查 Git index 后再提交。");
     }
     Ok(result)

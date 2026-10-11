@@ -3,6 +3,7 @@ import { createComponent, type EventName } from '@lit/react';
 import { MdOutlinedTextField } from '@material/web/textfield/outlined-text-field.js';
 import { MdFilledTextField } from '@material/web/textfield/filled-text-field.js';
 import { MdIconButton } from '@material/web/iconbutton/icon-button.js';
+import { MdLinearProgress } from '@material/web/progress/linear-progress.js';
 import { Icon } from './ui';
 
 const OutlinedField = createComponent({
@@ -14,6 +15,7 @@ const FilledField = createComponent({
   events: { onValueChange: 'input' as EventName<InputEvent & { target: MdFilledTextField }> },
 });
 const MaterialIconButton = createComponent({ tagName: 'md-icon-button', elementClass: MdIconButton, react: React });
+export const LinearProgress = createComponent({ tagName: 'md-linear-progress', elementClass: MdLinearProgress, react: React });
 
 export function OutlinedTextField({ className = '', ...props }: React.ComponentProps<typeof OutlinedField>) {
   // The host participates in the existing dialog focus trap; Material delegates

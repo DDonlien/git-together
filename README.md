@@ -56,7 +56,7 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 0.22.10已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.10)公开。最终公开更新包的下载、验签及同版官方安装器隔离安装通过，安装结果的版本、签名及公证票据再次核对。远端内容与后台Fetch并行读取，平台返回即展示分支/历史/文件树；Fetch失败时保留内容，并说明本地远端引用更新未完成。安装ZIP约4.6MB。框架迁到Tauri 2，桌面后台直接使用Rust：账号、Git/worktree/LFS、文件处理、AI、授权和应用更新都由Rust执行。生产包只包含原生程序及React资源。界面、每分支提交草稿和既有操作范围保持；Git仍通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
-当前源码0.22.10支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
+当前源码0.22.11支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
 
 Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示按远端恢复、补齐和删除的具体文件（包含忽略的本地文件），确认后执行，保留本地提交和暂存区。Get Latest核验最新文件及LFS后替换为深度1的新目录，并实际删除可独立回收的旧历史与缓存；未推送提交、其他分支、标签或共享主目录会阻止清理，独立分支worktree可整理成单层目录，其他目录需要的共享历史保留并如实报告。后台每5分钟及变化触发实际Git fetch，不合并或改工作文件；保留已有数量、检查反馈、离线暂停及失败退避。未关联分支继续通过下载入口创建并关联目录。在线协作仍在开发中。
 
@@ -85,6 +85,8 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 [产品范围与进展](REQUIREMENTS.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
+
+Commit/Submit弹窗按Tracked/Untracked分组，可通过文件、分组或全选复选框调整真实提交范围；新增、修改、删除分别标色，删除路径加删除线。AI只读取选中范围，原有未选暂存内容保持。推送时分支显示上传动画，完成显示双勾约2.6秒后消失；仓库全部目录推送用实心箭头/双勾，部分用虚线箭头/单勾，Dashboard不显示推送成功横条。弹窗和详情页提供细进度条。
 
 Commit / Submit / Push失败时，弹窗只显示一处统一错误提示，注明失败仓库和分支；本地Commit保留，重试继续Push。macOS从Finder启动也会在用户`~/.local/bin`和Homebrew的`/opt/homebrew/bin`、`/usr/local/bin`查找Git LFS，供推送钩子、下载及同步使用，保留已有PATH优先级；无需重复安装已可运行的LFS。
 

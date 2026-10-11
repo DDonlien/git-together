@@ -388,9 +388,35 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-submit-count { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
 .repository-submit-content h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
 .repository-submit-content h3 svg { flex-shrink: 0; }
-.repository-submit-files { list-style: none; padding: 0; margin: 8px 0 0; font-size: 12px; }
-.repository-submit-files li { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; overflow-wrap: anywhere; }
-.repository-submit-file-status { flex: 0 0 24px; color: var(--muted); font-family: monospace; }
+.repository-commit-files { margin-top: 8px; font-size: 12px; }
+.submit-file-selection, .submit-file-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--muted); }
+.submit-file-selection small, .submit-file-group-heading small { font-size: 10px; }
+.submit-file-group-heading { border-top: 1px solid var(--line); }
+.submit-file-group-heading > span { display: flex; gap: 8px; align-items: baseline; }
+.submit-file-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 3px 0; }
+.submit-file-choice { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 28px; padding: 3px 4px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; color: var(--text); }
+.submit-file-choice:hover:not(:disabled) { background: var(--surface); }
+.submit-file-choice:disabled { cursor: default; }
+.submit-file-path { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.submit-file-mark { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; border: 1px solid currentColor; border-radius: 3px; font-size: 12px; line-height: 1; }
+.submit-file-choice code { flex: 0 0 12px; font-size: 10px; }
+.submit-file-row[data-change="added"] .submit-file-mark, .submit-file-row[data-change="added"] code { color: var(--teal); }
+.submit-file-row[data-change="modified"] .submit-file-mark, .submit-file-row[data-change="modified"] code { color: var(--warning); }
+.submit-file-row[data-change="deleted"] .submit-file-mark, .submit-file-row[data-change="deleted"] code { color: var(--danger); }
+.submit-file-row[data-change="deleted"] .submit-file-path { text-decoration: line-through; color: var(--muted); }
+.submit-file-row:not(.is-included) .submit-file-choice { opacity: .6; }
+.push-feedback-icon { display: inline-flex; flex-shrink: 0; color: var(--blue); pointer-events: none; }
+.push-feedback-icon.is-pushing svg { animation: push-upload 1.25s ease-in-out infinite; }
+.push-feedback-icon.is-success { color: var(--teal); animation: push-confirm 180ms ease-out; }
+.repository-icon-anchor > .push-feedback-icon { position: absolute; right: -3px; bottom: -3px; border-radius: 50%; background: var(--content); padding: 1px; box-sizing: content-box; }
+.push-progress { display: flex; flex-direction: column; gap: 6px; margin-block: 10px; min-width: 0; }
+.push-progress small { color: var(--muted); font-size: 11px; }
+.push-progress md-linear-progress { --md-linear-progress-active-indicator-height: 3px; --md-linear-progress-track-height: 3px; --md-linear-progress-active-indicator-color: var(--blue); --md-linear-progress-track-color: var(--line); }
+.repository-push-status { display: flex; align-items: center; gap: 10px; }
+.repository-push-status .push-progress { flex: 1; }
+@keyframes push-upload { 0%, 100% { transform: translateY(1px); opacity: .7; } 50% { transform: translateY(-1px); opacity: 1; } }
+@keyframes push-confirm { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .push-feedback-icon.is-pushing svg, .push-feedback-icon.is-success { animation: none; } }
 .repository-submit-generating { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
 .repository-batch-draft { display: grid; gap: 8px; }
 .repository-action-dialog > :not(.repository-submit-content) { flex-shrink: 0; }
