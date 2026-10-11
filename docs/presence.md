@@ -1,6 +1,8 @@
 # Presence 插件
 
-GitTogether 0.23.0 提供首轮 Presence 接入。「设置 → 插件 → Presence」可启用、停用、配置服务器和重新连接；NAS、服务器会话与此电脑的状态分别显示。停用会关闭本应用的连接，不停止独立的本机 Bridge 或服务器。
+GitTogether 0.23.0 源码提供首轮 Presence 接入。「设置 → 插件 → Presence」可启用、停用、配置服务器和重新连接；NAS、服务器会话与此电脑的状态分别显示。停用会关闭本应用的连接，不停止独立的本机 Bridge 或服务器。
+
+NAS 服务已实际部署；当前源码与网页预览已连接。0.23.0 桌面更新尚未正式发布：按照 2026-10-12 最新发布规则，需在同次交付中补齐 Windows x86/x64，当前公开 macOS 版本仍为 0.22.11。未操作用户已安装的应用。
 
 首个服务器为 `https://git.freshli4.com:10443/presence/`，运行在 NAS 的独立 Docker 容器。初次只登记 `github.com/ddonlien/git-together` 和 `github.com/ddonlien/git-presence`，不是自动共享全部账号仓库；其他成员、仓库和设备需在服务器中独立授权。
 

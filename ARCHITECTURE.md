@@ -75,7 +75,7 @@ React 客户端由 App shell、AccountSidebar、统一仓库 Dashboard、独立 
 
 IMPORT-13-branches 的展开集合由 Dashboard 持有，以 Catalog instanceId + repository.id 区分会话与访问账号；目录心跳和筛选不清空其他展开。IMPORT-13-branches-folder把原文件夹底板直接复用为公共IconButton展开入口，保留aria-expanded/aria-controls；仓库名称的工作区导航处理器独立，不新增状态或箭头。每个可见仓库行复用 useRemoteRepository；0.10.0 在展开或已有本地关联且服务就绪时启用已有 remoteWorkspace。未关联仓库收起保留该行最后结果并取消读取，已关联仓库保留同步信号所需心跳；筛选隐藏/离开 Dashboard 卸载读取器。分支名称取真实远端任务与已关联本地任务的并集，不从 defaultBranch 合成；任务历史/树失败不掩盖已读名称，分支列表整体失败明确保留上次结果。默认标记只在实际名称匹配时显示，读取上限沿用原分支警告，计数仍只统计仓库。现有接口同时读取有限历史/树并缓存SHA，没有新增分支API或Git写入。
 
-`ui.tsx` 的 MaterialProvider 使用 OpenGlass UI 的公共 classic/CSS 交互原语，保留按钮、字段、分段选择、菜单与弹窗的无障碍/焦点契约；`theme.ts` 与 `styles.css` 统一 Material 3 亮暗色、状态、形状与轻微卡片 elevation。Roboto 字体本地打包，中文系统回退，不访问外部字体服务器。App shell 只有共享画布，侧栏透明且无独立浮层，主要语义内容分组为卡片，浏览器/Electron 共用样式。侧栏宽度只由显式开关决定，收起保留56px图标列；导航、选择与草稿不卸载。旧 reducedGlass 偏好仍可读取以兼容保存结构，但不再呈现无作用的开关。仓库图标空心角标表示 Presence 未连接，不伪造在线数据。
+`ui.tsx` 的 MaterialProvider 使用 OpenGlass UI 的公共 classic/CSS 交互原语，保留按钮、字段、分段选择、菜单与弹窗的无障碍/焦点契约；`theme.ts` 与 `styles.css` 统一 Material 3 亮暗色、状态、形状与轻微卡片 elevation。Roboto 字体本地打包，中文系统回退，不访问外部字体服务器。App shell 只有共享画布，侧栏透明且无独立浮层，主要语义内容分组为卡片，浏览器/桌面共用样式。侧栏宽度只由显式开关决定，收起保留56px图标列；导航、选择与草稿不卸载。旧 reducedGlass 偏好仍可读取以兼容保存结构，但不再呈现无作用的开关。0.23.0 仓库 Presence 角标只在插件启用时根据实际会话显示在线、离线或未知，停用时隐藏，不伪造在线数据。
 
 `WindowChrome.tsx` 是生产 App 与真实 Git 隔离 QA 共用的窗口控制区，位于横向 app-body 外，只保留红绿灯；Electron 保留系统按钮，浏览器绘制既有预览。`SidebarHeader.tsx` 两态保留同一公共IconButton和右侧GitTogether文字DOM，收起时文字hidden；32px头部/常驻导航行与固定8px间距通过CSS统一，不引入新状态。侧栏与首页/仓库首卡片共用顶部内缩令牌，左边缘沿既有导航尺寸对齐。App 的 sidebarCollapsed 仅切换 is-collapsed CSS 类，侧栏保留56px图标列，不条件卸载导航或工作区，不改变页面/RepositoryView 的 key；账户/仓库导航隐藏文字时仍有明确可访问名称。函数式切换、aria-expanded/aria-controls 和显式名称维持鼠标/键盘操作。保持 hook 顺序不变，布局热更新不使用强制 refresh reset，避免重置当前表单。普通卡片共享无投影令牌，菜单/弹窗阴影独立。原生窗口按钮固定在顶部控制条内，不依赖侧栏宽度或 resize 回调；不增加 IPC、账号服务变更或凭据存储。
 
@@ -185,7 +185,7 @@ Tauri/Rust读取一致性（2026-10-11，RUN-01-tauri-parity）：旧式单目�
 
 Dashboard 的 `matchAccountRepositories` 是单账号批量目录关联入口：renderer 只提交 `accountId` 和用户选择的父目录，账号服务从自己的 Catalog 取得该账号全部可访问仓库，目录扫描一次后按规范化远端身份返回命中的仓库 ID，并在一次持久化变更中更新这些关联。未匹配仓库保持原记录；多个账号筛选时客户端逐账号调用，搜索、组织、类型和可见性筛选不参与匹配范围。请求与响应继续通过有限 API DTO/IPC 校验，不向 renderer 传递账号令牌。
 
-关联本地目录后，RepositoryView 使用真实 Git status、branch、最近 log、工作目录与暂存区 Diff；关联或解除时重建对应视图，避免残留的本地快照。有限 execFile 参数、不使用 shell、禁止外部 diff/textconv、关闭可选 index 锁；不提供任意命令/任意文件读取。Diff 仅接受当前更改列表中的路径；未跟踪文件不编造差异或读取内容。此段描述原只读浏览边界；2026-10-10 用户授权的分支下载与本地 Commit/本机 Codex 生成分别遵循对应有限入口。其他未实现操作不显示模拟成功，Presence 连接仍需独立接入。
+关联本地目录后，RepositoryView 使用真实 Git status、branch、最近 log、工作目录与暂存区 Diff；关联或解除时重建对应视图，避免残留的本地快照。有限 execFile 参数、不使用 shell、禁止外部 diff/textconv、关闭可选 index 锁；不提供任意命令/任意文件读取。Diff 仅接受当前更改列表中的路径；未跟踪文件不编造差异或读取内容。此段描述原只读浏览边界；2026-10-10 用户授权的分支下载与本地 Commit/本机 Codex 生成分别遵循对应有限入口。其他未实现操作不显示模拟成功；0.23.0 的独立 Presence 接入见下方插件章节。
 
 外观与折叠偏好使用 `gittogether.preferences.v2`；不保存账号令牌、仓库私密数据或错误状态。旧 v1 演示存储保留但不读取为新工作区，也不自动覆盖/清除它。
 

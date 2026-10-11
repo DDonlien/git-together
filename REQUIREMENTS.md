@@ -10,7 +10,8 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
 
 - [x] \[PRESENCE-01-plugin] 设置增加「插件 → Presence」，支持启用/停用、服务器地址、独立访问密钥的系统加密保存和重连；首次 NAS 配置从仓库外私有文件读取，密钥不返回界面、不入日志或安装包。类型/Cargo/构建及真实浏览器启用、NAS 连接已核对；不代表用户安装版已更新。
 - [x] \[PRESENCE-02-state] Rust 客户端只读订阅 GitPresence v1 世界快照与本机 Bridge；在设置、仓库侧栏和仓库工作台展示实际会话、分支、Git changed 与编辑器 editing。失联或过期只显示上次状态和未知有效性，停用即停止连接；App 不执行 Bridge 的 Git 写操作。两个真实登记工作区已连接，未启用的 UE/Godot 来源明确显示未接入。
-- [ ] \[PRESENCE-03-nas] NAS 部署独立 GitPresence Docker 服务，复用现有 HTTPS 的 /presence/ 路径、按仓库授权和只读非 root 容器；核对健康、真实 Bridge/观察者通信和相邻服务，完成源码与桌面更新交付。
+- [x] \[PRESENCE-03-nas] NAS 部署独立 GitPresence Docker 服务，复用现有 HTTPS 的 /presence/ 路径、按仓库授权和只读非 root 容器；健康、真实 Bridge/观察者通信与相邻服务已核对。GitPresence 0.2.0 的已推送 ff242f4 源码精确部署，GitTogether 接入源码 d84730f 已推送；桌面更新交付单独跟踪下一项。
+- [ ] \[PRESENCE-04-release] 发布包含 Presence 的 GitTogether 0.23.0 桌面更新。2026-10-12 新增 RUN-01-windows-policy 要求下一次正式版同一源码/版本同时交付 macOS、Windows x86 与 x64；当前 Windows 原生适配和双架构安装包尚未完成，因此本轮未运行会直接公开仅 macOS 资产的既有发布入口，0.23.0 尚未正式发布。正式交付仍须复用签名/公证、核验三平台安装包及公共更新源，不操作用户安装版。
 
 ## Phase - v0.1.0 - 独立 TypeScript 客户端
 
