@@ -432,3 +432,11 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 沿用Material 3、原bundle ID、Developer ID、数据目录及账号/目录关联；兼容旧加密文件和固定偏好键，不将真实用户升级等同于源码编译。Git CLI与Git LFS从Rust调用，保留正常钩子、签名及用户配置。
 - 正式main打包继续完整签名、公证、发布和公共回读；同时提供旧Electron过渡ZIP/清单与Tauri最终tar/签名/清单。更新私钥仅存仓库外，不输出或打包，未来版本继续匹配内置公钥。开发版不安装更新。
 - 延续发布持续授权和安装版不操作约定；本次不新增或运行测试，执行类型/Cargo检查、生产构建及包和公开更新源校验。
+
+## Windows 双架构发布（2026-10-12，最新用户要求）
+
+- 用户原文：「下一个版本开始一并打包 Windows 的 x86 和 x64 版本」。从下一次正式版本发布起，macOS Apple Silicon、Windows x86（32位）和Windows x64（64位）属于同一次交付，使用相同产品版本和已推送main源码提交/tag；不因当前客户端目录名为macos而遗漏Windows。
+- Windows沿用同一React/Tauri/Rust客户端，分别使用i686-pc-windows-msvc与x86_64-pc-windows-msvc构建真实的32位/64位应用，优先在Windows原生构建环境生成NSIS安装包。发布资产明确标识Windows-x86与Windows-x64，并与macOS资产归入同一个GitHub Release。
+- 下一次发布前补齐Windows系统加密存储、用户数据路径、Git/Codex工具查找、文件权限/链接、子进程取消及系统打开等当前macOS/Unix专用实现；编译成功不能替代安装包架构、内容和真实功能核对。不把仅添加构建参数或记录规则称为Windows支持已经完成。
+- 正式发布验收同时覆盖两种Windows架构：源码/版本一致、实际主程序架构、完整安装包大小与摘要、更新签名，以及latest.json中windows-i686和windows-x86_64的公开下载/签名。复用仓库外更新签名配置，保留macOS既有Developer ID、公证及过渡更新资产；缺少任一Windows包或校验失败，不能把该次完整发布标为完成，须报告具体缺口。
+- 延续自动提交/推送/发布的持续授权和不操作用户已安装GitTogether的约定。本次只更新未来发布范围，不为规则变更单独递增版本或发布安装包；实际Windows适配与打包验收跟踪RUN-01-windows-packaging。
