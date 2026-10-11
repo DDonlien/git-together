@@ -16,4 +16,11 @@
 - 新共享fetch作业最后等待者取消后实际Git停止、active计数归零，随后再次fetch成功。最终诊断final-inspection.json确认cancelledFetchDrained/lastFetchCancelled/fetchAfterCancellationSucceeded均true。
 - 0.22.5源码检查：npm run check、npm run check:rust、npm run build及git diff --check通过；仅已有Vite大chunk体积警告。一次调用误把脚本内已有--locked重复传入而被Cargo参数解析拒绝，纠正调用后检查通过，不计为业务失败或已通过结果。没有运行项目测试套件或旧TS后台测试；隔离运行诊断与类型/编译/构建分别记录。
 - 版本范围：独立任务已在main交付0.22.4更新安装等待修正，本轮不覆盖该提交；补丁版本递增0.22.5，仅修改本轮代码/文档及包版本。REQUIREMENTS.md其他任务的行序调整保留不暂存。
-- 状态：准备推送main及正式签名、公证、发布。
+- 功能提交9e434f13c420e6d0540d9fe6141a630d6cc1aef9正常推送main，ls-remote回读一致。正式入口首次预检失败：xcrun notarytool history找不到可读取的gittogether-notary项（exit69）；正常默认钥匙串和明确login.keychain-db均失败，未读取/输出密码，未改Keychain访问设置或重新存储凭据。
+- 只读系统诊断确认当前会话IOConsoleLocked/CGSSessionScreenIsLocked为true；新进程SecKeychainGetUserInteractionAllowed仍为true，隔离Rust禁止交互设置未全局关闭其他进程UI。Apple TN3147说明notarytool未指定文件钥匙串时使用data protection keychain；不把classic钥匙串查无项当成配置被删除的证明。当前不可读取的具体底层原因未作超出证据的结论。
+- 为完成仍可执行的工作，使用本轮临时构建入口，仅取消history前置检查，仍保留正常main/源码核验、Developer ID及必须Accepted才能发布的全部门槛；正式源码发布入口未修改。0.22.5原生编译及生产构建完成，包只含gittogether，签名/团队/标识核验通过。随后实际notarytool submit仍exit69且没有submission ID，公证尚未提交成功，没有staple或发布。临时入口及临时复制源码已清理。
+- 产物：_builds/gittogether-0.22.5-macos-arm64-0LBV47/GitTogether-0.22.5-macOS-arm64.zip，4205783 bytes，SHA256 5a1c49d03068ce636f529a6ecb78b6ddcf142f862daef32b0213561d2f6893ff。实际解包复核0.22.5、com.gittogether.standalone、Team86J7X3KZ5Z、Developer ID及deep/strict签名，仅gittogether且无Node/Electron资源。build-blocked.json明确notarized/published/publicUpdateVerified均false，未把本地包冒称正式发布。
+- 14:34公共API最新版本仍v0.22.4，未创建v0.22.5 tag或半成品更新源。README和需求分开记录代码已完成及公证/发布未完成。依照用户持续约定未启动/操作/替换安装版、未要求解锁；没有创建重试自动化或承诺无后台机制的后续运行。
+- 本轮状态：修复、隔离核验、检查、main推送和签名打包完成；公证/发布受已有配置不可读取阻塞，RUN-01-tauri-parity-release仍未勾选。完成记录归档，明确保留剩余工作。
+
+- 本轮结束：2026-10-11 14:35:39 CST；公证/发布仍待既有配置恢复可读取，未标记整个需求完成。
