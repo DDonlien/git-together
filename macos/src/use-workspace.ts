@@ -8,12 +8,14 @@ import pkg from '../package.json';
 import { preserveLocalWorkspace, type RepositoryWorkspace } from './repository-model';
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
+import { useUpdates } from './use-updates';
 
 type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; hiddenEntries?: string[] };
 const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [] };
 const preferenceKey = 'gittogether.preferences.v2';
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; loading?: boolean; error: string; checkedAt: number }
 export function useWorkspace() {
+  const updates = useUpdates();
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const catalogRef = useRef<Catalog>(emptyCatalog);
   const [localStates, setLocalStates] = useState<Record<string, LocalRepositoryState>>({});
@@ -49,7 +51,9 @@ export function useWorkspace() {
     return next;
   }, []);
   const ensureService = useCallback(async () => {
+    if (updates.installingRef.current) throw new DOMException('应用正在重启更新。', 'AbortError');
     if (checking.current) return checking.current;
+    const installation = updates.installationRef.current;
     const check = (async () => {
       try {
         const info = await importAPI('status', {});
@@ -65,21 +69,23 @@ export function useWorkspace() {
         }
         return info;
       } catch (problem) {
-        if (mounted.current) setError(problem instanceof Error ? problem.message : '无法检查本地连接。');
+        if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current) setError(problem instanceof Error ? problem.message : '无法检查本地连接。');
         throw problem;
       }
     })();
     checking.current = check;
     try { return await check; } finally { checking.current = null; }
-  }, []);
+  }, [updates.installingRef, updates.installationRef]);
   const reload = useCallback(async () => {
+    if (updates.installingRef.current) return;
+    const installation = updates.installationRef.current;
     setLoading(true); setError('');
     try { await ensureService(); accept(await importAPI('catalog', {})); }
-    catch (problem) { if (mounted.current) setError(problem instanceof Error ? problem.message : '无法读取账号。'); }
+    catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current) setError(problem instanceof Error ? problem.message : '无法读取账号。'); }
     finally { if (mounted.current) setLoading(false); }
   }, [accept, ensureService]);
   useEffect(() => { mounted.current = true; void reload(); return () => { mounted.current = false; }; }, [reload]);
-  const monitoring = !loading && !needsReload;
+  const monitoring = !loading && !needsReload && !updates.installing;
   useAutoRefresh({ resources: monitoring ? ['catalog'] : [], intervalMs: syncIntervals.service, initialDelayMs: syncIntervals.service,
     run: async (_resource, signal) => {
       await ensureService();
@@ -87,7 +93,7 @@ export function useWorkspace() {
       const next = await importAPI('catalog', {}, signal);
       if (!signal.aborted) accept(next);
     },
-    onError: (_resource, problem) => setError(problem instanceof Error ? problem.message : '自动检查本地连接失败，正在重试。'),
+    onError: (_resource, problem) => { if (!updates.installingRef.current) setError(problem instanceof Error ? problem.message : '自动检查本地连接失败，正在重试。'); },
   });
   useAutoRefresh({ resources: monitoring ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.remote, initialDelayMs: syncIntervals.remote,
     run: async (resource, signal) => {
@@ -99,7 +105,7 @@ export function useWorkspace() {
       const failure = next.accounts.find(account => account.id === accountId)?.error;
       if (failure) throw new Error(failure); // Account errors retain their last successful directory and back off independently.
     },
-    onError: (_resource, problem) => { if (problem instanceof LocalServiceError) setError(problem.message); },
+    onError: (_resource, problem) => { if (!updates.installingRef.current && problem instanceof LocalServiceError) setError(problem.message); },
   });
   const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees])) : [];
   useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
@@ -174,15 +180,17 @@ export function useWorkspace() {
   }, [preferences]);
   const updatePreferences = (change: Partial<Preferences>) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...change })); };
   async function task(key: string, run: () => Promise<Catalog>) {
+    const installation = updates.installationRef.current;
     if (running.current.has(key)) throw new Error('该操作正在执行，请稍候。');
     running.current.add(key); setBusy(current => ({ ...current, [key]: true }));
     try { return accept(await run()); }
-    catch (problem) { if (mounted.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
+    catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
     finally { running.current.delete(key); if (mounted.current) setBusy(current => ({ ...current, [key]: false })); }
   }
   async function connectionTask<T>(run: () => Promise<T>): Promise<T> {
+    const installation = updates.installationRef.current;
     try { return await run(); }
-    catch (problem) { if (mounted.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
+    catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
   }
   async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
     await ensureService();
@@ -215,7 +223,7 @@ export function useWorkspace() {
     } finally { running.current.delete(input.repositoryId); if (mounted.current) setBusy(current => ({ ...current, [input.repositoryId]: false })); }
   }
   return {
-    catalog, localStates, remoteStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload,
+    catalog, localStates, remoteStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload, updates,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

@@ -2,7 +2,7 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.22.7）
+## 当前运行结构（0.22.9）
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
@@ -19,7 +19,7 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 | credentials / preferences | Keychain、旧Electron密文读取、新AES-GCM原子存储和限定偏好迁移 |
 | oauth | Rust loopback网页授权与设备授权，PKCE/state、实例绑定及加密开发配置 |
 | diagnostics | 24小时本机有限日志、打开文件夹及复制日志文件 |
-| updates | Tauri签名更新、版本绑定、操作完成后安装与重启 |
+| updates | Tauri签名更新、版本绑定、确认后立即安装与重启 |
 
 保留`com.gittogether.standalone`、原Developer ID及`GitTogether-Standalone-Demo`数据目录。正式应用启动时兼容`accounts-v2.encrypted`旧v10密文，保存采用认证加密；Keychain不可用时保留原文件并返回错误，不弹解锁或明文降级。只迁移本应用偏好键，WKWebView已有值不覆盖。开发账号保持会话存储，不读取正式账号。迁移源与实际用户升级结果分别记录。
 
@@ -31,7 +31,7 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 
 正式发布从已推送main生成独立源码快照，构建Rust release及React资源，Developer ID签名、Apple公证并附加凭证后生成两套更新资产：旧Electron版读取ZIP和`latest-mac.yml`，新Tauri版读取最终已公证的`.app.tar.gz`、`.sig`和`latest.json`。Tauri签名绑定版本，内置公钥匹配仓库外0600私钥；发布后完整回读两套公共资产并核对摘要。开发版禁用安装更新。不会为交付启动或修改用户已安装应用。
 
-安装预约（0.22.4，RUN-01-update-quiesce）：用户确认后先以Service.installing关闭新请求入口，再等待Service.active归零；该计数继续覆盖已接受请求及独立fetch任务，不能把它的瞬时非零误报为永久阻塞，也不能跳过在途Git写操作。等待最多180秒，期间通过既有更新状态显示实际等待说明；真实未完成账号授权仍须先完成或取消。预约以Drop释放，取消、超时及安装失败均恢复请求入口。失败保留已经验证并下载的Update及字节，以ready状态、具体说明和“重试安装”直接重试，不再退回检查更新。
+安装预约（RUN-01-update-immediate，取代0.22.4通用等待）：useWorkspace持有跨页面的useUpdates状态；确认重启时立即设置安装标志，停止自动账号、本地和远端检查。安装状态仅由更新卡片展示，正常关闭入口或IPC退出不生成顶部连接错误。Service.installing原子关闭新请求入口，独立Foreground守卫记录真正的提交、推送、文件变更、下载及配置保存；已有前台事务只返回具体原因，不排队等待。其余在途读取及独立fetch通过后台CancellationToken取消，安装不等待Service.active归零；该计数仍用于实际请求生命周期。预约以Drop释放并更新后台取消代次，安装失败恢复新请求、保留已下载Update及字节，以ready状态和“重试安装”直接重试。前端确认前仍禁用真实前台操作/授权期间的重启入口。
 
 浏览器开发由Vite将有限`/api`转发到Rust服务4175；授权回调4174也由Rust持有。受限Host/Origin、请求体上限和断连取消仍保留；桌面通过IPC直接调用同一Service，不依赖这些端口。类型检查覆盖当前React和发布工具，Rust使用独立Cargo检查。
 

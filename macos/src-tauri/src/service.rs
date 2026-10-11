@@ -62,6 +62,8 @@ pub struct Service {
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
+    foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
+    background: std::sync::Mutex<CancellationToken>,
     pub active: AtomicUsize,
     pub installing: AtomicBool,
 }
@@ -71,10 +73,28 @@ impl Drop for Active<'_> {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
-pub struct InstallReservation<'a>(&'a AtomicBool);
+struct Foreground<'a> {
+    operations: &'a std::sync::Mutex<BTreeMap<&'static str, usize>>,
+    name: &'static str,
+}
+impl Drop for Foreground<'_> {
+    fn drop(&mut self) {
+        let mut operations = self.operations.lock().unwrap_or_else(|e| e.into_inner());
+        let count = operations.get_mut(self.name).unwrap();
+        *count -= 1;
+        if *count == 0 {
+            operations.remove(self.name);
+        }
+    }
+}
+pub struct InstallReservation<'a>(&'a Service);
 impl Drop for InstallReservation<'_> {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
+        let mut background = self.0.background.lock().unwrap_or_else(|e| e.into_inner());
+        if background.is_cancelled() {
+            *background = CancellationToken::new();
+        }
+        self.0.installing.store(false, Ordering::SeqCst);
     }
 }
 impl Service {
@@ -117,6 +137,8 @@ impl Service {
             fetching: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
             installing: AtomicBool::new(false),
+            foreground: std::sync::Mutex::new(BTreeMap::new()),
+            background: std::sync::Mutex::new(CancellationToken::new()),
         });
         service
             .diagnostics
@@ -560,7 +582,11 @@ impl Service {
             let (sender, receiver) = watch::channel(None);
             let entry = Arc::new(PendingFetch {
                 result: receiver,
-                cancel: CancellationToken::new(),
+                cancel: self
+                    .background
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .child_token(),
                 waiters: AtomicUsize::new(0),
             });
             pending.insert(key.clone(), entry.clone());
@@ -661,6 +687,17 @@ impl Service {
         if self.installing.load(Ordering::SeqCst) {
             return Err("正在安装更新，请稍后重试。".into());
         }
+        let foreground = match method {
+            "submitCommit" => Some("提交"),
+            "pushCommit" => Some("推送"),
+            "applySync" => Some("文件变更"),
+            "downloadBranch" => Some("分支下载"),
+            "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
+            "link" | "unlink" | "matchAccountRepositories" => Some("保存仓库关联"),
+            _ => None,
+        }
+        .map(|name| self.foreground(name))
+        .transpose()?;
         self.active.fetch_add(1, Ordering::SeqCst);
         let _active = Active(&self.active);
         if self.installing.load(Ordering::SeqCst) {
@@ -671,7 +708,22 @@ impl Service {
             &json!({"event":"api","outcome":"start","method":method}),
             false,
         );
-        let result = self.dispatch(method, &input, &cancel).await;
+        let background = self
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .child_token();
+        let request = self.dispatch(method, &input, &cancel);
+        tokio::pin!(request);
+        let result = tokio::select! {
+            result = &mut request => result,
+            _ = background.cancelled(), if foreground.is_none() => {
+                // Let the existing cancellation paths finish their cleanup. Installation
+                // never waits for these readers or the separately owned fetch jobs.
+                cancel.cancel();
+                request.await
+            }
+        };
         let failures = result.as_ref().ok().and_then(|value| value["tasks"].as_array())
             .map(|tasks| tasks.iter().filter(|task| !text(task, "error").is_empty()).count()).unwrap_or(0);
         let mut details = json!({"event":"api","outcome":match &result {
@@ -1253,31 +1305,43 @@ impl Service {
         open(url.as_str()).await?;
         Ok(json!({"opened":true}))
     }
+    fn foreground(&self, name: &'static str) -> Result<Foreground<'_>> {
+        let mut operations = self.foreground.lock().unwrap_or_else(|e| e.into_inner());
+        if self.installing.load(Ordering::SeqCst) {
+            return Err("正在安装更新，请稍后重试。".into());
+        }
+        *operations.entry(name).or_default() += 1;
+        Ok(Foreground {
+            operations: &self.foreground,
+            name,
+        })
+    }
     pub async fn reserve_install(&self) -> Result<InstallReservation<'_>> {
         self.installing
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .map_err(|_| "更新安装正在进行中。".to_string())?;
-        let reservation = InstallReservation(&self.installing);
-        // Close admission before draining. Periodic reads and fetches must not
-        // make installation race an ever-changing snapshot of active requests.
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
-        loop {
-            if self.authorization.busy() {
-                return Err("请先完成或取消正在进行的账号授权，已下载的更新已保留。".into());
-            }
-            if self.active.load(Ordering::SeqCst) == 0 {
-                return Ok(reservation);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return Err("当前操作尚未结束，已下载的更新已保留，请稍后重试安装。".into());
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
+        let reservation = InstallReservation(self);
+        let operations = self.foreground.lock().unwrap_or_else(|e| e.into_inner());
+        if !operations.is_empty() {
+            return Err(format!(
+                "正在执行{}，请完成后再重启更新。已下载的更新已保留。",
+                operations.keys().copied().collect::<Vec<_>>().join("、")
+            ));
         }
+        if self.authorization.busy() {
+            return Err("请先完成或取消正在进行的账号授权，已下载的更新已保留。".into());
+        }
+        self.background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .cancel();
+        Ok(reservation)
     }
     pub async fn web(&self, method: &str, input: Value) -> Result<Value> {
         if self.installing.load(Ordering::SeqCst) {
             return Err("正在安装更新，请稍后重试。".into());
         }
+        let _foreground = self.foreground("账号授权")?;
         self.active.fetch_add(1, Ordering::SeqCst);
         let _active = Active(&self.active);
         if self.installing.load(Ordering::SeqCst) {

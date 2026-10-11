@@ -129,7 +129,6 @@ impl Updates {
             return self.error("请先下载更新。");
         };
         service.authorization.prune().await;
-        self.set(json!({"phase":"installing","availableVersion":update.version,"message":"正在等待当前操作完成，随后自动安装更新…"}));
         let _reservation = match service.reserve_install().await {
             Ok(reservation) => reservation,
             Err(message) => return self.retry_install(&update.version, &message),
