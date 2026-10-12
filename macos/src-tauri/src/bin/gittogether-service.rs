@@ -105,19 +105,23 @@ async fn authorization(
     envelope(service.web(&method, input).await)
 }
 async fn presence(
-    State(presence): State<Arc<Presence>>,
+    State((presence,control)): State<(Arc<Presence>,Arc<RemoteControl>)>,
     Path(method): Path<String>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if !trusted(&headers) || body.len() > 4096 {
+    if !trusted(&headers) || body.len() > 8192 {
         return StatusCode::FORBIDDEN.into_response();
     }
     let input = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(_) => return envelope(Err("Presence 请求无效。".into())),
     };
-    envelope(presence.command(&method, input).await)
+    if matches!(method.as_str(),"register"|"login"|"logout"|"password") && control.busy().await {return envelope(Err("请先等待远端操作结束或中止，再更换账号。".into()));}
+    if method=="logout" && presence.signed_in() {if let Err(error)=control.forget_account(true).await {return envelope(Err(error));}}
+    let result=presence.command(&method,input).await;
+    if method=="password" && result.is_ok() {if let Err(error)=control.forget_account(false).await {return envelope(Err(error));}}
+    envelope(result)
 }
 #[tokio::main]
 async fn main() {
@@ -143,8 +147,8 @@ async fn remote_control(
 }
 async fn run() -> Result<()> {
     let root = data_root()?;
-    let presence = Presence::new(root.clone(), false)?;
-    let service = Service::new(root, false, "preview")?;
+    let service = Service::new(root.clone(), false, "preview")?;
+    let presence = Presence::new(root, false, service.clone())?;
     let control = RemoteControl::new(service.clone(), presence.clone(), false)?;
     service.authorization.ensure_listener().await?;
     let router = Router::new()
@@ -156,7 +160,7 @@ async fn run() -> Result<()> {
         .merge(
             Router::new()
                 .route("/api/presence/{method}", post(self::presence))
-                .with_state(presence),
+                .with_state((presence.clone(),control.clone())),
         )
         .merge(
             Router::new()

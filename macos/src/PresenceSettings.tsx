@@ -3,6 +3,7 @@ import { usePresence } from './PresenceProvider';
 import { presenceConnectionLabels, presenceProjectSummary } from './presence-model';
 import { Button, Icon, Notice, Switch, TextField } from './ui';
 import { RemoteControlSettings } from './RemoteControlSettings';
+import { PresenceAccountSettings } from './PresenceAccountSettings';
 
 export function PresenceSettings({ disabled = false }: { disabled?: boolean }) {
   const presence = usePresence();
@@ -38,6 +39,7 @@ export function PresenceSettings({ disabled = false }: { disabled?: boolean }) {
       <h3>服务器会话</h3>
       {status.sessions.length ? status.sessions.map(session => <div className="presence-session" key={session.sessionId}><strong>{session.displayName}<span className="presence-session-validity">{status.connection === 'connected' && session.alive ? '在线' : '离线，状态未知'}</span></strong>{session.projects.map(project => <small key={`${project.repositoryId}:${project.worktreeId}`}>{project.repositoryId} · {project.branch || '未检出分支'} · {presenceProjectSummary(project, status.connection === 'connected' && session.alive)}</small>)}</div>) : <p className="presence-empty">{status.connection === 'connected' ? '已连接，等待授权仓库的协作状态。' : '服务器尚未连接，协作状态未知。'}</p>}
     </div>}
+    <PresenceAccountSettings disabled={disabled} />
     <RemoteControlSettings disabled={disabled} />
   </div></section>;
 }

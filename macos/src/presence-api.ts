@@ -1,11 +1,11 @@
-import type { PresenceConfiguration, PresenceStatus } from './presence-model';
+import type { PresenceConfiguration, PresenceStatus, PresenceMethod } from './presence-model';
 
-export async function presenceCommand(method: 'status' | 'configure' | 'reconnect', input: PresenceConfiguration | Record<string, never> = {}): Promise<PresenceStatus> {
+export async function presenceCommand(method: PresenceMethod, input: PresenceConfiguration | Record<string, unknown> = {}): Promise<PresenceStatus> {
   let result: unknown;
   if (window.gittogether?.presence) result = await window.gittogether.presence(method, input);
   else {
     if (window.gittogether) throw new Error('当前版本尚未包含 Presence 插件，请更新 GitTogether。');
-    const response = await fetch(`/api/presence/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input), signal: AbortSignal.timeout(5000) });
+    const response = await fetch(`/api/presence/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
     result = await response.json();
   }
   const envelope = result as { ok?: boolean; value?: PresenceStatus; error?: string };

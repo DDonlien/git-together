@@ -12,7 +12,12 @@ export type PresenceStatus = {
   version: 1; enabled: boolean; configured: boolean; serverUrl: string; serverName: string;
   connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string; sessions: PresenceSession[];
   bridge: { connected: boolean; error: string; projects: PresenceProject[] };
+  account?: { id: string; email: string; displayName: string; emailVerified: boolean; expiresAt: number; repositories: string[]; mode: 'personal' | 'hosted' } | null;
+  accountService?: { version: 1; mode: 'personal' | 'hosted'; organizationManagement: boolean; registrationAvailable: boolean; setupRequired: boolean } | null;
+  localRepositories?: { id: string; name: string; remoteId: string; bound: boolean }[];
 };
+export type PresenceAccountMethod = 'accountStatus' | 'register' | 'login' | 'logout' | 'bindRepository' | 'password';
+export type PresenceMethod = 'status' | 'configure' | 'reconnect' | PresenceAccountMethod;
 export type PresenceConfiguration = { enabled: boolean; serverUrl: string; serverName: string; serverToken?: string };
 export const presenceConnectionLabels: Record<PresenceStatus['connection'], string> = { disabled: '已停用', connecting: '正在连接…', connected: '已连接', offline: '连接已断开，状态未知' };
 

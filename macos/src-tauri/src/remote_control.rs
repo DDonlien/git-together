@@ -79,11 +79,21 @@ impl RemoteControl {
         });
         Ok(control)
     }
-    pub fn enabled(&self) -> bool { self.config.borrow().enabled }
+    pub fn enabled(&self) -> bool { let c=self.config.borrow(); c.enabled && !c.device_token.is_empty() && self.bound(&c).is_ok() }
     pub async fn busy(&self) -> bool { !self.running.lock().await.is_empty() }
+    pub async fn forget_account(&self, revoke: bool) -> Result<()> {
+        let _guard=self.settings.lock().await;
+        if self.busy().await {return Err("远端操作正在执行，请先等待完成或中止，再退出账号。".into());}
+        let old=self.config.borrow().clone();
+        let warning=if revoke && !old.device_token.is_empty() {self.http(&old,"revoke",Some(&json!({"deviceId":old.device_id}))).await.err().map(|e|format!("本机已停止接收；服务器设备撤销暂未完成：{e}")).unwrap_or_default()}else{String::new()};
+        self.save_config(Configuration::default()).await?;
+        self.workspaces.write().await.clear();
+        *self.state.write().await=json!({"connection":"disabled","error":warning,"devices":[],"jobs":[],"teams":[],"repositories":[]});
+        Ok(())
+    }
     fn bound(&self, c: &Configuration) -> Result<()> {
-        let (url, token) = self.presence.access()?;
-        if c.server_url != url || c.binding != util::digest(format!("{url}:{token}")) { return Err("Presence账号或服务器已改变，请重新登记此设备。".into()); }
+        let (url, _) = self.presence.access()?;
+        if c.server_url != url || c.binding != self.presence.account_binding()? { return Err("Presence账号或服务器已改变，请重新登记此设备。".into()); }
         Ok(())
     }
     async fn decode(mut response: reqwest::Response) -> Result<Value> {
@@ -102,6 +112,7 @@ impl RemoteControl {
         let url = presence::server_url(&c.server_url)?.join(&format!("v1/control/{route}")).map_err(|_| "远端控制地址无效。")?;
         let request = if let Some(value) = input { self.client.post(url).json(value) } else { self.client.get(url) };
         let response = request.bearer_auth(&c.device_token).send().await.map_err(|_| "远端控制连接失败；可重新连接后查询命令结果。")?;
+        if route=="state" && matches!(response.status().as_u16(),401|403) {self.state.write().await["deviceRevoked"]=json!(true);}
         Self::decode(response).await
     }
     async fn save_config(&self, c: Configuration) -> Result<()> {
@@ -132,10 +143,12 @@ impl RemoteControl {
     async fn snapshot(&self) -> Result<Value> {
         let c = self.config.borrow().clone();
         let mut state = self.state.read().await.clone();
-        state["enabled"] = json!(c.enabled);
-        state["registered"] = json!(!c.device_token.is_empty());
-        state["deviceId"] = json!(c.device_id);
-        state["userId"] = json!(c.user_id);
+        let bound=!c.device_token.is_empty() && state["deviceRevoked"]!=true && self.bound(&c).is_ok();
+        if !bound {state["devices"]=json!([]);state["jobs"]=json!([]);state["teams"]=json!([]);state["repositories"]=json!([]);state["connection"]=json!("disabled");}
+        state["enabled"] = json!(c.enabled && bound);
+        state["registered"] = json!(bound);
+        state["deviceId"] = json!(if bound {&c.device_id}else{""});
+        state["userId"] = json!(if bound {&c.user_id}else{""});
         state["name"] = json!(c.name);
         state["localRepositories"] = self.local_repositories().await?;
         Ok(state)
@@ -150,7 +163,7 @@ impl RemoteControl {
                 let _guard = self.settings.lock().await;
                 let (url, token) = self.presence.access()?;
                 let supplied = input["registrationKey"].as_str().filter(|s|!s.trim().is_empty()).map(|s|s.trim().to_owned());
-                let registration = if let Some(key)=supplied { key } else {
+                let registration = if self.presence.signed_in() {token.clone()} else if let Some(key)=supplied { key } else {
                     let private = presence::private_json(&crate::platform::home()?.join(".config/git-presence/control-access.local.json"))?;
                     if let Some(access)=private {
                         if presence::server_url(text(&access,"serverUrl"))?.as_str()!=url { return Err("设备登记授权属于其他服务器，请填写当前服务器的登记密钥。".into()); }
@@ -160,7 +173,7 @@ impl RemoteControl {
                 let name = util::field(&input, "name", 120)?;
                 if name.trim().is_empty() { return Err("请输入设备名称。".into()); }
                 let old = self.config.borrow().clone();
-                if !old.device_token.is_empty() && self.bound(&old).is_ok() {
+                if !old.device_token.is_empty() && self.state.read().await["deviceRevoked"]!=true && self.bound(&old).is_ok() {
                     return Err("此设备已登记；可以修改名称或先撤销旧设备。".into());
                 }
                 let address = presence::server_url(&url)?.join("v1/control/enroll").map_err(|_| "登记地址无效。")?;
@@ -170,7 +183,8 @@ impl RemoteControl {
                 uuid::Uuid::parse_str(&id).map_err(|_| "服务器返回无效设备身份。")?;
                 let credential = util::field(&value, "deviceToken", 512)?;
                 if credential.len() < 32 { return Err("服务器返回无效设备凭证。".into()); }
-                self.save_config(Configuration { enabled: true, name, server_url: url.clone(), binding: util::digest(format!("{url}:{token}")), device_id: id, user_id: util::field(&value, "userId", 160)?, device_token: credential, projects: vec![] }).await?;
+                self.save_config(Configuration { enabled: true, name, server_url: url.clone(), binding: self.presence.account_binding()?, device_id: id, user_id: util::field(&value, "userId", 160)?, device_token: credential, projects: vec![] }).await?;
+                self.state.write().await["deviceRevoked"]=json!(false);
                 self.snapshot().await
             }
             "configure" => {
@@ -205,6 +219,10 @@ impl RemoteControl {
                     if let Some(team) = &p.team_id {
                         if !teams.as_array().is_some_and(|a|a.iter().any(|t| t["id"]==*team && t["projects"].as_array().is_some_and(|r|r.iter().any(|v|v==&remote)))) { return Err("此项目不在指定团队的纳管范围。".into()); }
                     }
+                }
+                if self.presence.signed_in() {
+                    let remotes=value.projects.iter().filter_map(|p|catalog["repositories"].as_array()?.iter().find(|r|r["id"]==p.repository_id)).map(|r|repository_id(text(r,"url"))).collect::<Result<Vec<_>>>()?;
+                    self.presence.bind_account_repositories(remotes,vec![]).await?;
                 }
                 c.enabled = value.enabled; c.name = value.name.trim().into(); c.projects = value.projects;
                 if !c.enabled {

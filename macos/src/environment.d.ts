@@ -1,12 +1,13 @@
 import type { UpdateBridge } from './update-model';
 import type { DiagnosticInput, DiagnosticsStatus } from './diagnostics-model';
+import type { PresenceMethod } from './presence-model';
 declare global {
   interface Window {
     gittogether?: {
       environment: () => Promise<{ nativeGlass: boolean; platform: string }>;
       setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
       import: (method: string, input: unknown, requestId?: string) => Promise<unknown>;
-      presence?: (method: 'status' | 'configure' | 'reconnect', input: unknown) => Promise<unknown>;
+      presence?: (method: PresenceMethod, input: unknown) => Promise<unknown>;
       remoteControl?: (method: string, input: unknown) => Promise<unknown>;
       diagnostics?: {
         status: (input?: unknown) => Promise<DiagnosticsStatus>;

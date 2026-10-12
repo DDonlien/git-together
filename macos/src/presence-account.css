@@ -1,0 +1,11 @@
+.presence-account-settings { display: grid; gap: 12px; padding-block: 16px; border-top: 1px solid var(--line); }
+.presence-account-form, .presence-account-password form { display: grid; gap: 12px; max-width: 520px; }
+.presence-account-tabs, .presence-account-address, .presence-account-project-heading { display: flex; align-items: center; gap: 8px; }
+.presence-account-address > :first-child { flex: 1; min-width: 0; }
+.presence-account-project-heading { justify-content: space-between; }
+.presence-account-project-heading h3 { margin: 0; }
+.presence-account-hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.presence-account-projects { display: grid; gap: 8px; }
+.presence-account-projects > label, .presence-account-projects > div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.presence-account-projects span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence-account-password summary { cursor: pointer; margin-bottom: 12px; }

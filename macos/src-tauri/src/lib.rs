@@ -71,11 +71,16 @@ fn environment() -> Value {
 #[tauri::command]
 async fn presence_command(
     presence: State<'_, Arc<presence::Presence>>,
+    control: State<'_, Arc<remote_control::RemoteControl>>,
     method: String,
     input: Option<Value>,
 ) -> util::Result<Value> {
+    if matches!(method.as_str(),"register"|"login"|"logout"|"password") && control.busy().await {return Ok(envelope(Err("请先等待远端操作结束或中止，再更换账号。".into())));}
+    if method=="logout" && presence.signed_in() {control.forget_account(true).await?;}
+    let result=presence.command(&method, input.unwrap_or(json!({}))).await;
+    if method=="password" && result.is_ok() {control.forget_account(false).await?;}
     Ok(envelope(
-        presence.command(&method, input.unwrap_or(json!({}))).await,
+        result,
     ))
 }
 #[tauri::command]
@@ -172,9 +177,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let root = data_root().map_err(std::io::Error::other)?;
-            let presence = presence::Presence::new(root.clone(), !cfg!(debug_assertions))
+            let service = Service::new(root.clone(), !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
-            let service = Service::new(root, !cfg!(debug_assertions), "app")
+            let presence = presence::Presence::new(root, !cfg!(debug_assertions), service.clone())
                 .map_err(std::io::Error::other)?;
             let updates = Updates::new(service.diagnostics.clone());
             app.manage(service.clone());

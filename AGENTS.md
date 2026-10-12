@@ -440,3 +440,9 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 下一次发布前补齐Windows系统加密存储、用户数据路径、Git/Codex工具查找、文件权限/链接、子进程取消及系统打开等当前macOS/Unix专用实现；编译成功不能替代安装包架构、内容和真实功能核对。不把仅添加构建参数或记录规则称为Windows支持已经完成。
 - 正式发布验收同时覆盖两种Windows架构：源码/版本一致、实际主程序架构、完整安装包大小与摘要、更新签名，以及latest.json中windows-i686和windows-x86_64的公开下载/签名。复用仓库外更新签名配置，保留macOS既有Developer ID、公证及过渡更新资产；缺少任一Windows包或校验失败，不能把该次完整发布标为完成，须报告具体缺口。
 - 延续自动提交/推送/发布的持续授权和不操作用户已安装GitTogether的约定。本次只更新未来发布范围，不为规则变更单独递增版本或发布安装包；实际Windows适配与打包验收跟踪RUN-01-windows-packaging。
+
+## Presence商业与身份方向（2026-10-12，用户要求）
+
+- GitTogether继续公开客户端源码，开源许可证尚待选择；GitPresence源码仓库当前private。公共客户端只依赖公开协议，不要求用户能访问私有仓库。
+- 个人Docker最多一个Presence账号，可绑定多个仓库/设备，不提供组织空间或跨账号管理；Git平台组织仓库有权限即可绑定，不等同Presence组织管理。组织付费服务计划部署NAS的独立Presence实例，用组织ID、成员关系和明确纳管项目隔离，不能只凭账号名称或同仓库推导权限。
+- 本轮独立账号使用邮箱/密码，平台Git凭证留在目标设备；GitHub/Gitea直接登录Presence、官网Docker分发、组织邀请/计费/控制台和许可协议仍独立验收。用户提出未来商业模式不代表这些已发布，也不自动改变现有仓库可见性。

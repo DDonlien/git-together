@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useRemoteControl } from './RemoteControlProvider';
 import { Button, Checkbox, Notice, Switch, TextField } from './ui';
+import { usePresence } from './PresenceProvider';
 
 export function RemoteControlSettings({ disabled = false }: { disabled?: boolean }) {
   const control = useRemoteControl();
+  const presence = usePresence();
   const status = control?.status;
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +32,7 @@ export function RemoteControlSettings({ disabled = false }: { disabled?: boolean
     <div className="remote-device-name"><TextField label="此设备名称" value={name} onChange={event => setName(event.target.value)} maxLength={120} disabled={busy} />
       <Button disabled={busy || !name.trim()} onClick={() => { if (status.registered) void save(); else void enroll(); }}>{status.registered ? '保存名称' : '登记此设备'}</Button>
     </div>
-    {!status.registered && <TextField label="设备登记密钥（已配置可留空）" type="password" value={registrationKey} onChange={event => setRegistrationKey(event.target.value)} autoComplete="off" maxLength={512} disabled={busy} />}
+    {!status.registered && (presence?.status?.account ? <p className="remote-control-hint">使用已登录的 Presence 账号登记此电脑，无需设备登记密钥。</p> : <TextField label="设备登记密钥（旧访问密钥模式）" type="password" value={registrationKey} onChange={event => setRegistrationKey(event.target.value)} autoComplete="off" maxLength={512} disabled={busy} />)}
     {status.registered && <>
       <p className="remote-control-hint">{!status.enabled ? '远端控制已停用' : status.connection === 'connected' ? '设备已连接' : '设备正在连接；离线时无法执行'}。启用后关闭窗口可继续在后台接收操作；从托盘退出会断开。</p>
       <h3>允许控制的本机项目</h3>

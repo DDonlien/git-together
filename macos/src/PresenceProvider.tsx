@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { presenceCommand } from './presence-api';
-import type { PresenceConfiguration, PresenceStatus } from './presence-model';
+import type { PresenceConfiguration, PresenceStatus, PresenceAccountMethod } from './presence-model';
 import './presence.css';
 
 type PresenceController = {
   status: PresenceStatus | null; error: string; busy: boolean;
   configure: (input: PresenceConfiguration) => Promise<void>; reconnect: () => Promise<void>;
+  account: (method: PresenceAccountMethod, input?: Record<string, unknown>) => Promise<void>;
 };
 const Context = createContext<PresenceController | null>(null);
 export const usePresence = () => useContext(Context);
@@ -38,7 +39,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     void read();
     return () => { active = false; mounted.current = false; clearTimeout(timer); };
   }, []);
-  const change = useCallback(async (method: 'configure' | 'reconnect', input: PresenceConfiguration | Record<string, never> = {}) => {
+  const change = useCallback(async (method: 'configure' | 'reconnect' | PresenceAccountMethod, input: PresenceConfiguration | Record<string, unknown> = {}) => {
     if (mutating.current) throw new Error('Presence 设置正在处理中。');
     mutating.current = true; generation.current++; setBusy(true); setActionError('');
     try {
@@ -47,5 +48,6 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     } catch (problem) { if (mounted.current) setActionError(problem instanceof Error ? problem.message : 'Presence 设置保存失败。'); throw problem; }
     finally { mutating.current = false; if (mounted.current) setBusy(false); }
   }, []);
-  return <Context.Provider value={{ status, error: actionError || readError, busy, configure: input => change('configure', input), reconnect: () => change('reconnect') }}>{children}</Context.Provider>;
+  const account = useCallback((method: PresenceAccountMethod, input?: Record<string, unknown>) => change(method, input), [change]);
+  return <Context.Provider value={{ status, error: actionError || readError, busy, configure: input => change('configure', input), reconnect: () => change('reconnect'), account }}>{children}</Context.Provider>;
 }

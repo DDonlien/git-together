@@ -14,6 +14,8 @@ use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig, Message},
 };
 use url::Url;
+#[path = "presence_account.rs"]
+mod account;
 
 pub const DEFAULT_SERVER: &str = "https://git.freshli4.com:10443/presence/";
 const MAX_MESSAGE: usize = 4 * 1024 * 1024;
@@ -28,6 +30,8 @@ struct Configuration {
     server_name: String,
     server_token: String,
     device_id: String,
+    #[serde(default)]
+    account: Option<account::Account>,
 }
 impl Default for Configuration {
     fn default() -> Self {
@@ -38,6 +42,7 @@ impl Default for Configuration {
             server_name: "NAS".into(),
             server_token: String::new(),
             device_id: format!("gittogether-{}", uuid::Uuid::new_v4()),
+            account: None,
         }
     }
 }
@@ -141,6 +146,8 @@ struct Status {
     error: String,
     sessions: Vec<Session>,
     bridge: BridgeStatus,
+    account: Option<account::Account>,
+    account_service: Value,
 }
 impl Status {
     fn new(config: &Configuration, error: String) -> Self {
@@ -164,11 +171,14 @@ impl Status {
                 error: String::new(),
                 projects: vec![],
             },
+            account: config.account.clone(),
+            account_service: json!(null),
         }
     }
 }
 
 pub struct Presence {
+    service: Arc<crate::service::Service>,
     root: PathBuf,
     private_directory: PathBuf,
     persistent: bool,
@@ -183,9 +193,10 @@ impl Presence {
         if !config.enabled || config.server_token.is_empty() {
             return Err("请先配置并启用 Presence。".into());
         }
+        if config.account.as_ref().is_some_and(|a|a.expires_at<=crate::util::now() as u64) { return Err("Presence 登录已过期，请重新登录。".into()); }
         Ok((config.server_url.clone(), config.server_token.clone()))
     }
-    pub fn new(root: PathBuf, persistent: bool) -> Result<Arc<Self>> {
+    pub fn new(root: PathBuf, persistent: bool, service: Arc<crate::service::Service>) -> Result<Arc<Self>> {
         let directory = crate::platform::home()?.join(".config/git-presence");
         let loaded = (|| -> Result<Configuration> {
             let saved = if persistent {
@@ -212,6 +223,7 @@ impl Presence {
         };
         let (tx, mut rx) = watch::channel(config.clone());
         let presence = Arc::new(Self {
+            service,
             root,
             private_directory: directory,
             persistent,
@@ -247,6 +259,7 @@ impl Presence {
     }
 
     pub async fn command(&self, method: &str, input: Value) -> Result<Value> {
+        if matches!(method,"accountStatus"|"register"|"login"|"logout"|"bindRepository"|"password") {return self.account_command(method,input).await;}
         match method {
             "status" => {}
             "configure" => {
@@ -278,6 +291,7 @@ impl Presence {
                 config.server_name = input.server_name.trim().to_owned();
                 if let Some(token) = fresh_token {
                     config.server_token = token.trim().into();
+                    config.account = None;
                 }
                 validate_configuration(&config)?;
                 if config.enabled && config.server_token.is_empty() {
@@ -313,8 +327,7 @@ impl Presence {
             }
             _ => return Err("未知的 Presence 操作。".into()),
         }
-        serde_json::to_value(&*self.state.read().await)
-            .map_err(|_| "Presence 状态无法读取。".into())
+        self.account_snapshot().await
     }
 
     async fn update(&self, generation: u64, apply: impl FnOnce(&mut Status)) {
@@ -383,7 +396,7 @@ impl Presence {
         })?;
         socket
             .send(Message::Text(
-                json!({"type":"observer","version":2,"deviceId":config.device_id})
+                json!({"type":if config.account.is_some(){"bridge"}else{"observer"},"version":2,"deviceId":config.device_id})
                     .to_string()
                     .into(),
             ))
@@ -414,9 +427,17 @@ impl Presence {
         heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut last_receive = tokio::time::Instant::now();
         let mut revision = None;
+        let mut published = 0u64;
         loop {
             tokio::select! {
                 _ = heartbeat.tick() => {
+                    if let Some(account)=&config.account {
+                        if account.expires_at<=crate::util::now() as u64 {return Err("Presence 登录已过期，请重新登录。".into());}
+                        let bridge=self.state.read().await.bridge.clone();
+                        let projects=if bridge.connected {bridge.projects.into_iter().filter(|p|account.repositories.contains(&p.repository_id)).collect::<Vec<_>>()}else{vec![]};
+                        published+=1;
+                        socket.send(Message::Text(json!({"type":"snapshot","version":2,"sessionId":session_id,"revision":published,"projects":projects}).to_string().into())).await.map_err(|_|"Presence 本机状态发布失败。")?;
+                    }
                     if last_receive.elapsed() > Duration::from_millis(ttl_ms) { return Err("Presence 服务器续期超时，协作状态已变为未知。".into()); }
                     socket.send(Message::Text(json!({"type":"heartbeat","version":2,"sessionId":session_id}).to_string().into())).await.map_err(|_| "Presence 连接已断开，正在自动重试。")?;
                     socket.send(Message::Ping(vec![].into())).await.map_err(|_| "Presence 连接已断开。")?;

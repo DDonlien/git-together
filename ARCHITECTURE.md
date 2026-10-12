@@ -282,3 +282,11 @@ PRESENCE-01/02/03：Presence 独立于账号导入和 Git 写服务；有限 pre
 App 为 GitPresence v1 只读 observer，只接收 welcome/world 和维护心跳。服务器 grant 同时限定角色与仓库，App 不发布、不执行 Bridge 写操作。独立 Bridge 继续是 Git/编辑器事实唯一发布者；App 也通过固定私有 connection.json 读取 loopback /v1/projects 与 /v1/view，跳转和远程地址不得承载本机密钥。没有 Node 业务 sidecar、动态插件执行或凭据迁移。
 
 Rust 以配置 generation 隔离旧连接结果，停用/配置变化立即丢弃连接任务；续期/断线保留上次快照且使有效性未知。Bridge 与远端独立，服务端按 alive 判断有效性，不用客户端时钟重新裁决来源。前端单一 PresenceProvider 在页面切换时保持状态，读取失败也撤销在线有效性。完整快照有容量、路径与类型限制，编辑器未接入不能显示已确认 clean。部署与初始两个仓库的范围见 docs/presence.md。
+
+## Presence独立账号与发行范围（COLLAB-02）
+
+0.28.0在现有Rust Presence有限命令中增加accountStatus/register/login/logout/bindRepository/password；会话和账号元信息沿用presence-v1.encrypted，旧访问密钥配置仍可读。渲染层只收到白名单profile/能力和仓库关联，密码与session/device token均不回传；不得从本机目录、同名Git账号或邮箱推导跨账号控制权。原生账号连接可转发绑定范围内已观察的Bridge快照，手工密钥仍保持observer行为；没有Node业务sidecar。
+
+RemoteControl按服务URL及稳定Presence账号ID绑定设备；换会话可以恢复，换账号会清空可见设备/结果，退出设备撤销凭证；修改密码后服务端令旧授权代次失效，客户端显示重新登记入口。开启本机项目时同步添加该账号的仓库绑定；解除绑定由服务器阻止后续操作。Presence身份登录独立于GitHub/Gitea仓库凭证，平台直接网页登录仍为后续功能。
+
+商业方向将用户账号与组织租户分开：个人Docker只允许一个账号，托管组织按组织ID、成员角色和纳管项目授权；组织命令绑定创建时范围。公共个人镜像不含组织执行模块，闭源服务器的公开接入契约由客户端docs维护。付费组织后台、官网镜像下载、计费及许可证选择均不由账号接口完成冒称交付。
