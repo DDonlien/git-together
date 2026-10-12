@@ -1,12 +1,8 @@
 # GitTogether
 
-<img src="assets/brand/gittogether-app.png" width="96" height="96" alt="GitTogether 图标" />
-
 把仓库当作项目，把分支当作任务。
 
-品牌图标原图位于[assets/brand](assets/brand/README.md)，包含选定的应用图标、正方形版本和透明图形。在`macos/`执行`npm run icons`可重新生成macOS、Windows与网页图标。
-
-GitTogether 是一款面向 macOS 的独立 Git 工作台，把 GitHub（含企业版）、GitLab、Gitee、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
+GitTogether 是一款面向 macOS 的独立 Git 工作台，把 GitHub、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
 
 ## 一个项目，多条任务线
 
@@ -40,8 +36,6 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 0.23.0 源码在「设置 → 插件 → Presence」连接自托管服务器，查看团队在线工作区、分支、Git 修改和编辑器未保存状态。仓库图标显示实际协作连接，工作台的 Presence 可展开查看文件；失联时保留上次记录并明确显示未知。首个 NAS 服务已部署，初次只开放 GitTogether 和 GitPresence 两个仓库。源码与网页预览已连通，桌面正式发布等待补齐新规则要求的 Windows x86/x64，详见 [Presence 使用说明](docs/presence.md)。
 
-GitHub企业版支持自定义域名（如`github.dxc.com`），GitLab支持官方与自建服务，Gitee使用v5接口。账号可以使用访问令牌连接，也可在「网页授权应用配置」中填写该平台及域名登记的OAuth应用，之后通过系统浏览器完成登录和企业SSO。GitLab公共客户端使用PKCE，无需Client Secret；企业GitHub与Gitee需要该域名的应用密钥。应用配置按域名在本机加密保存，切换域名不会复用其他服务的凭据；未获SSO批准时明确提示并保留上次仓库数据。
-
 ## 从哪里开始
 
 1. 在设置中连接 GitHub 或 Gitea 账号。
@@ -51,15 +45,11 @@ GitHub企业版支持自定义域名（如`github.dxc.com`），GitLab支持官�
 
 仓库的可见范围始终取决于账号授权与平台权限。关联本地是可选步骤，不是读取远端内容的前提。
 
-Dashboard可点击「状态」表头按仓库读取/Git状态排序，再次点击反向；未确认的仓库与已确认同步的仓库分开排列。
-
 此前0.22.5已完成的迁移读取修正随0.22.6公开交付：失效的旧目录不会阻止重新关联，无法读取的目录会显示错误；本地连续保存或暂存仍自动刷新。更新本地远端引用失败时，远端提交仍继续读取并明确显示反馈。残缺文件树允许重新读取，Gitea中文文件的提交Diff可正确显示，多个同时等待的获取请求可以分别取消。0.22.6安装ZIP及Tauri更新包已完成签名、公证及公共更新源核验。
 
 遇到读取或更新异常时，可在「设置 → 日志 → 打开日志文件夹」找到本机记录，也可复制日志文件到剪贴板。日志自动保留最近 24 小时，不上传，不记录令牌、密码、文件内容或明文仓库路径；空间上限 128 MB，超出后较早记录会被清理。此功能从 0.13.0 起提供，已有安装版需更新到包含此功能的版本。
 
 ## 当前状态
-
-性能记录已接入源码：Dashboard输入等待、帧间隔、渲染、响应读取/校验、并行请求、Git排队及日志写入压力分别记录在现有本地日志中。日志聚合并后台批量写入，不逐帧写磁盘；详见[性能日志说明](docs/performance-logs.md)。已安装App需更新到包含此功能的版本，源码验证不表示实际卡顿已解决。
 
 0.22.10修正更新包附带macOS元数据导致解压失败的问题。更新检查、下载、安装记录真实失败类别、脱敏错误链及系统错误码；界面区分更新包、签名、网络、磁盘和实际访问限制，失败继续保留下载及安装重试。旧版已下载失败包时，退出并重新打开应用，再检查并下载0.22.10。
 
@@ -70,7 +60,7 @@ Dashboard可点击「状态」表头按仓库读取/Git状态排序，再次点�
 0.22.11已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.11)公开。安装ZIP与Tauri更新包完成公共下载摘要回读、验签及解压后版本、签名、公证票据核对，ZIP约4.6MB。推送改为分支与仓库图标的上传动画和短暂成功勾，区分全部/部分本地目录；弹窗与详情提供细进度条。Commit/Submit支持Tracked/Untracked分组与多选，真实提交和AI只处理选中范围，保留未选暂存内容。桌面采用Tauri 2和Rust后台，生产包只包含原生程序及React资源；Git通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
-当前源码0.24.0支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
+当前源码0.25.0支持真实远端与多个已关联worktree的浏览，以及Commit / Submit / Push、Pull / Get Latest / Clean。Dashboard行内和仓库顶部统一为Pull / Get Latest、Commit / Submit、Push、Clean和隐藏五组；移除Reconcile及手动Fetch，图标使用手形指针，同组只显示一个正数角标。Dashboard数量表头居中对应按钮组；仓库行覆盖筛选出来的分支/目录，收起不缩小范围；仓库页顶部覆盖当前分支筛选，中栏只处理选中的更改上下文。Commit只创建本地提交；Submit使用本机Codex CLI配置的模型和登录，为每个分支预填可编辑的Summary和Description，确认后Commit再Push。关闭重开或筛选保留各分支草稿，生成不覆盖手工修改；Push失败保留Commit，重试不重复提交。Summary和Description使用官方Material Web描边字段，空态及正文按紧凑桌面统一为13px；顶部搜索按M3 Search bar规范组合。
 
 Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示按远端恢复、补齐和删除的具体文件（包含忽略的本地文件），确认后执行，保留本地提交和暂存区。Get Latest核验最新文件及LFS后替换为深度1的新目录，并实际删除可独立回收的旧历史与缓存；未推送提交、其他分支、标签或共享主目录会阻止清理，独立分支worktree可整理成单层目录，其他目录需要的共享历史保留并如实报告。后台每5分钟及变化触发实际Git fetch，不合并或改工作文件；保留已有数量、检查反馈、离线暂停及失败退避。未关联分支继续通过下载入口创建并关联目录。在线协作仍在开发中。
 
