@@ -35,3 +35,19 @@
 - 运行38189258573（c971a86）两种架构均通过Cargo检查与release构建，原生报告nativeValidationPassed=true，八项实际检查均完成：DPAPI往返、损坏拒绝、私有ACL、Unicode Git路径、选择范围提交、保留暂存、完整进程树取消及日志。两包已生成，但安装包摘要核验阻止后续交付，尚未标记通过。
 - 依据Tauri官方bundler源码确认：NSIS打包时将唯一__TAURI_BUNDLE_TYPE_VAR_UNK标记改为NSS，打包后恢复构建输出的原标记；直接与原输出比较SHA会误报。验证器仅允许这次已知标记替换，其余完整字节仍做摘要核对；安装后也核对该NSIS版本摘要，不放宽为只看版本或架构。来源：https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-bundler/src/bundle.rs。
 - 同步收紧未选暂存检查为精确清单且拒绝发布index警告，私有目录查询显式请求FILE_READ_ATTRIBUTES；补齐Codex官方bin布局与npm嵌套/提升依赖路径。tauri-build 2.7.2当前实际源码已静态链接VC runtime，无需另加CRT构建流程。下一轮继续安装和界面启动验证。
+
+## 第三轮与同源码macOS核验
+
+- 其他任务正常提交6fa089a（Presence头像）并将版本更新为0.24.0；本轮532da7a47c799c2bc6036b8a37799903460dd47b保留该提交，继续同一版本而不自行回退。新的干净源码检查目录为项目容器release-windows-0.23.0-9ajf2wrv，目录前缀是历史名称，实际package/Cargo/Info版本均为0.24.0；不包含主工作区其他任务尚未提交的provider、图标或远端控制修改。
+- 一次人工填写的完整提交号有误，运行38191297351已取消；改为直接读取克隆HEAD，正确运行38191358623使用上述真实532da7a SHA。后续始终从工具读取完整SHA，不凭短号补写。
+- 干净源码类型/Cargo检查、前端生产构建及macOS原生release/app构建通过。原始Tauri包含三个诊断工具，独立副本去掉它们后仅保留gittogether；Developer ID签名及deep/strict核验通过。Apple公证a064fa35-b502-41d3-bfe8-a095ee821bdd为Accepted，staple/validate通过；最终tar更新签名、绑定版本及结构校验通过。产物位于仓库外_builds/gittogether-windows-mac-0.24.0-532da7a，build-info明确publicUpdateVerified=false、windowsPending=true，不冒称正式发布。
+- 最终Mac ZIP为4756067字节，SHA-256=9c6a8d688d4a09e608f4d1fa00068e958bdb6f36db58dca80164ad66dcfd9c95；tar为4754235字节，SHA-256=3bb66bd91170d5d546836b9c170be1add856fb0e5fb2d4d0a33fc25ca721fa39。
+- GitHub当前账号的工作流查询返回core额度0/5000，具体接口头部reset为2026-10-12 01:51:07 UTC（09:51:07 UTC+8）；/rate_limit端点单独显示5000，不能替代实际工作流接口的限额。没有更换账号、代理或凭据绕过，等待该接口恢复后读取第三轮失败细节并继续校验。
+
+## 双架构实际通过与联合发布验证
+
+- 38191358623最终为success。x64完整构建/安装校验先通过；x86的第一次失败是static.crates.io DNS解析导致依赖下载失败，保留完整日志并仅重跑失败job，第二次于2026-10-12 02:04:11 UTC通过。两种架构的报告均为nativeValidationPassed/installerVerified/interfaceStarted=true，八项系统/Git检查全部通过，安装后的NSIS主程序完整字节摘要、实际WebView2窗口启动及静默卸载通过。构建机为Windows Server 2022 x64，x86程序通过WOW64运行；没有冒称独立纯32位操作系统设备验收。
+- 实际调用已提交的buildWindowsPackages发布收集器，复用成功运行下载两个产物、核对源码/版本/PE架构/大小/摘要，在发布Mac用既有仓库外私钥进行版本绑定签名，再由原生发布验签工具验证NSIS结构与签名。x86为5246242字节、SHA-256=bf5988eeb0705e3684d8aec9ce65b031522efbe237fb5d90cb9ad5e169770e53；x64为5629374字节、SHA-256=77ccc057bfc623b0a21057262d655208a7ec3f602e7b4548e888a55af72d8754。
+- 同源码0.24.0产物的latest.json实际包含darwin-aarch64/windows-i686/windows-x86_64三条，verifyTauriMetadata与旧版verifyUpdateMetadata通过。build-info已标记localJointReleaseVerified=true、windowsPending=false、publicUpdateVerified=false。该包用于隔离校验，没有发布旧于当前main的版本。
+- 主工作区其他任务在本轮期间正常推进至48f19f0c18a9524f25ebaa27eb2313d86a8303e8/0.25.1；该提交的实际统一打包入口已持有共享发布锁，并启动Windows运行38197037620。继续只读跟进该轮同源码三平台包与公开源，不重复启动或移除其他任务发布锁，也不把尚未提交的0.27.0改动打包。
+- 实际下一版本暴露缓存跨版本问题：x64的Cargo、八项原生操作与NSIS生成均成功，但target缓存保留0.24.0和新0.25.1两个安装器，安装包唯一性检查正确阻止交付。完整日志_builds/windows-114641911218.log确认错误为“Windows安装包数量不正确”。本轮修复为每次Tauri打包前清空已归本次目标管理的bundle/nsis输出目录，保留依赖/编译缓存和全部字节/架构/安装验收；继续按新源码实际构建，不挑旧包或跳过校验。

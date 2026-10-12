@@ -49,6 +49,10 @@ try {
   // Build-time diagnostics stay outside the application's Cargo target list.
   // This excludes them from Tauri's NSIS payload before bundling.
   await rm(join(source, 'src-tauri/src/bin'), { recursive: true });
+  // Cargo's cache can contain an older version's installer. Only this run's
+  // freshly generated bundle may enter the release's payload verification.
+  const nsisRoot = join(binaryRoot, 'bundle/nsis');
+  await rm(nsisRoot, { recursive: true, force: true });
   await run(process.execPath, [join(clientRoot, 'node_modules/@tauri-apps/cli/tauri.js'), 'build', '--target', target, '--bundles', 'nsis', '--config', JSON.stringify({ build: { beforeBuildCommand: null }, bundle: { createUpdaterArtifacts: false } }), '--', '--locked'], source, environment);
   const appBytes = await readFile(join(binaryRoot, 'gittogether.exe'));
   if (machine(appBytes) !== (arch === 'x86' ? 0x14c : 0x8664)) throw new Error('主程序的真实架构与打包目标不符。');
@@ -60,10 +64,10 @@ try {
   const markerIndex = expectedApplication.indexOf(marker);
   if (markerIndex < 0) throw new Error('构建程序缺少Tauri安装类型标记。');
   expectedApplication.write('__TAURI_BUNDLE_TYPE_VAR_NSS', markerIndex, 'ascii');
-  const installers = (await readdir(join(binaryRoot, 'bundle/nsis'))).filter(name => name.endsWith('-setup.exe'));
+  const installers = (await readdir(nsisRoot)).filter(name => name.endsWith('-setup.exe'));
   if (installers.length !== 1) throw new Error('Windows安装包数量不正确。');
   const installerPath = join(output, `GitTogether-${manifest.version}-Windows-${arch}-setup.exe`);
-  await cp(join(binaryRoot, 'bundle/nsis', installers[0]), installerPath);
+  await cp(join(nsisRoot, installers[0]), installerPath);
   const unpacked = join(temporary, 'unpacked');
   await run('C:\\Program Files\\7-Zip\\7z.exe', ['x', installerPath, '-o' + unpacked, '-y'], source);
   const entries: string[] = [];
