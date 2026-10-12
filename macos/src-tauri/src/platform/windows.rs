@@ -83,7 +83,7 @@ fn user_sid() -> io::Result<String> {
 fn protect_handle(handle: HANDLE) -> io::Result<()> {
     let sid = user_sid()?;
     let sddl = wide(std::ffi::OsStr::new(&format!(
-        "D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)"
+        "O:{sid}D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)"
     )));
     unsafe {
         let mut descriptor = null_mut();
@@ -103,11 +103,17 @@ fn protect_handle(handle: HANDLE) -> io::Result<()> {
         if GetSecurityDescriptorDacl(descriptor, &mut present, &mut acl, &mut defaulted) == 0 {
             return Err(io::Error::last_os_error());
         }
+        let mut owner = null_mut();
+        if GetSecurityDescriptorOwner(descriptor, &mut owner, &mut defaulted) == 0 {
+            return Err(io::Error::last_os_error());
+        }
         let code = SetSecurityInfo(
             handle,
             SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            null_mut(),
+            OWNER_SECURITY_INFORMATION
+                | DACL_SECURITY_INFORMATION
+                | PROTECTED_DACL_SECURITY_INFORMATION,
+            owner,
             null_mut(),
             acl,
             null(),
@@ -120,7 +126,7 @@ fn protect_handle(handle: HANDLE) -> io::Result<()> {
 }
 pub fn protect_path(path: &Path) -> io::Result<()> {
     let file = OpenOptions::new()
-        .access_mode(READ_CONTROL | WRITE_DAC)
+        .access_mode(READ_CONTROL | WRITE_DAC | WRITE_OWNER)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
@@ -134,7 +140,7 @@ pub fn protect_file(file: &File) -> io::Result<()> {
     let handle = unsafe {
         owned(ReOpenFile(
             file.as_raw_handle(),
-            READ_CONTROL | WRITE_DAC,
+            READ_CONTROL | WRITE_DAC | WRITE_OWNER,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             0,
         ))?
