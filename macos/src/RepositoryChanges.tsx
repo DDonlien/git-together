@@ -5,7 +5,7 @@ import { RepositoryActionDialog } from './RepositoryActionDialog';
 import type { GenerateCommitMessage, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { RepositoryCommitDetails } from './RepositoryCommitDetails';
 import { RepositoryChangedFiles } from './RepositoryChangedFiles';
-import { PresenceBranchIcon } from './PresenceAvatars';
+import { PresenceAvatars } from './PresenceAvatars';
 import type { RemoteRepository } from './import-model';
 import type { RepositoryCommit, RepositoryTask } from './repository-model';
 import type { LocalCommitState } from './local-commit-model';
@@ -21,7 +21,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
   const history = selectedCommit && historyState?.id === selectedCommit.id ? historyState : undefined;
   const details = history?.details;
   return <section className="repository-change-task" aria-label={`更改任务：${task.branch}`}>
-    <div className="repository-task-header"><div className="branch-label"><PresenceBranchIcon repository={repository} branch={task.branch} /><strong>{task.branch}</strong></div>{showFocus && <Button variant="quiet" onClick={onFocus} aria-pressed={focused}>{focused ? '退出聚焦' : '聚焦'}</Button>}</div>
+    <div className="repository-task-header"><div className="branch-label"><Icon name="branch" size={14} /><strong>{task.branch}</strong>{repository && <PresenceAvatars repository={repository} branch={task.branch} />}</div>{showFocus && <Button variant="quiet" onClick={onFocus} aria-pressed={focused}>{focused ? '退出聚焦' : '聚焦'}</Button>}</div>
     <p className="repository-task-path" title={task.path || undefined}>{task.path || (linked ? '未检出 · 分支快照' : '未关联本地目录')}</p>
     <div className="repository-task-body">
       {selectedCommit && <>

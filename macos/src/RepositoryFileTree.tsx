@@ -3,7 +3,7 @@ import { Button, Icon, IconButton } from './ui';
 import type { RepositoryTask } from './repository-model';
 import { providerName, type Account, type RemoteRepository } from './import-model';
 import { importAPI } from './import-api';
-import { PresenceBranchIcon } from './PresenceAvatars';
+import { PresenceAvatars } from './PresenceAvatars';
 import { repositoryFileURL } from './repository-file-url';
 import { decoratedFileTree, type DecoratedFileTreeNode, type FileTreeChange } from './file-tree';
 
@@ -63,7 +63,7 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
     {task.remote && task.treeComplete === false && task.tree.length > 0 && <p className="repository-data-note">文件树不完整，显示已读取部分。</p>}
     {task.error && <p className="repository-task-error" role="alert">{task.error}</p>}
     <footer className="repository-tree-identity">
-      <div className="repository-tree-branch"><PresenceBranchIcon repository={repository} branch={task.branch} /><strong title={task.branch}>{task.branch}</strong></div>
+      <div className="repository-tree-branch"><Icon name="branch" size={14} /><strong title={task.branch}>{task.branch}</strong>{repository && <PresenceAvatars repository={repository} branch={task.branch} />}</div>
       {!task.remote && (task.path ? <Button variant="quiet" className="repository-tree-path" title={task.path} aria-label={`在文件浏览器中打开 ${task.path}`} disabled={!repository?.available || !account || openingDirectory || opening !== null} aria-busy={openingDirectory || undefined} onClick={openDirectory}>{task.path}</Button> : <small>未检出</small>)}
       <code title={task.head || undefined}>{task.head.slice(0, 8) || '未读取'}</code>
     </footer>

@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import type { RemoteRepository } from './import-model';
 import { usePresence } from './PresenceProvider';
 import { presencePeople, presenceRepositoryColor, presenceRepositoryId, presenceWorkLabels, type PresencePerson } from './presence-model';
@@ -33,8 +33,4 @@ export function PresenceAvatarGroup({ repository, branch, people, className = ''
     <ul className="presence-people-list">{people.map(person => <li key={person.userId}><PresenceAvatar person={person} large /><div><strong>{person.displayName}</strong><ul className="presence-people-branches">{person.branches.map(entry => <li key={entry.branch || ''}><span title={entry.branch || undefined}>{entry.branch || '分离 HEAD'}</span><small>{presenceWorkLabels[entry.state]}</small></li>)}</ul></div></li>)}</ul>
     <div className="presence-avatar-legend"><span><i className="editing" />编辑中</span><span><i className="changed" />未 Commit</span><span><i className="committed" />未 Push</span></div></div>
   </Popover>;
-}
-
-export function PresenceBranchIcon({ repository, branch, children, size = 14 }: { repository?: RemoteRepository; branch: string; children?: ReactNode; size?: number }) {
-  return <div className="presence-branch-icon">{children || <Icon name="branch" size={size} />}{repository && <PresenceAvatars repository={repository} branch={branch} />}</div>;
 }
