@@ -23,6 +23,8 @@
 
 设备`GET state`、`POST announce`更新自己明确开放的工作区、branch/HEAD、组织范围和动作。请求依次使用`POST requests`、目标`POST claim`和`POST finish`；可取消排队请求或撤销本人设备。action只允许commit、submit、abort、discard；kind为preview、generate、execute、retryPush、restore。每个请求有UUID、deviceId、repositoryId、workspaceId；执行绑定目标预览，生成说明和提交按该分支进行。组织范围由服务端从目标开放范围确定，不能由请求方任意赋值。
 
+`teamId`/`organizationId`是Presence自己维护的组织标识，不是仓库owner、GitHub/Gitea组织ID或平台角色。`GET state`中的teams来自Presence成员关系和明确纳管项目；客户端只能选择服务端返回且包含该项目的组织。Git平台账号绑定不自动创建组织、同步成员或授予组织控制权限。
+
 没有任意shell、任意本机目录或文件正文接口。命令与结果持久化，过期/撤销/目标变化时拒绝执行；已有Commit而Push失败时只能重试Push，不再次提交。
 
 ## 状态协议2
