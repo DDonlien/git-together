@@ -21,15 +21,20 @@ impl Presence {
         json!({"version":value["version"],"mode":value["mode"],"organizationManagement":value["organizationManagement"],"registrationAvailable":value["registrationAvailable"],"setupRequired":value["setupRequired"]})
     }
     pub(crate) fn account_binding(&self) -> Result<String> {
-        let (url, token) = self.access()?;
         let config = self.config.borrow();
+        if !config.enabled || config.server_token.is_empty() {
+            return Err("请先登录或配置 Presence。".into());
+        }
+        // An enrolled executor uses its own revocable device credential. Account-session
+        // expiry must not require an unattended target to sign in before it can receive work.
         Ok(util::digest(format!(
-            "{url}:{}",
+            "{}:{}",
+            config.server_url,
             config
                 .account
                 .as_ref()
                 .map(|a| a.id.as_str())
-                .unwrap_or(&token)
+                .unwrap_or(&config.server_token)
         )))
     }
     pub fn signed_in(&self) -> bool {

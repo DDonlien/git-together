@@ -92,8 +92,7 @@ impl RemoteControl {
         Ok(())
     }
     fn bound(&self, c: &Configuration) -> Result<()> {
-        let (url, _) = self.presence.access()?;
-        if c.server_url != url || c.binding != self.presence.account_binding()? { return Err("Presence账号或服务器已改变，请重新登记此设备。".into()); }
+        if c.binding != self.presence.account_binding()? { return Err("Presence账号或服务器已改变，请重新登记此设备。".into()); }
         Ok(())
     }
     async fn decode(mut response: reqwest::Response) -> Result<Value> {
