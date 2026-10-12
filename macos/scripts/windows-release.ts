@@ -15,7 +15,7 @@ export interface WindowsPackage {
   nativeValidationPassed: true; installerVerified: true; interfaceStarted: true; runId: number;
   authenticodeSigned: boolean;
 }
-interface Run { id: number; head_sha: string; status: string; conclusion: string | null; html_url: string; event: string }
+interface Run { id: number; head_sha: string; display_title?: string; status: string; conclusion: string | null; html_url: string; event: string }
 async function cli(cwd: string, args: string[]) {
   for (let attempt = 0; ; attempt++) {
     try { return (await execute('gh', args, { cwd, timeout: 120_000, maxBuffer: 1024 * 1024 })).stdout; }
@@ -48,10 +48,12 @@ export function verifyWindowsPackages(packages: WindowsPackage[] | undefined, ve
 
 /** CI builds without secrets; final updater signing remains on the release Mac. */
 export async function buildWindowsPackages(clientRoot: string, version: string, sourceCommit: string, output: string, signingKey: string, verifier: string): Promise<WindowsPackage[]> {
-  const runsPath = `repos/${repository}/actions/workflows/${workflow}/runs?event=workflow_dispatch&head_sha=${sourceCommit}&per_page=20`;
+  const matchesSource = (run: Run) => run.event === 'workflow_dispatch' && (run.head_sha === sourceCommit || run.display_title === `Windows ${sourceCommit}`);
+  const runsPath = `repos/${repository}/actions/workflows/${workflow}/runs?event=workflow_dispatch&per_page=20`;
   const recent = async () => (JSON.parse(await cli(clientRoot, ['api', runsPath])) as { workflow_runs: Run[] }).workflow_runs
-    .filter(run => run.head_sha === sourceCommit && run.event === 'workflow_dispatch');
-  let run = (await recent()).find(run => run.conclusion === 'success' || ['queued', 'in_progress', 'waiting', 'pending'].includes(run.status));
+    .filter(matchesSource);
+  const available = await recent();
+  let run = available.find(run => run.conclusion === 'success') ?? available.find(run => ['queued', 'in_progress', 'waiting', 'pending'].includes(run.status));
   if (!run) {
     await cli(clientRoot, ['workflow', 'run', workflow, '--repo', repository, '--ref', 'main', '-f', 'source_commit=' + sourceCommit]);
     for (let attempt = 0; attempt < 12 && !run; attempt++) {
@@ -71,7 +73,7 @@ export async function buildWindowsPackages(clientRoot: string, version: string, 
     await new Promise(resolve => setTimeout(resolve, 15_000));
     run = JSON.parse(await cli(clientRoot, ['api', `repos/${repository}/actions/runs/${run.id}`])) as Run;
   }
-  if (run.conclusion !== 'success' || run.head_sha !== sourceCommit) throw new Error(`Windows原生构建未通过（${run.conclusion}）：${run.html_url}`);
+  if (run.conclusion !== 'success' || !matchesSource(run)) throw new Error(`Windows原生构建未通过（${run.conclusion}）：${run.html_url}`);
   const packages: WindowsPackage[] = [];
   for (const architecture of ['x86', 'x64'] as const) {
     const downloaded = join(output, 'windows-build', architecture); await mkdir(downloaded, { recursive: true });

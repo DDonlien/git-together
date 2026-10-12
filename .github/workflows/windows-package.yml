@@ -1,4 +1,5 @@
 name: Windows packages
+run-name: Windows ${{ inputs.source_commit }}
 on:
   workflow_dispatch:
     inputs:

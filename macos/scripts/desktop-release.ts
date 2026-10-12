@@ -185,6 +185,7 @@ async function publicRead(url: string, ready?: (response: Response) => Promise<b
 
 export async function prepareDesktopRelease(cwd: string, version: string, sourceCommit: string) {
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('正式更新必须使用稳定的语义版本号。');
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit)) throw new Error('发布源码必须使用完整的main提交号。');
   const tag = `v${version}`;
   const credential = await githubCredential(cwd);
   const request = async <T>(url: string, init: RequestInit = {}, allowMissing = false): Promise<T | null> => {
@@ -221,7 +222,15 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
   };
   const assertMain = async () => {
     const main = await api<{ object: { sha: string } }>(`git/ref/heads/${releaseBranch}`);
-    if (main?.object.sha !== sourceCommit) throw new Error('打包提交必须与已推送的远端main一致，请先检查并推送源码。');
+    if (!main) throw new Error('没有找到已推送的远端main，停止发布。');
+    if (main.object.sha !== sourceCommit) {
+      // The three platforms share an immutable main snapshot. Advancing main
+      // while CI runs must not replace that source or invalidate its artifacts.
+      const comparison = await api<{ status: string; base_commit: { sha: string }; merge_base_commit: { sha: string } }>(`compare/${sourceCommit}...${main.object.sha}`);
+      if (comparison?.status !== 'ahead' || comparison.base_commit.sha !== sourceCommit || comparison.merge_base_commit.sha !== sourceCommit) {
+        throw new Error('打包提交不属于当前已推送的main历史，停止发布。');
+      }
+    }
   };
   const assertTag = async (allowMissing: boolean) => {
     const ref = await api<{ object: { sha: string } }>(`git/ref/tags/${tag}`, allowMissing);
@@ -235,21 +244,25 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
   await assertTag(true);
   const existing = await tagRelease();
   if (existing && (!existing.draft || existing.target_commitish !== sourceCommit)) throw new Error('此版本已发布或草稿对应其他源码，请递增版本；不覆盖正式资产。');
-  const latest = await api<Release>('releases/latest', true);
-  if (latest) {
+  const assertNewerVersion = async () => {
+    const latest = await api<Release>('releases/latest', true);
+    if (!latest) return latest;
     const previous = latest.tag_name.replace(/^v/, '').split('.').map(Number);
     const next = version.split('.').map(Number);
     const different = next.findIndex((value, index) => value !== previous[index]);
     if (previous.length !== 3 || previous.some(value => !Number.isInteger(value)) || different < 0 || next[different] < previous[different]) {
       throw new Error('发布版本必须高于当前公共最新版本。');
     }
-  }
+    return latest;
+  };
+  const latest = await assertNewerVersion();
 
   return {
     async publish(artifact: ReleasePackage): Promise<{ releaseUrl: string; tag: string; publicUpdateVerified: true }> {
       if (!artifact.notarized || artifact.sourceCommit !== sourceCommit || artifact.version !== version) throw new Error('只有本次main构建且通过公证的包可以发布。');
       verifyWindowsPackages(artifact.windows, version, sourceCommit);
       await assertMain();
+      await assertNewerVersion();
       await assertTag(true);
       const expected = await releaseFiles(artifact);
       const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
@@ -302,6 +315,7 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       await reconcileReleaseMutation(
         async () => {
           await assertMain(); await assertTag(true);
+          await assertNewerVersion();
           verifyReleaseAssets((await matchingRelease(true)).assets, expected);
           return request(endpoint(`releases/${releaseId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ draft: false, prerelease: false, make_latest: 'true' }) });
