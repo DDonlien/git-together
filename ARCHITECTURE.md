@@ -281,17 +281,21 @@ Dashboard展开呈现（2026-10-11）：DashboardRepositoryRows将展开意图�
 
 PRESENCE-01/02/03：Presence 独立于账号导入和 Git 写服务；有限 presence_command 与同源 /api/presence/{status,configure,reconnect} 共用 Rust Presence。私有默认配置从 ~/.config/git-presence/gittogether.local.json 发现，配置保存沿用系统加密，不把密钥返回渲染层或纳入包。更换服务器拒绝复用旧密钥；URL 限 HTTPS（loopback 例外），不接受 URL 凭据、query 或 fragment。
 
-App 为 GitPresence v1 只读 observer，只接收 welcome/world 和维护心跳。服务器 grant 同时限定角色与仓库，App 不发布、不执行 Bridge 写操作。独立 Bridge 继续是 Git/编辑器事实唯一发布者；App 也通过固定私有 connection.json 读取 loopback /v1/projects 与 /v1/view，跳转和远程地址不得承载本机密钥。没有 Node 业务 sidecar、动态插件执行或凭据迁移。
+0.23.0 App 为 GitPresence v1 只读 observer，只接收 welcome/world 和维护心跳；此段为历史架构，0.30.0账号发布见下文。服务器 grant 同时限定角色与仓库，App 不发布、不执行 Bridge 写操作。历史独立 Bridge 是 Git/编辑器事实发布者；App 也通过固定私有 connection.json 读取 loopback /v1/projects 与 /v1/view，跳转和远程地址不得承载本机密钥。没有 Node 业务 sidecar、动态插件执行或凭据迁移。
 
 Rust 以配置 generation 隔离旧连接结果，停用/配置变化立即丢弃连接任务；续期/断线保留上次快照且使有效性未知。Bridge 与远端独立，服务端按 alive 判断有效性，不用客户端时钟重新裁决来源。前端单一 PresenceProvider 在页面切换时保持状态，读取失败也撤销在线有效性。完整快照有容量、路径与类型限制，编辑器未接入不能显示已确认 clean。部署与初始两个仓库的范围见 docs/presence.md。
 
-## Presence独立账号与发行范围（COLLAB-02）
+## Presence账号自动管理（COLLAB-03，0.30.0）
 
-0.28.0在现有Rust Presence有限命令中增加accountStatus/register/login/logout/bindRepository/password；会话和账号元信息沿用presence-v1.encrypted，旧访问密钥配置仍可读。渲染层只收到白名单profile/能力和仓库关联，密码与session/device token均不回传；不得从本机目录、同名Git账号或邮箱推导跨账号控制权。原生账号连接可转发绑定范围内已观察的Bridge快照，手工密钥仍保持observer行为；没有Node业务sidecar。
+Presence有限命令为状态、最高级开关、账号登录/退出、打开账号Web及添加/选择/移除服务器；旧加密配置继续读取，删去客户端密码修改、个人仓库绑定及团队选择入口。身份以归属issuer/subject为准，向目标服务器交换签名短时凭证和其独立会话，不传归属登录Bearer。元数据变更写加密缓存但不重启正常连接，断线只影响所属服务器的有效性。
 
-RemoteControl按服务URL及稳定Presence账号ID绑定设备；换会话可以恢复，换账号会清空可见设备/结果，退出设备撤销凭证；修改密码后服务端令旧授权代次失效，客户端显示重新登记入口。开启本机项目时同步添加该账号的仓库绑定；解除绑定由服务器阻止后续操作。Presence身份登录独立于GitHub/Gitea仓库凭证，平台直接网页登录仍为后续功能。
+source_loop独立扫描可访问的已关联工作区，读取Git status及分支身份，不读取完整树/历史；结果由所有所选服务器共享，WebSocket心跳不等待Git扫描。读失败保留上次事实并标unknown，撤去可执行工作区；Bridge编辑器断线也标unknown，不伪造clean。协议3的world下发组织/角色及每个项目的服务端组织范围。
 
-商业方向将用户账号与组织租户分开：个人Docker只允许一个账号，托管组织按组织ID、成员角色和纳管项目授权；组织命令绑定创建时范围。公共个人镜像不含组织执行模块，闭源服务器的公开接入契约由客户端docs维护。付费组织后台、官网镜像下载、计费及许可证选择均不由账号接口完成冒称交付。
+RemoteControl按服务器分别维护加密设备凭证、事务日志、工作区与出站轮询。工作区自动匹配当前账户的组织清单，每组织独立生成workspaceId；个人范围只在无匹配时使用。服务端再次检查组织revision及来源/目标身份，提交仍由本机Service验证实际Git身份、目录和当前文件。现有AI、预览、Commit、Push、中止与备份恢复复用，命令hash包含组织范围。
+
+instances模块为显式实例参数分别配置单实例锁及数据目录；默认位置保持，独立实例分别持有Git账号、Presence和事务记录，仅复用开发者GitHub应用配置。Tauri更新重启保留原参数。应用菜单可打开默认/secondary实例。
+
+Presence组织独立维护，Web绑定需组织和Git仓库两重ownership；同仓库多组织不合并，客户端只展示服务端事实。公共个人Docker不含组织管理实现；客户端公开协议不依赖私有源码。官网分发、计费、邮件验证/找回、正式客户端包及真实双设备写操作分别验收。
 
 ## 本机授权监听错误与备用流程
 

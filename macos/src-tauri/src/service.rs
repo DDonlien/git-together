@@ -122,7 +122,10 @@ impl Service {
             let root = self
                 .validate_path(&context.repository, text(&item, "path"))
                 .await?;
-            tasks.push(git::task(&root).await?);
+            // Presence needs changed paths and task identity, not complete trees or history.
+            let entry=git::worktrees(&root).await?.into_iter().find(|v|text(v,"path")==root.to_string_lossy()).ok_or("工作目录不属于此仓库。")?;
+            let status=git::read(&root,&["status","--porcelain=v1","-z","--untracked-files=all"]).await?;
+            let branch=text(&entry,"branch");tasks.push(json!({"id":format!("worktree:{branch}:{}",root.display()),"path":root.to_string_lossy(),"branch":branch,"head":entry["head"],"files":git::changes(&status)}));
         }
         self.validate(&context).await?;
         Ok(tasks)

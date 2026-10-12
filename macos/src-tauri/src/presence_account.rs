@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    remote_control::repository_id,
-    util::{self, text},
-};
+use crate::util::{self, text};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,33 +11,22 @@ pub(super) struct Account {
     pub expires_at: u64,
     pub repositories: Vec<String>,
     pub mode: String,
+    #[serde(default)]
+    pub identity_id: String,
+    #[serde(default)]
+    pub issuer: String,
+    #[serde(default)]
+    pub subject: String,
 }
 
 impl Presence {
     fn account_metadata(value: &Value) -> Value {
         json!({"version":value["version"],"mode":value["mode"],"organizationManagement":value["organizationManagement"],"registrationAvailable":value["registrationAvailable"],"setupRequired":value["setupRequired"]})
     }
-    pub(crate) fn account_binding(&self) -> Result<String> {
-        let config = self.config.borrow();
-        if !config.enabled || config.server_token.is_empty() {
-            return Err("请先登录或配置 Presence。".into());
-        }
-        // An enrolled executor uses its own revocable device credential. Account-session
-        // expiry must not require an unattended target to sign in before it can receive work.
-        Ok(util::digest(format!(
-            "{}:{}",
-            config.server_url,
-            config
-                .account
-                .as_ref()
-                .map(|a| a.id.as_str())
-                .unwrap_or(&config.server_token)
-        )))
-    }
     pub fn signed_in(&self) -> bool {
         self.config.borrow().account.is_some()
     }
-    async fn account_http(
+    pub(super) async fn account_http(
         &self,
         url: &str,
         method: &str,
@@ -48,7 +34,13 @@ impl Presence {
         input: Option<&Value>,
     ) -> Result<Value> {
         let address = server_url(url)?
-            .join(&format!("v1/account/{method}"))
+            .join(&if let Some(route) = method.strip_prefix("identity/") {
+                format!("v1/identity/{route}")
+            } else if let Some(route) = method.strip_prefix("control/") {
+                format!("v1/control/{route}")
+            } else {
+                format!("v1/account/{method}")
+            })
             .map_err(|_| "账号地址无效。")?;
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -87,7 +79,7 @@ impl Presence {
         }
         Ok(value)
     }
-    async fn save_account(
+    pub(super) async fn save_account(
         &self,
         config: Configuration,
         metadata: Value,
@@ -120,62 +112,8 @@ impl Presence {
             status["localRepositories"] = json!([]);
             return Ok(status);
         }
-        let catalog = self.service.catalog().await?;
-        let bindings = config
-            .account
-            .as_ref()
-            .map(|a| a.repositories.as_slice())
-            .unwrap_or_default();
-        status["localRepositories"] = json!(catalog["repositories"].as_array().ok_or("仓库清单无效。")?.iter().filter(|r|r["available"]==true).map(|r| {
-            let remote = repository_id(text(r,"url")).unwrap_or_default();
-            json!({"id":r["id"],"name":r["fullName"],"remoteId":remote,"bound":bindings.contains(&remote)})
-        }).collect::<Vec<_>>());
+        status["localRepositories"] = json!([]);
         Ok(status)
-    }
-    pub(crate) async fn bind_account_repositories(
-        &self,
-        add: Vec<String>,
-        remove: Vec<String>,
-    ) -> Result<()> {
-        let _guard = self.configure_lock.lock().await;
-        let mut config = self.config.borrow().clone();
-        if config.account.is_none() {
-            return Ok(());
-        }
-        let value = self
-            .account_http(
-                &config.server_url,
-                "repositories",
-                Some(&config.server_token),
-                Some(&json!({"add":add,"remove":remove})),
-            )
-            .await?;
-        let repositories: Vec<String> = serde_json::from_value(value["repositories"].clone())
-            .map_err(|_| "账号仓库清单无效。")?;
-        config.account.as_mut().unwrap().repositories = repositories;
-        self.save_account(config, value, String::new()).await
-    }
-    pub(crate) async fn sync_account_repositories(
-        &self,
-        user_id: &str,
-        value: &Value,
-    ) -> Result<()> {
-        let _guard = self.configure_lock.lock().await;
-        let mut config = self.config.borrow().clone();
-        let Some(account) = config.account.as_mut() else {
-            return Ok(());
-        };
-        if account.id != user_id {
-            return Err("Presence账号已改变，请重新连接设备。".into());
-        }
-        let repositories: Vec<String> =
-            serde_json::from_value(value.clone()).map_err(|_| "账号仓库范围无效。")?;
-        if account.repositories == repositories {
-            return Ok(());
-        }
-        account.repositories = repositories;
-        let metadata = self.state.read().await.account_service.clone();
-        self.save_account(config, metadata, String::new()).await
     }
     pub(super) async fn account_command(&self, method: &str, input: Value) -> Result<Value> {
         if !input.is_object()
@@ -187,6 +125,14 @@ impl Presence {
             return Err("账号请求无效。".into());
         }
         match method {
+            "openAccount" => {
+                util::allowed(&input, &["serverUrl"])?;
+                let c = self.config.borrow().clone();
+                let url = server_url(input["serverUrl"].as_str().unwrap_or(&c.server_url))?
+                    .join("account")
+                    .map_err(|_| "账号网页地址无效。")?;
+                crate::service::open(url.as_str()).await?;
+            }
             "accountStatus" => {
                 util::allowed(&input, &["serverUrl"])?;
                 let _guard = self.configure_lock.lock().await;
@@ -210,8 +156,7 @@ impl Presence {
                                 .map_err(|_| "账号仓库清单无效。")?;
                         if account.repositories != repositories {
                             account.repositories = repositories;
-                            self.save_account(next, value.clone(), String::new())
-                                .await?;
+                            self.save_cached(next.clone()).await?;
                         }
                     }
                 }
@@ -260,59 +205,88 @@ impl Presence {
                 let account = Account {
                     id: util::field(profile, "id", 160)?,
                     email: util::field(profile, "email", 254)?,
-                    display_name: util::field(profile, "displayName", 120)?,
+                    display_name: util::field(profile, "displayName", 480)?,
                     email_verified: profile["emailVerified"] == true,
                     expires_at: value["expiresAt"].as_u64().ok_or("账号有效期无效。")?,
                     repositories: serde_json::from_value(value["repositories"].clone())
                         .map_err(|_| "账号仓库清单无效。")?,
                     mode: util::field(&value, "mode", 20)?,
+                    identity_id: profile["identityId"].as_str().unwrap_or("").to_owned(),
+                    issuer: profile["issuer"].as_str().unwrap_or(&url).to_owned(),
+                    subject: profile["subject"]
+                        .as_str()
+                        .unwrap_or(text(profile, "id"))
+                        .to_owned(),
                 };
-                let config = Configuration {
+                if old
+                    .account
+                    .as_ref()
+                    .is_some_and(|a| a.id != account.id || old.server_url != url)
+                {
+                    let result = self
+                        .account_http(&url, "logout", Some(&token), Some(&json!({})))
+                        .await;
+                    return Err(if result.is_ok() {
+                        "一个实例只能绑定一个Presence账号，请先退出当前账号。".into()
+                    } else {
+                        "请先退出当前账号；新的登录会话暂未撤销，请在该账号网页处理。".into()
+                    });
+                }
+                let mut config = Configuration {
                     enabled: true,
                     server_url: url,
                     server_name: "Presence".into(),
                     server_token: token,
                     account: Some(account),
-                    ..old
+                    ..old.clone()
                 };
-                validate_configuration(&config)?;
-                self.save_account(config, value, String::new()).await?;
-            }
-            "bindRepository" => {
-                util::allowed(&input, &["repositoryId", "enabled"])?;
-                let id = util::field(&input, "repositoryId", 512)?;
-                let enabled = input["enabled"].as_bool().ok_or("绑定状态无效。")?;
-                let config = self.config.borrow().clone();
-                let account = config.account.as_ref().ok_or("请先登录 Presence 账号。")?;
-                let catalog = self.service.catalog().await?;
-                if enabled
-                    && !catalog["repositories"].as_array().is_some_and(|r| {
-                        r.iter().any(|r| {
-                            r["available"] == true
-                                && repository_id(text(r, "url")).is_ok_and(|remote| remote == id)
-                        })
-                    })
-                {
-                    return Err("只能绑定当前 Git 账号有权访问的仓库。".into());
+                let same_account = old.account.as_ref().is_some_and(|a| {
+                    a.id == config.account.as_ref().unwrap().id
+                        && old.server_url == config.server_url
+                });
+                if !same_account {
+                    config.servers.clear();
                 }
-                if !enabled && !account.repositories.contains(&id) {
-                    return Err("此仓库未绑定当前 Presence 账号。".into());
+                let home = ServerConfiguration::home(&config);
+                if let Some(existing) = config.servers.iter_mut().find(|s| s.url == home.url) {
+                    existing.token = home.token;
+                    existing.expires_at = home.expires_at;
+                    existing.user_id = home.user_id;
+                } else {
+                    config.servers.insert(0, home);
                 }
-                self.bind_account_repositories(
-                    if enabled { vec![id.clone()] } else { vec![] },
-                    if enabled { vec![] } else { vec![id] },
+                let mut warnings = vec![];
+                let foreign = config
+                    .servers
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.url != config.server_url && s.enabled)
+                    .map(|(i, s)| (i, s.clone()))
+                    .collect::<Vec<_>>();
+                let results = futures_util::future::join_all(
+                    foreign
+                        .iter()
+                        .map(|(_, s)| self.authenticated_server(&s.url, &config)),
                 )
-                .await?;
+                .await;
+                for ((index, previous), result) in foreign.into_iter().zip(results) {
+                    match result {
+                        Ok(mut server) => {
+                            server.device_id = previous.device_id;
+                            server.device_token = previous.device_token;
+                            config.servers[index] = server;
+                        }
+                        Err(error) => {
+                            warnings.push(format!("{} 的身份更新未完成：{error}", previous.url))
+                        }
+                    }
+                }
+                validate_configuration(&config)?;
+                self.save_account(config, value, warnings.join("；"))
+                    .await?;
             }
-            "logout" | "password" => {
-                util::allowed(
-                    &input,
-                    if method == "logout" {
-                        &[]
-                    } else {
-                        &["currentPassword", "password"]
-                    },
-                )?;
+            "logout" => {
+                util::allowed(&input, &[])?;
                 let _guard = self.configure_lock.lock().await;
                 let mut config = self.config.borrow().clone();
                 if config.account.is_none() {
@@ -328,14 +302,14 @@ impl Presence {
                     .await;
                 let warning = match result {
                     Ok(_) => String::new(),
-                    Err(error) if method == "logout" => {
+                    Err(error) => {
                         format!("本机已退出；服务器会话暂未撤销：{error}")
                     }
-                    Err(error) => return Err(error),
                 };
                 config.enabled = false;
                 config.account = None;
                 config.server_token.clear();
+                config.servers.clear();
                 self.save_account(config, json!(null), warning).await?;
             }
             _ => return Err("未知的 Presence 账号操作。".into()),

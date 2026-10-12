@@ -71,10 +71,10 @@ export function RemoteControlProvider({ children }: { children: ReactNode }) {
     let job = initial;
     while (!['done', 'failed', 'expired'].includes(job.status)) {
       if (signal.aborted) throw new DOMException('已关闭', 'AbortError');
-      if (ref.current?.connection === 'connected' && !ref.current.devices.some(d => d.deviceId === job.deviceId && d.workspaces.some(w => w.id === job.workspaceId))) throw new Error('目标已撤销此工作目录的控制权限，请重新查看设备。');
+      if (ref.current?.connection === 'connected' && !ref.current.devices.some(d => d.serverId === job.serverId && d.deviceId === job.deviceId && d.workspaces.some(w => w.id === job.workspaceId))) throw new Error('目标已撤销此工作目录的控制权限，请重新查看设备。');
       if (Date.now() > initial.expiresAt + 180000) throw new Error('等待结果超时；可重新连接查看执行记录，请勿重复提交。');
       await new Promise<void>(resolve => setTimeout(resolve, 350));
-      job = ref.current?.jobs.find(j => j.id === initial.id) || job;
+      job = ref.current?.jobs.find(j => j.serverId === initial.serverId && j.id === initial.id) || job;
     }
     if (job.status !== 'done') throw new Error(job.error || '目标操作未完成。');
     return job;

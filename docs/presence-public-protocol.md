@@ -1,34 +1,49 @@
-# Presence公开接入协议
+# Presence 公开接入协议
 
-此文档是公开客户端的接入契约，不依赖读取私有GitPresence源码。服务基址可以含路径；HTTPS是必需的，本机loopback开发允许HTTP。客户端不得将Git平台令牌作为Presence凭证。
+基址允许子路径，HTTPS必需，loopback开发可用HTTP。账号、组织和设备身份来自服务器验证，不以邮箱、仓库名、文件夹或客户端userId作为证明。
 
-## 独立账号协议1
+## 账号协议1与自动登记
 
-原生客户端向`v1/account/`发送JSON，标头`X-Presence-Client: native`；后续接口使用`Authorization: Bearer <会话凭证>`。浏览器在同源`account`页面登录，使用HttpOnly Cookie，不把凭证放在localStorage。
+`v1/account/` 原生JSON使用 `X-Presence-Client: native`，后续用Bearer会话；同源Web使用HttpOnly/Secure Cookie及 `X-Presence-Client: web`，不将会话放在localStorage。
 
 | 方法 | 请求 | 返回 |
 | --- | --- | --- |
-| GET status | 无；已登录可带会话 | version、mode(personal/hosted)、organizationManagement、registrationAvailable、setupRequired、account或null、repositories |
-| POST register | email、password、displayName、可选setupKey | 账号状态；原生另有token、expiresAt，浏览器仅写Cookie |
-| POST login | email、password | 与注册成功格式相同 |
-| POST logout | 空对象 | ok；当前会话失效 |
-| POST repositories | add与remove的仓库ID数组 | 更新后的账号状态 |
-| POST password | currentPassword、password | ok、signedOut；所有会话与旧设备授权失效 |
+| GET status | 可带会话 | version1、automaticManagement、mode、issuer、组织管理/注册能力、account、repositories、organizations |
+| POST register | email、password、displayName、可选setupKey | 状态；原生另返回token和expiresAt |
+| POST login | email、password | 同注册返回格式 |
+| POST catalogue | deviceId、repositories完整数组 | 合并各设备的实际仓库范围及组织信息 |
+| POST logout | 空对象 | ok，当前会话失效 |
+| POST password | currentPassword、password | 仅归属服务Web使用；会话及旧设备授权失效 |
 
-账号profile为服务端id、email、displayName、emailVerified；初版emailVerified为false。仓库ID是Git平台公开仓库网址的host加完整pathname、转小写并去尾部斜线，保留合法`.git`仓库名和URL转义。绑定不授予其他账号或组织权限。
+profile为id、identityId、issuer、subject、email、displayName、emailVerified(false)。仓库ID使用平台公开网址host（含非默认端口）+完整pathname、转小写、去尾斜线，保留真实`.git`名称和URL转义。旧`repositories`增删端点只为旧客户端过渡；自动登记后的设备清单为准，当前客户端不提供手工勾选。
 
-注册及修改密码的`password`长度为8至128个字符，不强制字符组合；登录和`currentPassword`只校验非空及最长128，按已保存的密码核对。
+注册/改密码为8至128字符，不强制字符组合；登录只校验非空及最长128。一个实例只绑定一个账号，所有当前Git身份可访问的仓库自动登记；组织选择由Web所有者维护，客户端匹配成员和仓库后自动使用服务器返回的组织。
 
-## 设备控制协议1
+## 跨服务器身份协议1
 
-原生端在`POST v1/control/enroll`发送name，以账号会话作Bearer与`X-Presence-Account`证明，获得独立deviceId、deviceToken、userId；其他控制端点使用设备凭证。旧手工访问/登记密钥仍可用于兼容。
+`v1/identity/`：目标先用POST challenge({issuer})返回自身canonical audience和120秒nonce；归属服务用当前会话POST ticket({audience,nonce})返回Ed25519签名assertion及仅查询撤销状态的delegation；目标POST exchange({assertion,delegation})校验受信任签发者、公钥、audience、nonce、时效和实时有效性，再返回目标本地会话。
 
-设备`GET state`、`POST announce`更新自己明确开放的工作区、branch/HEAD、组织范围和动作。请求依次使用`POST requests`、目标`POST claim`和`POST finish`；可取消排队请求或撤销本人设备。action只允许commit、submit、abort、discard；kind为preview、generate、execute、retryPush、restore。每个请求有UUID、deviceId、repositoryId、workspaceId；执行绑定目标预览，生成说明和提交按该分支进行。组织范围由服务端从目标开放范围确定，不能由请求方任意赋值。
+GET keys返回issuer和Ed25519公开JWK；POST validate({delegation})仅返回active。个人身份为issuer+subject的SHA256，不按邮箱合并。归属服务密码/登录Bearer不得发送给目标。delegation包含目标audience和授权epoch，不能用来登录、交换会话或登记设备。目标定期验证撤销，未知/离线不得授权控制；信任由服务器安装者明确配置。
 
-`teamId`/`organizationId`是Presence自己维护的组织标识，不是仓库owner、GitHub/Gitea组织ID或平台角色。`GET state`中的teams来自Presence成员关系和明确纳管项目；客户端只能选择服务端返回且包含该项目的组织。Git平台账号绑定不自动创建组织、同步成员或授予组织控制权限。
+网页 `identity/signin` → 归属服务 `identity/authorize` 确认 → 目标 `v1/identity/callback`，凭证只以表单传递，绑定浏览器一次性Cookie和Origin，禁止放入URL或第三方脚本。网页组织管理通过归属服务登录。
 
-没有任意shell、任意本机目录或文件正文接口。命令与结果持久化，过期/撤销/目标变化时拒绝执行；已有Commit而Push失败时只能重试Push，不再次提交。
+## 设备控制协议2
 
-## 状态协议2
+POST `v1/control/enroll` 以账号会话作Bearer与 `X-Presence-Account`，body为name，返回deviceId/deviceToken/userId。其他端点以设备凭证认证；已有设备会话过期仍可发布/接收，明确撤销、账号代次变化、组织范围变化会阻止操作。
 
-`v1/ws`使用原生Bearer鉴权，支持bridge发布与observer读取；心跳、完整快照、离线有效性沿用现有Presence字段。账号范围、组织成员与明确纳管项目同时限制可见快照，离线记录也保持账号隔离。新客户端不能把用户提供的仓库名、邮箱、显示名称或userId当作授权证明。
+| 方法 | 语义 |
+| --- | --- |
+| GET state | 当前授权设备、工作区、组织/角色、jobs、pending、automaticManagement、identityId；保留version1响应兼容 |
+| POST catalogue | deviceId及仓库数组，用设备凭证更新自动清单 |
+| POST announce | 本设备name与自动工作区列表；组织teamId和scopeVersion须与服务端当前范围一致 |
+| POST requests | preview/generate/execute/retryPush/restore，action为commit/submit/abort/discard |
+| POST claim / finish | 目标重新核验权限后认领并回传结果 |
+| POST cancel / revoke | 取消未认领请求或撤销本人设备 |
+
+请求UUID、server、organizationId、scopeVersion、deviceId、repositoryId、workspaceId及preview共同绑定。提交说明逐分支生成并可编辑。跨用户只能由同一纳管组织内严格更高角色操作；同一身份不同设备允许个人控制。目标仍验证保存的Git身份、真实工作目录及文件变化，只有固定有限行为，不接受任意shell、文件正文或Git凭证。Commit后Push失败只重试Push。
+
+## 远端状态协议3
+
+`v1/ws`支持账号会话或独立设备Bearer，设备握手deviceId须为服务端登记UUID。版本3支持bridge/observer、welcome/heartbeat/world/snapshot；完整快照含仓库/worktree/branch/HEAD、独立git/editor事实和unpublishedCommits。world的session包含identityId，project包含服务器确定的organizationId；world.organizations包含id/name/role/projects/revision。App不能通过上报organizationId选择自己的权限，服务器重新计算。
+
+同仓库多组织、不同服务器的会话和命令分别隔离；未匹配的仓库只对同一个人身份可见。离线快照保留原范围但标为未知；不能因为另一个服务器在线而将此范围误标在线。版本1/2继续按旧字段回复，编辑器本机协议1及Bridge版本2不变。版本3最多4096个上报工作区、单快照16MiB、单项目10000文件；超限明确失败，不静默截断。

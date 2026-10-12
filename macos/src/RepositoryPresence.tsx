@@ -1,6 +1,6 @@
 import type { RemoteRepository } from './import-model';
 import { usePresence } from './PresenceProvider';
-import { presenceProjectSummary, presenceRepositoryId, type PresenceProject } from './presence-model';
+import { presenceProjectSummary, presenceRepositoryId, managedOrganizations, type PresenceProject } from './presence-model';
 import { Icon } from './ui';
 import { RemoteControlProjects } from './RemoteControlProjects';
 import { controlRepositoryId } from './remote-control-model';
@@ -14,14 +14,13 @@ export function RepositoryPresence({ repository }: { repository: RemoteRepositor
   const status = presence?.status;
   if (!status?.enabled) return null;
   const id = presenceRepositoryId(repository);
-  const local = status.bridge.projects.filter(project => project.repositoryId.toLowerCase() === id);
+  const organizations = managedOrganizations(status, id);
   const peers = status.sessions.flatMap(session => session.projects.filter(project => project.repositoryId.toLowerCase() === id).map(project => ({ session, project })));
   const online = peers.filter(peer => status.connection === 'connected' && peer.session.alive).length;
   return <details className="repository-presence-panel"><summary><span className="presence-disclosure"><Icon name="right" size={11} /></span><Icon name="users" size={16} /><span>Presence</span><small>{online ? `${online} 个在线工作区` : status.connection === 'connected' ? '暂无在线协作' : '协作状态未知'}</small></summary><div className="presence-projects">
-    {local.map(project => <div className="presence-session" key={`local:${project.worktreeId}`}><strong>此电脑 · {project.branch || '未检出分支'}</strong><ProjectFiles project={project} valid={status.bridge.connected} /></div>)}
-    {peers.map(({ session, project }) => <div className="presence-session" key={`${session.sessionId}:${project.worktreeId}`}><strong>{session.displayName} · {project.branch || '未检出分支'}<span className="presence-session-validity">{status.connection === 'connected' && session.alive ? '在线' : '离线，状态未知'}</span></strong><ProjectFiles project={project} valid={status.connection === 'connected' && session.alive} /></div>)}
-    {!local.length && !peers.length && <p className="presence-empty">{status.connection === 'connected' ? '尚无这个仓库的协作会话。' : '连接未就绪，无法确认这个仓库的协作状态。'}</p>}
-    <RemoteControlProjects repositoryId={controlRepositoryId(repository.url)} />
+    {peers.map(({ session, project }) => <div className="presence-session" key={`${session.serverId}:${project.organizationId}:${session.sessionId}:${project.worktreeId}`}><strong>{session.displayName} · {project.branch || '未检出分支'}<span className="presence-session-validity">{project.organizationId ? organizations.find(o => o.serverId === session.serverId && o.id === project.organizationId)?.name : '个人'} · {session.alive ? '在线' : '离线，状态未知'}</span></strong><ProjectFiles project={project} valid={session.alive} /></div>)}
+    {!peers.length && <p className="presence-empty">{status.connection === 'connected' ? '尚无这个仓库的协作会话。' : '连接未就绪，无法确认这个仓库的协作状态。'}</p>}
+    {repository.available && <RemoteControlProjects repositoryId={controlRepositoryId(repository.url)} />}
     {(presence?.error || status.error) && <p className="presence-error">{presence?.error || status.error}</p>}
   </div></details>;
 }

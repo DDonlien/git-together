@@ -108,6 +108,10 @@ Commit / Submit / Push失败时，弹窗只显示一处统一错误提示，注�
 
 Dashboard仓库可分别平滑展开和收起分支；分支行与仓库行等高，保留相同的上下留白，系统减少动态效果时直接切换。
 
-## Presence独立账号（0.28.0源码）
+## Presence个人自动管理（0.30.0源码）
 
-在「设置 → 插件 → Presence → Presence账号」创建账号或登录，再绑定多个已授权仓库并登记独立设备。同账号可控制明确开放的本机项目；退出当前设备或修改密码会撤销对应控制凭证。当前NAS提供[账号注册/登录页面](https://git.freshli4.com:10443/presence/account)，详情见[账号使用说明](docs/presence-accounts.md)与[公开接入协议](docs/presence-public-protocol.md)。个人Docker单账号且无Presence组织空间；组织管理计划由独立NAS托管服务提供，官网Docker下载与计费尚未上线。此段描述源码能力，真实用户双设备验收和正式客户端三平台发布分别记录。
+在「设置 → 插件 → Presence」登录账号归属服务，当前Git身份可访问的仓库和已关联工作区自动登记。可添加并选择多台明确信任此登录服务的Presence服务器，使用同一个个人身份；密码只交给归属服务。设置中没有个人仓库选择、团队选择或密码修改。
+
+[组织管理网页](https://git.freshli4.com:10443/presence/manage)独立维护组织、成员与具体仓库网址；绑定要求Presence组织owner和Git仓库ownership。成员访问匹配仓库时自动使用组织范围，Dashboard“托管组织”列/筛选、文件夹图标和详情显示组织与个人角色。同仓库可分别进入多个独立组织，不限制或合并。
+
+同账号多设备支持Commit、Submit和两类abort，保留分支预览、说明编辑与备份；详情按服务器/组织隔离目标与结果。应用菜单“打开另一个实例”可使用独立账号数据目录。详情见[账号使用说明](docs/presence-accounts.md)及[公开协议](docs/presence-public-protocol.md)。客户端源码、NAS部署、正式三平台包和真实双设备操作分别验收；官网Docker分发、组织计费与开源许可证尚待交付。

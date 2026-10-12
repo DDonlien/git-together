@@ -117,10 +117,9 @@ async fn presence(
         Ok(v) => v,
         Err(_) => return envelope(Err("Presence 请求无效。".into())),
     };
-    if matches!(method.as_str(),"register"|"login"|"logout"|"password") && control.busy().await {return envelope(Err("请先等待远端操作结束或中止，再更换账号。".into()));}
+    if matches!(method.as_str(),"register"|"login"|"logout"|"configure"|"selectServer"|"removeServer") && control.busy().await {return envelope(Err("请先等待远端操作结束或中止，再更换账号。".into()));}
     if method=="logout" && presence.signed_in() {if let Err(error)=control.forget_account(true).await {return envelope(Err(error));}}
     let result=presence.command(&method,input).await;
-    if method=="password" && result.is_ok() {if let Err(error)=control.forget_account(false).await {return envelope(Err(error));}}
     envelope(result)
 }
 #[tokio::main]

@@ -1,0 +1,25 @@
+.presence-server-settings { padding: 18px 0 0; }
+.presence-server-settings h3 { margin: 0 0 8px; font-size: 13px; }
+.presence-server-selection { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.presence-server-selection > span { overflow-wrap: anywhere; font-size: 12px; }
+.presence-server-list .setting-row { flex-wrap: wrap; }
+.presence-server-add { display: flex; align-items: center; gap: 10px; padding-top: 16px; }
+.presence-server-add > :first-child { flex: 1; }
+.presence-managed-mark { position: absolute; right: -2px; top: -2px; display: grid; place-items: center; width: 17px; height: 17px; color: var(--blue); background: var(--content); border: 1px solid var(--line); border-radius: 6px; pointer-events: none; }
+.presence-managed-names { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.presence-managed-details { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; font-size: 12px; }
+.presence-managed-details > span { display: inline-flex; align-items: center; gap: 6px; }
+.presence-managed-details small { color: var(--muted); }
+.repository-managed-title { display: flex; align-items: center; gap: 14px; }
+.repository-managed-title > div { min-width: 0; }
+.repository-detail-folder { display: grid; place-items: center; position: relative; flex: 0 0 40px; width: 40px; height: 40px; color: var(--blue); background: var(--blue-bg); border-radius: 12px; }
+.remote-repo-table.has-managed-column th:nth-child(4) { width: 10%; }
+.remote-repo-table.has-managed-column th:nth-child(5), .remote-repo-table.has-managed-column th:nth-child(6) { width: 9%; }
+.remote-repo-table.has-managed-column th:nth-child(7) { width: 13%; }
+.remote-repo-table.has-managed-column th:nth-child(8) { width: 296px; }
+@media (max-width: 600px) { .presence-server-add { align-items: stretch; flex-direction: column; } }
+
+.presence-managed-names > span + span::before { content: "、"; }
+
+.remote-repo-table.has-managed-column th:nth-child(1) { width: 19%; }
+.remote-repo-table.has-managed-column th:nth-child(3) { width: 12%; }

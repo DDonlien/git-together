@@ -19,7 +19,7 @@ function RemoteActionDialog({ device, workspace, action, onClose }: { device: Co
   const selection = useRef<string[] | undefined>(undefined);
   const revision = useRef(0);
   const preparing = useRef(false);
-  const base = { deviceId: device.deviceId, workspaceId: workspace.id, repositoryId: workspace.repositoryId, action };
+  const base = { serverId: device.serverId, deviceId: device.deviceId, workspaceId: workspace.id, repositoryId: workspace.repositoryId, action };
   async function prepare() {
     if (preparing.current) return;
     preparing.current = true;
@@ -90,26 +90,27 @@ export function RemoteControlProjects({ repositoryId }: { repositoryId: string }
   const [target, setTarget] = useState<{ device: ControlDevice; workspace: ControlWorkspace; action: RemoteAction } | null>(null);
   const [error, setError] = useState('');
   if (!control || !status?.enabled) return null;
-  const peers = status.devices.filter(device => device.deviceId !== status.deviceId).flatMap(device => device.workspaces.filter(w => w.repositoryId === repositoryId).map(workspace => ({ device, workspace })));
+  const peers = status.devices.filter(device => !device.isCurrent && device.deviceId !== status.deviceId).flatMap(device => device.workspaces.filter(w => w.repositoryId === repositoryId).map(workspace => ({ device, workspace })));
   async function followup(job: ControlJob, kind: 'retryPush' | 'restore') {
     if (!control) return;
     setError('');
     if (kind === 'restore' && !window.confirm('恢复这次丢弃前的文件和暂存状态？目标有新变化时会停止。')) return;
-    try { await control.enqueue({ deviceId: job.deviceId, workspaceId: job.workspaceId, repositoryId: job.repositoryId, action: job.action, kind, previousId: job.id }); }
+    try { await control.enqueue({ serverId: job.serverId, deviceId: job.deviceId, workspaceId: job.workspaceId, repositoryId: job.repositoryId, action: job.action, kind, previousId: job.id }); }
     catch (problem) { setError(problem instanceof Error ? problem.message : '远端请求未完成。'); }
   }
   return <div className="remote-control-projects"><h3>远端控制</h3>
-    {!status.registered && <p className="presence-empty">在设置的 Presence 中登记此设备后，可控制同账号的设备。</p>}
-    {status.registered && !peers.length && <p className="presence-empty">暂无其他设备开放这个项目。目标设备需登记并启用该项目。</p>}
+    {!status.registered && <p className="presence-empty">正在连接 Presence，自动登记此设备。</p>}
+    {status.registered && !peers.length && <p className="presence-empty">暂无可操作的其他设备或协作成员。</p>}
     {peers.map(({ device, workspace }) => {
-      const jobs = status.jobs.filter(j => j.deviceId === device.deviceId && j.workspaceId === workspace.id);
+      const jobs = status.jobs.filter(j => j.serverId === device.serverId && j.deviceId === device.deviceId && j.workspaceId === workspace.id);
       const pending = jobs.some(j => ['queued', 'running'].includes(j.status));
       const latest = jobs.find(j => !['preview', 'generate'].includes(j.kind));
       const previous = latest?.previousId ? jobs.find(j => j.id === latest.previousId) : undefined;
       const retry = latest?.status === 'failed' && latest.kind === 'retryPush' ? previous : latest;
       const recover = latest?.status === 'failed' && latest.kind === 'restore' ? previous : latest;
-      return <div className="remote-target" key={device.deviceId + workspace.id}>
-        <div className="remote-target-heading"><strong>{device.name} · {workspace.branch}</strong><small>{device.online && status.connection === 'connected' ? '在线' : '离线'}</small></div>
+      const organization = status.teams.find(t => t.serverId === device.serverId && t.id === workspace.teamId);
+      return <div className="remote-target" key={(device.serverId || '') + device.deviceId + workspace.id}>
+        <div className="remote-target-heading"><strong>{device.name} · {workspace.branch}{organization && ` · ${organization.name || organization.id}`}</strong><small>{device.online && status.connection === 'connected' ? '在线' : '离线'}</small></div>
         <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => <Button key={action} disabled={!device.online || status.connection !== 'connected' || (pending && action !== 'abort')} onClick={() => setTarget({ device, workspace, action })}>{remoteActionLabels[action]}</Button>)}</div>
         {latest && <div className={'remote-job-result' + (latest.error ? ' is-error' : '')} role="status"><span>{controlJobLabel(latest)}</span>
           {latest.result?.warning && <small>{latest.result.warning}</small>}
@@ -119,6 +120,6 @@ export function RemoteControlProjects({ repositoryId }: { repositoryId: string }
       </div>;
     })}
     {(error || control.error || status.error) && <Notice kind="error">{error || control.error || status.error}</Notice>}
-    {target && <RemoteActionDialog key={target.device.deviceId + target.workspace.id + target.action} {...target} onClose={() => setTarget(null)} />}
+    {target && <RemoteActionDialog key={(target.device.serverId || '') + target.device.deviceId + target.workspace.id + target.action} {...target} onClose={() => setTarget(null)} />}
   </div>;
 }

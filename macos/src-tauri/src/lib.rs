@@ -17,13 +17,14 @@ pub mod update_archive;
 pub mod update_error;
 mod updates;
 pub mod util;
+mod instances;
 use serde_json::{json, Value};
 use service::Service;
 use std::{path::PathBuf, sync::Arc};
 use tauri::{Manager, State};
 use updates::Updates;
 pub fn data_root() -> util::Result<PathBuf> {
-    platform::data_root()
+    instances::data_root()
 }
 fn envelope(result: util::Result<Value>) -> Value {
     match result {
@@ -75,10 +76,9 @@ async fn presence_command(
     method: String,
     input: Option<Value>,
 ) -> util::Result<Value> {
-    if matches!(method.as_str(),"register"|"login"|"logout"|"password") && control.busy().await {return Ok(envelope(Err("请先等待远端操作结束或中止，再更换账号。".into())));}
+    if matches!(method.as_str(),"register"|"login"|"logout"|"configure"|"selectServer"|"removeServer") && control.busy().await {return Ok(envelope(Err("请先等待远端操作结束或中止，再更换账号。".into())));}
     if method=="logout" && presence.signed_in() {control.forget_account(true).await?;}
     let result=presence.command(&method, input.unwrap_or(json!({}))).await;
-    if method=="password" && result.is_ok() {control.forget_account(false).await?;}
     Ok(envelope(
         result,
     ))
@@ -165,6 +165,10 @@ async fn update_install(
     Ok(updates.install(app, &service).await)
 }
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    let profile = instances::profile().expect("Invalid instance name");
+    // Separate both the lock and on-disk account data for each explicitly opened instance.
+    if let Some(id) = &profile { context.config_mut().identifier.push_str(&format!(".instance.p{}", util::digest(id))); }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app,_,_|{
             if let Some(window)=app.get_webview_window("main") {
@@ -176,6 +180,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            use tauri::menu::{Menu, MenuItem};
+            let menu = Menu::default(app.handle())?;
+            let other = MenuItem::with_id(app, "presence-other-instance", "打开另一个实例", true, None::<&str>)?;
+            if let Some(submenu) = menu.items()?.first().and_then(|item| item.as_submenu()) { submenu.append(&other)?; }
+            app.set_menu(menu)?;
+            if instances::profile().map_err(std::io::Error::other)?.is_some() {
+                if let Some(window) = app.get_webview_window("main") { window.set_title("GitTogether · 独立实例")?; }
+            }
             let root = data_root().map_err(std::io::Error::other)?;
             let service = Service::new(root.clone(), !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
@@ -190,6 +202,11 @@ pub fn run() {
             app.manage(presence);
             app.manage(updates);
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if event.id.as_ref() == "presence-other-instance" {
+                if let Err(error) = instances::open_other() { app.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"open-other-instance","error":error}), false); }
+            }
         })
         .on_window_event(|window,event| {
             if let tauri::WindowEvent::CloseRequested {api,..}=event {
@@ -216,6 +233,6 @@ pub fn run() {
             update_download,
             update_install
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("GitTogether 原生运行失败。");
 }

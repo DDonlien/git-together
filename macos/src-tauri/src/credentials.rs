@@ -129,6 +129,9 @@ pub fn oauth_secret(root: &Path) -> Result<Option<String>> {
     let path = root.join("github-oauth-v1.encrypted");
     let saved = if let Some(value) = load(&path, "GitTogether")? {
         Some(value)
+    } else if root.parent().is_some_and(|p| p.file_name().is_some_and(|n|n=="instances")) {
+        // Share the installed GitHub application's developer configuration, never user accounts.
+        return oauth_secret(root.parent().unwrap().parent().ok_or("实例目录无效。")?);
     } else {
         let legacy = root
             .parent()

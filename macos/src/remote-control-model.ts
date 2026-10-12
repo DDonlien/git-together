@@ -1,6 +1,6 @@
 export type RemoteAction = 'commit' | 'submit' | 'abort' | 'discard';
-export type ControlWorkspace = { id: string; repositoryId: string; branch: string; head: string; teamId: string | null; actions: RemoteAction[] };
-export type ControlDevice = { deviceId: string; userId: string; name: string; online: boolean; lastSeen: number; workspaces: ControlWorkspace[] };
+export type ControlWorkspace = { id: string; repositoryId: string; branch: string; head: string; teamId: string | null; scopeVersion?: number; actions: RemoteAction[] };
+export type ControlDevice = { deviceId: string; userId: string; identityId?: string; serverId?: string; isCurrent?: boolean; name: string; online: boolean; lastSeen: number; workspaces: ControlWorkspace[] };
 export type RemoteFile = { path: string; fromPath?: string | null; status: string; tracked: boolean };
 export type ControlResult = {
   branch?: string;
@@ -11,6 +11,9 @@ export type ControlResult = {
 };
 export type ControlJob = {
   previousId?: string;
+  serverId?: string;
+  organizationId?: string | null;
+  scopeVersion?: number | null;
   id: string; deviceId: string; workspaceId: string; repositoryId: string; action: RemoteAction;
   kind: 'preview' | 'generate' | 'execute' | 'retryPush' | 'restore';
   status: 'queued' | 'running' | 'done' | 'failed' | 'expired'; expiresAt: number; result: ControlResult | null; error: string;
@@ -23,7 +26,7 @@ export type ControlStatus = {
   enabled: boolean; registered: boolean; deviceId: string; userId: string; name: string;
   connection: 'disabled' | 'connected' | 'offline'; error: string;
   devices: ControlDevice[]; jobs: ControlJob[]; repositories: string[];
-  teams: { id: string; projects: string[] }[];
+  teams: { id: string; name?: string; role?: string; serverId?: string; projects: string[] }[];
   localRepositories: { id: string; name: string; remoteId: string; enabled: boolean; teamId: string | null }[];
 };
 export const remoteActionLabels: Record<RemoteAction, string> = { commit: 'Commit', submit: 'Submit', abort: '中止操作', discard: '丢弃更改' };
