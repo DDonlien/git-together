@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { basename, dirname, join } from 'node:path';
 import { releaseBranch, updateSource } from '../src/update-model';
+import { verifyWindowsPackages, type WindowsPackage } from './windows-release';
 
 const repository = `${updateSource.owner}/${updateSource.repo}`;
 
@@ -14,6 +15,7 @@ export interface ReleasePackage {
   version: string; sourceCommit: string; zipPath: string; updateMetadataPath: string;
   sha256: string; sha512: string; size: number; notarized: boolean;
   tauri?: { tarPath: string; signaturePath: string; manifestPath: string; signature: string; sha256: string; size: number };
+  windows?: WindowsPackage[];
 }
 
 export function notarizationResult(output: string): { id: string; status: 'Accepted' } {
@@ -52,6 +54,15 @@ export function verifyTauriMetadata(metadata: unknown, artifact: ReleasePackage)
   const url = `https://github.com/${repository}/releases/download/v${artifact.version}/${basename(artifact.tauri.tarPath)}`;
   if (data?.version !== artifact.version || !data.pub_date || !Number.isFinite(Date.parse(data.pub_date)) ||
     platform?.url !== url || platform.signature !== artifact.tauri.signature) throw new Error('Tauri 公开更新清单与最终签名包不一致。');
+  if (artifact.windows) {
+    verifyWindowsPackages(artifact.windows, artifact.version, artifact.sourceCommit);
+    for (const windows of artifact.windows) {
+      const target = data.platforms?.[windows.platform];
+      const expected = `https://github.com/${repository}/releases/download/v${artifact.version}/${basename(windows.installerPath)}`;
+      if (target?.url !== expected || target.signature !== windows.signature) throw new Error(`Windows ${windows.architecture}公开更新清单与最终签名包不一致。`);
+    }
+    if (Object.keys(data.platforms ?? {}).length !== 3) throw new Error('正式更新清单必须包含macOS、Windows x86和x64三个平台。');
+  }
 }
 async function releaseFiles(artifact: ReleasePackage) {
   const metadata = await readFile(artifact.updateMetadataPath);
@@ -68,6 +79,17 @@ async function releaseFiles(artifact: ReleasePackage) {
       const hash = createHash('sha256').update(bytes).digest('hex');
       if (path === artifact.tauri.tarPath && (bytes.length !== artifact.tauri.size || hash !== artifact.tauri.sha256)) throw new Error('Tauri 签名包校验值不一致。');
       files.push({ path, name: basename(path), size: bytes.length, sha256: hash, contentType });
+    }
+  }
+  if (artifact.windows) {
+    verifyWindowsPackages(artifact.windows, artifact.version, artifact.sourceCommit);
+    for (const windows of artifact.windows) {
+      const bytes = await readFile(windows.installerPath);
+      if (bytes.length !== windows.size || createHash('sha256').update(bytes).digest('hex') !== windows.sha256) throw new Error(`Windows ${windows.architecture}安装包校验值不一致。`);
+      const signature = await readFile(windows.signaturePath);
+      if (signature.toString().trim() !== windows.signature) throw new Error(`Windows ${windows.architecture}签名文件不一致。`);
+      files.push({ path: windows.installerPath, name: basename(windows.installerPath), size: bytes.length, sha256: windows.sha256, contentType: 'application/octet-stream' },
+        { path: windows.signaturePath, name: basename(windows.signaturePath), size: signature.length, sha256: createHash('sha256').update(signature).digest('hex'), contentType: 'text/plain' });
     }
   }
   return files;
@@ -226,11 +248,12 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
   return {
     async publish(artifact: ReleasePackage): Promise<{ releaseUrl: string; tag: string; publicUpdateVerified: true }> {
       if (!artifact.notarized || artifact.sourceCommit !== sourceCommit || artifact.version !== version) throw new Error('只有本次main构建且通过公证的包可以发布。');
+      verifyWindowsPackages(artifact.windows, version, sourceCommit);
       await assertMain();
       await assertTag(true);
       const expected = await releaseFiles(artifact);
       const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
-      await writeFile(notes, `# GitTogether ${version}\n\nmacOS Apple Silicon 正式更新，已完成 Developer ID 签名及 Apple 公证。${artifact.tauri ? '\n\n桌面框架迁移到 Tauri 2，Git、账号、授权、文件和 AI 服务运行在 Rust 后台。保留现有 React 界面、自动 Fetch、逐分支提交及已关联工作目录。更新资产同时支持旧版 Electron 的过渡升级和 Tauri 签名更新。' : ''}\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
+      await writeFile(notes, `# GitTogether ${version}\n\n同一版本提供 macOS Apple Silicon、Windows x86（32 位）和 Windows x64（64 位）。Windows 两种架构已通过原生构建、系统加密存储、Git 提交范围/暂存保留、进程取消及实际安装包校验；所有平台提供签名更新。macOS 保留 Developer ID 签名、Apple 公证及旧版过渡更新资产。\n\n本版同时包含 Presence 插件与团队协作状态接入，以及此前提交的推送反馈、可选提交范围等功能。\n\nWindows 安装器使用当前用户范围并包含 WebView2 引导程序；Git/Git LFS 与可选的 Codex CLI 沿用本机安装。官方 Codex CLI 的 Windows 二进制支持 x64/ARM64，纯32位系统不能生成 AI 提交说明，普通 Git 操作可用。Windows 安装器当前未配置 Authenticode 代码签名；更新包签名已验证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
       let draft: Release | null = null;
       await reconcileReleaseMutation(
         async () => {
@@ -339,6 +362,13 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
       await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900', '--retry', '2', '--output', downloadedTar, base + '/' + basename(artifact.tauri.tarPath)], { timeout: 2_800_000 });
       const tar = await readFile(downloadedTar);
       if (tar.length !== artifact.tauri.size || createHash('sha256').update(tar).digest('hex') !== artifact.tauri.sha256) throw new Error('公共 Tauri 更新包的大小或校验值不一致。');
+    }
+    for (const windows of artifact.windows ?? []) {
+      if ((await (await publicRead(base + '/' + basename(windows.signaturePath))).text()).trim() !== windows.signature) throw new Error(`公共Windows ${windows.architecture}签名文件不一致。`);
+      const path = join(temporary, basename(windows.installerPath));
+      await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900', '--retry', '2', '--output', path, base + '/' + basename(windows.installerPath)], { timeout: 2_800_000 });
+      const bytes = await readFile(path);
+      if (bytes.length !== windows.size || createHash('sha256').update(bytes).digest('hex') !== windows.sha256) throw new Error(`公共Windows ${windows.architecture}安装包的大小或校验值不一致。`);
     }
   } finally { await rm(temporary, { recursive: true, force: true }); }
   return { releaseUrl: publicLatest.html_url, tag, publicUpdateVerified: true };

@@ -32,6 +32,10 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 
 正式发布从已推送main生成独立源码快照，构建Rust release及React资源，Developer ID签名、Apple公证并附加凭证后生成两套更新资产：旧Electron版读取ZIP和`latest-mac.yml`，新Tauri版读取最终已公证的`.app.tar.gz`、`.sig`和`latest.json`。Tauri签名绑定版本，内置公钥匹配仓库外0600私钥；发布后完整回读两套公共资产并核对摘要。开发版禁用安装更新。不会为交付启动或修改用户已安装应用。
 
+Windows双架构（RUN-01-windows-packaging，2026-10-12）：同一React/Tauri/Rust客户端增加platform边界，Windows使用KnownFolder LocalAppData内的原数据目录名称、当前用户DPAPI（GTTW1，带应用身份熵）与私有ACL；macOS继续兼容Keychain/GTT1/v10及原目录。路径按本机分隔符枚举工具并规范化Git绝对目录；Windows通过Job Object接管在挂起状态创建的Git/AI进程，再恢复初始线程，取消及退出清理整组后代。普通文件读取保留no-follow/reparse校验，权限/链接、系统打开、日志文件剪贴板与更新错误码按平台实现。Windows更新验证NSIS PE/firstheader，签名仍绑定版本；Mac更新结构校验保持独立。
+
+联合打包由macos/scripts/package-desktop.ts驱动：Windows workflow只接受已推送main SHA，在原生Windows-2022/MSVC以i686与x86_64分别构建，使用相同版本。package-windows.ts在私有快照构建真实应用，构建时验证器在临时目录核对DPAPI、ACL、Git提交范围/暂存和进程取消；随后删除快照内诊断bin再生成currentUser NSIS包，解包核对主程序PE架构/摘要及额外二进制，并实际临时安装、核对和卸载。CI不持有更新私钥，只产出安装器和有限构建报告。Mac发布入口收集同SHA的两包、核对报告/完整摘要、在本机签名并原生验签，latest.json统一包含darwin-aarch64、windows-i686和windows-x86_64；Windows两包未通过则不能公开完整正式版本。GitHub资产及公共完整下载、对应sig与清单均须匹配。当前Windows安装器未配置Authenticode代码签名，不能把更新签名等同于Microsoft代码签名；纯32位Windows不支持官方Codex CLI，AI缺失必须如实提示。
+
 更新包与错误诊断（RUN-01-update-diagnostics）：最终tar通过COPYFILE_DISABLE禁止AppleDouble元数据；发布验签工具及安装前共用update_archive，要求唯一GitTogether.app根目录、真实Info.plist/主程序和正常相对路径，拒绝._元数据。官方安装器去掉第一路径层，旧包的根._GitTogether.app因此被解压到临时目录自身，实际返回EPERM/errno 1，尚未开始应用替换。Updates直接持有Diagnostics，记录检查/下载/安装起止、目标版本、错误类型、脱敏source链、系统errno及HTTP状态；原生有限字段不接受渲染层输入。UpdateFailure保留透明Io包装的直接errno，并区分解压包、签名/版本、网络、磁盘、访问限制及未知错误。安装失败保留下载与重试，不推断所有失败均为权限，不更改系统权限。
 
 安装预约（RUN-01-update-immediate，取代0.22.4通用等待）：useWorkspace持有跨页面的useUpdates状态；确认重启时立即设置安装标志，停止自动账号、本地和远端检查。安装状态仅由更新卡片展示，正常关闭入口或IPC退出不生成顶部连接错误。Service.installing原子关闭新请求入口，独立Foreground守卫记录真正的提交、推送、文件变更、下载及配置保存；已有前台事务只返回具体原因，不排队等待。其余在途读取及独立fetch通过后台CancellationToken取消，安装不等待Service.active归零；该计数仍用于实际请求生命周期。预约以Drop释放并更新后台取消代次，安装失败恢复新请求、保留已下载Update及字节，以ready状态和“重试安装”直接重试。前端确认前仍禁用真实前台操作/授权期间的重启入口。

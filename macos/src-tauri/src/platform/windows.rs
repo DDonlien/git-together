@@ -11,11 +11,16 @@ use std::{
     ptr::{null, null_mut},
 };
 use windows_sys::Win32::{
-    Foundation::{LocalFree, HANDLE, INVALID_HANDLE_VALUE},
-    Security::{self, Authorization::*, Cryptography::*, *},
+    Foundation::{GlobalFree, LocalFree, HANDLE, INVALID_HANDLE_VALUE},
+    Security::{Authorization::*, Cryptography::*, *},
     Storage::FileSystem::*,
     System::{
-        Com::CoTaskMemFree, DataExchange::*, Diagnostics::ToolHelp::*, JobObjects::*, Memory::*,
+        Com::CoTaskMemFree,
+        DataExchange::*,
+        Diagnostics::ToolHelp::*,
+        JobObjects::*,
+        Memory::*,
+        SystemServices::{ACCESS_ALLOWED_ACE_TYPE, ACCESS_DENIED_ACE_TYPE},
         Threading::*,
     },
     UI::{Shell::*, WindowsAndMessaging::*},

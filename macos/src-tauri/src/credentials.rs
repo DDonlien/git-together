@@ -1,10 +1,13 @@
 use crate::util::{text, Result};
+#[cfg(not(windows))]
 use aes_gcm::{
     aead::{rand_core::RngCore, Aead, OsRng},
     Aes256Gcm, KeyInit,
 };
+#[cfg(not(windows))]
 use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use serde_json::Value;
+#[cfg(not(windows))]
 use sha2::{Digest, Sha256};
 use std::{fs, path::Path};
 

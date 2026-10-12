@@ -23,3 +23,9 @@
 - https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata：用户范围、非交互加密与完整性。
 - https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects：子进程继承Job及整体终止。
 - https://raw.githubusercontent.com/openai/codex/main/codex-cli/bin/codex.js：官方Windows原生Codex包为x64/arm64，提供vendor目标/bin/codex.exe；兼容已存在的vendor/codex布局。纯32位Windows中找不到受支持Codex时给出真实错误，不模拟AI。
+
+## 第一轮原生构建与联合发布接入
+
+- main/b491264e3023500b3a77c6db84a2ad2dd436b6c0已正常推送。Windows原生运行38188189029的两种架构均到达Cargo检查，发现同一组4个Win32引用错误：两个ACE类型常量所在模块未导入、GlobalFree未从Foundation导入。完整日志保存在仓库外_builds/windows-38188189029.log。修复精确引用并为密码模块按平台裁剪导入，继续实际构建，不把Mac编译代替Windows通过。
+- 联合发布入口增加同源码Windows工作流收集、临时安装/核心操作报告检查、本机版本绑定签名/验签、三个平台的latest.json，以及两种Windows完整资产与sig的公开回读；publish在公开草稿前强制要求Windows两包。更新错误按Windows系统码解释，保留Mac原有消息和公证流程。
+- 原生校验路径规范化处理Windows临时目录可能存在的8.3别名；普通目录遍历/复制保留reparse点边界。Windows构建缓存按目标/依赖/源码分开保存，失败也保留已完成依赖以便修复后重建。ARCHITECTURE补充实际平台边界与联合流水线；需求仍等待完整构建/安装包通过。

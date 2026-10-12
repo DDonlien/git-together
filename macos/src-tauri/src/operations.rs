@@ -652,11 +652,11 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
             let key = key.replace('\\', "/");
             util::file_path(&key)?;
             let meta = fs::symlink_metadata(&path).map_err(|_| "文件状态无法读取。")?;
-            if meta.is_dir() {
+            if meta.is_dir() && !crate::platform::is_link(&meta) {
                 queue.push(path);
                 continue;
             }
-            let (kind, mode, digest) = if meta.file_type().is_symlink() {
+            let (kind, mode, digest) = if crate::platform::is_link(&meta) {
                 (
                     "symlink".into(),
                     0,
@@ -728,9 +728,9 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
         let src = item.path();
         let dst = to.join(item.file_name());
         let m = fs::symlink_metadata(&src).map_err(|_| "配置读取失败。")?;
-        if m.is_dir() {
+        if m.is_dir() && !crate::platform::is_link(&m) {
             copy_tree(&src, &dst)?;
-        } else if m.file_type().is_symlink() {
+        } else if crate::platform::is_link(&m) {
             crate::platform::copy_link(&src, &dst).map_err(|_| "配置链接保存失败。")?;
         } else {
             fs::copy(src, &dst).map_err(|_| "配置保存失败。")?;

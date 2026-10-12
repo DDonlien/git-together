@@ -67,13 +67,31 @@ try {
   const installed = join(temporary, 'installed');
   await run(installerPath, ['/S', '/D=' + installed], source);
   if (hash(await readFile(join(installed, 'gittogether.exe'))) !== hash(appBytes)) throw new Error('实际安装后的主程序与构建结果不一致。');
+  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
+    $ErrorActionPreference = 'Stop'
+    $app = Start-Process -FilePath $env:GITTOGETHER_VALIDATION_APP -PassThru
+    try {
+      $ready = $false
+      for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        $app.Refresh()
+        if ($app.HasExited) { throw 'GitTogether exited during native startup' }
+        $webview = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($app.Id)" | Where-Object { $_.Name -eq 'msedgewebview2.exe' }
+        if ($app.MainWindowHandle -ne 0 -and $webview) { $ready = $true; break }
+      }
+      if (-not $ready) { throw 'Native window or WebView2 did not start' }
+      Write-Output 'Native GitTogether window and WebView2 started'
+    } finally {
+      if (-not $app.HasExited) { taskkill /PID $app.Id /T /F | Out-Null }
+    }
+  `], source, { GITTOGETHER_VALIDATION_APP: join(installed, 'gittogether.exe') });
   const installedEntries = await readdir(installed);
   const uninstaller = installedEntries.find(name => /^uninstall.*\.exe$/i.test(name));
   if (!uninstaller) throw new Error('安装后缺少卸载程序。');
   await run(join(installed, uninstaller), ['/S', '_?=' + installed], source);
   if (await git(['rev-parse', 'HEAD']) !== sourceCommit || await git(['status', '--porcelain=v1', '--untracked-files=all', '--', 'src', 'src-tauri', 'scripts', 'package.json', 'package-lock.json'])) throw new Error('构建过程中源码发生变化。');
   const bytes = await readFile(installerPath);
-  await writeFile(join(output, 'build-info.json'), JSON.stringify({ version: manifest.version, sourceBranch: 'main', sourceCommit, platform: `windows-${arch === 'x86' ? 'i686' : 'x86_64'}`, architecture: arch, target, filename: basename(installerPath), size: bytes.length, sha256: hash(bytes), applicationSha256: hash(appBytes), applicationMachine: machine(appBytes), nativeValidationPassed: true, installerVerified: true, ...{ validation }, authenticodeSigned: false }, null, 2) + '\n');
+  await writeFile(join(output, 'build-info.json'), JSON.stringify({ version: manifest.version, sourceBranch: 'main', sourceCommit, platform: `windows-${arch === 'x86' ? 'i686' : 'x86_64'}`, architecture: arch, target, filename: basename(installerPath), size: bytes.length, sha256: hash(bytes), applicationSha256: hash(appBytes), applicationMachine: machine(appBytes), nativeValidationPassed: true, installerVerified: true, interfaceStarted: true, ...{ validation }, authenticodeSigned: false }, null, 2) + '\n');
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `directory=${output}\n`);
   console.log(`Windows ${arch}原生构建、核心操作、实际安装及架构校验通过：${installerPath}`);
 } finally { await rm(temporary, { recursive: true, force: true, maxRetries: 6, retryDelay: 1000 }); }

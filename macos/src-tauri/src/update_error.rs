@@ -79,6 +79,43 @@ impl UpdateFailure {
                     "ERR_UPDATER_RESTORE",
                     "更新替换失败，旧应用未能恢复到原位置。已保留备份，请使用完整安装包恢复。",
                 ),
+                #[cfg(windows)]
+                UpdaterError::Io(e) => match system_code {
+                    Some(5) => ("EACCES", "系统拒绝写入更新文件，请检查应用目录权限后重试。"),
+                    Some(32) | Some(33) => (
+                        "EBUSY",
+                        "更新文件正在被其他程序占用，请关闭相关程序后重试。",
+                    ),
+                    Some(112) | Some(39) => {
+                        ("ENOSPC", "磁盘空间不足，无法安装更新。请释放空间后重试。")
+                    }
+                    Some(19) => ("EROFS", "应用所在位置只读，请将应用放到可写位置后重试。"),
+                    Some(17) => (
+                        "EXDEV",
+                        "更新临时目录与应用不在同一磁盘，请使用完整安装包。",
+                    ),
+                    Some(2) | Some(3) => (
+                        "ENOENT",
+                        "更新所需文件或应用目录不存在，请使用完整安装包恢复。",
+                    ),
+                    _ if e.kind() == io::ErrorKind::InvalidData
+                        || e.kind() == io::ErrorKind::UnexpectedEof =>
+                    {
+                        (
+                            "ERR_UPDATER_INVALID_ARCHIVE",
+                            "更新包损坏或格式不兼容，请重新下载更新。",
+                        )
+                    }
+                    _ if e.kind() == io::ErrorKind::PermissionDenied => (
+                        "permission",
+                        "系统拒绝更新文件操作，请检查应用目录权限后重试。",
+                    ),
+                    _ => (
+                        "unknown",
+                        "Windows更新安装失败，请查看日志后重试或使用完整安装包。",
+                    ),
+                },
+                #[cfg(not(windows))]
                 UpdaterError::Io(e) => match system_code {
                     Some(libc::EACCES) => (
                         "EACCES",

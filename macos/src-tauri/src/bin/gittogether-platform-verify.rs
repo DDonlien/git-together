@@ -19,6 +19,7 @@ async fn verify() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let root = temporary.path().join("仓库 with spaces");
     fs::create_dir(&root).map_err(|e| e.to_string())?;
+    let root = dunce::canonicalize(&root).map_err(|e| e.to_string())?;
     let storage = temporary.path().join("state");
     platform::private_directory(&storage).map_err(|e| e.to_string())?;
     let account_path = storage.join("accounts-v2.encrypted");

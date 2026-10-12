@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { releaseBranch, updateSource } from '../src/update-model';
 import { notarizationResult, prepareDesktopRelease } from './desktop-release';
+import { buildWindowsPackages } from './windows-release';
 
 const clientRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(join(clientRoot, 'package.json'), 'utf8')) as { version: string };
@@ -21,7 +22,7 @@ const signingKey = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), 
 const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
 const execute = promisify(execFile);
 const git = async (args: string[]) => (await execute('git', args, { cwd: clientRoot })).stdout.trim();
-const inputPaths = [...sourceEntries, 'scripts/package-desktop.ts', 'scripts/desktop-release.ts', 'vite.config.mjs'];
+const inputPaths = [...sourceEntries, 'scripts', '../.github/workflows/windows-package.yml', 'vite.config.mjs'];
 const sourceBranch = await git(['symbolic-ref', '--short', 'HEAD']);
 if (sourceBranch !== releaseBranch) throw new Error(`更新包必须从 ${releaseBranch} 构建，当前为 ${sourceBranch}。`);
 if (await git(['status', '--porcelain=v1', '--untracked-files=all', '--', ...inputPaths])) throw new Error('打包源码有未提交改动，请先检查并提交到 main。');
@@ -107,9 +108,12 @@ try {
   const signaturePath = tarPath + '.sig';
   await run(join(binaryRoot, 'gittogether-release-verify'), [join(source, 'src-tauri/tauri.conf.json'), tarPath, signaturePath, manifest.version]);
   const tarBytes = await readFile(tarPath), tarSignature = (await readFile(signaturePath, 'utf8')).trim();
+  console.log('macOS包已完成公证和签名，正在收集并签名同一源码的Windows x86/x64原生安装包…');
+  const windows = await buildWindowsPackages(clientRoot, manifest.version, sourceCommit, output, signingKey, join(binaryRoot, 'gittogether-release-verify'));
   const tauriManifestPath = join(output, 'latest.json');
-  await writeFile(tauriManifestPath, JSON.stringify({ version: manifest.version, notes: `GitTogether ${manifest.version}`, pub_date: new Date().toISOString(), platforms: { 'darwin-aarch64': { signature: tarSignature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(tarPath)}` } } }, null, 2) + '\n');
-  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, framework: 'Tauri 2', backend: 'Rust', architecture: 'arm64', signature: 'Developer ID', notarized: true, size: bytes.length, tauri: { tarPath, signaturePath, manifestPath: tauriManifestPath, signature: tarSignature, sha256: createHash('sha256').update(tarBytes).digest('hex'), size: tarBytes.length } };
+  const platforms = Object.fromEntries(windows.map(p => [p.platform, { signature: p.signature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(p.installerPath)}` }]));
+  await writeFile(tauriManifestPath, JSON.stringify({ version: manifest.version, notes: `GitTogether ${manifest.version}`, pub_date: new Date().toISOString(), platforms: { 'darwin-aarch64': { signature: tarSignature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(tarPath)}` }, ...platforms } }, null, 2) + '\n');
+  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, framework: 'Tauri 2', backend: 'Rust', architecture: 'arm64', signature: 'Developer ID', notarized: true, size: bytes.length, windows, tauri: { tarPath, signaturePath, manifestPath: tauriManifestPath, signature: tarSignature, sha256: createHash('sha256').update(tarBytes).digest('hex'), size: tarBytes.length } };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(result, null, 2) + '\n');
   console.log('公证及更新签名通过，正在发布并核对两种公开更新源…');
   const publication = await release.publish(result);
