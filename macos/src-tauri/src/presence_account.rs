@@ -155,6 +155,28 @@ impl Presence {
         config.account.as_mut().unwrap().repositories = repositories;
         self.save_account(config, value, String::new()).await
     }
+    pub(crate) async fn sync_account_repositories(
+        &self,
+        user_id: &str,
+        value: &Value,
+    ) -> Result<()> {
+        let _guard = self.configure_lock.lock().await;
+        let mut config = self.config.borrow().clone();
+        let Some(account) = config.account.as_mut() else {
+            return Ok(());
+        };
+        if account.id != user_id {
+            return Err("Presence账号已改变，请重新连接设备。".into());
+        }
+        let repositories: Vec<String> =
+            serde_json::from_value(value.clone()).map_err(|_| "账号仓库范围无效。")?;
+        if account.repositories == repositories {
+            return Ok(());
+        }
+        account.repositories = repositories;
+        let metadata = self.state.read().await.account_service.clone();
+        self.save_account(config, metadata, String::new()).await
+    }
     pub(super) async fn account_command(&self, method: &str, input: Value) -> Result<Value> {
         if !input.is_object()
             || serde_json::to_vec(&input)

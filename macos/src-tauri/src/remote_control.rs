@@ -259,7 +259,7 @@ impl RemoteControl {
         for p in &c.projects {
             let repository = catalog["repositories"].as_array().unwrap().iter().find(|r|r["id"]==p.repository_id).ok_or("已开放的项目被移除，请更新远端控制设置。")?;
             let remote = repository_id(text(repository,"url"))?;
-            let _ = allowed;
+            if self.presence.signed_in() && !allowed.as_array().is_some_and(|ids|ids.iter().any(|id|id==&remote)) {continue;}
             let tasks = self.service.control_tasks(&p.repository_id).await?;
             for task in &tasks {
                 let id = util::digest(format!("{remote}:{}",text(task,"path")));
@@ -273,6 +273,8 @@ impl RemoteControl {
     async fn poll(self: &Arc<Self>, c: &Configuration) -> Result<()> {
         let mut state = self.http(c, "state", None).await?;
         if state["version"]!=1 || state["deviceId"]!=c.device_id || state["userId"]!=c.user_id || !state["devices"].is_array() || !state["pending"].is_array() { return Err("远端控制身份或状态无效。".into()); }
+        self.bound(c)?;
+        self.presence.sync_account_repositories(&c.user_id,&state["repositories"]).await?;
         let mapped = self.mapped(c, &state["repositories"]).await?;
         self.http(c, "announce", Some(&json!({"name":c.name,"workspaces":mapped.values().map(|w|&w.public).collect::<Vec<_>>()}))).await?;
         *self.workspaces.write().await = mapped;
