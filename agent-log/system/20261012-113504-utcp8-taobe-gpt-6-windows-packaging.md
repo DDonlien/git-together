@@ -3,7 +3,7 @@
 - 用户原始prompt：那就把 Windows 的适配和 x86、x64 打包流程做好，实际构建校验通过，下个版本跟 macOS 一起发布，不要只是记规则。
 - 模型：gpt-6（运行环境提供的最具体标识，未推测其他版本）；执行者：taobe。
 - 启动分支/提交/产品版本：main，caf1175002，0.23.0。
-- 开始：2026-10-12 08:14:26 UTC+8（首次时钟记录）；结束：执行中，交付时追加。
+- 开始：2026-10-12 08:14:26 UTC+8（首次时钟记录）；结束：2026-10-12 11:35:04 UTC+8（最终公开资产/版本核验时钟）。
 - 本轮提交：按已有持续授权分段提交并推送，实际构建未通过前不标记需求完成；不操作用户已安装应用。
 - 需求ID：RUN-01-windows-packaging。
 
@@ -54,3 +54,13 @@
 - 缓存修复e644c9ac5b8e0599c7b5ad550129c75291132ec9正常提交/推送，真实运行38198124067两目标最终success，完整安装/原生窗口/卸载校验通过。独立发布克隆调用正常npm run package:desktop，本机0.25.1类型/Cargo/生产构建、签名、公证、更新验签及收集两个Windows报告/签名均通过，产物位于_builds/gittogether-0.25.1-macos-arm64-ShfrZO。正式公开前assertMain发现主分支已正常推进到新的Presence头像位置/0.27.1，停止发布旧快照，没有创建不一致的正式Release，也没有削弱来源检查。
 - 克隆保持main，以ff-only对齐2e9781dfb32cebe222091e540ab01be934bf7cbd/0.27.1，启动真实Windows运行38198911321和正常联合发布入口；共享发布锁不冲突。该轮日志位于_builds/windows-joint-release-0.27.1-2e9781d.log。保留原生Windows两轮成功证据，继续完成本次最终主分支版本及公共更新源。
 - 联合CI期间main又追加仅发布脚本的瞬时错误重试a3fc3a1。原有“公开时必须仍为main尖端”把正常主分支推进误判为快照无效，导致已验证包反复重建；项目规则要求已推送main来源及同源码/版本/tag，并未要求暂停其他提交。修复发布来源检查为完整40位SHA且必须仍为远端main的真实祖先（compare status=ahead、base与merge-base均为源码SHA）；不更换已编译源码、版本、签名或tag，不接受force-push移出的历史。候选版本在准备、发布开始和公开前分别高于最新公共版本。实际只读compare核对2e9781d到a3fc3a1的祖先关系；正式包验收继续使用2e9781d同一快照，不冒称包含之后的源码变化。ARCHITECTURE补充该不可变发布快照约定。
+
+## 最终交付
+
+- 运行38198911321的x86/x64均success，0.27.1两个原生目标、八项系统/Git操作及真实安装、原生窗口/WebView2启动、卸载全部通过。首次收集x86产物时gh下载超过原120秒期限；没有重建或替换源码，下载期限改为10分钟，并对短暂网络错误/超时有限重试，每次清空本次架构的私有下载输出后完整重取，仍逐字节核验摘要。准备和消费者脚本专项TypeScript检查通过。
+- Workflow增加实际source_commit的run-name，收集器以输入快照标题定位新任务，兼容旧任务的相同head SHA；后续main推进不再把工作流定义提交错误当成被checkout的源码，最终仍要求产物报告中sourceCommit/版本/架构和原生验收严格匹配。优先复用相同快照已成功的运行，不重复发送结果未知的dispatch。
+- 已提交的发布模块在独立main克隆中从原0.27.1公证产物和成功的原生CI恢复；临时驱动位于仓库外_builds/resume-windows-joint-release.mts，持有正常共享发布锁，没有修改任何已编译程序或源码归属。Mac签名、staple、Info版本和tar更新验签重新核对，两个Windows报告/完整字节/本机版本绑定签名核对后生成三平台清单；正常prepare/publish完成真实GitHub草稿、九个完整资产上传、公开及回读。
+- https://github.com/DDonlien/git-together/releases/tag/v0.27.1 于2026-10-12 03:31:53 UTC正式公开，stable/latest、非draft/prerelease；tag实际指向2e9781dfb32cebe222091e540ab01be934bf7cbd。latest.json有darwin-aarch64/windows-i686/windows-x86_64三项。公共latest、Atom、旧Mac清单、新Tauri清单、三平台完整下载和各签名文件回读通过，产物build-info.publicUpdateVerified=true。主分支之后的0.27.2及尚未提交内容没有冒称进入此包。
+- 最终Mac ZIP6363472字节/SHA-256 c337b58d36c79a6cb21714b802cec96be48c4b2b532de584185a22860adc0483；tar6356867字节/SHA-256 dea4f884558df60f5cb2b9d382a06eba143fa6117b230390d81d6f4f095755ab。Apple公证49d99162-9cca-4303-9334-4f6f8e2ec164=Accepted、staple/validate及deep/strict签名通过；spctl返回Notarized Developer ID，输出同时注明本机既有security disabled，未更改该系统设置，也未冒称默认Gatekeeper设备验收。
+- 最终Windows x865477214字节/SHA-256 ef3af610566dc0804f4fe773c8ac1f6afecce441fac6af5b51edd7f9f7f1de47，PE machine332；x645871880字节/SHA-256 d105ac30611809cb53b3c6220a3ef0834862278d2e31b6d2f1e0b737e06d395c，PE machine34404。Authenticode尚无证书配置，更新签名已通过；AI沿用官方本机Codex支持范围，纯32位OS暂不支持。真实x86程序通过WOW64，不将其称为纯32位OS实机验收。
+- 交付产物与证据位于_builds/gittogether-0.27.1-macos-arm64-GdDABc；本次适配/打包需求标为完成，README更新平台和真实发布状态。仅提交本任务代码/段落及日志，其他任务的provider、性能、表头和规则等工作区修改保持各自归属。没有启动、替换、升级或操作用户已安装的GitTogether，也没有要求解锁Mac；没有新增或运行旧项目测试。

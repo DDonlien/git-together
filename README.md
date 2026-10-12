@@ -6,7 +6,7 @@
 
 品牌图标原图位于[assets/brand](assets/brand/README.md)，包含选定的应用图标、正方形版本和透明图形。在`macos/`执行`npm run icons`可重新生成macOS、Windows与网页图标。
 
-GitTogether 是一款面向 macOS 的独立 Git 工作台，把 GitHub、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
+GitTogether 是一款面向 macOS 和 Windows 的独立 Git 工作台，把 GitHub、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
 
 ## 一个项目，多条任务线
 
@@ -38,7 +38,7 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 ### 接入团队协作状态
 
-0.23.0 源码在「设置 → 插件 → Presence」连接自托管服务器，查看团队在线工作区、分支、Git 修改和编辑器未保存状态。仓库图标显示实际协作连接，工作台的 Presence 可展开查看文件；失联时保留上次记录并明确显示未知。首个 NAS 服务已部署，初次只开放 GitTogether 和 GitPresence 两个仓库。源码与网页预览已连通，桌面正式发布等待补齐新规则要求的 Windows x86/x64，详见 [Presence 使用说明](docs/presence.md)。
+0.23.0 源码在「设置 → 插件 → Presence」连接自托管服务器，查看团队在线工作区、分支、Git 修改和编辑器未保存状态。仓库图标显示实际协作连接，工作台的 Presence 可展开查看文件；失联时保留上次记录并明确显示未知。首个 NAS 服务已部署，初次只开放 GitTogether 和 GitPresence 两个仓库。源码与网页预览已连通，桌面已随0.27.1在macOS和Windows x86/x64正式交付，详见 [Presence 使用说明](docs/presence.md)。
 
 ## 从哪里开始
 
@@ -69,6 +69,12 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示按远端恢复、补齐和删除的具体文件（包含忽略的本地文件），确认后执行，保留本地提交和暂存区。Get Latest核验最新文件及LFS后替换为深度1的新目录，并实际删除可独立回收的旧历史与缓存；未推送提交、其他分支、标签或共享主目录会阻止清理，独立分支worktree可整理成单层目录，其他目录需要的共享历史保留并如实报告。后台每5分钟及变化触发实际Git fetch，不合并或改工作文件；保留已有数量、检查反馈、离线暂停及失败退避。未关联分支继续通过下载入口创建并关联目录。在线协作仍在开发中。
 
 源码与后续更新包以`main`为基线，公开安装版在[GitHub Releases](https://github.com/DDonlien/git-together/releases)提供。桌面打包入口自动完成检查、签名、公证和正式更新发布；只推送源码不会发布安装包。已打包的桌面版提供「设置 → 应用更新」，检查、下载和重启安装。更新沿用账号及本地目录配置，不修改仓库文件。确认安装后会暂停自动读取并立即安装；实际前台操作或授权未完成、安装失败时保留下载包，直接重试安装。浏览器预览与桌面版的授权、目录选择支持有所不同，具体限制见[运行说明](docs/development.md)。
+
+[0.27.1联合发行版](https://github.com/DDonlien/git-together/releases/tag/v0.27.1)已公开提供macOS、Windows x86和Windows x64安装包，并完成公开下载与更新源核验。
+
+Windows 提供明确标识 `Windows-x86` 和 `Windows-x64` 的当前用户 NSIS 安装包，包含 WebView2 引导程序，Git/Git LFS 沿用本机安装。两个目标已在 Windows 原生环境验证编译、加密存储、Git 选择范围提交和暂存保留、进程取消，以及实际安装、界面启动和卸载。账号保存在当前用户 LocalAppData 中，以系统 DPAPI 加密并限制访问。更新包使用应用内置公钥验签；Windows 安装器当前未配置 Authenticode 代码签名。可选 AI 提交说明使用已登录的本机 Codex CLI，官方 Windows CLI 支持 x64/ARM64，纯32位系统暂不提供该 AI 功能。
+
+发布入口会收集同一 `main` 提交和版本的 macOS、Windows x86/x64 包，验证两个 Windows 原生构建报告并在发布机签署更新包；三个平台一并写入 `latest.json`、上传到同一 Release，再回读公开文件。任一目标失败会停止正式发布，不会退化为只发 macOS。Windows 双架构工作流见 [.github/workflows/windows-package.yml](.github/workflows/windows-package.yml)。
 
 ## 本地试用
 
