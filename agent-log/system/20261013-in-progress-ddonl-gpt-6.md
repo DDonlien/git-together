@@ -45,4 +45,4 @@ Windows x64原生Rust运行报告0.30.1已通过真实LFS过滤器/钩子、正�
 
 ## 验证与备注
 
-TypeScript与生产构建通过，Vite既有超过500kB提示保留；Windows原生14项有限诊断报告0.30.1全部通过，包含失败钩子后HEAD/index/工作文件保护。新增回调把弹窗修改同步到中栏，实际关闭重开保持最终手工摘要且不请求AI；最后的类型/Cargo检查收尾中。未运行旧Node后台测试或冒称Rust全套回归。继承项目持续发布授权；gh已正常登录指定远端DDonlien/git-together。Windows环境没有已配置Mac连接入口和仓库外更新密钥，正式脚本要求Apple Silicon macOS、原Developer ID及gittogether-notary；已异步询问现成Mac入口，同时继续完成独立工作。不操作用户安装版，不跳过签名或公证。
+TypeScript与生产构建通过，Vite既有超过500kB提示保留；Windows原生14项有限诊断报告0.30.1全部通过，包含失败钩子后HEAD/index/工作文件保护。新增回调把弹窗修改同步到中栏，实际关闭重开保持最终手工摘要且不请求AI；最后的TypeScript和Cargo --locked检查也已通过。未运行旧Node后台测试或冒称Rust全套回归。继承项目持续发布授权；gh已正常登录指定远端DDonlien/git-together。Windows环境没有已配置Mac连接入口和仓库外更新密钥，正式脚本要求Apple Silicon macOS、原Developer ID及gittogether-notary；已异步询问现成Mac入口，同时继续完成独立工作。不操作用户安装版，不跳过签名或公证。

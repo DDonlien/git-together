@@ -67,6 +67,6 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
   </form>
   {hidden && error && <Notice kind="error">{error}</Notice>}
   {hidden && feedback && <p className="repository-commit-feedback" role="status">{feedback}</p>}
-  {submitPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="submit" targets={[{ repositoryId, repositoryName, task }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onCommitted={(_target, result) => { setSummary(''); setDescription(''); setError(result.warning || ''); intent.current = null; onCommitted?.(task.id, result.commitId); }} onComplete={setFeedback} onClose={() => setSubmitPopup(false)} />}
+  {submitPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="submit" targets={[{ repositoryId, repositoryName, task, draft: summary || description ? { summary, description } : undefined }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onDraftChange={(_target, draft) => { edit(); setSummary(draft.summary); setDescription(draft.description); }} onCommitted={(_target, result) => { setSummary(''); setDescription(''); setError(result.warning || ''); intent.current = null; onCommitted?.(task.id, result.commitId); }} onComplete={setFeedback} onClose={() => setSubmitPopup(false)} />}
   </>;
 }

@@ -263,6 +263,10 @@ use-local-commits仅订阅明确选中的本地task/SHA，缓存最多64份，�
 
 ## 本地提交与 Codex 说明生成（0.22.11，沿用0.18.0原生提交约束）
 
+0.30.1的Submit沿用Commit说明契约：Summary非空即可确认，Description允许为空；AI成功状态只控制是否继续生成，不作为提交门槛。中栏通过每目标的可选draft把当前文本传入弹窗，弹窗修改也回写中栏草稿，避免关闭重开恢复旧值；手工摘要跳过自动生成。确认时取消仍在进行的生成，阻止迟到结果写回。没有手工摘要时仍可自动生成，未手工修改的说明在文件范围变化后重新生成。原有任务快照、选中路径、Commit后Push与仅重试Push的幂等边界保留。
+
+Git错误分类先识别Unix和Windows磁盘不足，再区分LFS命令缺失、对象404及其他过滤器或钩子失败；只返回固定安全提示。Rust提交的add和commit步骤记录受控动词、退出码、耗时及故障代码，不记录原始stderr、正文、文件路径或凭据。
+
 `RepositoryCommitComposer` 为每个已挂载本地任务保存 Summary/Description 草稿，历史视图只隐藏表单；通过有限 submitCommit/generateCommitMessage/cancelCommitGeneration DTO 调用现有受保护 HTTP 或主 frame IPC。Dashboard及仓库页的Commit/Submit打开固定worktree快照弹窗，每个目录按Tracked/Untracked分组，复选状态作为可选paths DTO传给submitCommit/generateCommitMessage；空、重复或已不在当前更改中的路径拒绝。范围随草稿在服务会话内保留，仅相同HEAD/changeKey复用；调整范围取消旧生成，不覆盖手工字段。旧直接提交表单未提供paths时仍提交该目录全部更改。
 
 AccountService 从已保存仓库、账号与关联定位真实 worktree，复核 expectedHead/changeKey、remote 与映射身份，不接受 renderer 命令或任意路径。每个关联根串行执行；operationId 在当前服务实例内对已确认成功结果幂等，同 ID 不同内容拒绝。冲突、待完成 merge/rebase、已有 index.lock、过期快照在写入前拒绝。local-submit 使用真实 Git、私有 index 和独占 index.lock；分别保存原暂存区和从HEAD（unborn使用空树）建立的提交索引；GIT_LITERAL_PATHSPECS防止文件名被当作模式，仅对选中路径add --all，重命名附带原路径，之后再次复核快照，以标准 input 提供提交说明并保留 Git identity/hooks/signing。确认新HEAD的父提交与实际树后，在保存索引中仅将选中路径更新到新HEAD，再原子发布index，未选文件的已暂存内容（包括部分暂存）保持，失败保留原 index；已确认提交但响应/后处理有问题返回真实成功及警告。进入 commit 后不因浏览器断连取消，120秒执行上限仍保留。不会checkout、移动HEAD的reset、push或修改另一个worktree；路径限定的reset仅更新保存索引条目，不改HEAD或工作文件。

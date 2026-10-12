@@ -21,9 +21,10 @@ function draftKey(target: RepositoryActionTarget): string {
 
 // Freeze the reviewed worktrees and file lists when opening. Later filtering or
 // heartbeat reads must not silently widen the operation's scope.
-export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, onPush, onCommitted, onComplete, onClose }: {
+export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, onPush, onCommitted, onDraftChange, onComplete, onClose }: {
   mode: Extract<RepositoryActionMode, 'commit' | 'submit' | 'push'>; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onGenerate: GenerateCommitMessage; onPush: PushLocalCommit;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void;
+  onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
   onComplete?: (message: string) => void; onClose: () => void;
 }) {
   const sharedDrafts = useContext(DraftsContext), fallbackDrafts = useRef(new Map<string, SavedDraft>());
@@ -41,8 +42,8 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
       const sameChanges = saved?.head === target.task.head && saved.changeKey === target.task.changeKey;
       return {
         ...structuredClone(target),
-        draft: { summary: saved && (sameChanges || saved.edited.summary) ? saved.draft.summary : '', description: saved && (sameChanges || saved.edited.description) ? saved.draft.description : '' },
-        edited: { summary: saved?.edited.summary || false, description: saved?.edited.description || false }, generated: !!sameChanges && !!saved?.generated,
+        draft: target.draft || { summary: saved && (sameChanges || saved.edited.summary) ? saved.draft.summary : '', description: saved && (sameChanges || saved.edited.description) ? saved.draft.description : '' },
+        edited: { summary: !!target.draft?.summary.trim() || !!saved?.edited.summary, description: !!target.draft || !!saved?.edited.description }, generated: !!sameChanges && !!saved?.generated,
         head: target.task.head, changeKey: target.task.changeKey,
         paths: sameChanges && saved?.paths ? [...saved.paths] : target.task.files.map(file => file.path),
         commitOperation: crypto.randomUUID(), pushOperation: crypto.randomUUID(),
@@ -50,7 +51,7 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
     });
   });
   const current = useRef(entries), running = useRef(false);
-  const [generating, setGenerating] = useState(mode === 'submit' && entries.some(entry => entry.paths.length && !entry.generated)), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [generating, setGenerating] = useState(mode === 'submit' && entries.some(entry => entry.paths.length && !entry.generated && !(entry.edited.summary && entry.draft.summary.trim()))), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [phase, setPhase] = useState<'commit' | 'push' | null>(null);
   const generation = useRef<AbortController | null>(null);
   const update = (index: number, change: Partial<Entry> | ((entry: Entry) => Partial<Entry>)) => {
@@ -59,26 +60,30 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
       const next = { ...entry, ...(typeof change === 'function' ? change(entry) : change) };
       if (mode !== 'push') {
         if (next.committed) drafts.delete(draftKey(next));
-        else drafts.set(draftKey(next), { draft: next.draft, edited: next.edited, generated: next.generated, head: next.head, changeKey: next.changeKey, paths: next.paths });
+        else {
+          drafts.set(draftKey(next), { draft: next.draft, edited: next.edited, generated: next.generated, head: next.head, changeKey: next.changeKey, paths: next.paths });
+          onDraftChange?.(next, next.draft);
+        }
       }
       return next;
     });
     setEntries(current.current);
   };
-  const edit = (index: number, field: keyof CommitDraft, value: string) => update(index, entry => ({
-    draft: { ...entry.draft, [field]: value }, edited: { ...entry.edited, [field]: true }, commitOperation: crypto.randomUUID(),
-  }));
+  const edit = (index: number, field: keyof CommitDraft, value: string) => {
+    setError('');
+    update(index, entry => ({ draft: { ...entry.draft, [field]: value }, edited: { ...entry.edited, [field]: true }, commitOperation: crypto.randomUUID() }));
+  };
   const selectionKey = JSON.stringify(entries.map(entry => entry.paths));
   useEffect(() => {
     if (mode !== 'submit') return;
     const controller = new AbortController(); generation.current = controller;
-    setGenerating(current.current.some(entry => entry.paths.length && !entry.generated && !entry.committed));
+    setGenerating(current.current.some(entry => entry.paths.length && !entry.generated && !entry.committed && !(entry.edited.summary && entry.draft.summary.trim())));
     setError('');
     void (async () => {
       try {
         for (let index = 0; index < current.current.length; index++) {
           const entry = current.current[index];
-          if (entry.generated || entry.committed || !entry.paths.length) continue;
+          if (entry.generated || entry.committed || !entry.paths.length || entry.edited.summary && entry.draft.summary.trim()) continue;
           const draft = await onGenerate({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, paths: entry.paths }, controller.signal);
           controller.signal.throwIfAborted();
           // Fields can be edited while generation is pending. Fill only those
@@ -95,10 +100,10 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   }, [selectionKey]);
   const close = () => { if (running.current) return; generation.current?.abort(); onClose(); };
   const included = entries.filter(entry => mode === 'push' || entry.paths.length);
-  const ready = included.length > 0 && !generating && !busy && included.every(entry => mode === 'push' || entry.committed || (mode !== 'submit' || entry.generated) && !!entry.draft.summary.trim());
+  const ready = included.length > 0 && !busy && included.every(entry => mode === 'push' || entry.committed || !!entry.draft.summary.trim());
   async function confirm() {
     if (!ready || running.current) return;
-    running.current = true; setBusy(true); setError('');
+    running.current = true; generation.current?.abort(); setGenerating(false); setBusy(true); setError('');
     let activeTarget = '';
     let pushBatch: ReturnType<typeof pushActivity.begin> | undefined;
     try {
@@ -138,7 +143,7 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
           <h3><Icon name="branch" size={15} /><span>{entry.repositoryName} · {entry.task.branch}</span></h3>
           {mode !== 'push' && <div className="repository-batch-draft">
             <OutlinedTextField label="Summary" aria-label={`Summary：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.summary} onChange={event => edit(index, 'summary', event.target.value)} maxLength={500} required disabled={busy || !!entry.committed} />
-            <OutlinedTextField type="textarea" label="Description" aria-label={`Description：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.description} onChange={event => edit(index, 'description', event.target.value)} maxLength={20_000} rows={2} disabled={busy || !!entry.committed} />
+            <OutlinedTextField type="textarea" label="Description（选填）" aria-label={`Description：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.description} onChange={event => edit(index, 'description', event.target.value)} maxLength={20_000} rows={2} disabled={busy || !!entry.committed} />
           </div>}
           {mode === 'push' ? <code className="repository-submit-sha">{(entry.commitId || entry.task.head).slice(0, 12)}</code> : <RepositoryCommitFiles files={entry.task.files} paths={entry.paths} branch={entry.task.branch} disabled={busy || !!entry.committed} onChange={paths => update(index, { paths, generated: false, commitOperation: crypto.randomUUID() })} />}
           {entry.committed && <p className="repository-submit-result" role="status">已 Commit · {entry.committed.commitId.slice(0, 8)}{entry.pushed ? ' · 已 Push' : mode === 'submit' ? ' · 待 Push' : ''}</p>}

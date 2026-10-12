@@ -3,9 +3,10 @@ import type { RepositoryTask } from './repository-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import type { LocalRepositoryState } from './use-workspace';
 import { gitSignals } from './branch-links';
+import type { CommitDraft } from './local-submit-model';
 
 export type RepositoryActionMode = 'commit' | 'submit' | 'push' | 'pull' | 'latest' | 'clean';
-export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string };
+export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string; draft?: CommitDraft };
 
 export function repositoryActionTargets(repository: RemoteRepository, tasks: RepositoryTask[], mode: RepositoryActionMode, remote: RemoteRepositoryState, local?: LocalRepositoryState): RepositoryActionTarget[] {
   if (!repository.available) return [];
