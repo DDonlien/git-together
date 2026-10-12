@@ -23,7 +23,13 @@ pub struct Options {
 }
 fn failure(output: &[u8]) -> String {
     let out = String::from_utf8_lossy(output).to_lowercase();
-    if out.contains("authentication failed")
+    if out.contains("no space left")
+        || out.contains("not enough space on the disk")
+        || out.contains("out of diskspace")
+        || out.contains("disk full")
+    {
+        "磁盘空间不足；操作未完成。"
+    } else if out.contains("authentication failed")
         || out.contains("could not read username")
         || out.contains("could not read password")
         || out.contains("http 401")
@@ -62,10 +68,17 @@ fn failure(output: &[u8]) -> String {
         "提交签名失败，请检查Git签名密钥及本机签名程序。"
     } else if out.contains("certificate") || out.contains("ssl") {
         "Git证书验证失败，请检查服务器证书。"
+    } else if out.contains("git-lfs: command not found")
+        || out.contains("git-lfs: not found")
+        || out.contains("'git-lfs' was not found on your path")
+        || out.contains("'lfs' is not a git command")
+        || out.contains("cannot spawn git-lfs")
+    {
+        "Git LFS未找到，请确认本机已安装Git LFS且Git子进程可以找到它。"
+    } else if out.contains("lfs") && out.contains("[404] not found") {
+        "Git LFS对象未找到，服务器返回404；请核对对象存储和访问权限。"
     } else if out.contains("lfs") {
-        "Git LFS操作失败，请检查LFS安装、对象与访问权限；没有替换为指针文件。"
-    } else if out.contains("no space left") {
-        "磁盘空间不足；操作未完成。"
+        "Git LFS过滤器或钩子执行失败；请查看本机Git LFS日志。"
     } else if out.contains("index.lock") {
         "当前Git暂存区正在被其他操作使用，请稍后重试。"
     } else {
@@ -74,6 +87,15 @@ fn failure(output: &[u8]) -> String {
     .into()
 }
 pub fn diagnostic_code(message: &str) -> &'static str {
+    if message.starts_with("Git LFS未找到") {
+        return "git-lfs-missing";
+    }
+    if message.starts_with("Git LFS对象未找到") {
+        return "git-lfs-object-missing";
+    }
+    if message.starts_with("Git LFS") {
+        return "git-lfs";
+    }
     if message.starts_with("Git远端分支不存在") {
         return "git-remote-ref-missing";
     }
