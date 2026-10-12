@@ -48,12 +48,6 @@ export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
   })) as GitSignals;
 }
 
-function contains(commits: Map<string, string[]>, head: string, ancestor: string): boolean {
-  const pending = [head]; const visited = new Set<string>();
-  while (pending.length) { const id = pending.pop()!; if (id === ancestor) return true; if (visited.has(id)) continue; visited.add(id); pending.push(...(commits.get(id) || [])); }
-  return false;
-}
-
 export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true): GitSignals {
   const tasks = branch ? local.filter(task => task.branch === branch) : local;
   const remoteTasks = branch ? remote.workspace?.tasks.filter(task => task.branch === branch) : remote.workspace?.tasks;
@@ -83,13 +77,26 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
   const changes = tasks.reduce((sum, task) => sum + task.files.length, 0);
   result.commit = { ...result.commit, tone: changes ? 'warning' : 'off', ...(changes ? { count: changes } : {}), detail: changes ? `工作目录中有 ${changes} 项未提交更改（含未跟踪文件）。` : !localState?.workspace && tasks.some(task => task.error) ? '本地更改尚未确认。' : '已关联工作目录没有未提交更改。' };
   const commits = new Map([...(remote.workspace?.commits || []), ...(localState?.workspace?.commits || [])].map(commit => [commit.id, commit.parents]));
+  // Several directories can share the same branch/HEAD. Traverse each head
+  // once, including the common-ancestor check for a proven divergence.
+  const histories = new Map<string, Set<string>>();
+  const history = (head: string) => {
+    const previous = histories.get(head);
+    if (previous) return previous;
+    const pending = [head], ids = new Set<string>();
+    while (pending.length) { const id = pending.pop()!; if (ids.has(id)) continue; ids.add(id); pending.push(...(commits.get(id) || [])); }
+    histories.set(head, ids); return ids;
+  };
   const comparisons = tasks.map(task => {
     const target = remote.workspace?.tasks.find(remoteTask => remoteTask.branch === task.branch);
     if (!target || !target.head || !task.head) return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地或远端 HEAD 尚未确认。` };
     if (task.head === target.head) return { pull: 'good' as const, push: 'off' as const, text: `${task.branch}：本地与远端一致（${task.head.slice(0, 8)}）。` };
-    if (contains(commits, task.head, target.head)) return { pull: 'good' as const, push: 'warning' as const, text: `${task.branch}：本地包含远端最新提交，另有尚未推送的提交。` };
-    if (contains(commits, target.head, task.head)) return { pull: 'warning' as const, push: 'off' as const, text: `${task.branch}：本地落后于已读取的远端 HEAD。` };
-    return { pull: 'warning' as const, push: 'warning' as const, text: `${task.branch}：本地 ${task.head.slice(0, 8)} 与远端 ${target.head.slice(0, 8)} 不同；在已读取范围内无法确认领先、落后或分叉。` };
+    const localHistory = history(task.head);
+    const remoteHistory = history(target.head);
+    if (localHistory.has(target.head)) return { pull: 'good' as const, push: 'warning' as const, text: `${task.branch}：本地包含远端最新提交，另有尚未推送的提交。` };
+    if (remoteHistory.has(task.head)) return { pull: 'warning' as const, push: 'off' as const, text: `${task.branch}：本地落后于已读取的远端 HEAD。` };
+    if ([...localHistory].some(id => remoteHistory.has(id))) return { pull: 'warning' as const, push: 'warning' as const, text: `${task.branch}：本地与远端已分叉，两侧都有独立提交；Pull 需要先处理分叉。` };
+    return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地 ${task.head.slice(0, 8)} 与远端 ${target.head.slice(0, 8)} 不同；在已读取范围内无法确认领先、落后或分叉，待同步数量未知。` };
   });
   const detail = [...new Set(comparisons.map(item => item.text))].slice(0, 4).join(' ');
   const pullCount = comparisons.filter(item => item.pull === 'warning').length;

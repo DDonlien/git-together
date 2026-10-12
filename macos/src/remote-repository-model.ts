@@ -10,7 +10,8 @@ export type ReadRemoteCommit = (commitId: string, signal: AbortSignal) => Promis
 
 export function preserveRemoteWorkspace(previous: RemoteRepositoryWorkspace | null, next: RemoteRepositoryWorkspace): RemoteRepositoryWorkspace {
   if (!previous) return next;
-  const stale = next.tasks.filter(task => task.error && previous.tasks.some(old => old.id === task.id && old.head));
+  const heads = new Set(next.commits.map(commit => commit.id));
+  const stale = next.tasks.filter(task => task.error && !heads.has(task.head) && previous.tasks.some(old => old.id === task.id && old.head));
   if (!stale.length) return next;
   const commits = new Map(next.commits.map(commit => [commit.id, commit]));
   const tasks = next.tasks.map(task => {

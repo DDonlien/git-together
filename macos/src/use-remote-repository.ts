@@ -11,7 +11,7 @@ const resourceKey = (repository: RemoteRepository, instanceId: string) => JSON.s
 // Associated repositories are owned by useWorkspace across page/filter changes.
 // Unassociated ones use the same reader on demand. Both retain successful SHA
 // snapshots and share the timer/trigger serialization and cancellation rules.
-export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false) {
+export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void) {
   const identities = repositories.map(repository => resourceKey(repository, instanceId));
   const resources = enabled && instanceId ? repositories.filter(repository => repository.available).map(repository => resourceKey(repository, instanceId)) : [];
   const current = useRef(new Set<string>()); current.current = new Set(resources);
@@ -57,6 +57,9 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
       }
       const fetchFailure = await fetching;
       if (signal.aborted || !current.current.has(key)) return;
+      // Wake the existing local reader after refs/objects change. Its working
+      // change fingerprint excludes tracking refs, avoiding a fetch loop.
+      if (!fetchFailure) onFetched?.(repositoryId);
       setStates(previous => ({ ...previous, [key]: { ...previous[key], loading: false, error: [readFailure?.message, fetchFailure ? `${readFailure ? '' : '远端内容已读取；'}本地远端引用更新未完成：${fetchFailure.message}` : ''].filter(Boolean).join(' ') } }));
       if (readFailure) throw readFailure;
       if (fetchFailure) throw fetchFailure;

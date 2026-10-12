@@ -73,10 +73,17 @@ export function repositoryCommitTask(workspace: RepositoryWorkspace, commitId: s
 
 export function combineRepositoryWorkspaces(remote: RepositoryWorkspace, local?: RepositoryWorkspace): RepositoryWorkspace {
   if (!local) return remote;
+  const remoteHeads = new Map(remote.tasks.filter(task => task.remote && task.head).map(task => [task.branch, task.head]));
   const commits = new Map(remote.commits.map(commit => [commit.id, commit]));
   for (const commit of local.commits) {
     const previous = commits.get(commit.id);
-    commits.set(commit.id, previous ? { ...previous, refs: [...new Set([...previous.refs, ...commit.refs])] } : commit);
+    // API branch tips also drive Pull/Push. An older local tracking ref must
+    // not give the same origin branch a second position in this snapshot.
+    const refs = commit.refs.filter(ref => {
+      const branch = ref.startsWith('origin/') ? ref.slice(7) : ref.startsWith('refs/remotes/origin/') ? ref.slice(20) : null;
+      return branch !== 'HEAD' && (branch === null || !remoteHeads.has(branch) || remoteHeads.get(branch) === commit.id);
+    }).map(ref => ref.replace(/^refs\/remotes\/origin\//, 'origin/'));
+    commits.set(commit.id, previous ? { ...previous, refs: [...new Set([...previous.refs, ...refs])] } : { ...commit, refs });
   }
   return { source: 'mixed', tasks: [...remote.tasks, ...local.tasks], commits: topologicalCommits([...commits.values()]), complete: remote.complete && local.complete };
 }

@@ -24,6 +24,10 @@ export function useWorkspace() {
   const localChanges = useRef(new Map<string, Map<string, string>>());
   const localReadVersions = useRef(new Map<string, number>());
   const [changeVersions, setChangeVersions] = useState<Record<string, number>>({});
+  const [fetchVersions, setFetchVersions] = useState<Record<string, number>>({});
+  const onFetched = useCallback((repositoryId: string) => {
+    setFetchVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [storageError, setStorageError] = useState('');
@@ -112,6 +116,7 @@ export function useWorkspace() {
   });
   const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees])) : [];
   useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
+    triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees]), fetchVersions[link.repositoryId] ?? 0])),
     onReading: (resource, loading) => {
       const [instanceId, repositoryId, path] = JSON.parse(resource) as [string, string, string];
       if (instanceId !== catalogRef.current.instanceId || !catalogRef.current.links.some(link => JSON.stringify([instanceId, link.repositoryId, link.path, link.worktrees]) === resource)) return;
@@ -169,13 +174,17 @@ export function useWorkspace() {
       const retained = Object.fromEntries(Object.entries(current).filter(([id]) => catalogRef.current.links.some(link => link.repositoryId === id)));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
+    setFetchVersions(current => {
+      const retained = Object.fromEntries(Object.entries(current).filter(([id]) => catalogRef.current.links.some(link => link.repositoryId === id)));
+      return Object.keys(retained).length === Object.keys(current).length ? current : retained;
+    });
     setLocalStates(current => {
       const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && JSON.stringify([catalogRef.current.instanceId, id, link.path, link.worktrees]) === state.mappingKey)));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide');
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched);
   const hiddenEntries = new Set(preferences.hiddenEntries || []);
   for (const repository of catalog.repositories) for (const key of branchHiddenEntries(repository.id, preferences, remoteStates[repository.id]?.workspace?.tasks, linkedTasks(catalog.links.find(link => link.repositoryId === repository.id), localStates[repository.id]))) hiddenEntries.add(key);
   useEffect(() => {

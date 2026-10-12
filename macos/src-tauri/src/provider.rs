@@ -975,7 +975,32 @@ impl Provider {
                 let p = self.clone();
                 let r = repo.clone();
                 let c = cancel.clone();
-                jobs.spawn(async move {let mut task=json!({"id":format!("remote:{branch}"),"branch":branch,"head":head,"path":null,"files":[],"tree":[],"error":"","remote":true,"treeComplete":false});let result=async {let h=p.history(&r,&head,&c).await?;let t=p.tree(&r,text(&h,"tree"),&c).await?;Ok::<_,String>((h,t))}.await;match result {Ok((h,t))=>{task["tree"]=json!(tree_paths(&t));task["treeComplete"]=t["complete"].clone();if check_participation { match p.account_commits(&r,&head,&c).await { Ok(found)=>task["hasAccountCommits"]=json!(found),Err(error)=>task["participationError"]=json!(error) } }(task,h["commits"].as_array().unwrap().clone(),h["limited"]==true)},Err(e)=>{task["error"]=json!(e);(task,vec![],false)}}});
+                jobs.spawn(async move {
+                    let mut task = json!({"id":format!("remote:{branch}"),"branch":branch,"head":head,"path":null,"files":[],"tree":[],"error":"","remote":true,"treeComplete":false});
+                    let history = match p.history(&r, &head, &c).await {
+                        Ok(history) => history,
+                        Err(error) => {
+                            task["error"] = json!(error);
+                            return (task, vec![], false);
+                        }
+                    };
+                    // File-tree health must not discard a verified branch tip
+                    // and its history: the graph and sync counts need them.
+                    match p.tree(&r, text(&history, "tree"), &c).await {
+                        Ok(tree) => {
+                            task["tree"] = json!(tree_paths(&tree));
+                            task["treeComplete"] = tree["complete"].clone();
+                            if check_participation {
+                                match p.account_commits(&r, &head, &c).await {
+                                    Ok(found) => task["hasAccountCommits"] = json!(found),
+                                    Err(error) => task["participationError"] = json!(error),
+                                }
+                            }
+                        }
+                        Err(error) => task["error"] = json!(format!("文件树读取失败：{error}")),
+                    }
+                    (task, history["commits"].as_array().unwrap().clone(), history["limited"] == true)
+                });
             }
             match jobs.join_next().await {
                 Some(Ok((t, c, l))) => {

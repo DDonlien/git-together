@@ -233,7 +233,7 @@ GitHub 使用 branches、commits、git/trees、git/blobs；Gitea 区分 branches
 
 分支最多 1000 个，每个 head 最近 50 条提交，最多 4 个分支并发。树与 head 历史按不可变 SHA 缓存，各最多 64 份；真实父节点去重并拓扑排序，不用作者日期或相邻行捏造 ancestry。GitHub recursive 树截断时回退逐目录读取，Gitea 按 total_count/truncated/Link 本机分页；最多 20000 个树条目（Gitea 200 页、GitHub 400 个子树请求），到限明确提示不完整。GitHub 提交文件最多 3000 个，缺少 patch 时明确二进制/未提供差异，不伪造。逐分支失败保留成功部分；取消传播，失败和空仓库分开。
 
-`remote-repository-model.ts` 定义独立、无凭据的响应验证。远端任务 path=null、files=[]、remote=true，树属于已提交对象，不是本地更改。`combineRepositoryWorkspaces` 同时保留 remote/local 任务身份，按真实提交父节点合并；本地解除不应擦除远端内容。文件读取只接受合法 SHA 与字面仓库路径，并先查该提交的树定位 blob；不跟随 submodule 或接受任意 blob。超过 500KB、含 NUL 或非 UTF-8 返回明确不可文本预览。
+`remote-repository-model.ts` 定义独立、无凭据的响应验证。远端任务 path=null、files=[]、remote=true，树属于已提交对象，不是本地更改。`combineRepositoryWorkspaces` 同时保留 remote/local 任务身份，按真实提交父节点合并；同名origin引用以共享远端快照的HEAD为准，不把过期本地跟踪标签叠加到另一个位置，本地解除不应擦除远端内容。Provider保留已验证的HEAD历史，即使对应文件树失败；仅本次HEAD历史缺失时才保留旧分支快照。Pull/Push数量只使用同一份提交父图中已证明的领先、落后或分叉关系，历史未知不产生数量。后台Fetch成功触发既有共享本地读取器更新引用和对象，不改变工作文件，也不把引用变化当作本地保存再次触发Fetch。文件读取只接受合法 SHA 与字面仓库路径，并先查该提交的树定位 blob；不跟随 submodule 或接受任意 blob。超过 500KB、含 NUL 或非 UTF-8 返回明确不可文本预览。
 
 RepositoryView 接受独立 remoteState 和有限 readRemoteCommit。图选中提交控制对应任务的中栏文件列表和右栏差异标记，不替换树的当前 HEAD 目录，再点选中项清除选择；文件选择仍按任务 ID 同步。按 R-05-remote-inline-preview 移除远端内嵌文本展示、内容状态/轮询以及 App→View→RemoteChanges 的文件读取 prop；生产 hook 不再发起专供预览的 remoteFile 请求。后台有限 API、Diff/blob DTO 和相关权限/隔离测试保留，没有服务或协议改动。`use-remote-commits.ts`仅订阅明确选中的远端SHA，无选择不回退到task.head；复用前台取消/退避调度器，按 SHA 缓存最多 64 份，资源身份阻止过期发布。远端禁用composer已移除，本地未提交卡片仍独立保留草稿和Diff。实际 App 始终传入远端读取状态，失败显示实际错误/自动重试、空仓库显示真实空态；旧隔离组件未传 reader 的占位契约保留。0.5.0接通时的服务重启和当时需重新连接账号属于历史更新，不用fixture端口或无凭据公开读取作为当前真实账号已登录的证据。
 
