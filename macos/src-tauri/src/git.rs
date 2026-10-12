@@ -1,6 +1,5 @@
-use crate::util::{digest, file_path, text, tool_path, valid_sha as sha, Result};
+use crate::util::{self, digest, file_path, text, tool_path, valid_sha as sha, Result};
 use serde_json::{json, Value};
-use std::os::unix::{fs::MetadataExt, process::CommandExt};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -159,7 +158,7 @@ async fn run_process(
     options: Options,
     details: &mut Value,
 ) -> Result<String> {
-    let mut command = Command::new("git");
+    let mut command = Command::new(util::find_tool("git")?);
     command
         .args([
             "--no-optional-locks",
@@ -197,10 +196,15 @@ async fn run_process(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
-    command.as_std_mut().process_group(0);
+    let group = crate::platform::ChildGroup::prepare(&mut command)?;
     let mut child = command
         .spawn()
         .map_err(|_| "无法启动Git，请检查Git安装。")?;
+    if let Err(error) = group.attach(&child) {
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        return Err(error);
+    }
     let pid = child.id().unwrap_or(0);
     let stdout = child.stdout.take().ok_or("无法读取Git输出。")?;
     let stderr = child.stderr.take().ok_or("无法读取Git状态。")?;
@@ -228,11 +232,7 @@ async fn run_process(
     let cancellation = options.cancel.unwrap_or_default();
     let wait = tokio::select! { result=child.wait()=>result.map_err(|_| "无法读取Git操作结果。".to_string()), _=tokio::time::sleep(Duration::from_secs(if options.timeout>0 {options.timeout} else if options.write {180} else {10}))=>Err("Git操作超时，请稍后重试。".into()), _=cancellation.cancelled()=>Err("操作已取消。".into()) };
     if wait.is_err() {
-        if pid > 0 {
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGKILL);
-            }
-        }
+        group.terminate(pid);
         let _ = child.kill().await;
         let _ = child.wait().await;
     }
@@ -285,7 +285,7 @@ pub async fn worktrees(root: &Path) -> Result<Vec<Value>> {
     let output = read(root, &["worktree", "list", "--porcelain", "-z"]).await?;
     Ok(output.split("\0\0").filter(|s|!s.is_empty()).map(|row| {
         let parts:Vec<&str>=row.split('\0').collect();let field=|key:&str|parts.iter().find_map(|s|s.strip_prefix(&format!("{key} "))).unwrap_or("").to_owned();
-        let path=field("worktree");let canonical=std::fs::canonicalize(&path).unwrap_or(PathBuf::from(&path));
+        let path=field("worktree");let canonical=dunce::canonicalize(&path).unwrap_or(PathBuf::from(&path));
         let branch=field("branch").trim_start_matches("refs/heads/").to_owned();
         json!({"path":canonical.to_string_lossy(),"branch":if branch.is_empty(){"Detached HEAD"}else{&branch},"head":field("HEAD"),"bare":parts.contains(&"bare"),"prunable":parts.iter().any(|s|s.starts_with("prunable"))})
     }).collect())
@@ -323,19 +323,7 @@ pub async fn task(root: &Path) -> Result<Value> {
         file_path(path)?;
         bytes.extend(path.as_bytes());
         match std::fs::symlink_metadata(root.join(path)) {
-            Ok(m) => bytes.extend(
-                format!(
-                    "\0{}:{}:{}:{}:{}:{}:{}",
-                    m.mode(),
-                    m.len(),
-                    m.mtime(),
-                    m.mtime_nsec(),
-                    m.ctime(),
-                    m.ctime_nsec(),
-                    m.ino()
-                )
-                .as_bytes(),
-            ),
+            Ok(m) => bytes.extend(format!("\0{}", crate::platform::metadata_key(&m)).as_bytes()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bytes.extend(b"missing"),
             Err(_) => return Err("无法完整检查本地更改，请刷新后重试。".into()),
         }

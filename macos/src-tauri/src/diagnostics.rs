@@ -3,7 +3,6 @@ use serde_json::{json, Value};
 use std::{
     fs::{self, OpenOptions},
     io::Write,
-    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -39,9 +38,7 @@ impl Diagnostics {
         if fs::symlink_metadata(&self.directory).is_ok_and(|m| m.file_type().is_symlink()) {
             return Err("日志目录链接无效（ELOOP）。".into());
         }
-        fs::create_dir_all(&self.directory).map_err(|_| "无法创建日志目录。")?;
-        fs::set_permissions(&self.directory, fs::Permissions::from_mode(0o700))
-            .map_err(|_| "无法保护日志目录。".into())
+        crate::platform::private_directory(&self.directory).map_err(|_| "无法保护日志目录。".into())
     }
     fn files(&self) -> Result<Vec<(PathBuf, i64, u64)>> {
         let mut files = Vec::new();
@@ -88,9 +85,7 @@ impl Diagnostics {
                 } else {
                     let mut temp = tempfile::NamedTempFile::new_in(&self.directory)
                         .map_err(|_| "日志清理写入失败。")?;
-                    temp.as_file()
-                        .set_permissions(fs::Permissions::from_mode(0o600))
-                        .map_err(|_| "日志保护失败。")?;
+                    crate::platform::private_file(temp.as_file()).map_err(|_| "日志保护失败。")?;
                     writeln!(temp, "{retained}").map_err(|_| "日志清理写入失败。")?;
                     temp.persist(path).map_err(|_| "日志清理发布失败。")?;
                 }
@@ -130,13 +125,10 @@ impl Diagnostics {
                 self.component,
                 self.session
             ));
-            let mut file = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .custom_flags(libc::O_NOFOLLOW)
-                .mode(0o600)
-                .open(path)
-                .map_err(|_| "日志写入失败。")?;
+            let mut file =
+                crate::platform::open_regular(&path, OpenOptions::new().create(true).append(true))
+                    .map_err(|_| "日志写入失败。")?;
+            crate::platform::private_file(&file).map_err(|_| "日志保护失败。")?;
             let row = format!("{v}\n");
             file.write_all(row.as_bytes())
                 .map_err(|_| "日志写入失败。")?;
@@ -256,19 +248,40 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
         if ["check", "download", "install", "extract"].contains(&text(v, "updateStage")) {
             clean["updateStage"] = v["updateStage"].clone();
         }
-        if ["Io", "Reqwest", "Signature", "Version", "Restore", "Updater"].contains(&text(v, "updaterError")) {
+        if [
+            "Io",
+            "Reqwest",
+            "Signature",
+            "Version",
+            "Restore",
+            "Updater",
+        ]
+        .contains(&text(v, "updaterError"))
+        {
             clean["updaterError"] = v["updaterError"].clone();
         }
-        if v["systemCode"].as_i64().is_some_and(|n| (0..=i32::MAX as i64).contains(&n)) {
+        if v["systemCode"]
+            .as_i64()
+            .is_some_and(|n| (0..=i32::MAX as i64).contains(&n))
+        {
             clean["systemCode"] = v["systemCode"].clone();
         }
         let version = text(v, "updateVersion");
-        if !version.is_empty() && version.len() <= 64 && version.bytes().all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b)) {
+        if !version.is_empty()
+            && version.len() <= 64
+            && version
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b))
+        {
             clean["updateVersion"] = v["updateVersion"].clone();
         }
         if let Some(chain) = v["errorChain"].as_array() {
-            clean["errorChain"] = json!(chain.iter().take(8).filter_map(Value::as_str)
-                .map(|s| s.chars().take(1024).collect::<String>()).collect::<Vec<_>>());
+            clean["errorChain"] = json!(chain
+                .iter()
+                .take(8)
+                .filter_map(Value::as_str)
+                .map(|s| s.chars().take(1024).collect::<String>())
+                .collect::<Vec<_>>());
         }
     }
     Some(clean)
@@ -325,7 +338,11 @@ fn copy_files(files: &[PathBuf]) -> Result<()> {
         result
     }
 }
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn copy_files(files: &[PathBuf]) -> Result<()> {
+    crate::platform::copy_files(files)
+}
+#[cfg(not(any(target_os = "macos", windows)))]
 fn copy_files(_: &[PathBuf]) -> Result<()> {
     Err("当前系统暂不支持复制日志文件。".into())
 }

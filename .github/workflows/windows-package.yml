@@ -1,0 +1,71 @@
+name: Windows packages
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Pushed main commit shared with the macOS package
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: windows-package-${{ inputs.source_commit }}
+  cancel-in-progress: false
+jobs:
+  package:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            target: i686-pc-windows-msvc
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+      - name: Verify source belongs to main
+        shell: pwsh
+        env:
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          if ($env:SOURCE_COMMIT -notmatch '^[0-9a-f]{40}$') { throw 'Invalid source commit' }
+          git merge-base --is-ancestor $env:SOURCE_COMMIT origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'Source is not on main' }
+          git switch --force-create main $env:SOURCE_COMMIT
+          if ($LASTEXITCODE -ne 0) { throw 'Could not select the exact main commit' }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: macos/package-lock.json
+      - name: Update Rust toolchain
+        run: rustup update stable
+      - name: Install Rust targets
+        run: rustup target add ${{ matrix.target }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            macos/src-tauri/target
+          key: windows-${{ matrix.arch }}-${{ hashFiles('macos/src-tauri/Cargo.lock') }}
+          restore-keys: windows-${{ matrix.arch }}-
+      - name: Install client dependencies
+        working-directory: macos
+        run: npm ci
+      - name: Build and verify installer
+        id: package
+        working-directory: macos
+        run: npm run package:windows -- ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gittogether-windows-${{ matrix.arch }}
+          path: ${{ steps.package.outputs.directory }}
+          if-no-files-found: error
+          retention-days: 14

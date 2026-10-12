@@ -211,5 +211,9 @@ fn trusted(u: &Update) -> bool {
             .starts_with("/DDonlien/git-together/releases/download/")
         && u.download_url.username().is_empty()
         && u.download_url.password().is_none()
-        && u.download_url.path().ends_with(".app.tar.gz")
+        && u.download_url.path().ends_with(if cfg!(windows) {
+            "-setup.exe"
+        } else {
+            ".app.tar.gz"
+        })
 }

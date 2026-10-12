@@ -159,7 +159,7 @@ impl Service {
         if self.persistent {
             return Ok(self.root.join("repositories"));
         }
-        let home = std::env::var_os("HOME").ok_or("无法读取用户目录。")?;
+        let home = crate::platform::home()?;
         Ok(PathBuf::from(home).join(".gittogether/repositories"))
     }
     async fn materialized_link(
@@ -298,7 +298,7 @@ impl Service {
     pub async fn validate_path(&self, repo: &Value, input: &str) -> Result<PathBuf> {
         let selected = util::absolute(input)?;
         let top = git::read(&selected, &["rev-parse", "--show-toplevel"]).await?;
-        let root = fs::canonicalize(top.trim()).map_err(|_| "工作目录不可读取。")?;
+        let root = dunce::canonicalize(top.trim()).map_err(|_| "工作目录不可读取。")?;
         let names = git::read(&root, &["remote"]).await?;
         let expected = util::identity(text(repo, "url")).ok_or("仓库远端无效。")?;
         for name in names.lines() {
@@ -1079,7 +1079,7 @@ impl Service {
                     return Err("文件不属于当前工作目录文件清单。".into());
                 }
                 let file =
-                    fs::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
+                    dunce::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
                 if !file.starts_with(&root)
                     || file
                         .components()
@@ -1352,6 +1352,7 @@ impl Service {
         self.authorization.web(method, input).await
     }
 }
+#[cfg(not(windows))]
 pub async fn open(target: &str) -> Result<()> {
     let status = tokio::process::Command::new("/usr/bin/open")
         .arg("--")
@@ -1625,4 +1626,9 @@ async fn discover(
         }
     }
     Ok(found)
+}
+
+#[cfg(windows)]
+pub async fn open(target: &str) -> Result<()> {
+    crate::platform::open(target)
 }

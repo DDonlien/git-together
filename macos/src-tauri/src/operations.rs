@@ -8,7 +8,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, OpenOptions},
     io::{Read, Write},
-    os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
 };
 use tokio_util::sync::CancellationToken;
@@ -113,12 +112,9 @@ struct IndexLock {
 }
 impl IndexLock {
     fn take(path: PathBuf) -> Result<Self> {
-        let file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|_| "Git 暂存区正在使用，请稍后重试。")?;
+        let file =
+            crate::platform::open_regular(&path, OpenOptions::new().write(true).create_new(true))
+                .map_err(|_| "Git 暂存区正在使用，请稍后重试。")?;
         Ok(Self {
             path,
             file: Some(file),
@@ -392,7 +388,7 @@ pub async fn push(
 }
 pub async fn common(root: &Path) -> Result<PathBuf> {
     let p = git::read(root, &["rev-parse", "--git-common-dir"]).await?;
-    fs::canonicalize(root.join(p.trim())).map_err(|_| "Git 共享目录不可读取。".into())
+    dunce::canonicalize(root.join(p.trim())).map_err(|_| "Git 共享目录不可读取。".into())
 }
 pub async fn download(
     root: &Path,
@@ -418,8 +414,7 @@ pub async fn download(
         return Err("目标目录已经存在，未覆盖文件。".into());
     }
     fs::create_dir_all(root).map_err(|_| "无法创建分支存储目录。")?;
-    fs::set_permissions(root, fs::Permissions::from_mode(0o700))
-        .map_err(|_| "无法保护分支存储目录。")?;
+    crate::platform::private_directory(root).map_err(|_| "无法保护分支存储目录。")?;
     let store = root.join(format!(
         "{}.git",
         util::digest(format!(
@@ -653,6 +648,8 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 .to_str()
                 .ok_or("文件路径无法读取。")?
                 .to_owned();
+            #[cfg(windows)]
+            let key = key.replace('\\', "/");
             util::file_path(&key)?;
             let meta = fs::symlink_metadata(&path).map_err(|_| "文件状态无法读取。")?;
             if meta.is_dir() {
@@ -671,10 +668,7 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                     ),
                 )
             } else if meta.is_file() {
-                let mut file = OpenOptions::new()
-                    .read(true)
-                    .custom_flags(libc::O_NOFOLLOW)
-                    .open(&path)
+                let mut file = crate::platform::open_regular(&path, OpenOptions::new().read(true))
                     .map_err(|_| "文件内容不可读取。")?;
                 use sha2::{Digest, Sha256};
                 let mut hash = Sha256::new();
@@ -691,11 +685,7 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 }
                 (
                     "file".into(),
-                    if meta.mode() & 0o111 != 0 {
-                        0o755
-                    } else {
-                        0o644
-                    },
+                    crate::platform::file_mode(&meta),
                     format!("{:x}", hash.finalize()),
                 )
             } else {
@@ -741,8 +731,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
         if m.is_dir() {
             copy_tree(&src, &dst)?;
         } else if m.file_type().is_symlink() {
-            std::os::unix::fs::symlink(fs::read_link(&src).map_err(|_| "配置链接读取失败。")?, dst)
-                .map_err(|_| "配置链接保存失败。")?;
+            crate::platform::copy_link(&src, &dst).map_err(|_| "配置链接保存失败。")?;
         } else {
             fs::copy(src, &dst).map_err(|_| "配置保存失败。")?;
             fs::set_permissions(dst, m.permissions()).map_err(|_| "配置权限保存失败。")?;

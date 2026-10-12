@@ -75,7 +75,7 @@ try {
   await cp(join(binaryRoot, 'bundle/macos/GitTogether.app'), applicationPath, { recursive: true });
   // Cargo also builds the browser service and the release verifier. Tauri's
   // bundler discovers all binaries; these tools stay outside the shipped app.
-  for (const tool of ['gittogether-service', 'gittogether-release-verify']) await rm(join(applicationPath, 'Contents/MacOS', tool), { force: true });
+  for (const tool of ['gittogether-service', 'gittogether-release-verify', 'gittogether-platform-verify']) await rm(join(applicationPath, 'Contents/MacOS', tool), { force: true });
   const bundledBinaries = await readdir(join(applicationPath, 'Contents/MacOS'));
   if (bundledBinaries.length !== 1 || bundledBinaries[0] !== 'gittogether') throw new Error('正式包包含额外运行程序，停止发布。');
   await run('/usr/bin/codesign', ['--force', '--options', 'runtime', '--timestamp', '--entitlements', join(source, 'src-tauri/entitlements.plist'), '--sign', identity, applicationPath]);

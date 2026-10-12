@@ -48,9 +48,7 @@ pub fn file_path(value: &str) -> Result<String> {
     Ok(value.into())
 }
 pub fn absolute(value: &str) -> Result<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or("无法读取用户目录。")?;
+    let home = crate::platform::home()?;
     let path = if value == "~" {
         home
     } else if let Some(suffix) = value.strip_prefix("~/") {
@@ -61,7 +59,7 @@ pub fn absolute(value: &str) -> Result<PathBuf> {
     if !path.is_absolute() {
         return Err("请选择绝对的本地目录。".into());
     }
-    std::fs::canonicalize(path).map_err(|_| "目录不存在或不可访问。".into())
+    dunce::canonicalize(path).map_err(|_| "目录不存在或不可访问。".into())
 }
 pub fn now() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -99,5 +97,66 @@ pub fn identity(value: &str) -> Option<String> {
     ))
 }
 pub fn tool_path() -> String {
+    #[cfg(windows)]
+    {
+        let mut paths = vec![];
+        if let Ok(home) = crate::platform::home() {
+            paths.extend([home.join(".local/bin"), home.join(".cargo/bin")]);
+        }
+        if let Some(roaming) = std::env::var_os("APPDATA") {
+            paths.push(PathBuf::from(roaming).join("npm"));
+        }
+        for variable in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
+            if let Some(directory) = std::env::var_os(variable) {
+                paths.push(PathBuf::from(directory).join("Git/cmd"));
+            }
+        }
+        if let Some(directory) = std::env::var_os("LOCALAPPDATA") {
+            paths.push(PathBuf::from(directory).join("Programs/Git/cmd"));
+        }
+        if let Some(existing) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        return std::env::join_paths(paths)
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into();
+    }
+    #[cfg(not(windows))]
     format!("{}/.local/bin:{}/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:{}", std::env::var("HOME").unwrap_or_default(), std::env::var("HOME").unwrap_or_default(), std::env::var("PATH").unwrap_or_default())
+}
+
+pub fn find_tool(name: &str) -> Result<PathBuf> {
+    let filename = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.into()
+    };
+    for directory in std::env::split_paths(&tool_path()) {
+        let path = directory.join(&filename);
+        if std::fs::metadata(&path).is_ok_and(|m| crate::platform::executable(&m)) {
+            return Ok(path);
+        }
+        #[cfg(windows)]
+        if name == "codex" {
+            // npm's .cmd is a shell shim. Locate the shipped native CLI instead
+            // of interpreting the shim or interpolating repository text in cmd.
+            for arch in ["x64", "arm64"] {
+                let target = if arch == "arm64" { "aarch64" } else { "x86_64" };
+                for package in [
+                    directory.join(format!(
+                        "node_modules/@openai/codex/node_modules/@openai/codex-win32-{arch}"
+                    )),
+                    directory.join("node_modules/@openai/codex"),
+                ] {
+                    let candidate =
+                        package.join(format!("vendor/{target}-pc-windows-msvc/codex/codex.exe"));
+                    if candidate.is_file() {
+                        return Ok(candidate);
+                    }
+                }
+            }
+        }
+    }
+    Err(format!("没有找到本机 {name}，请先安装并确认工具路径。"))
 }

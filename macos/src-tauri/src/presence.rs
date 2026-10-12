@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     fs,
-    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -177,9 +176,7 @@ pub struct Presence {
 }
 impl Presence {
     pub fn new(root: PathBuf, persistent: bool) -> Result<Arc<Self>> {
-        let directory =
-            PathBuf::from(std::env::var_os("HOME").ok_or("无法读取 Presence 用户目录。")?)
-                .join(".config/git-presence");
+        let directory = crate::platform::home()?.join(".config/git-presence");
         let loaded = (|| -> Result<Configuration> {
             let saved = if persistent {
                 credentials::load(&root.join("presence-v1.encrypted"), "GitTogether")?
@@ -538,8 +535,8 @@ fn private_json(path: &Path) -> Result<Option<Value>> {
     if !metadata.is_file()
         || metadata.file_type().is_symlink()
         || metadata.len() > 8192
-        || metadata.mode() & 0o077 != 0
-        || metadata.uid() != unsafe { libc::geteuid() }
+        || !crate::platform::private_config(path, &metadata)
+            .map_err(|_| "Presence 私有配置权限无法读取。")?
     {
         return Err("Presence 连接文件必须是当前用户的私有配置文件。".into());
     }

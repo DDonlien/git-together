@@ -2,7 +2,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use minisign_verify::{PublicKey, Signature};
 fn run() -> Result<(), String> {
     let a: Vec<_> = std::env::args().skip(1).collect();
-    if a.len() != 4 {
+    if a.len() != 4 && a.len() != 5 {
         return Err("需要公开配置、更新包、签名文件和版本。".into());
     }
     let config: serde_json::Value =
@@ -32,8 +32,15 @@ fn run() -> Result<(), String> {
     {
         return Err("更新签名没有绑定本次版本。".into());
     }
-    gittogether_core::update_archive::verify(&bytes)
-        .map_err(|e| format!("更新包解压结构校验失败：{e}"))?;
+    let verified = if a
+        .get(4)
+        .is_some_and(|platform| platform.starts_with("windows-"))
+    {
+        gittogether_core::update_archive::verify_windows_installer(&bytes)
+    } else {
+        gittogether_core::update_archive::verify_macos(&bytes)
+    };
+    verified.map_err(|e| format!("更新包解压结构校验失败：{e}"))?;
     Ok(())
 }
 fn main() {

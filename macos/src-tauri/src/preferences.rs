@@ -1,7 +1,7 @@
 use crate::util::{self, Result};
 use rusty_leveldb::{LdbIterator, Options, DB};
 use serde_json::Value;
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+use std::{fs, path::Path};
 pub fn legacy(root: &Path) -> Result<Option<String>> {
     let cached = root.join("preferences-migration-v1.json");
     if cached.exists() {
@@ -93,9 +93,7 @@ pub fn legacy(root: &Path) -> Result<Option<String>> {
         fs::create_dir_all(root).map_err(|_| "偏好迁移记录目录不可写。")?;
         let mut file =
             tempfile::NamedTempFile::new_in(root).map_err(|_| "偏好迁移记录无法保存。")?;
-        file.as_file()
-            .set_permissions(fs::Permissions::from_mode(0o600))
-            .map_err(|_| "偏好迁移记录保护失败。")?;
+        crate::platform::private_file(file.as_file()).map_err(|_| "偏好迁移记录保护失败。")?;
         use std::io::Write;
         file.write_all(json_record(value).as_bytes())
             .and_then(|_| file.as_file().sync_all())

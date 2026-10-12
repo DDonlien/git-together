@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod git;
 pub mod oauth;
 pub mod operations;
+pub mod platform;
 pub mod preferences;
 pub mod presence;
 pub mod provider;
@@ -20,8 +21,7 @@ use std::{path::PathBuf, sync::Arc};
 use tauri::{Manager, State};
 use updates::Updates;
 pub fn data_root() -> util::Result<PathBuf> {
-    let home = std::env::var_os("HOME").ok_or("无法读取用户目录。")?;
-    Ok(PathBuf::from(home).join("Library/Application Support/GitTogether-Standalone-Demo"))
+    platform::data_root()
 }
 fn envelope(result: util::Result<Value>) -> Value {
     match result {
