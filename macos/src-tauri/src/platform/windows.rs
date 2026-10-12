@@ -126,7 +126,7 @@ fn protect_handle(handle: HANDLE) -> io::Result<()> {
 }
 pub fn protect_path(path: &Path) -> io::Result<()> {
     let file = OpenOptions::new()
-        .access_mode(READ_CONTROL | WRITE_DAC | WRITE_OWNER)
+        .access_mode(READ_CONTROL | WRITE_DAC | WRITE_OWNER | FILE_READ_ATTRIBUTES)
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;

@@ -29,3 +29,9 @@
 - main/b491264e3023500b3a77c6db84a2ad2dd436b6c0已正常推送。Windows原生运行38188189029的两种架构均到达Cargo检查，发现同一组4个Win32引用错误：两个ACE类型常量所在模块未导入、GlobalFree未从Foundation导入。完整日志保存在仓库外_builds/windows-38188189029.log。修复精确引用并为密码模块按平台裁剪导入，继续实际构建，不把Mac编译代替Windows通过。
 - 联合发布入口增加同源码Windows工作流收集、临时安装/核心操作报告检查、本机版本绑定签名/验签、三个平台的latest.json，以及两种Windows完整资产与sig的公开回读；publish在公开草稿前强制要求Windows两包。更新错误按Windows系统码解释，保留Mac原有消息和公证流程。
 - 原生校验路径规范化处理Windows临时目录可能存在的8.3别名；普通目录遍历/复制保留reparse点边界。Windows构建缓存按目标/依赖/源码分开保存，失败也保留已完成依赖以便修复后重建。ARCHITECTURE补充实际平台边界与联合流水线；需求仍等待完整构建/安装包通过。
+
+## 第二轮：两种原生程序与操作检查通过
+
+- 运行38189258573（c971a86）两种架构均通过Cargo检查与release构建，原生报告nativeValidationPassed=true，八项实际检查均完成：DPAPI往返、损坏拒绝、私有ACL、Unicode Git路径、选择范围提交、保留暂存、完整进程树取消及日志。两包已生成，但安装包摘要核验阻止后续交付，尚未标记通过。
+- 依据Tauri官方bundler源码确认：NSIS打包时将唯一__TAURI_BUNDLE_TYPE_VAR_UNK标记改为NSS，打包后恢复构建输出的原标记；直接与原输出比较SHA会误报。验证器仅允许这次已知标记替换，其余完整字节仍做摘要核对；安装后也核对该NSIS版本摘要，不放宽为只看版本或架构。来源：https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-bundler/src/bundle.rs。
+- 同步收紧未选暂存检查为精确清单且拒绝发布index警告，私有目录查询显式请求FILE_READ_ATTRIBUTES；补齐Codex官方bin布局与npm嵌套/提升依赖路径。tauri-build 2.7.2当前实际源码已静态链接VC runtime，无需另加CRT构建流程。下一轮继续安装和界面启动验证。

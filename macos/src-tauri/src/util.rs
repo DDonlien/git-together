@@ -147,12 +147,16 @@ pub fn find_tool(name: &str) -> Result<PathBuf> {
                     directory.join(format!(
                         "node_modules/@openai/codex/node_modules/@openai/codex-win32-{arch}"
                     )),
+                    directory.join(format!("node_modules/@openai/codex-win32-{arch}")),
                     directory.join("node_modules/@openai/codex"),
                 ] {
-                    let candidate =
-                        package.join(format!("vendor/{target}-pc-windows-msvc/codex/codex.exe"));
-                    if candidate.is_file() {
-                        return Ok(candidate);
+                    for folder in ["bin", "codex"] {
+                        let candidate = package.join(format!(
+                            "vendor/{target}-pc-windows-msvc/{folder}/codex.exe"
+                        ));
+                        if candidate.is_file() {
+                            return Ok(candidate);
+                        }
                     }
                 }
             }

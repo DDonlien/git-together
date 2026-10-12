@@ -84,7 +84,7 @@ async fn verify() -> Result<(), String> {
     let task = git::task(&root).await?;
     let service = Service::new(storage.clone(), true, "release-check")?;
     let result = service.handle("submitCommit", json!({"repositoryId":"release-check:1","taskId":task["id"],"expectedHead":task["head"],"changeKey":task["changeKey"],"operationId":uuid::Uuid::new_v4().to_string(),"summary":"select one file","description":"native Windows release validation","paths":["selected.txt"]}), CancellationToken::new()).await?;
-    if result["commitId"].as_str().is_none() {
+    if result["commitId"].as_str().is_none() || result.get("warning").is_some() {
         return Err("本地提交未返回真实SHA。".into());
     }
     let committed = git::read(
@@ -93,7 +93,13 @@ async fn verify() -> Result<(), String> {
     )
     .await?;
     let staged = git::read(&root, &["diff", "--cached", "--name-only", "-z"]).await?;
-    if committed.trim() != "selected.txt" || !staged.contains("保留.txt") {
+    if committed.trim() != "selected.txt"
+        || staged
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .collect::<Vec<_>>()
+            != ["保留.txt"]
+    {
         return Err("选择范围或未选暂存内容核验失败。".into());
     }
 

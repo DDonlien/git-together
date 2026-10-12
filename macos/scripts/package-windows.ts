@@ -52,6 +52,14 @@ try {
   await run(process.execPath, [join(clientRoot, 'node_modules/@tauri-apps/cli/tauri.js'), 'build', '--target', target, '--bundles', 'nsis', '--config', JSON.stringify({ build: { beforeBuildCommand: null }, bundle: { createUpdaterArtifacts: false } }), '--', '--locked'], source, environment);
   const appBytes = await readFile(join(binaryRoot, 'gittogether.exe'));
   if (machine(appBytes) !== (arch === 'x86' ? 0x14c : 0x8664)) throw new Error('主程序的真实架构与打包目标不符。');
+  // Tauri patches this exact marker for NSIS, then restores the build output.
+  // Compare the payload with that expected byte change, retaining a full hash
+  // check rather than accepting an arbitrary different executable.
+  const expectedApplication = Buffer.from(appBytes);
+  const marker = Buffer.from('__TAURI_BUNDLE_TYPE_VAR_UNK');
+  const markerIndex = expectedApplication.indexOf(marker);
+  if (markerIndex < 0) throw new Error('构建程序缺少Tauri安装类型标记。');
+  expectedApplication.write('__TAURI_BUNDLE_TYPE_VAR_NSS', markerIndex, 'ascii');
   const installers = (await readdir(join(binaryRoot, 'bundle/nsis'))).filter(name => name.endsWith('-setup.exe'));
   if (installers.length !== 1) throw new Error('Windows安装包数量不正确。');
   const installerPath = join(output, `GitTogether-${manifest.version}-Windows-${arch}-setup.exe`);
@@ -62,11 +70,11 @@ try {
   async function walk(directory: string) { for (const item of await readdir(directory, { withFileTypes: true })) { const path = join(directory, item.name); if (item.isDirectory()) await walk(path); else entries.push(path); } }
   await walk(unpacked);
   const applications = entries.filter(path => basename(path).toLowerCase() === 'gittogether.exe');
-  if (applications.length !== 1 || hash(await readFile(applications[0])) !== hash(appBytes) || entries.some(path => /gittogether-(service|release-verify|platform-verify)\.exe$/i.test(path))) throw new Error('NSIS安装包内主程序或额外运行程序不符合要求。');
+  if (applications.length !== 1 || hash(await readFile(applications[0])) !== hash(expectedApplication) || entries.some(path => /gittogether-(service|release-verify|platform-verify)\.exe$/i.test(path))) throw new Error('NSIS安装包内主程序或额外运行程序不符合要求。');
   // Exercise the real installer in a disposable, user-scoped destination.
   const installed = join(temporary, 'installed');
   await run(installerPath, ['/S', '/D=' + installed], source);
-  if (hash(await readFile(join(installed, 'gittogether.exe'))) !== hash(appBytes)) throw new Error('实际安装后的主程序与构建结果不一致。');
+  if (hash(await readFile(join(installed, 'gittogether.exe'))) !== hash(expectedApplication)) throw new Error('实际安装后的主程序与构建结果不一致。');
   await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `
     $ErrorActionPreference = 'Stop'
     $app = Start-Process -FilePath $env:GITTOGETHER_VALIDATION_APP -PassThru
@@ -91,7 +99,7 @@ try {
   await run(join(installed, uninstaller), ['/S', '_?=' + installed], source);
   if (await git(['rev-parse', 'HEAD']) !== sourceCommit || await git(['status', '--porcelain=v1', '--untracked-files=all', '--', 'src', 'src-tauri', 'scripts', 'package.json', 'package-lock.json'])) throw new Error('构建过程中源码发生变化。');
   const bytes = await readFile(installerPath);
-  await writeFile(join(output, 'build-info.json'), JSON.stringify({ version: manifest.version, sourceBranch: 'main', sourceCommit, platform: `windows-${arch === 'x86' ? 'i686' : 'x86_64'}`, architecture: arch, target, filename: basename(installerPath), size: bytes.length, sha256: hash(bytes), applicationSha256: hash(appBytes), applicationMachine: machine(appBytes), nativeValidationPassed: true, installerVerified: true, interfaceStarted: true, ...{ validation }, authenticodeSigned: false }, null, 2) + '\n');
+  await writeFile(join(output, 'build-info.json'), JSON.stringify({ version: manifest.version, sourceBranch: 'main', sourceCommit, platform: `windows-${arch === 'x86' ? 'i686' : 'x86_64'}`, architecture: arch, target, filename: basename(installerPath), size: bytes.length, sha256: hash(bytes), applicationSha256: hash(expectedApplication), applicationMachine: machine(appBytes), nativeValidationPassed: true, installerVerified: true, interfaceStarted: true, ...{ validation }, authenticodeSigned: false }, null, 2) + '\n');
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `directory=${output}\n`);
   console.log(`Windows ${arch}原生构建、核心操作、实际安装及架构校验通过：${installerPath}`);
 } finally { await rm(temporary, { recursive: true, force: true, maxRetries: 6, retryDelay: 1000 }); }
