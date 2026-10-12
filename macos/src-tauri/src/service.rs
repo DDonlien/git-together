@@ -1634,21 +1634,26 @@ async fn discover(
         .map(|r| (text(r, "id").into(), Vec::new()))
         .collect();
     let mut pending = VecDeque::from([(root.to_owned(), 0)]);
-    let mut visited = 0;
+    let mut expanded = 0;
+    let mut matched_paths = std::collections::BTreeSet::new();
     while let Some((path, depth)) = pending.pop_front() {
         if cancel.is_cancelled() {
             return Err("目录扫描已取消。".into());
         }
-        visited += 1;
-        if visited > 4000 || depth > 8 {
-            return Err("目录扫描超过4000个文件夹或8层；请选择更具体的目录，尚未保存关联。".into());
+        if matched_paths.contains(&path) {
+            continue;
         }
-        let entries = fs::read_dir(&path)
-            .map_err(|_| "所选目录不可读取。")?
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|_| "目录扫描未完成。")?;
-        let marker = entries.iter().find(|e| e.file_name() == ".git");
-        if marker.is_some_and(|e| e.file_type().is_ok_and(|t| !t.is_symlink())) {
+        // A worktree's marker can be a directory or a gitdir file. Check it
+        // directly before enumerating any project files or generated folders.
+        let marker = match fs::symlink_metadata(path.join(".git")) {
+            Ok(metadata) => Some(metadata.file_type()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => return Err("无法读取目录的Git标记；尚未保存关联。".into()),
+        };
+        if let Some(marker) = marker {
+            if marker.is_symlink() || !(marker.is_dir() || marker.is_file()) {
+                continue;
+            }
             let names = git::read(&path, &["remote"]).await?;
             let mut identities = Vec::new();
             for n in names.lines() {
@@ -1693,6 +1698,7 @@ async fn discover(
                         if expected.is_none() || !own_identities.contains(&expected) {
                             continue;
                         }
+                        matched_paths.insert(p.clone());
                         let out = found.get_mut(text(r, "id")).unwrap();
                         if !out.iter().any(|w| w["path"] == t["path"]) {
                             out.push(json!({"branch":t["branch"],"path":t["path"]}));
@@ -1705,7 +1711,19 @@ async fn discover(
             }
             continue;
         }
-        let mut dirs: Vec<_> = entries
+        // The selected parent is depth zero. A deep unrelated subtree is not
+        // a failed match: stop this branch and keep checking its siblings.
+        if depth >= 6 {
+            continue;
+        }
+        expanded += 1;
+        if expanded > 4000 {
+            return Err("需要展开的候选父目录超过4000个；请选择更具体的项目父目录，原关联未改变。".into());
+        }
+        let mut dirs: Vec<_> = fs::read_dir(&path)
+            .map_err(|_| "所选目录不可读取。")?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|_| "目录扫描未完成。")?
             .into_iter()
             .filter(|e| {
                 e.file_type().is_ok_and(|t| t.is_dir() && !t.is_symlink())
