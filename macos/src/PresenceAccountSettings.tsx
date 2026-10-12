@@ -57,7 +57,7 @@ export function PresenceAccountSettings({ disabled = false }: { disabled?: boole
       {!account.repositories.length && <p className="presence-account-hint">选择已连接 Git 账号有权访问的仓库；绑定不上传文件内容，也不会自动开放远端控制。</p>}
       <details className="presence-account-password"><summary>修改密码</summary><form onSubmit={event => { event.preventDefault(); setError(''); setFeedback(''); void presence.account('password', { currentPassword, password: newPassword }).then(() => { setCurrentPassword(''); setNewPassword(''); setFeedback('密码已修改，请重新登录；各台设备需重新登记。'); }).catch(problem => setError(problem instanceof Error ? problem.message : '修改失败。')); }}>
         <TextField label="当前密码" type="password" autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} maxLength={128} required disabled={busy} />
-        <TextField label="新密码（至少15个字符）" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={15} maxLength={128} required disabled={busy} />
+        <TextField label="新密码（至少8个字符）" type="password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={8} maxLength={128} required disabled={busy} />
         <Button type="submit" disabled={busy}>修改并退出所有会话</Button>
       </form></details>
     </> : <>
@@ -67,7 +67,7 @@ export function PresenceAccountSettings({ disabled = false }: { disabled?: boole
         <div className="presence-account-address"><TextField label="Presence 服务器地址" value={serverUrl} onChange={e => setServerUrl(e.target.value)} type="url" maxLength={2048} required disabled={busy} /><Button variant="quiet" disabled={busy || !serverUrl.trim()} onClick={() => { void presence.account('accountStatus', { serverUrl }).catch(() => {}); }}>检查</Button></div>
         {register && <TextField label="显示名称" value={name} onChange={e => setName(e.target.value)} maxLength={120} autoComplete="nickname" required disabled={busy} />}
         <TextField label="邮箱" type="email" value={email} onChange={e => setEmail(e.target.value)} maxLength={254} autoComplete="username" required disabled={busy} />
-        <TextField label={register ? '密码（至少15个字符）' : '密码'} type="password" value={password} onChange={e => setPassword(e.target.value)} maxLength={128} minLength={register ? 15 : 1} autoComplete={register ? 'new-password' : 'current-password'} required disabled={busy} />
+        <TextField label={register ? '密码（至少8个字符）' : '密码'} type="password" value={password} onChange={e => setPassword(e.target.value)} maxLength={128} minLength={register ? 8 : 1} autoComplete={register ? 'new-password' : 'current-password'} required disabled={busy} />
         {register && <TextField label="确认密码" type="password" value={confirmation} onChange={e => setConfirmation(e.target.value)} maxLength={128} autoComplete="new-password" required disabled={busy} />}
         {register && service?.setupRequired !== false && <TextField label="安装密钥（安装者已配置可留空）" type="password" value={setupKey} onChange={e => setSetupKey(e.target.value)} maxLength={512} autoComplete="off" disabled={busy} />}
         <Button type="submit" variant="primary" disabled={busy}>{register ? '创建账号并登录' : '登录'}</Button>

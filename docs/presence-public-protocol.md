@@ -17,6 +17,8 @@
 
 账号profile为服务端id、email、displayName、emailVerified；初版emailVerified为false。仓库ID是Git平台公开仓库网址的host加完整pathname、转小写并去尾部斜线，保留合法`.git`仓库名和URL转义。绑定不授予其他账号或组织权限。
 
+注册及修改密码的`password`长度为8至128个字符，不强制字符组合；登录和`currentPassword`只校验非空及最长128，按已保存的密码核对。
+
 ## 设备控制协议1
 
 原生端在`POST v1/control/enroll`发送name，以账号会话作Bearer与`X-Presence-Account`证明，获得独立deviceId、deviceToken、userId；其他控制端点使用设备凭证。旧手工访问/登记密钥仍可用于兼容。

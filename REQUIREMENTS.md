@@ -3,6 +3,7 @@
 
 - [ ] \[COLLAB-02-presence-account] 按用户“补上”要求提供Presence独立账号注册/登录，设置中绑定同账号多个仓库和设备，支持退出、重新登录和修改密码；原生端加密会话且不回传凭证。个人Docker只有一个账号，不提供组织空间；托管组织仅控制明确纳管项目。邮箱/密码首轮已接源码，GitHub/Gitea平台网页登录与跨平台身份绑定仍另行跟踪COLLAB-01-platform-login。真实用户注册和双设备Git写操作，以及正式客户端三平台发布分别验收，本项不以编译替代用户验收。
   - [x] \[COLLAB-02-source] 0.28.0账号设置及Rust有限命令已随66ace84推送main；当前工作区与隔离任务源码的TypeScript、Cargo --locked及生产构建通过。GitPresence 0.5.0已实际部署NAS，账号页面与注册开放状态HTTP200、容器healthy；个人镜像已构建且不含组织模块和源码映射。没有代用户注册或运行测试，真实双设备Git操作、正式客户端三平台包、官网镜像下载及收费服务仍待交付。
+  - [x] \[COLLAB-02-password-length] 按用户2026-10-12要求，Presence注册和修改密码均接受至少8个字符，不强制字符组合；应用设置字段的提示和最短长度与网页、服务端一致。0.28.2为客户端源码修订，不在本轮发布安装包或操作已安装应用；线上网页以实际部署回读为准。 已通过仅本任务源码的TypeScript检查和生产构建；安装包另行交付。
 - [ ] \[COLLAB-02-commercial] 用户商业方向：GitTogether开源，GitPresence源码private，官网分发单账号个人Docker，NAS单独托管付费组织服务。账号代表用户，组织用独立ID、成员关系、项目纳管和命令范围隔离；客户端不以可修改的UI标志作为授权。GitPresence当前已private、GitTogether为public，但GitTogether尚未选择和加入开源许可证；官网Docker下载、组织管理/计费和正式收费服务尚未上线。
   - [ ] \[COLLAB-02-organization-boundary] 自有Presence组织独立维护，不与GitHub/Gitea组织一一对应，不因Git平台存在组织、用户属于该组织或具有管理员权限而自动创建Presence组织、加入成员或授予控制权。管理员明确选择纳管项目，可涵盖不同平台及不同外部组织的仓库；未纳管仓库仍可按个人账号使用。未来GitHub/Gitea账号绑定只关联身份及仓库访问，不自动继承组织角色。当前源码已按独立配置的组织、成员和项目判断，组织管理界面及真实跨组织权限验收仍待完成。
 
