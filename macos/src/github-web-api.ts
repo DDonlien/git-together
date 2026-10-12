@@ -1,5 +1,5 @@
 import { isRecord } from './import-model';
-import { githubOAuthOrigin, isGitHubAuthorizationURL, isGitHubWebSession, isGitHubWebProgress, isGitHubWebCancellation, type GitHubWebSession, type GitHubWebProgress, type GitHubWebCancellation } from './github-web-model';
+import { githubOAuthOrigin, isGitHubDeviceFallback, isGitHubAuthorizationURL, isGitHubWebSession, isGitHubWebProgress, isGitHubWebCancellation, type GitHubWebAuthorization, type GitHubWebSession, type GitHubWebProgress, type GitHubWebCancellation } from './github-web-model';
 import { authorizationDelay } from './github-auth-flow';
 
 async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -24,8 +24,9 @@ async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unkno
   if (!response.ok || !isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '网页授权失败，请重新开始。');
   return envelope.value;
 }
-export async function startGitHubWebAuthorization(name: string): Promise<GitHubWebSession> {
+export async function startGitHubWebAuthorization(name: string): Promise<GitHubWebAuthorization> {
   const result = await webAPI('start', { name });
+  if (isGitHubDeviceFallback(result)) return result;
   if (!isGitHubWebSession(result)) throw new Error('网页授权信息无效，没有打开其他网站。');
   return result;
 }

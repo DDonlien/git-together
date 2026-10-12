@@ -127,13 +127,27 @@ impl Authorization {
         &self,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
+            self.listen().await.map_err(|error| self.listener_error(&error))
+        })
+    }
+    fn listener_error(&self, error: &std::io::Error) -> String {
+        let reason = match error.kind() {
+            std::io::ErrorKind::AddrInUse => "已被其他进程占用",
+            std::io::ErrorKind::PermissionDenied => "被系统拒绝使用，可能是系统保留端口",
+            _ => "无法启动监听",
+        };
+        let code = error.raw_os_error().map(|code| format!("（系统错误 {code}）")).unwrap_or_default();
+        format!("本机授权端口 {}{reason}{code}。", 4174)
+    }
+    fn listen(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = std::io::Result<()>> + Send + '_>> {
+        Box::pin(async move {
             let mut started = self.listener.lock().await;
             if *started {
                 return Ok(());
             }
-            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 4174))
-                .await
-                .map_err(|_| "本机授权端口 4174 已占用；请关闭旧的授权窗口或开发服务后重试。")?;
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 4174)).await?;
             let router = Router::new()
                 .route("/oauth/github/callback", get(callback))
                 .route("/setup", get(setup).post(save_setup))
@@ -151,7 +165,23 @@ impl Authorization {
         })
     }
     pub async fn start(&self, name: &str) -> Result<Value> {
-        self.ensure_listener().await?;
+        if let Err(error) = self.listen().await {
+            let problem = self.listener_error(&error);
+            if let Some(service) = self.service.upgrade() {
+                let code = match error.kind() {
+                    std::io::ErrorKind::PermissionDenied => "permission",
+                    std::io::ErrorKind::AddrInUse => "EADDRINUSE",
+                    _ => "unknown",
+                };
+                service.diagnostics.record(&json!({"event":"authorization","method":"start","outcome":"failure","code":code,"systemCode":error.raw_os_error()}), false);
+            }
+            if matches!(error.kind(), std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied) {
+                let mut session = self.device_start(name).await.map_err(|error| format!("{problem} 备用网页授权未能启动：{error}"))?;
+                session["flow"] = json!("device");
+                return Ok(session);
+            }
+            return Err(problem);
+        }
         let secret = credentials::oauth_secret(&self.root)?;
         if secret.is_none() {
             return Err("GitHub 网页授权应用尚未配置；请先在本机授权配置页完成一次配置。".into());
@@ -436,12 +466,7 @@ async fn post_json(client: &reqwest::Client, url: &str, body: &[(&str, &str)]) -
         .send()
         .await
         .map_err(provider::transport_error)?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "GitHub 授权服务返回 HTTP {}。",
-            response.status().as_u16()
-        ));
-    }
+    let status = response.status();
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(provider::transport_error)? {
         if bytes.len() + chunk.len() > 32_768 {
@@ -449,7 +474,14 @@ async fn post_json(client: &reqwest::Client, url: &str, body: &[(&str, &str)]) -
         }
         bytes.extend_from_slice(&chunk);
     }
-    serde_json::from_slice(&bytes).map_err(|_| "GitHub 授权服务返回格式无效。".into())
+    if !status.is_success() {
+        if url == "https://github.com/login/device/code"
+            && serde_json::from_slice::<Value>(&bytes).ok().is_some_and(|value| value["error"] == "device_flow_disabled") {
+            return Err("GitTogether 的 GitHub 备用网页授权尚未启用，请联系开发者开启设备授权。".into());
+        }
+        return Err(format!("网页授权服务返回 HTTP {}，请检查该域名的应用配置与授权状态。", status.as_u16()));
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "网页授权服务返回格式无效。".into())
 }
 fn trusted(h: &HeaderMap) -> bool {
     h.get("host").and_then(|v| v.to_str().ok()) == Some("127.0.0.1:4174")

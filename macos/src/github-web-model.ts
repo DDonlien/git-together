@@ -1,4 +1,4 @@
-import { isCatalog, isRecord, type Catalog } from './import-model';
+import { githubVerificationURL, isCatalog, isRecord, type Catalog, type GitHubAuthorization } from './import-model';
 
 // Public identity of our development GitHub App, not a credential.
 export const githubDevClientId = 'Iv23liKMFYSaYtpe3XnL';
@@ -6,6 +6,14 @@ export const githubOAuthOrigin = 'http://127.0.0.1:4174';
 export const githubOAuthCallback = `${githubOAuthOrigin}/oauth/github/callback`;
 export const githubOAuthSetup = `${githubOAuthOrigin}/setup`;
 export type GitHubWebSession = { id: string; authorizationURL: string; expiresAt: number };
+export type GitHubDeviceFallback = GitHubAuthorization & { flow: 'device' };
+export type GitHubWebAuthorization = GitHubWebSession | GitHubDeviceFallback;
+export function isGitHubDeviceFallback(value: unknown): value is GitHubDeviceFallback {
+  return isRecord(value) && value.flow === 'device' && typeof value.id === 'string' && /^[\w-]{36}$/.test(value.id) &&
+    typeof value.userCode === 'string' && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(value.userCode) && value.verificationURL === githubVerificationURL &&
+    typeof value.expiresAt === 'number' && Number.isSafeInteger(value.expiresAt) &&
+    typeof value.interval === 'number' && Number.isInteger(value.interval) && value.interval >= 5 && value.interval <= 900;
+}
 export type GitHubWebProgress = { status: 'pending' } | { status: 'complete'; catalog: Catalog };
 export type GitHubWebCancellation = { cancelled: true } | { cancelled: false; catalog: Catalog };
 

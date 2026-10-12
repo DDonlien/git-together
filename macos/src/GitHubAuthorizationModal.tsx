@@ -4,8 +4,9 @@ import type { WorkspaceController } from './use-workspace';
 import { openGitHubAuthorization, waitForGitHubAuthorization } from './github-auth-flow';
 import { Button, Icon, Modal, Notice } from './ui';
 
-export function GitHubAuthorizationModal({ session, opened, controller, onComplete, onClose, onRestart }: {
+export function GitHubAuthorizationModal({ session, opened, callbackUnavailable = false, controller, onComplete, onClose, onRestart }: {
   session: GitHubAuthorization; opened: boolean; controller: WorkspaceController;
+  callbackUnavailable?: boolean;
   onComplete: (catalog: Catalog) => void; onClose: () => void; onRestart: () => void;
 }) {
   const [error, setError] = useState('');
@@ -29,7 +30,7 @@ export function GitHubAuthorizationModal({ session, opened, controller, onComple
       cancellation.abort();
       // React Strict Mode immediately replays this effect. Only a real unmount
       // should cancel the server session, not its development-only replay.
-      queueMicrotask(() => { if (lifecycle.current === generation && !completed.current) void latest.current.controller.cancelGithubAuthorization(session.id).catch(() => {}); });
+      queueMicrotask(() => { if (lifecycle.current === generation && !completed.current) void latest.current.controller.cancelGithubAuthorization(session.id).catch(() => console.warn('网页验证码授权取消未确认；请在设置中检查账号连接状态。')); });
     };
   }, [session.id, session.expiresAt, session.interval]);
   async function finish(restart = false) {
@@ -53,6 +54,7 @@ export function GitHubAuthorizationModal({ session, opened, controller, onComple
   }
   return <Modal title="通过 GitHub 授权" onClose={() => void finish()}>
     <div className="github-authorization">
+      {callbackUnavailable && <Notice kind="info">本机网页回调不可用，已改用 GitHub 网页验证码授权。</Notice>}
       <p>在 GitHub 网页输入验证码，并确认连接 GitTogether。</p>
       <div className="authorization-code"><code aria-label="GitHub 授权验证码">{session.userCode}</code><Button variant="quiet" leadingIcon={<Icon name="copy" size={16} />} onClick={() => void copyCode()}>复制验证码</Button></div>
       {copyMessage && <span className="muted" role="status">{copyMessage}</span>}

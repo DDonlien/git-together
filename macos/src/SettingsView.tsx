@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { accountLabel, providerName, type Account, type Catalog, type Provider } from './import-model';
+import { accountLabel, githubVerificationURL, providerName, type Account, type Catalog, type GitHubAuthorization, type Provider } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { Button, Icon, Modal, Notice, Segmented, Select, TextField } from './ui';
 import { AccountSignInOptions } from './AccountSignInOptions';
 import { AccountEditForm } from './AccountEditForm';
 import { GitHubBrowserAuthorizationModal } from './GitHubBrowserAuthorizationModal';
 import { cancelGitHubWebAuthorization, navigateGitHubWebWindow, openGitHubWebAuthorization, reserveGitHubWebWindow, startGitHubWebAuthorization } from './github-web-api';
-import type { GitHubWebSession } from './github-web-model';
+import { isGitHubDeviceFallback, type GitHubWebSession } from './github-web-model';
+import { GitHubAuthorizationModal } from './GitHubAuthorizationModal';
+import { openGitHubAuthorization } from './github-auth-flow';
 import { UpdateSettings } from './UpdateSettings';
 import { DiagnosticsSettings } from './DiagnosticsSettings';
 import { PresenceSettings } from './PresenceSettings';
@@ -20,16 +22,17 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
   const [manual, setManual] = useState(false);
   const [starting, setStarting] = useState(false);
   const [browserAuthorization, setBrowserAuthorization] = useState<{ session: GitHubWebSession; opened: boolean } | null>(null);
+  const [deviceAuthorization, setDeviceAuthorization] = useState<{ session: GitHubAuthorization; opened: boolean } | null>(null);
   const startingRef = useRef(false);
   const mounted = useRef(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [removing, setRemoving] = useState<Account | null>(null);
   const [editing, setEditing] = useState<Account | null>(null);
-  const busy = !!controller.busy.connect || starting || !!browserAuthorization;
+  const busy = !!controller.busy.connect || starting || !!browserAuthorization || !!deviceAuthorization;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   function connected(catalog: Catalog) {
-    setBrowserAuthorization(null); setToken(''); setHost(''); setName(''); setAdding(false); setManual(false);
+    setBrowserAuthorization(null); setDeviceAuthorization(null); setToken(''); setHost(''); setName(''); setAdding(false); setManual(false);
     setMessage(catalog.accounts.some(account => account.error) ? '账号已连接，但部分仓库未能读取。请在 Dashboard 重试。' : '账号已连接，仓库已显示在左侧账号下和 Dashboard。');
   }
   async function authorizeGithub() {
@@ -39,6 +42,17 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
     try {
       const session = await startGitHubWebAuthorization(name);
       if (!mounted.current) { popup?.close(); await cancelGitHubWebAuthorization(session.id); return; }
+      if (isGitHubDeviceFallback(session)) {
+        let opened = false;
+        if (window.gittogether) opened = await openGitHubAuthorization();
+        else if (popup) {
+          try { popup.location.replace(githubVerificationURL); opened = true; }
+          catch { opened = false; }
+        }
+        if (!mounted.current) { popup?.close(); await cancelGitHubWebAuthorization(session.id); return; }
+        setDeviceAuthorization({ session, opened });
+        return;
+      }
       setBrowserAuthorization({ session, opened: window.gittogether ? await openGitHubWebAuthorization(session) : navigateGitHubWebWindow(popup, session.authorizationURL) });
     } catch (problem) { popup?.close(); if (mounted.current) setError(problem instanceof Error ? problem.message : '无法开始网页授权。'); }
     finally { startingRef.current = false; if (mounted.current) setStarting(false); }
@@ -71,5 +85,6 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
     {editing && <Modal title="编辑账号" onClose={() => { if (!controller.busy[editing.id]) setEditing(null); }}><AccountEditForm key={editing.id} account={editing} busy={!!controller.busy[editing.id]} onSubmit={controller.updateAccount} onSaved={() => { setEditing(null); setMessage('账号已更新。'); }} onCancel={() => setEditing(null)} onRemove={() => { setRemoving(editing); setError(''); }} /></Modal>}
     {removing && <Modal title={`移除 ${removing.name}？`} onClose={() => { if (!controller.busy[removing.id]) setRemoving(null); }}><p>{accountLabel(removing)}</p><p>移除这个账号的凭据、仓库列表与应用内的本地关联。不会删除任何本地文件。</p>{error && <Notice kind="error">{error}</Notice>}<div className="modal-actions"><Button disabled={!!controller.busy[removing.id]} onClick={() => setRemoving(null)}>取消</Button><Button variant="danger" disabled={!!controller.busy[removing.id]} onClick={() => { setError(''); void controller.removeAccount(removing.id).then(() => { setRemoving(null); setEditing(null); }).catch(problem => setError(problem instanceof Error ? problem.message : '移除失败。')); }}>移除账号</Button></div></Modal>}
     {browserAuthorization && <GitHubBrowserAuthorizationModal key={browserAuthorization.session.id} {...browserAuthorization} onComplete={catalog => { void controller.reload(); connected(catalog); }} onClose={() => setBrowserAuthorization(null)} onRestart={() => { setBrowserAuthorization(null); void authorizeGithub(); }} />}
+    {deviceAuthorization && <GitHubAuthorizationModal key={deviceAuthorization.session.id} {...deviceAuthorization} callbackUnavailable controller={controller} onComplete={catalog => { void controller.reload(); connected(catalog); }} onClose={() => setDeviceAuthorization(null)} onRestart={() => { setDeviceAuthorization(null); void authorizeGithub(); }} />}
   </main>;
 }

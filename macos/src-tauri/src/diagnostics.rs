@@ -244,6 +244,9 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
     {
         clean["resource"] = v["resource"].clone();
     }
+    if !renderer && event == "authorization" && v["systemCode"].as_i64().is_some_and(|n| (0..=i32::MAX as i64).contains(&n)) {
+        clean["systemCode"] = v["systemCode"].clone();
+    }
     if !renderer && event == "update" {
         if ["check", "download", "install", "extract"].contains(&text(v, "updateStage")) {
             clean["updateStage"] = v["updateStage"].clone();
