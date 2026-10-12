@@ -29,3 +29,5 @@ NAS 服务已实际部署；当前源码与网页预览已连接。0.23.0 桌面
 NAS 服务配置：`/vol3/docker/gitpresence/config/server.local.json`；只包含授权令牌的 SHA-256。源码与 Compose：`/vol3/docker/gitpresence/source/`；容器 `gitpresence`，镜像 `gitpresence:0.2.0`。健康检查位于 `/presence/health`，不需要账号；会话读取必须认证。
 
 容器非 root、只读、移除 capabilities、禁止提权、自动恢复；主机端口只监听 loopback，由已有 HTTPS 反向代理传递 WebSocket。没有挂载 Git 仓库、文件正文或本机/Git 凭据。进程重启清空在线快照，Bridge 重新上报；本轮不包含强制文件锁、持久化审计或其他机器的安装验收。
+
+正在协作端操作、尚未出现在本机或已读取远端中的分支，会以「仅协作端」加入展开清单供查看人员；不会因此获得本机Git操作或下载尚不存在的远端分支的能力。NAS支持同账号多个只读订阅并存，编辑器重连后等待新报告才认定editing。

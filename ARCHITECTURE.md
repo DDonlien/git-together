@@ -1,5 +1,11 @@
 # Tauri / Rust / React 架构
 
+性能记录（IMPORT-14-performance）：performance-diagnostics独立于React状态，以被动输入/滚动监听、交互期间rAF、可见页面1秒心跳及受支持Long Tasks接口按10秒聚合；组件layout effect记录提交观测，业务请求计数不包含日志请求。响应接收/解码与同步校验分开，不为记录大小再序列化大DTO。记录仍通过有限白名单；接口不支持时显式标识，而非把0当证明。前端日志队列128且单请求；Diagnostics以512容量通道交给单独线程，每批64条，记录接受与实际持久化分开。后台写入/清理的IO不进入异步服务执行线程，检查/打开/复制以写入屏障及spawn_blocking完成，队列拒绝和落盘失败均累计丢失并在日志/设置反馈。Git_READ_CONTEXT在Service请求范围传递匿名日志身份和取消令牌；只读4许可、fetch2许可，异步等待记录queueMs，实际写命令不占后台许可。大分支表移除高度动画并一次构建分支Map，不减少数据；首次完整DOM挂载的剩余成本与真实安装版根因仍需后续确认。完整字段/边界见docs/performance-logs.md。
+
+2026-10-12托管平台扩展：Provider统一支持github、github-enterprise、gitlab、gitee、gitea。企业服务器按域名读取/api/v3，ghe.com企业云读取api子域。GitLab使用/api/v4/projects数字ID和完整namespace，分页读取branch/history/tree/commit/diff/blob。Gitee使用/api/v5，access_token只在Rust请求中使用，不进入DTO、跳转或日志。Git网络继续通过匹配origin的辅助器提供凭据，GitLab使用oauth2用户名，完整嵌套路径保留。
+
+OAuth应用按平台+origin保存在provider-oauth-v1.encrypted；更换Client ID不继承旧Secret，配置不进入Catalog。GitLab使用PKCE，GHES/Gitee使用授权码+Secret，公共GitHub保留既有App及PKCE。state只用一次，拒绝/取消/过期/失败终止等待并清除会话密钥，令牌获取后重新验证身份。GitHub SSO required/partial-results作为范围未完整开放处理。桌面回调用4174，浏览器开发用4176；开发页通过同源/api/authorization有限代理调用自己的Rust服务，避免占用安装版端口。端口由服务固定决定，renderer不能指定任意redirect_uri。
+
 分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
 
 仅hide模式通过remoteWorkspace的有限checkParticipation布尔参数发起账号参与核对，旧调用缺省false。Rust Provider在账号凭据与仓库身份边界内，GitHub/企业版/Gitee按平台作者账号查询；Gitea分页读取账号归属，GitLab匹配当前账号与已验证邮箱。不存在贡献的判定要求明确的作者查询空结果或已闭合的完整父节点历史；分页上限1000、身份失败及缺失父节点以participationError和可见warning保留未知。元数据按账号/仓库/HEAD缓存五分钟，邮箱只留服务内存，不回传界面或写入偏好；有脏文件、未知本地HEAD或未推送本地历史时保留分支显示。官方契约见[GitHub提交](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)、[Gitea提交](https://docs.gitea.com/api/operations/repo-get-all-commits/)及[GitLab账号邮箱](https://docs.gitlab.com/api/user_email_addresses/)。
@@ -8,7 +14,9 @@
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-## 当前运行结构（0.23.0）
+仓库状态排序（IMPORT-13-status-header）：Dashboard通过既有GitSignals和repositoryReadFeedback派生排序级别，读取中或推送中优先于残留错误，同级以仓库身份稳定排序；升序依次为异常、处理中、实际差异、已确认一致、未知。关联仓库继续使用workspace共享读取，未关联读取仍由现有行拥有。行只通过稳定回调报告一个带instanceId/repositoryId键的排序级别，不把新排序变成第二个读取器；相同级别不更新父状态。表头复用原排序状态，折叠/筛选不执行Git或保存账号配置。
+
+## 当前运行结构（0.24.0）
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
