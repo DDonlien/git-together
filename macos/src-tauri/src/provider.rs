@@ -537,6 +537,55 @@ impl Provider {
             )
             .await)
     }
+    async fn gitea_verified_emails(
+        &self,
+        cancel: &CancellationToken,
+    ) -> Result<std::collections::BTreeSet<String>> {
+        let key = "participation-emails";
+        let value = if let Some(value) = self.cached(key).await.filter(|value| {
+            value["checkedAt"]
+                .as_i64()
+                .is_some_and(|time| util::now() - time < 300_000)
+        }) {
+            value
+        } else {
+            let (user, _) = self.get("/user", &[], "json", cancel).await?;
+            if !text(&user, "login").eq_ignore_ascii_case(text(&self.account, "login")) {
+                return Err("提交身份与当前登录账号不一致。".into());
+            }
+            // Gitea returns the full email list. Its public profile email can
+            // be masked or unverified, so only use explicitly verified entries.
+            let (value, headers) = self.get("/user/emails", &[], "json", cancel).await?;
+            let rows = value.as_array().ok_or("账号邮箱记录格式无效。")?;
+            if next(&headers) {
+                return Err("账号邮箱记录尚未完整读取。".into());
+            }
+            let emails = rows
+                .iter()
+                .filter(|row| row["verified"] == true)
+                .map(|row| {
+                    row["email"]
+                        .as_str()
+                        .filter(|email| !email.is_empty())
+                        .map(str::to_lowercase)
+                        .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
+                })
+                .collect::<Result<Vec<_>>>()?;
+            self.remember(key.into(), json!({"emails":emails,"checkedAt":util::now()}))
+                .await
+        };
+        value["emails"]
+            .as_array()
+            .ok_or("账号邮箱记录格式无效。")?
+            .iter()
+            .map(|email| {
+                email
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
+            })
+            .collect()
+    }
     async fn account_commits(
         &self,
         repo: &Value,
@@ -658,6 +707,8 @@ impl Provider {
         // graph back to every root, rather than the graph's recent 50 records.
         let mut seen = std::collections::BTreeSet::new();
         let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
+        let mut gitea_emails = None;
+        let mut unresolved_gitea_author = false;
         for page in 1..=10 {
             let page_s = page.to_string();
             let (value, _) = self
@@ -687,7 +738,23 @@ impl Provider {
                 let found = if kind == "gitlab" {
                     emails.contains(&text(row, "author_email").to_lowercase())
                 } else {
-                    text(&row["author"], "login").eq_ignore_ascii_case(login)
+                    let author = text(&row["author"], "login");
+                    if author.eq_ignore_ascii_case(login) {
+                        true
+                    } else if author.is_empty() {
+                        if gitea_emails.is_none() {
+                            gitea_emails = Some(self.gitea_verified_emails(cancel).await);
+                        }
+                        let matched = gitea_emails.as_ref().is_some_and(|result| {
+                            result.as_ref().is_ok_and(|emails| {
+                                emails.contains(&text(&row["commit"]["author"], "email").to_lowercase())
+                            })
+                        });
+                        unresolved_gitea_author |= !matched;
+                        matched
+                    } else {
+                        false
+                    }
                 };
                 if found {
                     self.remember(key, json!({"found":true,"checkedAt":util::now()}))
@@ -705,6 +772,15 @@ impl Provider {
                 );
             }
             if parents.iter().all(|id| seen.contains(id)) {
+                // A complete history is not a complete identity mapping. Null
+                // Gitea authors cannot prove the current account never worked.
+                if unresolved_gitea_author {
+                    let detail = match &gitea_emails {
+                        Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
+                        _ => "部分提交作者未关联平台账号或已验证邮箱。".into(),
+                    };
+                    return Err(format!("Gitea无法确认分支参与记录；{detail}继续显示该分支。"));
+                }
                 self.remember(key, json!({"found":false,"checkedAt":util::now()}))
                     .await;
                 return Ok(false);
