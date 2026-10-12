@@ -43,7 +43,7 @@
 .branch-label:has(> .presence-avatar-popover) { overflow: visible; }
 .repository-task-header .branch-label > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .repository-tree-branch:has(.presence-avatar-popover) > strong { padding-right: 0; mask-image: none; text-overflow: ellipsis; }
-.presence-avatar-trigger { display: flex; align-items: center; justify-content: center; min-height: 24px; padding: 3px 0; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+.presence-avatar-trigger { display: flex; align-items: center; justify-content: center; min-height: 24px; padding: 3px 6px; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
 .presence-avatar-trigger:hover { background: var(--surface-hover); }
 .presence-avatar-trigger:active { background: var(--selection); }
 .presence-avatar-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
