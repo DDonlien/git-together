@@ -37,6 +37,8 @@ IMPORT-14-submit-summary-only、IMPORT-14-submit-popup-width、IMPORT-14-windows
 
 产品版本按修复递增patch至0.30.1，package.json为权威；npm锁文件、Cargo元数据/锁文件同步，Tauri配置和Rust显示仍由它读取。
 
+LFS需求已独立提交1385017def，包含新错误分类、有限诊断、版本与原生验证入口；没有改动Git/LFS配置或用户仓库。宽度需求完成800×588暗色、920×640亮色和1280×720组件实测，将独立提交；源码和安装包状态分开。暗/亮证据保存在macos/artifacts/submit-review/submit-fixed-dark.png与submit-fixed-light.png。
+
 独立生产组件预览已实际输入并确认：外部Summary带入且空Description，不启动AI；AI失败后手工Summary启用确认；AI等待中手工摘要可确认且产生取消，回调收到空正文；选中74/75后Push首次失败，重试记录只有一个Commit和两次Push。800×588实际modal为500px，正文452px且scrollWidth均等于clientWidth，底部按钮在窗口内，75文件滚动至最后一行且复选框可用。Playwright模拟fill未触发Material宿主事件，因此交互验证改用实际AX输入，不能把前者当用户键盘行为。开发Lit警告为既有开发模式提示；临时诊断入口HMR出现重复createRoot提示，属于该临时入口，后续完整刷新核对，不作为安装包控制台证据。
 
 Windows x64原生Rust运行报告0.30.1已通过真实LFS过滤器/钩子、正确指针OID/大小、工作文件内容保留、LFS对象fsck、Summary独立Commit及未选暂存内容保留；受控真实Git退出验证了磁盘不足优先、缺命令与404分类。补充失败钩子的HEAD/index/工作文件保护诊断后再执行收尾核对。

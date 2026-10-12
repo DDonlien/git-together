@@ -386,9 +386,9 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-committed-actions small { color: var(--muted); font-size: 10px; }
 .ogui-overlay__surface:has(.repository-action-dialog) { border-radius: 22px; }
 .ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__header { padding-inline: 24px; }
-.ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__body { padding: 0 24px 24px; }
+.ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__body { min-width: 0; padding: 0 24px 24px; }
 .repository-action-dialog { display: flex; flex-direction: column; width: 100%; max-height: calc(100dvh - 140px); }
-.repository-submit-content { display: grid; gap: 16px; min-height: 0; max-height: min(620px, calc(100dvh - 220px)); overflow-y: auto; }
+.repository-submit-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; max-height: min(620px, calc(100dvh - 220px)); overflow-y: auto; }
 .repository-submit-count { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
 .repository-submit-content h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
 .repository-submit-content h3 svg { flex-shrink: 0; }
@@ -422,7 +422,7 @@ button.repository-count-action:disabled { opacity: .7; }
 @keyframes push-confirm { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .push-feedback-icon.is-pushing svg, .push-feedback-icon.is-success { animation: none; } }
 .repository-submit-generating { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
-.repository-batch-draft { display: grid; gap: 8px; }
+.repository-batch-draft { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .repository-action-dialog > :not(.repository-submit-content) { flex-shrink: 0; }
 .repository-submit-sha, .repository-submit-result { font-size: 11px; color: var(--muted); }
 .repository-action-dialog > .notice { margin-top: 12px; }
