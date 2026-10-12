@@ -61,6 +61,8 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 0.22.7修正从Finder启动时Git没有继承系统代理的问题，沿用已配置的macOS代理及绕过规则，同时保留仓库自己的代理设置。读取日志增加真实Git失败类别、退出码和部分任务失败信息，通用Git错误不再归为账号权限失效。同样环境的公开仓库读取及隔离实际fetch、取消/恢复已验证，安装包和公共更新源完成核验；没有将这些证据扩大为逐私有账号或安装版运行验收。
 
+0.29.2已在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.29.2)正式公开，同一main历史提交36179f0b60提供macOS Apple Silicon、Windows x86/x64安装包。修复GitHub本机授权把系统拒绝端口误报为占用的问题；回调不可用时自动使用GitHub官方网页验证码授权，支持复制、轮询、取消与重试。自有GitHub App的设备授权已一次启用；公证、更新签名及完整公开下载/清单回读通过。用户可在设置检查更新，自己的GitHub登录/同意由用户完成。
+
 0.22.11已公证并在[GitHub Releases](https://github.com/DDonlien/git-together/releases/tag/v0.22.11)公开。安装ZIP与Tauri更新包完成公共下载摘要回读、验签及解压后版本、签名、公证票据核对，ZIP约4.6MB。推送改为分支与仓库图标的上传动画和短暂成功勾，区分全部/部分本地目录；弹窗与详情提供细进度条。Commit/Submit支持Tracked/Untracked分组与多选，真实提交和AI只处理选中范围，保留未选暂存内容。桌面采用Tauri 2和Rust后台，生产包只包含原生程序及React资源；Git通过本机Git/Git LFS执行，保留钩子和签名配置。
 
 
