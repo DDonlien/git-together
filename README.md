@@ -1,6 +1,10 @@
 # GitTogether
 
+<img src="assets/brand/gittogether-app.png" width="96" height="96" alt="GitTogether 图标" />
+
 把仓库当作项目，把分支当作任务。
+
+品牌图标原图位于[assets/brand](assets/brand/README.md)，包含选定的应用图标、正方形版本和透明图形。在`macos/`执行`npm run icons`可重新生成macOS、Windows与网页图标。
 
 GitTogether 是一款面向 macOS 的独立 Git 工作台，把 GitHub、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
 
