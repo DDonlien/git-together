@@ -15,3 +15,16 @@
 - 干净main镜像分配0.28.1，TypeScript检查通过、285模块生产构建通过、diff检查通过；保留原有大chunk提示。
 - 隔离静态页面确认header下0张图片、文字GitTogether、32×32开关；实测收起隐藏文字及展开恢复。截图artifacts/brand-sidebar/sidebar-text-only.jpg为208×96 JPEG。API不可用反馈属于无账号的隔离静态预览，本轮只验证侧栏，不代表真实账号/Git验收。
 - 继续按持续授权推送、签名公证和三个平台的联合发布；不操作用户安装版。
+
+## 推送与原生包阶段
+
+- 图标移除修正已提交并推送：3ad94fdc08f69953b8fb5459e5145d453322006c，来源main。发布镜像固定0.28.1，不收录其他任务未提交的改动。
+- package:desktop再次通过类型、Cargo --locked和生产构建检查。Mac输出/Users/taobe/Projects/GitHub/Personal/git-together/_builds/gittogether-0.28.1-macos-arm64-fSV1yX已完成Developer ID、staple/validate、严格签名验证及spctl。Apple公证Accepted，ID3f063262-6145-4bed-8b6c-a6ae5e5bd81c；Tauri tar版本绑定签名及解压结构校验通过。
+- 核对Mac包内icon.icns与已选定源资源逐字节相同；仓库三种原图、平台图标及favicon文件也逐字节不变。主程序目录仅有gittogether，版本0.28.1。
+- Windows同源码双架构运行38207754941正在原生构建与安装校验；还未正式发布，不将Mac阶段当作联合交付完成。
+
+## 查询连接中断与恢复
+
+- 收集Windows结果时GitHub API返回裸EOF，已有暂时错误正则只包含unexpected EOF，因此未进入重试；package:desktop在Windows收集阶段停止，Mac公证产物保留，尚未创建正式发布。
+- 修复为匹配独立EOF词，沿用只读API最多三次重试和既有下载清理/重试；不会重放不确定的工作流派发。此修复只影响发布工具，六组应用生产输入不变。
+- 从保留的Mac产物与同一3ad94fdc08main提交的Windows报告恢复收集/发布，继续完整签名、公证票据及公共更新验收；不重复构建或混用其他commit产物。

@@ -17,7 +17,7 @@ export interface WindowsPackage {
 }
 interface Run { id: number; head_sha: string; display_title?: string; status: string; conclusion: string | null; html_url: string; event: string }
 function transient(error: unknown) {
-  return !!(error as { killed?: boolean } | null)?.killed || /TLS handshake timeout|i\/o timeout|connection reset|temporary failure|unexpected EOF|HTTP 50[234]/i.test(error instanceof Error ? error.message : String(error));
+  return !!(error as { killed?: boolean } | null)?.killed || /TLS handshake timeout|i\/o timeout|connection reset|temporary failure|\bEOF\b|HTTP 50[234]/i.test(error instanceof Error ? error.message : String(error));
 }
 async function cli(cwd: string, args: string[]) {
   for (let attempt = 0; ; attempt++) {
