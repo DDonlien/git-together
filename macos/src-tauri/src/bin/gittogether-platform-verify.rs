@@ -5,9 +5,125 @@ use gittogether_core::{
 use serde_json::json;
 use std::{
     fs,
+    path::Path,
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio_util::sync::CancellationToken;
+
+async fn verify_directory_matching(
+    parent: &Path,
+    source: &Path,
+    service: &Arc<Service>,
+) -> Result<(), String> {
+    let projects = parent.join("Projects");
+    let main = projects.join("GITEA").join("project-name").join("main");
+    let task = main.parent().unwrap().join("branch-name");
+    fs::create_dir_all(main.parent().unwrap()).map_err(|e| e.to_string())?;
+    let boundary = projects.join("one/two/three/four/five/six");
+    let outside = projects.join("one/two/three/four/five/deeper/seven");
+    for path in [&main, &boundary, &outside] {
+        fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        git::read(
+            parent,
+            &[
+                "-c",
+                "core.hooksPath=",
+                "clone",
+                "--quiet",
+                "--no-hardlinks",
+                "--",
+                source.to_str().ok_or("临时路径无效。")?,
+                path.to_str().ok_or("临时路径无效。")?,
+            ],
+        )
+        .await?;
+        git::read(
+            path,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "https://github.com/gittogether-verification/fixture.git",
+            ],
+        )
+        .await?;
+    }
+    git::read(
+        &main,
+        &[
+            "-c",
+            "core.hooksPath=",
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            "branch-name",
+            task.to_str().ok_or("临时路径无效。")?,
+            "main",
+        ],
+    )
+    .await?;
+    if !main.join(".git").is_dir() || !task.join(".git").is_file() {
+        return Err("临时clone/worktree标记形状不符。".into());
+    }
+    // These belong to a checkout, not to the search's container budget.
+    for index in 0..4100 {
+        fs::create_dir_all(main.join("generated").join(index.to_string()))
+            .map_err(|e| e.to_string())?;
+    }
+    let mut unrelated = projects.join("GITHUB").join("unrelated-cache");
+    for index in 0..10 {
+        unrelated.push(index.to_string());
+    }
+    fs::create_dir_all(unrelated).map_err(|e| e.to_string())?;
+    let before = fs::read(main.join(".git/index")).map_err(|e| e.to_string())?;
+    let head = git::read(&main, &["rev-parse", "HEAD"]).await?;
+    let result = service
+        .handle(
+            "matchAccountRepositories",
+            json!({"accountId":"release-check","path":projects.to_string_lossy()}),
+            CancellationToken::new(),
+        )
+        .await?;
+    let paths = result["catalog"]["links"][0]["worktrees"]
+        .as_array()
+        .ok_or("目录匹配没有返回关联。")?;
+    for path in [&main, &task, &boundary] {
+        let path = dunce::canonicalize(path).map_err(|e| e.to_string())?;
+        if !paths
+            .iter()
+            .any(|entry| util::text(entry, "path") == path.to_string_lossy())
+        {
+            return Err("6层内的真实clone/worktree未匹配。".into());
+        }
+    }
+    let outside = dunce::canonicalize(outside).map_err(|e| e.to_string())?;
+    if paths
+        .iter()
+        .any(|entry| util::text(entry, "path") == outside.to_string_lossy())
+        || fs::read(main.join(".git/index")).map_err(|e| e.to_string())? != before
+        || git::read(&main, &["rev-parse", "HEAD"]).await? != head
+    {
+        return Err("扫描越过6层边界或改变Git状态。".into());
+    }
+    let catalog = service.catalog().await?;
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    if service
+        .handle(
+            "matchAccountRepositories",
+            json!({"accountId":"release-check","path":projects.to_string_lossy()}),
+            cancel,
+        )
+        .await
+        .is_ok()
+        || service.catalog().await? != catalog
+    {
+        return Err("取消目录匹配后仍保存了关联。".into());
+    }
+    Ok(())
+}
 
 async fn verify() -> Result<(), String> {
     if !cfg!(windows) {
@@ -103,6 +219,8 @@ async fn verify() -> Result<(), String> {
         return Err("选择范围或未选暂存内容核验失败。".into());
     }
 
+    verify_directory_matching(temporary.path(), &root, &service).await?;
+
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
     tokio::spawn(async move {
@@ -146,7 +264,7 @@ async fn main() {
     match verify().await {
         Ok(()) => println!(
             "{}",
-            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","preserved-staging","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
+            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","preserved-staging","bounded-directory-matching","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
         ),
         Err(error) => {
             eprintln!("Windows原生校验失败：{error}");
