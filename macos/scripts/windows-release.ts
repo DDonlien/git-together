@@ -17,7 +17,15 @@ export interface WindowsPackage {
 }
 interface Run { id: number; head_sha: string; status: string; conclusion: string | null; html_url: string; event: string }
 async function cli(cwd: string, args: string[]) {
-  return (await execute('gh', args, { cwd, timeout: 120_000, maxBuffer: 1024 * 1024 })).stdout;
+  for (let attempt = 0; ; attempt++) {
+    try { return (await execute('gh', args, { cwd, timeout: 120_000, maxBuffer: 1024 * 1024 })).stdout; }
+    catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      // Retry read-only status queries; dispatch and downloads retain one attempt.
+      if (args[0] !== 'api' || args.length !== 2 || attempt === 2 || !/TLS handshake timeout|i\/o timeout|connection reset|temporary failure|unexpected EOF/i.test(detail)) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+    }
+  }
 }
 async function tool(cwd: string, command: string, args: string[]) {
   await new Promise<void>((resolve, reject) => {
