@@ -8,6 +8,8 @@ pub mod operations;
 pub mod platform;
 pub mod preferences;
 pub mod presence;
+pub mod remote_control;
+mod remote_git;
 pub mod provider;
 pub mod proxy;
 pub mod service;
@@ -96,6 +98,37 @@ fn set_theme(window: tauri::WebviewWindow, theme: String) -> util::Result<()> {
         .map_err(|_| "窗口背景更新失败。".into())
 }
 #[tauri::command]
+async fn remote_control_command(
+    app: tauri::AppHandle,
+    control: State<'_, Arc<remote_control::RemoteControl>>, method: String, input: Option<Value>,
+) -> util::Result<Value> {
+    let result=control.command(&method, input.unwrap_or(json!({}))).await;
+    if control.enabled() { remote_tray(&app).map_err(|_|"后台托盘无法启动，请保留窗口运行。")?; }
+    else if let Some(tray)=app.tray_by_id("remote-control") { tray.set_visible(false).map_err(|_|"托盘状态更新失败。")?; }
+    Ok(envelope(result))
+}
+fn remote_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(tray)=app.tray_by_id("remote-control") { return tray.set_visible(true); }
+    use tauri::{menu::{Menu,MenuItem},tray::TrayIconBuilder};
+    let show=MenuItem::with_id(app,"remote-open","打开 GitTogether",true,None::<&str>)?;
+    let quit=MenuItem::with_id(app,"remote-quit","退出 GitTogether",true,None::<&str>)?;
+    let menu=Menu::with_items(app,&[&show,&quit])?;
+    let mut tray=TrayIconBuilder::with_id("remote-control").menu(&menu).tooltip("GitTogether · 远端控制后台").on_menu_event(|app,event|{
+        match event.id.as_ref() {
+            "remote-open"=>if let Some(window)=app.get_webview_window("main") {
+                if window.show().and_then(|_|window.unminimize()).and_then(|_|window.set_focus()).is_err() {
+                    app.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"background-show"}),false);
+                }
+            },
+            "remote-quit"=>app.exit(0),
+            _=>(),
+        }
+    });
+    if let Some(icon)=app.default_window_icon(){tray=tray.icon(icon.clone());}
+    tray.build(app)?;
+    Ok(())
+}
+#[tauri::command]
 async fn open_github_authorization() -> util::Result<()> {
     service::open("https://github.com/login/device").await
 }
@@ -128,6 +161,13 @@ async fn update_install(
 }
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app,_,_|{
+            if let Some(window)=app.get_webview_window("main") {
+                if window.show().and_then(|_|window.set_focus()).is_err() {
+                    if let Some(service)=app.try_state::<Arc<Service>>() {service.diagnostics.record(&json!({"event":"window","outcome":"error","method":"existing-instance"}),false);}
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -137,16 +177,31 @@ pub fn run() {
             let service = Service::new(root, !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
             let updates = Updates::new(service.diagnostics.clone());
-            app.manage(service);
+            app.manage(service.clone());
+            let control = remote_control::RemoteControl::new(service.clone(), presence.clone(), !cfg!(debug_assertions))
+                .map_err(std::io::Error::other)?;
+            if control.enabled() { remote_tray(app.handle())?; }
+            app.manage(control);
             app.manage(presence);
             app.manage(updates);
             Ok(())
+        })
+        .on_window_event(|window,event| {
+            if let tauri::WindowEvent::CloseRequested {api,..}=event {
+                if window.state::<Arc<remote_control::RemoteControl>>().enabled() {
+                    api.prevent_close();
+                    if window.hide().is_err() {
+                        window.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"background-hide"}),false);
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             import_command,
             github_web,
             diagnostics_command,
             presence_command,
+            remote_control_command,
             environment,
             set_theme,
             open_github_authorization,

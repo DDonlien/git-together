@@ -106,12 +106,12 @@ pub fn selected_paths(files: &[&Value]) -> Vec<String> {
         .into_iter()
         .collect()
 }
-struct IndexLock {
+pub(crate) struct IndexLock {
     path: PathBuf,
     file: Option<fs::File>,
 }
 impl IndexLock {
-    fn take(path: PathBuf) -> Result<Self> {
+    pub(crate) fn take(path: PathBuf) -> Result<Self> {
         let file =
             crate::platform::open_regular(&path, OpenOptions::new().write(true).create_new(true))
                 .map_err(|_| "Git 暂存区正在使用，请稍后重试。")?;
@@ -120,7 +120,7 @@ impl IndexLock {
             file: Some(file),
         })
     }
-    fn publish(&mut self, index: &Path, data: &[u8]) -> Result<()> {
+    pub(crate) fn publish(&mut self, index: &Path, data: &[u8]) -> Result<()> {
         let f = self.file.as_mut().ok_or("暂存区锁已关闭。")?;
         f.write_all(data)
             .and_then(|_| f.sync_all())

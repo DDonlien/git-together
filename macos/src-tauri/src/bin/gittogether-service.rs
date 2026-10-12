@@ -6,6 +6,7 @@ use axum::{
     routing::post,
     Router,
 };
+use gittogether_core::remote_control::RemoteControl;
 use gittogether_core::{data_root, presence::Presence, service::Service, util::Result};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -88,6 +89,21 @@ async fn diagnostics(
     let input = serde_json::from_slice(&body).unwrap_or(Value::Null);
     envelope(service.diagnostics.command(&method, &input).await)
 }
+async fn authorization(
+    State(service): State<Arc<Service>>,
+    Path(method): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !trusted(&headers) || body.len() > 8192 {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let input = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => return envelope(Err("授权请求不是有效JSON。".into())),
+    };
+    envelope(service.web(&method, input).await)
+}
 async fn presence(
     State(presence): State<Arc<Presence>>,
     Path(method): Path<String>,
@@ -110,13 +126,30 @@ async fn main() {
         std::process::exit(1);
     }
 }
+async fn remote_control(
+    State(control): State<Arc<RemoteControl>>,
+    Path(method): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !trusted(&headers) || body.len() > 128 * 1024 {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let input = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => return envelope(Err("远端控制请求无效。".into())),
+    };
+    envelope(control.command(&method, input).await)
+}
 async fn run() -> Result<()> {
     let root = data_root()?;
     let presence = Presence::new(root.clone(), false)?;
     let service = Service::new(root, false, "preview")?;
+    let control = RemoteControl::new(service.clone(), presence.clone(), false)?;
     service.authorization.ensure_listener().await?;
     let router = Router::new()
         .route("/api/import/{method}", post(import))
+        .route("/api/authorization/{method}", post(authorization))
         .route("/api/diagnostics/{method}", post(diagnostics))
         .layer(axum::extract::DefaultBodyLimit::max(32_768))
         .with_state(service.clone())
@@ -124,6 +157,12 @@ async fn run() -> Result<()> {
             Router::new()
                 .route("/api/presence/{method}", post(self::presence))
                 .with_state(presence),
+        )
+        .merge(
+            Router::new()
+                .route("/api/control/{method}", post(remote_control))
+                .layer(axum::extract::DefaultBodyLimit::max(128 * 1024))
+                .with_state(control),
         );
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 4175))
         .await

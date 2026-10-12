@@ -2,6 +2,8 @@ import type { RemoteRepository } from './import-model';
 import { usePresence } from './PresenceProvider';
 import { presenceProjectSummary, presenceRepositoryId, type PresenceProject } from './presence-model';
 import { Icon } from './ui';
+import { RemoteControlProjects } from './RemoteControlProjects';
+import { controlRepositoryId } from './remote-control-model';
 
 function ProjectFiles({ project, valid }: { project: PresenceProject; valid: boolean }) {
   const files = project.files.filter(file => file.git !== 'clean' || file.editor !== 'clean' || file.activity === 'editing');
@@ -19,6 +21,7 @@ export function RepositoryPresence({ repository }: { repository: RemoteRepositor
     {local.map(project => <div className="presence-session" key={`local:${project.worktreeId}`}><strong>此电脑 · {project.branch || '未检出分支'}</strong><ProjectFiles project={project} valid={status.bridge.connected} /></div>)}
     {peers.map(({ session, project }) => <div className="presence-session" key={`${session.sessionId}:${project.worktreeId}`}><strong>{session.displayName} · {project.branch || '未检出分支'}<span className="presence-session-validity">{status.connection === 'connected' && session.alive ? '在线' : '离线，状态未知'}</span></strong><ProjectFiles project={project} valid={status.connection === 'connected' && session.alive} /></div>)}
     {!local.length && !peers.length && <p className="presence-empty">{status.connection === 'connected' ? '尚无这个仓库的协作会话。' : '连接未就绪，无法确认这个仓库的协作状态。'}</p>}
+    <RemoteControlProjects repositoryId={controlRepositoryId(repository.url)} />
     {(presence?.error || status.error) && <p className="presence-error">{presence?.error || status.error}</p>}
   </div></details>;
 }

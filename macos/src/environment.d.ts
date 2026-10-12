@@ -7,6 +7,7 @@ declare global {
       setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
       import: (method: string, input: unknown, requestId?: string) => Promise<unknown>;
       presence?: (method: 'status' | 'configure' | 'reconnect', input: unknown) => Promise<unknown>;
+      remoteControl?: (method: string, input: unknown) => Promise<unknown>;
       diagnostics?: {
         status: (input?: unknown) => Promise<DiagnosticsStatus>;
         record: (input: DiagnosticInput) => Promise<boolean>;

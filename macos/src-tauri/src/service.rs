@@ -66,14 +66,25 @@ pub struct Service {
     background: std::sync::Mutex<CancellationToken>,
     pub active: AtomicUsize,
     pub installing: AtomicBool,
+    running_targets: std::sync::Mutex<BTreeMap<String, (String, String, CancellationToken)>>,
 }
 struct Active<'a>(&'a AtomicUsize);
+struct TargetOperation<'a>(&'a Service, String);
+impl Drop for TargetOperation<'_> {
+    fn drop(&mut self) {
+        self.0
+            .running_targets
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.1);
+    }
+}
 impl Drop for Active<'_> {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
-struct Foreground<'a> {
+pub(crate) struct Foreground<'a> {
     operations: &'a std::sync::Mutex<BTreeMap<&'static str, usize>>,
     name: &'static str,
 }
@@ -98,6 +109,48 @@ impl Drop for InstallReservation<'_> {
     }
 }
 impl Service {
+    pub(crate) fn remote_mutation(&self) -> Result<Foreground<'_>> {
+        self.foreground("远端文件变更")
+    }
+    pub(crate) async fn control_tasks(&self, repository: &str) -> Result<Vec<Value>> {
+        let context = self.context(repository).await?;
+        let mut tasks = vec![];
+        if context.link.is_null() {
+            return Ok(tasks);
+        }
+        for item in roots(&context.link)? {
+            let root = self
+                .validate_path(&context.repository, text(&item, "path"))
+                .await?;
+            tasks.push(git::task(&root).await?);
+        }
+        self.validate(&context).await?;
+        Ok(tasks)
+    }
+    pub(crate) fn target_operation_ids(
+        &self,
+        repository: &str,
+        task: &str,
+        cancel_ids: &[String],
+    ) -> Vec<String> {
+        let key = format!("{repository}:{task}");
+        let jobs = self
+            .running_targets
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        jobs.iter()
+            .filter_map(|(id, (target, _, token))| {
+                if target != &key {
+                    return None;
+                }
+                let tagged = format!("service:{id}");
+                if cancel_ids.contains(&tagged) {
+                    token.cancel();
+                }
+                Some(tagged)
+            })
+            .collect()
+    }
     pub fn new(root: PathBuf, persistent: bool, component: &str) -> Result<Arc<Self>> {
         let client = provider::client()?;
         let mut value = json!({"version":2,"accounts":[],"repositories":[],"links":[]});
@@ -137,6 +190,7 @@ impl Service {
             fetching: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
             installing: AtomicBool::new(false),
+            running_targets: std::sync::Mutex::new(BTreeMap::new()),
             foreground: std::sync::Mutex::new(BTreeMap::new()),
             background: std::sync::Mutex::new(CancellationToken::new()),
         });
@@ -309,7 +363,7 @@ impl Service {
         }
         Err("这个工作目录的远端不是目标仓库，没有保存关联。".into())
     }
-    async fn task_root(&self, context: &Context, id: &str) -> Result<PathBuf> {
+    pub(crate) async fn task_root(&self, context: &Context, id: &str) -> Result<PathBuf> {
         for item in roots(&context.link)? {
             if !id.ends_with(&format!(":{}", text(&item, "path"))) {
                 continue;
@@ -324,7 +378,11 @@ impl Service {
         }
         Err("这个任务不属于已关联工作目录。".into())
     }
-    async fn claim(&self, root: &Path, cancel: &CancellationToken) -> Result<OwnedMutexGuard<()>> {
+    pub(crate) async fn claim(
+        &self,
+        root: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<OwnedMutexGuard<()>> {
         let wait = async {
             loop {
                 let common = operations::common(root).await?;
@@ -687,6 +745,24 @@ impl Service {
         if self.installing.load(Ordering::SeqCst) {
             return Err("正在安装更新，请稍后重试。".into());
         }
+        let _target = if matches!(
+            method,
+            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage"
+        ) {
+            let id = uuid::Uuid::new_v4().to_string();
+            let key = format!(
+                "{}:{}",
+                text(&input, "repositoryId"),
+                text(&input, "taskId")
+            );
+            self.running_targets
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(id.clone(), (key, method.into(), cancel.clone()));
+            Some(TargetOperation(self, id))
+        } else {
+            None
+        };
         let foreground = match method {
             "submitCommit" => Some("提交"),
             "pushCommit" => Some("推送"),

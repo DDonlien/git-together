@@ -175,8 +175,16 @@ pub struct Presence {
     config: watch::Sender<Configuration>,
     state: RwLock<Status>,
     configure_lock: Mutex<()>,
+    editor_roots: RwLock<std::collections::BTreeMap<PathBuf, Project>>,
 }
 impl Presence {
+    pub(crate) fn access(&self) -> Result<(String, String)> {
+        let config = self.config.borrow();
+        if !config.enabled || config.server_token.is_empty() {
+            return Err("请先配置并启用 Presence。".into());
+        }
+        Ok((config.server_url.clone(), config.server_token.clone()))
+    }
     pub fn new(root: PathBuf, persistent: bool) -> Result<Arc<Self>> {
         let directory = crate::platform::home()?.join(".config/git-presence");
         let loaded = (|| -> Result<Configuration> {
@@ -210,6 +218,7 @@ impl Presence {
             config: tx,
             state: RwLock::new(Status::new(&config, error)),
             configure_lock: Mutex::new(()),
+            editor_roots: RwLock::new(std::collections::BTreeMap::new()),
         });
         let weak = Arc::downgrade(&presence);
         tauri::async_runtime::spawn(async move {
@@ -474,6 +483,25 @@ impl Presence {
         }
     }
 
+    pub(crate) async fn ensure_saved(&self, root: &Path, paths: &[String]) -> Result<()> {
+        if private_json(&self.private_directory.join("connection.json"))?.is_none() {
+            if self.editor_roots.read().await.get(root).is_some_and(|p|p.files.iter().any(|f|!f.sources.is_empty())) {
+                return Err("目标编辑器的状态已失联，请先恢复连接或保存文件。".into());
+            }
+            return Ok(());
+        }
+        let client=reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(2)).build().map_err(|_|"无法检查目标编辑器状态。")?;
+        let read=self.read_bridge(&client).await;
+        let roots=self.editor_roots.read().await;
+        if let Some(project)=roots.get(root) {
+            let observed=project.files.iter().any(|f|!f.sources.is_empty());
+            if observed && read.is_err() {return Err("目标编辑器状态未知，请恢复连接后重试。".into());}
+            if project.files.iter().any(|f| paths.contains(&f.path) && !f.sources.is_empty() && f.editor!=Fact::Clean) {
+                return Err("选中的文件在目标编辑器中尚未保存或状态未知，请先保存。".into());
+            }
+        }
+        Ok(())
+    }
     async fn read_bridge(&self, client: &reqwest::Client) -> Result<Vec<Project>> {
         let value = private_json(&self.private_directory.join("connection.json"))?
             .ok_or("本机 Bridge 尚未运行，本机协作状态未知。")?;
@@ -506,6 +534,7 @@ impl Presence {
             .filter(|p| p.len() <= 100)
             .ok_or("本机 Bridge 项目清单无效。")?;
         let mut snapshots = vec![];
+        let mut roots = std::collections::BTreeMap::new();
         for project in projects {
             let id = project["id"]
                 .as_str()
@@ -522,13 +551,17 @@ impl Presence {
             if !valid_project(&snapshot) {
                 return Err("本机 Bridge 文件状态无效。".into());
             }
+            if let Some(root)=project["root"].as_str() {
+                if let Ok(root)=dunce::canonicalize(root) {roots.insert(root,snapshot.clone());}
+            }
             snapshots.push(snapshot);
         }
+        *self.editor_roots.write().await=roots;
         Ok(snapshots)
     }
 }
 
-fn private_json(path: &Path) -> Result<Option<Value>> {
+pub(crate) fn private_json(path: &Path) -> Result<Option<Value>> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(v) => v,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -560,7 +593,7 @@ fn valid_token(token: &str) -> bool {
 fn loopback(url: &Url) -> bool {
     matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
 }
-fn server_url(input: &str) -> Result<Url> {
+pub(crate) fn server_url(input: &str) -> Result<Url> {
     let mut url = Url::parse(input.trim()).map_err(|_| "请输入完整的 Presence 服务器地址。")?;
     if !url.username().is_empty()
         || url.password().is_some()
