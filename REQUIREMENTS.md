@@ -4,6 +4,11 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
 
 # 任务清单
 
+## Phase - v0.24.0 - Presence 头像与分支人员
+
+- [ ] \[PRESENCE-05-avatars] 仓库文件夹与具体分支图标左上角显示18px圆形账号头像，最多三个重叠；按Presence userId去重且头像由服务器统一下发，repositoryId决定稳定边框颜色。点击仓库展示全部正在操作人员及其操作分支，点击分支仅展示对应人员；入口与原展开/导航独立，保留原读取与Push角标。
+- [ ] \[PRESENCE-06-avatar-state] 头像环优先级按用户确认：编辑中闪烁 > 未Commit更改虚线 > Commit未Push实线。状态来自有效在线Presence快照和真实未推送计数，已Push/只有远端领先不生成头像角标；失联与过期不能继续显示编辑。遵循减少动态效果，弹窗有状态说明。
+
 ## Phase - v0.23.0 - Presence 插件与首个服务器
 
 ### presence/main: 接入真实团队协作状态

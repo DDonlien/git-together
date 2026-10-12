@@ -86,6 +86,7 @@ pub struct Project {
     branch: Option<String>,
     head: Option<String>,
     git_ready: bool,
+    unpublished_commits: Option<u64>,
     files: Vec<File>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,6 +95,7 @@ pub struct Session {
     session_id: String,
     user_id: String,
     display_name: String,
+    avatar_url: Option<String>,
     device_id: String,
     alive: bool,
     last_seen: u64,
@@ -372,7 +374,7 @@ impl Presence {
         })?;
         socket
             .send(Message::Text(
-                json!({"type":"observer","version":1,"deviceId":config.device_id})
+                json!({"type":"observer","version":2,"deviceId":config.device_id})
                     .to_string()
                     .into(),
             ))
@@ -384,7 +386,7 @@ impl Presence {
             .ok_or("Presence 服务器已断开。")?
             .map_err(|_| "Presence 握手读取失败。")?;
         let ServerMessage::Welcome {
-            version: 1,
+            version: 2,
             session_id,
             heartbeat_ms,
             ttl_ms,
@@ -407,7 +409,7 @@ impl Presence {
             tokio::select! {
                 _ = heartbeat.tick() => {
                     if last_receive.elapsed() > Duration::from_millis(ttl_ms) { return Err("Presence 服务器续期超时，协作状态已变为未知。".into()); }
-                    socket.send(Message::Text(json!({"type":"heartbeat","version":1,"sessionId":session_id}).to_string().into())).await.map_err(|_| "Presence 连接已断开，正在自动重试。")?;
+                    socket.send(Message::Text(json!({"type":"heartbeat","version":2,"sessionId":session_id}).to_string().into())).await.map_err(|_| "Presence 连接已断开，正在自动重试。")?;
                     socket.send(Message::Ping(vec![].into())).await.map_err(|_| "Presence 连接已断开。")?;
                 }
                 message = socket.next() => {
@@ -417,7 +419,7 @@ impl Presence {
                         Message::Ping(_) | Message::Pong(_) => continue,
                         Message::Close(_) => return Err("Presence 连接已断开，正在自动重试。".into()),
                         other => match decode_message(other)? {
-                            ServerMessage::World { version: 1, revision: current, sessions } => {
+                            ServerMessage::World { version: 2, revision: current, sessions } => {
                                 if sessions.len() > 2000 || sessions.iter().any(|s| !valid_session(s)) { return Err("Presence 服务器快照无效，未使用异常数据。".into()); }
                                 if revision.is_some_and(|previous| current < previous) { return Err("Presence 服务器快照顺序无效。".into()); }
                                 revision = Some(current);
@@ -588,6 +590,9 @@ fn valid_project(project: &Project) -> bool {
     let mut paths = std::collections::HashSet::new();
     valid_id(&project.repository_id)
         && valid_id(&project.worktree_id)
+        && project
+            .unpublished_commits
+            .is_none_or(|count| count <= 9_007_199_254_740_991)
         && project.branch.as_ref().is_none_or(|s| s.len() <= 1024)
         && project.head.as_ref().is_none_or(|s| {
             (s.len() == 40 || s.len() == 64)
@@ -619,6 +624,12 @@ fn valid_session(session: &Session) -> bool {
         && valid_id(&session.device_id)
         && !session.display_name.is_empty()
         && session.display_name.chars().count() <= 200
+        && session.avatar_url.as_ref().is_none_or(|value| {
+            value.len() <= 2048
+                && url::Url::parse(value).is_ok_and(|url| {
+                    url.scheme() == "https" && url.username().is_empty() && url.password().is_none()
+                })
+        })
         && session.projects.len() <= 100
         && session.projects.iter().all(valid_project)
 }

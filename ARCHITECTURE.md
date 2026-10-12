@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+0.24.0 Presence头像：Rust观察者使用远端协议2读取server-authoritative avatarUrl与Bridge只读计算的unpublishedCommits；本机编辑器协议1不变，NAS按连接向旧客户端兼容发送原字段。presencePeople根据有效在线会话、精确仓库/分支和userId聚合操作人员；优先editing、未Commit change、未Push Commit。多设备同账号去重，边框颜色由repositoryId派生，与账号头像分离；已发布提交、仅远端领先及失联不产生头像角标。UI共享AvatarGroup/Popover，未增加读取请求、动态插件或Git写入口。
+
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
 ## 当前运行结构（0.23.0）

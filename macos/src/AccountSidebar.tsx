@@ -1,5 +1,6 @@
 import { accountLabel, type Catalog } from './import-model';
 import { RepositoryLogo } from './RepositoryLogo';
+import { PresenceAvatars } from './PresenceAvatars';
 import { Icon } from './ui';
 
 export function AccountSidebar({ catalog, collapsedAccounts, loading, selectedRepositoryId, onToggleAccount, onOpen }: {
@@ -19,9 +20,9 @@ export function AccountSidebar({ catalog, collapsedAccounts, loading, selectedRe
           <span className="sidebar-account-disclosure" aria-hidden="true"><Icon name={collapsed ? 'right' : 'down'} size={11} /></span><span className="sidebar-account-name">{account.name}</span><small>{repositories.length}</small>
         </button>
         {!collapsed && <div id={`account-${account.id}`} className="sidebar-account-repositories">
-          {repositories.map(repo => <button key={repo.id} className={`nav-item repository-item ${repo.id === selectedRepositoryId ? 'active' : ''}`} title={repo.fullName} aria-label={repo.available ? repo.name : `${repo.name}（不可访问）`} onClick={() => onOpen(repo.id)}>
+          {repositories.map(repo => <div key={repo.id} className="sidebar-repository-entry"><button className={`nav-item repository-item ${repo.id === selectedRepositoryId ? 'active' : ''}`} title={repo.fullName} aria-label={repo.available ? repo.name : `${repo.name}（不可访问）`} onClick={() => onOpen(repo.id)}>
             <RepositoryLogo repository={repo} /><span>{repo.name}</span>{!repo.available && <Icon name="warning" size={13} />}
-          </button>)}
+          </button><div className="sidebar-repository-avatar-anchor"><PresenceAvatars repository={repo} /></div></div>)}
           {!repositories.length && <p className="sidebar-account-empty">{account.error ? '仓库读取失败' : '此账号暂无仓库'}</p>}
         </div>}
       </section>;

@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button, Icon, IconButton } from './ui';
 import type { RepositoryTask } from './repository-model';
-import type { Account, RemoteRepository } from './import-model';
+import { providerName, type Account, type RemoteRepository } from './import-model';
 import { importAPI } from './import-api';
+import { PresenceBranchIcon } from './PresenceAvatars';
 import { repositoryFileURL } from './repository-file-url';
 import { decoratedFileTree, type DecoratedFileTreeNode, type FileTreeChange } from './file-tree';
 
@@ -39,7 +40,7 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
   };
   const actions: FileActions | undefined = repository && account ? {
     opening: openingDirectory ? '' : opening,
-    label: path => task.remote ? `在 ${account.provider === 'github' ? 'GitHub' : 'Gitea'} 打开 ${path}` : `用默认应用打开 ${path}`,
+    label: path => task.remote ? `在 ${providerName(account.provider)} 打开 ${path}` : `用默认应用打开 ${path}`,
     unavailable: node => node.missing ? '当前目录中不存在，无法打开' : !repository.available ? '当前账号无权访问' : task.remote ? repositoryFileURL(account, repository, task.head, node.path) ? '' : '远端文件地址不可用' : task.path ? '' : '这个分支未检出到本地',
     open: path => {
       if (inFlight.current) return;
@@ -62,7 +63,7 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
     {task.remote && task.treeComplete === false && task.tree.length > 0 && <p className="repository-data-note">文件树不完整，显示已读取部分。</p>}
     {task.error && <p className="repository-task-error" role="alert">{task.error}</p>}
     <footer className="repository-tree-identity">
-      <span className="repository-tree-branch"><Icon name="branch" size={14} /><strong title={task.branch}>{task.branch}</strong></span>
+      <div className="repository-tree-branch"><PresenceBranchIcon repository={repository} branch={task.branch} /><strong title={task.branch}>{task.branch}</strong></div>
       {!task.remote && (task.path ? <Button variant="quiet" className="repository-tree-path" title={task.path} aria-label={`在文件浏览器中打开 ${task.path}`} disabled={!repository?.available || !account || openingDirectory || opening !== null} aria-busy={openingDirectory || undefined} onClick={openDirectory}>{task.path}</Button> : <small>未检出</small>)}
       <code title={task.head || undefined}>{task.head.slice(0, 8) || '未读取'}</code>
     </footer>
