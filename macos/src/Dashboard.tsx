@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject, type TdHTMLAttributes } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject, type TdHTMLAttributes } from 'react';
 import { accountLabel, providerName, type Account, type LocalLink, type RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { useRemoteRepository } from './use-remote-repository';
@@ -22,6 +22,7 @@ import { aggregateGitSignals, associationStatus, gitSignals, hiddenEntryKey, lin
 import type { RepositoryTask } from './repository-model';
 import type { LocalRepositoryState } from './use-workspace';
 import { chooseLocalDirectory } from './local-directory';
+import { branchHiddenEntries, toggleBranchVisibility } from './branch-behavior';
 
 type DashboardSortKey = 'repository' | 'owner' | 'account' | 'updatedAt' | 'modifiedAt' | 'localPath' | 'pull' | 'push' | 'commit' | 'hidden';
 type DashboardSort = { key: DashboardSortKey; direction: 'asc' | 'desc' };
@@ -61,12 +62,15 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const [type, setType] = useState<FilterSelection>(null);
   const [visibility, setVisibility] = useState<FilterSelection>(null);
   const [showHidden, setShowHidden] = useState(false);
-  const hiddenEntries = new Set(controller.preferences.hiddenEntries || []);
+  const [reportedHiddenBranches, setReportedHiddenBranches] = useState<Record<string, string[]>>({});
+  const reportHiddenBranches = useCallback((key: string, entries: string[]) => setReportedHiddenBranches(current => JSON.stringify(current[key]) === JSON.stringify(entries) ? current : { ...current, [key]: entries }), []);
+  const hiddenEntries = new Set(controller.hiddenEntries || controller.preferences.hiddenEntries || []);
+  if (controller.preferences.unworkedBranchBehavior === 'hide') for (const repo of controller.catalog.repositories) {
+    if (controller.remoteStates[repo.id]) continue;
+    for (const key of reportedHiddenBranches[JSON.stringify([controller.catalog.instanceId, repo.id])] || []) if (!controller.preferences.shownBranches?.includes(key)) hiddenEntries.add(key);
+  }
   const toggleHidden = (key: string) => {
-    const next = new Set(hiddenEntries);
-    if (!next.delete(key)) next.add(key);
-    controller.updatePreferences({ hiddenEntries: [...next] });
-    if (!next.size) setShowHidden(false);
+    controller.updatePreferences(toggleBranchVisibility(controller.preferences, key, hiddenEntries.has(key)));
   };
   const [expandedRepositories, setExpandedRepositories] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<DashboardSort>({ key: 'repository', direction: 'asc' });
@@ -186,7 +190,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
         <DashboardActionNames>
         <div className="remote-table-scroll"><table className="remote-repo-table"><thead><tr><DashboardSortHeader label="仓库" column="repository" sort={sort} onSort={changeSort} /><DashboardSortHeader label="组织 / 用户" column="owner" sort={sort} onSort={changeSort} /><DashboardSortHeader label="账号" column="account" sort={sort} onSort={changeSort} /><DashboardSortHeader label="更新日期" column="updatedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="修改日期" column="modifiedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="本地目录" column="localPath" sort={sort} onSort={changeSort} /><th scope="col" className="repository-action-cell"><div className="dashboard-signal-sort">{([{ key: 'pull', label: '远端内容' }, { key: 'commit', label: '待提交' }, { key: 'push', label: '本地内容' }, { key: 'hidden', label: '隐藏' }] as const).map(item => { const count = item.key === 'hidden' ? filtered.reduce((sum, repo) => sum + hiddenCount(repo), 0) : batchSignals[item.key].count || 0; return <button type="button" key={item.key} data-signal={item.key} aria-pressed={sort.key === item.key} aria-label={`${item.label}，按数量排序${sort.key === item.key ? sort.direction === 'asc' ? '，升序' : '，降序' : ''}`} onClick={() => changeSort(item.key)}><span className="dashboard-sort-label">{item.label}{sort.key === item.key && <span className="repository-sort-indicator" aria-hidden="true">{sort.direction === 'asc' ? '↑' : '↓'}</span>}{count > 0 && <span className="dashboard-sort-count">{count}</span>}</span></button>; })}</div></th></tr></thead>{rows.map(({ repo, account, localPath, modifiedAt }) => {
           const key = JSON.stringify([controller.catalog.instanceId, repo.id]);
-          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} onDownload={onDownload} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={toggleHidden} taskSearch={repositorySearchText(repo, account).includes(globalSearch.toLowerCase()) ? '' : globalSearch} onAction={openAction} />;
+          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} onDownload={onDownload} showHidden={showHidden} onToggleHidden={toggleHidden} taskSearch={repositorySearchText(repo, account).includes(globalSearch.toLowerCase()) ? '' : globalSearch} onAction={openAction} onHiddenBranches={reportHiddenBranches} />;
         })}</table></div>
         </DashboardActionNames>
         {!filtered.length && <div className="account-repos-empty">{incompleteClassification ? '所选分类尚未读取完整，暂时没有已确认的匹配项。' : !visibleAccounts.length || repositories.some(repo => isSelected(selectedAccounts, repo.accountId)) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
@@ -195,9 +199,9 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   </main>;
 }
 
-function DashboardRepositoryRows({ repository: repo, account, controller, localPath, modifiedAt, expanded, onToggle, onOpen, onConfigure, onDownload, hiddenEntries, showHidden, onToggleHidden, taskSearch, onAction }: {
-  repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string, taskId?: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; hiddenEntries: ReadonlySet<string>; showHidden: boolean; onToggleHidden: (key: string) => void;
-  taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void;
+function DashboardRepositoryRows({ repository: repo, account, controller, localPath, modifiedAt, expanded, onToggle, onOpen, onConfigure, onDownload, showHidden, onToggleHidden, taskSearch, onAction, onHiddenBranches }: {
+  repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string, taskId?: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; showHidden: boolean; onToggleHidden: (key: string) => void;
+  taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void; onHiddenBranches: (key: string, entries: string[]) => void;
 }) {
   const branchesId = useId();
   const branchesRef = useRef<HTMLTableSectionElement>(null);
@@ -225,9 +229,12 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   const link = controller.catalog.links.find(link => link.repositoryId === repo.id);
   // Linked rows share workspace-owned checks, including while filtered out.
   // Unlinked repositories keep their expanded-row, on-demand reader.
-  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, (expanded || !!link) && ready, controller.remoteStates[repo.id]);
+  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, (expanded || !!link) && ready, controller.remoteStates[repo.id], controller.preferences.unworkedBranchBehavior === 'hide');
   const owner = repo.fullName.split('/')[0];
   const local = controller.localStates[repo.id];
+  const hiddenEntries = branchHiddenEntries(repo.id, controller.preferences, state.workspace?.tasks, linkedTasks(link, local));
+  const reportedEntries = JSON.stringify([...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).sort());
+  useLayoutEffect(() => { onHiddenBranches(JSON.stringify([controller.catalog.instanceId, repo.id]), JSON.parse(reportedEntries)); }, [controller.catalog.instanceId, repo.id, reportedEntries, onHiddenBranches]);
   const pushActivity = usePushActivity();
   const pushState = repositoryPushState(pushActivity.runs[repo.id], linkedTasks(link, local));
   const association = associationStatus(link, local, state, hiddenEntries);
@@ -255,7 +262,7 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
   const presence = usePresence();
   const pushActivity = usePushActivity();
   const error = repository.available ? state.error : '访问账号目前无权读取此仓库。';
-  const branchWarnings = workspace?.warnings.filter(warning => warning.startsWith('分支超过')) || [];
+  const branchWarnings = workspace?.warnings.filter(warning => warning.startsWith('分支超过') || warning.startsWith('分支参与记录')) || [];
   const localTasks = linkedTasks(link, localState);
   const collaborationBranches = presencePeople(presence?.status || null, presenceRepositoryId(repository)).flatMap(person => person.branches.flatMap(entry => entry.branch === null ? [] : [entry.branch]));
   const branches = [...new Set([...(workspace?.tasks.map(task => task.branch) || []), ...localTasks.map(task => task.branch), ...collaborationBranches])];

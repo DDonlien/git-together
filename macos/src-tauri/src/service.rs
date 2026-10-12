@@ -981,10 +981,15 @@ impl Service {
             "remoteWorkspace" | "remoteCommit" | "remoteFile" => {
                 let result = match method {
                     "remoteWorkspace" => {
-                        util::allowed(input, &["repositoryId"])?;
+                        util::allowed(input, &["repositoryId", "checkParticipation"])?;
+                        let check_participation = match input.get("checkParticipation") {
+                            None => false,
+                            Some(Value::Bool(value)) => *value,
+                            _ => return Err("分支参与记录选项必须为布尔值。".into()),
+                        };
                         context
                             .provider
-                            .workspace(&context.repository, cancel)
+                            .workspace(&context.repository, cancel, check_participation)
                             .await?
                     }
                     "remoteCommit" => {

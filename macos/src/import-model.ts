@@ -67,7 +67,7 @@ export type ApiInputs = {
   generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string; paths?: string[] };
   cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
-  remoteWorkspace: { repositoryId: string };
+  remoteWorkspace: { repositoryId: string; checkParticipation?: boolean };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
   openRepository: { repositoryId: string };

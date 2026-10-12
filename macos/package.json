@@ -1,6 +1,6 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "desktop": "tauri dev",
     "tauri": "tauri",
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
+    "icons": "tsx scripts/generate-icons.ts",
     "package:desktop": "tsx scripts/package-desktop.ts",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "package:windows": "tsx scripts/package-windows.ts"

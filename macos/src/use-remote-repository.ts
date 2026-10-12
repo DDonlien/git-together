@@ -11,7 +11,7 @@ const resourceKey = (repository: RemoteRepository, instanceId: string) => JSON.s
 // Associated repositories are owned by useWorkspace across page/filter changes.
 // Unassociated ones use the same reader on demand. Both retain successful SHA
 // snapshots and share the timer/trigger serialization and cancellation rules.
-export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}) {
+export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false) {
   const identities = repositories.map(repository => resourceKey(repository, instanceId));
   const resources = enabled && instanceId ? repositories.filter(repository => repository.available).map(repository => resourceKey(repository, instanceId)) : [];
   const current = useRef(new Set<string>()); current.current = new Set(resources);
@@ -25,7 +25,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     });
   }, [identityKey]);
   useAutoRefresh({ resources, intervalMs: syncIntervals.remote,
-    triggers: Object.fromEntries(repositories.map(repository => [resourceKey(repository, instanceId), changes[repository.id] ?? 0])),
+    triggers: Object.fromEntries(repositories.map(repository => [resourceKey(repository, instanceId), (changes[repository.id] ?? 0) * 2 + Number(checkParticipation)])),
     onReading: (key, loading) => setStates(previous => {
       const state = previous[key] || { workspace: null, error: '', loading: false };
       return state.loading === loading ? previous : { ...previous, [key]: { ...state, loading } };
@@ -41,7 +41,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
         problem => problem instanceof Error ? problem : new Error('本地远端引用更新失败。'),
       );
       try {
-        const workspace = await importAPI('remoteWorkspace', { repositoryId }, signal);
+        const workspace = await importAPI('remoteWorkspace', { repositoryId, ...(checkParticipation ? { checkParticipation: true } : {}) }, signal);
         if (signal.aborted || !current.current.has(key)) return;
         setStates(previous => {
           // Removed mappings and restarted services cannot inherit old contents.
@@ -72,8 +72,8 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
   })) as Record<string, RemoteRepositoryState>;
 }
 
-export function useRemoteRepository(repository: RemoteRepository | undefined, instanceId: string, enabled: boolean, sharedState?: RemoteRepositoryState) {
-  const states = useRemoteRepositories(repository && !sharedState ? [repository] : [], instanceId, enabled && !sharedState);
+export function useRemoteRepository(repository: RemoteRepository | undefined, instanceId: string, enabled: boolean, sharedState?: RemoteRepositoryState, checkParticipation = false) {
+  const states = useRemoteRepositories(repository && !sharedState ? [repository] : [], instanceId, enabled && !sharedState, {}, checkParticipation);
   const resource = repository && instanceId ? resourceKey(repository, instanceId) : '';
   const active = enabled && !!repository?.available && !!resource;
   const current = useRef(''); current.current = active ? resource : '';

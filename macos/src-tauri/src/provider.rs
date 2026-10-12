@@ -537,6 +537,184 @@ impl Provider {
             )
             .await)
     }
+    async fn account_commits(
+        &self,
+        repo: &Value,
+        head: &str,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        let key = format!(
+            "participation:{}:{}:{head}",
+            text(&self.account, "id"),
+            text(repo, "id")
+        );
+        if let Some(value) = self.cached(&key).await {
+            if value["checkedAt"]
+                .as_i64()
+                .is_some_and(|time| util::now() - time < 300_000)
+            {
+                return value["found"]
+                    .as_bool()
+                    .ok_or("分支参与记录格式无效。".into());
+            }
+        }
+        let kind = self.kind();
+        let login = text(&self.account, "login");
+        let base = if kind == "gitlab" {
+            format!(
+                "/projects/{}",
+                repo["remoteId"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or("无效的远端项目身份。")?
+            )
+        } else {
+            repo_path(repo)?
+        };
+        if matches!(kind, "github" | "github-enterprise" | "gitee") {
+            let (value, _) = self
+                .get(
+                    &format!("{base}/commits"),
+                    &[("sha", head), ("author", login), ("per_page", "1")],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("分支参与记录返回格式无效。")?;
+            if rows
+                .iter()
+                .any(|row| !text(&row["author"], "login").eq_ignore_ascii_case(login))
+            {
+                return Err("平台未能确认提交作者的账号身份。".into());
+            }
+            let found = !rows.is_empty();
+            self.remember(key, json!({"found":found,"checkedAt":util::now()}))
+                .await;
+            return Ok(found);
+        }
+        let mut emails = std::collections::BTreeSet::new();
+        if kind == "gitlab" {
+            let email_key = "participation-emails";
+            let identity = if let Some(value) = self.cached(email_key).await.filter(|value| {
+                value["checkedAt"]
+                    .as_i64()
+                    .is_some_and(|time| util::now() - time < 300_000)
+            }) {
+                value["emails"].clone()
+            } else {
+                let (user, _) = self.get("/user", &[], "json", cancel).await?;
+                if !text(&user, "username").eq_ignore_ascii_case(login) {
+                    return Err("提交身份与当前登录账号不一致。".into());
+                }
+                let mut addresses = Vec::new();
+                if let Some(email) = user["email"].as_str().filter(|email| !email.is_empty()) {
+                    addresses.push(email.to_lowercase());
+                }
+                for page in 1..=10 {
+                    let page_s = page.to_string();
+                    let (value, headers) = self
+                        .get(
+                            "/user/emails",
+                            &[("page", &page_s), ("per_page", "100")],
+                            "json",
+                            cancel,
+                        )
+                        .await?;
+                    let rows = value.as_array().ok_or("账号邮箱记录格式无效。")?;
+                    for row in rows {
+                        if row["confirmed_at"].as_str().is_some() {
+                            addresses.push(
+                                row["email"]
+                                    .as_str()
+                                    .ok_or("账号邮箱记录格式无效。")?
+                                    .to_lowercase(),
+                            );
+                        }
+                    }
+                    if !next(&headers) && rows.len() < 100 {
+                        break;
+                    }
+                    if page == 10 {
+                        return Err("账号邮箱记录尚未完整读取。".into());
+                    }
+                }
+                if addresses.is_empty() {
+                    return Err("平台未返回当前账号的已验证邮箱。".into());
+                }
+                self.remember(
+                    email_key.into(),
+                    json!({"emails":addresses,"checkedAt":util::now()}),
+                )
+                .await["emails"]
+                    .clone()
+            };
+            for email in identity.as_array().ok_or("账号邮箱记录格式无效。")? {
+                emails.insert(email.as_str().ok_or("账号邮箱记录格式无效。")?.to_owned());
+            }
+        } else if kind != "gitea" {
+            return Err("平台暂不能确认提交账号身份。".into());
+        }
+        // Gitea has no author query. A negative result requires a closed parent
+        // graph back to every root, rather than the graph's recent 50 records.
+        let mut seen = std::collections::BTreeSet::new();
+        let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
+        for page in 1..=10 {
+            let page_s = page.to_string();
+            let (value, _) = self
+                .get(
+                    &format!(
+                        "{base}{}",
+                        if kind == "gitlab" {
+                            "/repository/commits"
+                        } else {
+                            "/commits"
+                        }
+                    ),
+                    &[
+                        (if kind == "gitlab" { "ref_name" } else { "sha" }, head),
+                        (if kind == "gitea" { "limit" } else { "per_page" }, "100"),
+                        ("page", &page_s),
+                        ("stat", "false"),
+                        ("verification", "false"),
+                        ("files", "false"),
+                    ],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("分支参与记录返回格式无效。")?;
+            for row in rows {
+                let found = if kind == "gitlab" {
+                    emails.contains(&text(row, "author_email").to_lowercase())
+                } else {
+                    text(&row["author"], "login").eq_ignore_ascii_case(login)
+                };
+                if found {
+                    self.remember(key, json!({"found":true,"checkedAt":util::now()}))
+                        .await;
+                    return Ok(true);
+                }
+                let commit = commit_value(row)?;
+                seen.insert(text(&commit, "id").to_owned());
+                parents.extend(
+                    commit["parents"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|id| id.as_str().unwrap().to_owned()),
+                );
+            }
+            if parents.iter().all(|id| seen.contains(id)) {
+                self.remember(key, json!({"found":false,"checkedAt":util::now()}))
+                    .await;
+                return Ok(false);
+            }
+            if rows.is_empty() {
+                break;
+            }
+        }
+        Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into())
+    }
     pub async fn tree(&self, repo: &Value, id: &str, cancel: &CancellationToken) -> Result<Value> {
         util::sha(id)?;
         let key = format!("t:{}:{id}", text(repo, "id"));
@@ -703,7 +881,7 @@ impl Provider {
         });
         Ok((out, limited))
     }
-    pub async fn workspace(&self, repo: &Value, cancel: &CancellationToken) -> Result<Value> {
+    pub async fn workspace(&self, repo: &Value, cancel: &CancellationToken, check_participation: bool) -> Result<Value> {
         let (items, limited) = self.branches(repo, cancel).await?;
         let mut tasks = Vec::new();
         let mut commits = Vec::new();
@@ -721,10 +899,13 @@ impl Provider {
                 let p = self.clone();
                 let r = repo.clone();
                 let c = cancel.clone();
-                jobs.spawn(async move {let mut task=json!({"id":format!("remote:{branch}"),"branch":branch,"head":head,"path":null,"files":[],"tree":[],"error":"","remote":true,"treeComplete":false});let result=async {let h=p.history(&r,&head,&c).await?;let t=p.tree(&r,text(&h,"tree"),&c).await?;Ok::<_,String>((h,t))}.await;match result {Ok((h,t))=>{task["tree"]=json!(tree_paths(&t));task["treeComplete"]=t["complete"].clone();(task,h["commits"].as_array().unwrap().clone(),h["limited"]==true)},Err(e)=>{task["error"]=json!(e);(task,vec![],false)}}});
+                jobs.spawn(async move {let mut task=json!({"id":format!("remote:{branch}"),"branch":branch,"head":head,"path":null,"files":[],"tree":[],"error":"","remote":true,"treeComplete":false});let result=async {let h=p.history(&r,&head,&c).await?;let t=p.tree(&r,text(&h,"tree"),&c).await?;Ok::<_,String>((h,t))}.await;match result {Ok((h,t))=>{task["tree"]=json!(tree_paths(&t));task["treeComplete"]=t["complete"].clone();if check_participation { match p.account_commits(&r,&head,&c).await { Ok(found)=>task["hasAccountCommits"]=json!(found),Err(error)=>task["participationError"]=json!(error) } }(task,h["commits"].as_array().unwrap().clone(),h["limited"]==true)},Err(e)=>{task["error"]=json!(e);(task,vec![],false)}}});
             }
             match jobs.join_next().await {
                 Some(Ok((t, c, l))) => {
+                    if let Some(error) = t["participationError"].as_str() {
+                        warnings.push(format!("分支参与记录：{}：{}", text(&t, "branch"), error));
+                    }
                     if t["treeComplete"] != true && t["error"] == "" {
                         warnings.push(format!("{} 的文件树读取不完整。", text(&t, "branch")));
                     }

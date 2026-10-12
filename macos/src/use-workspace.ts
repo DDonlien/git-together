@@ -9,9 +9,11 @@ import { preserveLocalWorkspace, type RepositoryWorkspace } from './repository-m
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
 import { useUpdates } from './use-updates';
+import { branchHiddenEntries, type BranchBehaviorPreferences } from './branch-behavior';
+import { linkedTasks } from './branch-links';
 
-type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; hiddenEntries?: string[] };
-const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [] };
+type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[] } & BranchBehaviorPreferences;
+const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; loading?: boolean; error: string; checkedAt: number }
 export function useWorkspace() {
@@ -38,7 +40,8 @@ export function useWorkspace() {
       const raw = localStorage.getItem(preferenceKey); if (!raw) return defaults;
       const saved: unknown = JSON.parse(raw);
       if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string') || (saved.hiddenEntries !== undefined && (!Array.isArray(saved.hiddenEntries) || !saved.hiddenEntries.every(entry => typeof entry === 'string')))) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
-      return saved as Preferences;
+      if ((saved.unworkedBranchBehavior !== undefined && !['default', 'hide'].includes(String(saved.unworkedBranchBehavior))) || (saved.shownBranches !== undefined && (!Array.isArray(saved.shownBranches) || !saved.shownBranches.every(entry => typeof entry === 'string')))) throw new Error('仓库行为偏好格式无效，已使用默认设置；原记录尚未覆盖。');
+      return { ...defaults, ...saved } as Preferences;
     } catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); queueMicrotask(() => setStorageError(problem instanceof Error ? problem.message : '无法读取外观设置。')); return defaults; }
   });
   const accept = useCallback((next: Catalog) => {
@@ -172,11 +175,13 @@ export function useWorkspace() {
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions);
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide');
+  const hiddenEntries = new Set(preferences.hiddenEntries || []);
+  for (const repository of catalog.repositories) for (const key of branchHiddenEntries(repository.id, preferences, remoteStates[repository.id]?.workspace?.tasks, linkedTasks(catalog.links.find(link => link.repositoryId === repository.id), localStates[repository.id]))) hiddenEntries.add(key);
   useEffect(() => {
     if (!preferencesChanged.current) return;
     try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); setStorageError(''); logDiagnostic({ event: 'ui-action', outcome: 'success', method: 'preferences' }); }
-    catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); setStorageError('无法保存外观设置；当前会话仍可使用。'); }
+    catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); setStorageError('无法保存设置；当前会话仍可使用。'); }
   }, [preferences]);
   const updatePreferences = (change: Partial<Preferences>) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...change })); };
   async function task(key: string, run: () => Promise<Catalog>) {
@@ -223,7 +228,7 @@ export function useWorkspace() {
     } finally { running.current.delete(input.repositoryId); if (mounted.current) setBusy(current => ({ ...current, [input.repositoryId]: false })); }
   }
   return {
-    catalog, localStates, remoteStates, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload, updates,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload, updates,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

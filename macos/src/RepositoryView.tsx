@@ -27,9 +27,9 @@ import type { FileTreeChange } from './file-tree';
 
 const noChanges: FileTreeChange[] = [];
 
-export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask }: {
+export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask }: {
   repository: RemoteRepository; account: Account; localPath?: string; localState?: LocalRepositoryState;
-  localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
+  localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; manualHiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
   globalSearch: string; onSearchChange?: (value: string) => void; searchRef?: RefObject<HTMLElement | null>;
   onConfigure: () => void; workspace?: RepositoryWorkspace;
   remoteState?: RemoteRepositoryState; readRemoteCommit?: ReadRemoteCommit;
@@ -45,7 +45,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const [commitSelection, setCommitSelection] = useState<{ taskId: string; commitId: string } | null>(null);
   const [localTaskChoice, setLocalTaskChoice] = useState<string | null>(initialCommitTask || null);
   const [commitOpenRequest, setCommitOpenRequest] = useState(0);
-  const [branchSelection, setBranchSelection] = useState<ReadonlySet<string> | null>(null);
+  const [branchSelection, setBranchSelection] = useState<ReadonlySet<string> | null | undefined>(undefined);
   const [action, setAction] = useState<{ mode: RepositoryActionMode; targets: RepositoryActionTarget[] } | null>(null);
   const [actionFeedback, setActionFeedback] = useState('');
   const [repositoryOpenError, setRepositoryOpenError] = useState('');
@@ -85,7 +85,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   };
   const contextFiles = { ...selectedFiles };
   if (selection && !workspace.tasks.find(task => task.id === selection.taskId)?.remote) contextFiles[selection.taskId] = historyFiles[JSON.stringify([selection.taskId, selection.commitId])];
-  const actionTasks = (localLink ? linkedTasks(localLink, current, hiddenEntries) : suppliedWorkspace?.tasks.filter(task => !task.remote && task.path) || []).filter(task => branchSelection === null || branchSelection.has(task.branch));
+  const actionTasks = (localLink ? linkedTasks(localLink, current, branchSelection === undefined ? hiddenEntries : manualHiddenEntries || hiddenEntries) : suppliedWorkspace?.tasks.filter(task => !task.remote && task.path) || []).filter(task => branchSelection == null || branchSelection.has(task.branch));
   const signals = gitSignals(actionTasks, remoteState || { workspace: null, loading: false, error: '' }, current, undefined, repository.available);
   const pushActivity = usePushActivity(), pushRun = pushActivity.runs[repository.id];
   const pushState = repositoryPushState(pushRun, workspace.tasks);
@@ -106,6 +106,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
     finally { setOpeningRepository(false); }
   };
   const publishedCommits = new Map(workspace.tasks.filter(task => task.remote).map(task => [task.branch, reachableCommitIds(workspace.commits, [task.head])]));
+  const defaultHiddenBranches = useMemo(() => new Set(workspace.tasks.filter(task => hiddenEntries?.has(hiddenEntryKey(repository.id, task.branch))).map(task => task.branch)), [workspace.tasks, hiddenEntries, repository.id]);
   return <main className="repository-workspace-view" aria-label="仓库工作台">
     <section className="repository-overview flat-group" aria-label="仓库信息">
       <div className="repository-overview-heading"><div className="repository-overview-title"><h1>{repository.name}</h1><p title={repository.url}><a className="repository-url" href={repository.url} target="_blank" rel="noopener noreferrer" aria-label={`用默认浏览器打开 ${repository.fullName}`} aria-busy={openingRepository || undefined} onClick={openRepository} onAuxClick={event => { if (event.button === 1) void openRepository(event); }}>{repository.url}</a></p></div><div className="repository-overview-actions"><DashboardActionNames><RepositoryRowActions itemLabel={`${repository.fullName} · 当前筛选分支`} signals={signals} hidden={!!hiddenEntries?.has(hiddenEntryKey(repository.id))} onToggleHidden={onToggleHidden} onPull={repository.available && actionTasks.length ? () => openAction('pull') : undefined} onLatest={repository.available && actionTasks.length ? () => openAction('latest') : undefined} onClean={repository.available && actionTasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!action || !repository.available} /></DashboardActionNames></div></div>
@@ -121,7 +122,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
     {remoteState?.error && <Notice kind="error">{remoteState.error}{remoteState.workspace && ' 显示上次读取的远端内容。'}</Notice>}
     {remoteState?.workspace?.warnings.map(warning => <p className="repository-workspace-warning" key={warning}>{warning}</p>)}
     <RepositoryColumns>
-      <section id="repository-graph-column" className="repository-column repository-graph-column flat-group" aria-label="分支图"><RepositoryGraph workspace={workspace} search={globalSearch} focusedTask={focus} onBranchFilterChange={setBranchSelection} onSelectCommit={selectCommit} onSelectWorkingTask={setLocalTaskChoice} emptyLabel={workspace.source === 'remote' && !workspace.commits.length ? remoteState?.loading ? '正在读取远端分支图…' : remoteState?.error || workspace.tasks.find(task => task.error)?.error || '远端仓库尚无提交' : undefined} /></section>
+      <section id="repository-graph-column" className="repository-column repository-graph-column flat-group" aria-label="分支图"><RepositoryGraph workspace={workspace} defaultHiddenBranches={defaultHiddenBranches} search={globalSearch} focusedTask={focus} onBranchFilterChange={setBranchSelection} onSelectCommit={selectCommit} onSelectWorkingTask={setLocalTaskChoice} emptyLabel={workspace.source === 'remote' && !workspace.commits.length ? remoteState?.loading ? '正在读取远端分支图…' : remoteState?.error || workspace.tasks.find(task => task.error)?.error || '远端仓库尚无提交' : undefined} /></section>
       <section id="repository-changes-column" className="repository-column repository-changes-column flat-group" aria-label="Diff 与提交"><RepositoryChangesColumn repository={repository} onConfigure={repository.available ? onConfigure : undefined} expandRequest={commitOpenRequest} repositoryId={repository.id} repositoryName={repository.fullName} onSubmit={commit} onGenerate={generate} onPush={push} onCommitted={(taskId, commitId) => { setCommitSelection({ taskId, commitId }); setCommitOpenRequest(value => value + 1); }} publishedCommits={publishedCommits} tasks={workspace.tasks} selection={selection} commit={selectedCommit} remoteCommits={remoteCommits} localCommits={localCommits} selectedFiles={contextFiles} onSelect={select} search={globalSearch} focus={focus} onFocus={setFocusedTask} localChoice={localTaskChoice} onLocalChoice={setLocalTaskChoice} localPath={localPath} loading={!!localPath && !current && !suppliedWorkspace} /></section>
       <section id="repository-tree-column" className="repository-column repository-tree-column flat-group" aria-label="文件树"><RepositoryColumnHeading title="文件树" icon="folder" controls="repository-tree-column"><Segmented<'remote' | 'local'> className="repository-tree-source" aria-label="文件树来源" aria-controls="repository-file-trees" value={treeSource} onValueChange={setTreeSource} items={[{ value: 'remote', label: '远端' }, { value: 'local', label: '本地' }]} /></RepositoryColumnHeading><div id="repository-file-trees" className={`repository-task-stack ${visibleTreeIds.size === 1 ? 'is-focused' : ''}`}>{workspace.tasks.map(task => {
         const commitId = selectedCommits[task.id];
