@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
+
 分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
 
 仅hide模式通过remoteWorkspace的有限checkParticipation布尔参数发起账号参与核对，旧调用缺省false。Rust Provider在账号凭据与仓库身份边界内，GitHub/企业版/Gitee按平台作者账号查询；Gitea分页读取账号归属；作者账号为空时核对当前账号的已验证邮箱，仍无法映射的作者保留未知，完整历史不能替代完整身份确认。Gitea只信任/user/emails明确verified的记录，不以显示名或公开profile邮箱推断身份。GitLab匹配当前账号与已验证邮箱。不存在贡献的判定要求明确的作者查询空结果或已闭合的完整父节点历史；分页上限1000、身份失败及缺失父节点以participationError和可见warning保留未知。元数据按账号/仓库/HEAD缓存五分钟，邮箱只留服务内存，不回传界面或写入偏好；有脏文件、未知本地HEAD或未推送本地历史时保留分支显示。官方契约见[GitHub提交](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)、[Gitea提交](https://docs.gitea.com/api/operations/repo-get-all-commits/)及[GitLab账号邮箱](https://docs.gitlab.com/api/user_email_addresses/)。

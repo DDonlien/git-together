@@ -826,6 +826,21 @@ impl Service {
                 json!({"instanceId":self.instance,"version":crate::VERSION,"backend":"rust","githubWebAuth":true}),
             );
         }
+        if method == "openLocalDirectory" {
+            util::allowed(input, &["path"])?;
+            let selected = util::field(input, "path", 4096)?;
+            let directory = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
+                let directory = util::absolute(&selected)?;
+                if !directory.is_dir() {
+                    return Err("请选择本地文件夹。".into());
+                }
+                Ok(directory)
+            })
+            .await
+            .map_err(|_| "目录验证未完成。")??;
+            open(directory.to_str().ok_or("目录路径无法读取。")?).await?;
+            return Ok(json!({"opened":true}));
+        }
         self.catalog().await?;
         match method {
             "catalog" => {

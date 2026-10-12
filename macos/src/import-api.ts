@@ -99,7 +99,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || typeof value.cancelled !== 'boolean') throw new Error('AI 取消结果返回格式无效。');
   } else if (method === 'openFile') {
     if (!isRecord(value) || value.opened !== true) throw new Error('文件打开结果无效。');
-  } else if (method === 'openDirectory') {
+  } else if (method === 'openDirectory' || method === 'openLocalDirectory') {
     if (!isRecord(value) || value.opened !== true) throw new Error('目录打开结果无效。');
   } else if (method === 'openRepository') {
     if (!isRecord(value) || value.opened !== true) throw new Error('仓库页面打开结果无效。');

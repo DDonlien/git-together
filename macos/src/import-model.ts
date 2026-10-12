@@ -73,6 +73,7 @@ export type ApiInputs = {
   openRepository: { repositoryId: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
   openDirectory: { repositoryId: string; taskId: string };
+  openLocalDirectory: { path: string };
 };
 export type ApiOutputs = {
   status: ServiceInfo;
@@ -94,6 +95,7 @@ export type ApiOutputs = {
   remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
   openDirectory: { opened: true };
+  openLocalDirectory: { opened: true };
   openRepository: { opened: true };
 };
 export type ApiMethod = keyof ApiInputs;
