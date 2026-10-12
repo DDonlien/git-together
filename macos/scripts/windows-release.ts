@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 const execute = promisify(execFile);
@@ -16,13 +16,16 @@ export interface WindowsPackage {
   authenticodeSigned: boolean;
 }
 interface Run { id: number; head_sha: string; display_title?: string; status: string; conclusion: string | null; html_url: string; event: string }
+function transient(error: unknown) {
+  return !!(error as { killed?: boolean } | null)?.killed || /TLS handshake timeout|i\/o timeout|connection reset|temporary failure|unexpected EOF|HTTP 50[234]/i.test(error instanceof Error ? error.message : String(error));
+}
 async function cli(cwd: string, args: string[]) {
   for (let attempt = 0; ; attempt++) {
-    try { return (await execute('gh', args, { cwd, timeout: 120_000, maxBuffer: 1024 * 1024 })).stdout; }
+    try { return (await execute('gh', args, { cwd, timeout: args[0] === 'run' && args[1] === 'download' ? 600_000 : 120_000, maxBuffer: 1024 * 1024 })).stdout; }
     catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      // Retry read-only status queries; dispatch and downloads retain one attempt.
-      if (args[0] !== 'api' || args.length !== 2 || attempt === 2 || !/TLS handshake timeout|i\/o timeout|connection reset|temporary failure|unexpected EOF/i.test(detail)) throw error;
+      // Only read-only API calls retry here. Artifact retries use fresh output
+      // directories below; an uncertain dispatch is never sent a second time.
+      if (args[0] !== 'api' || args.length !== 2 || attempt === 2 || !transient(error)) throw error;
       await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
     }
   }
@@ -76,8 +79,17 @@ export async function buildWindowsPackages(clientRoot: string, version: string, 
   if (run.conclusion !== 'success' || !matchesSource(run)) throw new Error(`Windows原生构建未通过（${run.conclusion}）：${run.html_url}`);
   const packages: WindowsPackage[] = [];
   for (const architecture of ['x86', 'x64'] as const) {
-    const downloaded = join(output, 'windows-build', architecture); await mkdir(downloaded, { recursive: true });
-    await cli(clientRoot, ['run', 'download', String(run.id), '--repo', repository, '--name', `gittogether-windows-${architecture}`, '--dir', downloaded]);
+    const downloaded = join(output, 'windows-build', architecture);
+    for (let attempt = 0; ; attempt++) {
+      await rm(downloaded, { recursive: true, force: true });
+      await mkdir(downloaded, { recursive: true });
+      try { await cli(clientRoot, ['run', 'download', String(run.id), '--repo', repository, '--name', `gittogether-windows-${architecture}`, '--dir', downloaded]); break; }
+      catch (error) {
+        if (attempt === 2 || !transient(error)) throw error;
+        console.log(`Windows ${architecture}构建产物下载暂时失败，重试完整下载（${attempt + 1}/2）。`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt));
+      }
+    }
     const info = JSON.parse(await readFile(join(downloaded, 'build-info.json'), 'utf8')) as WindowsPackage & { filename: string; sourceBranch: string; target: string; validation: { architecture: string; version: string; nativeValidationPassed: boolean } };
     const filename = `GitTogether-${version}-Windows-${architecture}-setup.exe`;
     const target = architecture === 'x86' ? 'i686-pc-windows-msvc' : 'x86_64-pc-windows-msvc';
