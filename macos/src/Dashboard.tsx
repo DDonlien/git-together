@@ -10,7 +10,7 @@ import { RepositoryReadBadge } from './RepositoryReadBadge';
 import { PresenceAvatars } from './PresenceAvatars';
 import { usePresence } from './PresenceProvider';
 import { presencePeople, presenceRepositoryId, managedOrganizations, managedOrganizationKey } from './presence-model';
-import { PresenceManagedMark, PresenceManagedNames } from './PresenceManaged';
+import { PresenceManagedMark, PresenceManagedNames, usePresenceRepositoryIcon } from './PresenceManaged';
 import { PushFeedbackIcon, branchPushState, repositoryPushState, usePushActivity } from './PushFeedback';
 import { RepositoryOperationDialog } from './RepositoryOperationDialog';
 import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
@@ -210,6 +210,7 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string, taskId?: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; showHidden: boolean; onToggleHidden: (key: string) => void;
   taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void; onHiddenBranches: (key: string, entries: string[]) => void;
 }) {
+  const folder = usePresenceRepositoryIcon(repo);
   const branchesId = useId();
   const branchesRef = useRef<HTMLTableSectionElement>(null);
   const [branchesMounted, setBranchesMounted] = useState(expanded);
@@ -252,7 +253,7 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   const openAction = (mode: RepositoryActionMode) => onAction(mode, repositoryActionTargets(repo, tasks, mode, state, local));
   return <>
     <tbody><tr className={`dashboard-repository-row${hidden ? ' dashboard-hidden-row' : ''}`}>
-      <td><div className="remote-name"><div className="repository-icon-anchor" aria-busy={readFeedback.reading || pushState?.phase === 'pushing'}><IconButton className="repository-icon-tile repository-disclosure" icon="folder" label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><PresenceManagedMark repository={repo} /><RepositoryReadBadge {...readFeedback} reading={readFeedback.reading && !pushState} /><PushFeedbackIcon state={pushState} /></div><div><div className="repository-name-line"><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><PresenceAvatars repository={repo} /></div><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
+      <td><div className="remote-name"><div className="repository-icon-anchor" aria-busy={readFeedback.reading || pushState?.phase === 'pushing'}><IconButton className="repository-icon-tile repository-disclosure" icon={folder.icon} title={folder.title} aria-description={folder.title} label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><PresenceManagedMark repository={repo} /><RepositoryReadBadge {...readFeedback} reading={readFeedback.reading && !pushState} /><PushFeedbackIcon state={pushState} /></div><div><div className="repository-name-line"><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><PresenceAvatars repository={repo} /></div><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
       <td><span className="repository-owner" title={owner}>{owner}</span></td>
       <td><div className="remote-account-cell" title={accountLabel(account)}><div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login}@{new URL(account.host).host}</small></div></div></td>
       <td className="repository-managed-cell"><PresenceManagedNames repository={repo} /></td>
