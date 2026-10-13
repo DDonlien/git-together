@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RepositoryActionDialog } from './RepositoryActionDialog';
-import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
-import type { GenerateCommitMessage, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
+import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
+import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { importAPI } from './import-api';
 import type { ApplyRepositorySync, RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
 import { Button, Icon, Modal, Notice } from './ui';
@@ -9,21 +9,24 @@ import { Button, Icon, Modal, Notice } from './ui';
 const isSync = (mode: RepositoryActionMode): mode is RepositorySyncMode => mode === 'pull' || mode === 'latest' || mode === 'clean';
 const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clean' };
 const discard = (plan: RepositorySyncPlan) => importAPI('discardSync', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(() => { console.warn('操作预览清理未完成，服务将在预览到期后再次清理。'); });
-export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onClose }: {
+export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
   mode: RepositoryActionMode; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onPush: PushLocalCommit;
-  onGenerate: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete: (message: string) => void; onClose: () => void;
-}) {
-  return isSync(mode) ? <RepositorySyncDialog mode={mode} targets={targets} onApply={onSync} onComplete={onComplete} onClose={onClose} /> :
-    <RepositoryActionDialog mode={mode} targets={targets} onCommit={onCommit} onPush={onPush} onGenerate={onGenerate} onComplete={onComplete} onClose={onClose} />;
+  onGenerate: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string) => void; onClose: () => void;
+  onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void; onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
+} & RepositoryOperationControls) {
+  return isSync(mode) ? <RepositorySyncDialog mode={mode} targets={targets} onApply={onSync} onComplete={onComplete} onClose={onClose} {...controls} /> :
+    <RepositoryActionDialog mode={mode} targets={targets} onCommit={onCommit} onPush={onPush} onGenerate={onGenerate} onCommitted={onCommitted} onDraftChange={onDraftChange} onComplete={onComplete} onClose={onClose} {...controls} />;
 }
-export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose }: {
+export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished }: {
   mode: RepositorySyncMode; targets: RepositoryActionTarget[]; onApply?: ApplyRepositorySync;
-  onComplete: (message: string) => void; onClose: () => void;
-}) {
+  onComplete?: (message: string) => void; onClose: () => void;
+} & RepositoryOperationControls) {
   const [plans, setPlans] = useState<Record<string, RepositorySyncPlan>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [results, setResults] = useState<Record<string, RepositorySyncResult>>({});
   const [reading, setReading] = useState(true), [writing, setWriting] = useState(false), [revision, setRevision] = useState(0);
+  const [finished, setFinished] = useState(false);
+  useEffect(() => { onStateChange?.(finished ? 'completed' : writing ? 'working' : Object.keys(errors).length ? 'failed' : reading ? 'preparing' : 'ready'); }, [finished, writing, errors, reading, onStateChange]);
   const saved = useRef<Record<string, RepositorySyncPlan>>({});
   const completed = useRef<Record<string, RepositorySyncResult>>({});
   const mounted = useRef(true);
@@ -68,9 +71,10 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
     if (!mounted.current) return;
     setWriting(false);
     const count = Object.keys(completed.current).length;
-    if (count) onComplete(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。`);
+    if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。`);
+    if (count === targets.length) { setFinished(true); onFinished?.(); }
   }
-  return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} onClose={() => { if (!writing) onClose(); }}>
+  return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} visible={visible} onCollapse={onCollapse} onClose={() => { if (writing) onCollapse?.(); else onClose(); }}>
     <div className="commit-composer repository-sync-dialog">
       {!targets.length && <Notice kind="info">当前筛选范围没有可操作的已关联工作目录。</Notice>}
       {targets.map(target => {

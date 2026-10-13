@@ -4,7 +4,9 @@ import type { LocalCommitDetails } from './local-commit-model';
 import type { CommitDraft, LocalSubmitInput, LocalSubmitResult, LocalPushInput, LocalPushResult } from './local-submit-model';
 import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
 
-export type Provider = 'github' | 'gitea';
+export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea'] as const;
+export type Provider = typeof providers[number];
+export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '' };
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
 export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
@@ -68,6 +70,7 @@ export type ApiInputs = {
   cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string; checkParticipation?: boolean };
+  remoteHistory: { repositoryId: string; head: string; page: number };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
   openRepository: { repositoryId: string };
@@ -92,7 +95,7 @@ export type ApiOutputs = {
   discardSync: { discarded: boolean };
   generateCommitMessage: CommitDraft;
   cancelCommitGeneration: { cancelled: boolean };
-  remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
+  remoteWorkspace: RemoteRepositoryWorkspace; remoteHistory: import('./remote-repository-model').RemoteHistoryPage; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
   openDirectory: { opened: true };
   openLocalDirectory: { opened: true };
@@ -100,7 +103,7 @@ export type ApiOutputs = {
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };
-export const providerName = (provider: Provider) => provider === 'github' ? 'GitHub' : 'Gitea';
+export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea' })[provider];
 export const accountLabel = (account: Account) => `${account.name} · ${account.login}@${new URL(account.host).host}`;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,7 +113,7 @@ export function isCatalog(value: unknown): value is Catalog {
   return isRecord(value) && typeof value.instanceId === 'string' && typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && ['session', 'encrypted'].includes(String(value.credentialStorage)) &&
     Array.isArray(value.accounts) && value.accounts.every(a => isRecord(a) &&
       ['id', 'host', 'login', 'name', 'updatedAt'].every(k => typeof a[k] === 'string') &&
-      ['github', 'gitea'].includes(String(a.provider))) &&
+      providers.some(provider => provider === a.provider)) &&
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
       typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&

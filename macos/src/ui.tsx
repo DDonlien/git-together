@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useId, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Button as BaseButton, IconButton as BaseIconButton, GlassSystemProvider, SearchField, Dialog, type ButtonProps } from 'open-glass-ui';
 import { componentTheme } from './theme';
 export { SegmentedControl as Segmented, Select, TextField, Textarea, Switch, Menu, MenuItem, Popover, Toolbar } from 'open-glass-ui';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/csr/SquaresFour';
 import { GitBranchIcon } from '@phosphor-icons/react/dist/csr/GitBranch';
 import { FolderSimpleIcon } from '@phosphor-icons/react/dist/csr/FolderSimple';
+import { FolderSimpleUserIcon } from '@phosphor-icons/react/dist/csr/FolderSimpleUser';
 import { CaretRightIcon } from '@phosphor-icons/react/dist/csr/CaretRight';
 import { CaretLeftIcon } from '@phosphor-icons/react/dist/csr/CaretLeft';
 import { CaretDownIcon } from '@phosphor-icons/react/dist/csr/CaretDown';
@@ -16,6 +17,7 @@ import { CloudArrowDownIcon } from '@phosphor-icons/react/dist/csr/CloudArrowDow
 import { CloudArrowUpIcon } from '@phosphor-icons/react/dist/csr/CloudArrowUp';
 import { DownloadSimpleIcon } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { PlusIcon } from '@phosphor-icons/react/dist/csr/Plus';
+import { MinusIcon } from '@phosphor-icons/react/dist/csr/Minus';
 import { XIcon } from '@phosphor-icons/react/dist/csr/X';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/csr/DotsThree';
 import { SlidersHorizontalIcon } from '@phosphor-icons/react/dist/csr/SlidersHorizontal';
@@ -46,7 +48,7 @@ import { BroomIcon } from '@phosphor-icons/react/dist/csr/Broom';
 import { EyeIcon } from '@phosphor-icons/react/dist/csr/Eye';
 import { EyeSlashIcon } from '@phosphor-icons/react/dist/csr/EyeSlash';
 
-const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, right: CaretRightIcon, left: CaretLeftIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, downloadSimple: DownloadSimpleIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon, clear: BroomIcon, eye: EyeIcon, eyeSlash: EyeSlashIcon };
+const icons = { dashboard: SquaresFourIcon, branch: GitBranchIcon, folder: FolderSimpleIcon, folderManaged: FolderSimpleUserIcon, right: CaretRightIcon, left: CaretLeftIcon, down: CaretDownIcon, search: MagnifyingGlassIcon, arrowDown: ArrowDownIcon, arrowUp: ArrowUpIcon, refresh: ArrowsClockwiseIcon, download: CloudArrowDownIcon, downloadSimple: DownloadSimpleIcon, upload: CloudArrowUpIcon, plus: PlusIcon, close: XIcon, more: DotsThreeIcon, sliders: SlidersHorizontalIcon, sidebar: SidebarSimpleIcon, settings: GearSixIcon, sparkle: SparkleIcon, success: CheckCircleIcon, check: CheckIcon, warning: WarningCircleIcon, spinner: SpinnerGapIcon, robot: RobotIcon, users: UsersIcon, code: FileCodeIcon, file: FileIcon, image: ImageIcon, cube: CubeIcon, clock: ClockIcon, copy: CopyIcon, book: BookOpenIcon, external: ArrowSquareOutIcon, command: CommandIcon, desktop: DesktopIcon, moon: MoonIcon, sun: SunIcon, commit: GitCommitIcon, list: ListBulletsIcon, clear: BroomIcon, eye: EyeIcon, eyeSlash: EyeSlashIcon };
 export type IconName = keyof typeof icons;
 export function Icon({ name, size = 18, className = '', style }: { name: IconName | 'squares'; size?: number; className?: string; style?: CSSProperties }) { const Component = name === 'squares' ? SquaresFourIcon : icons[name]; return <Component size={size} weight="regular" className={className} style={style} aria-hidden="true" />; }
 // Reuse accessible interaction/portal contracts, not optical glass recipes.
@@ -67,14 +69,18 @@ export function SearchInput({ value, onChange, placeholder, inputRef }: { value:
   useEffect(() => { if (inputRef) { inputRef.current = document.getElementById(id) as HTMLInputElement; return () => { inputRef.current = null; }; } }, [id, inputRef]);
   return <SearchField id={id} label={placeholder} aria-label={placeholder} value={value} onValueChange={onChange} placeholder={placeholder} className="search-field" />;
 }
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({ title, children, onClose, visible = true, onCollapse }: { title: string; children: ReactNode; onClose: () => void; visible?: boolean; onCollapse?: () => void }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  // A stable callback keeps the library's focus trap from restarting on every
-  // field edit. Controlled dialogs mount open, so restore focus on unmount.
+  // A stable callback keeps the focus trap from restarting on field edits.
+  // Hiding releases the trap without unmounting the owning operation.
   const changeOpen = useCallback((open: boolean) => { if (!open) closeRef.current(); }, []);
-  useEffect(() => () => { requestAnimationFrame(() => { if (opener.current?.isConnected) opener.current.focus(); }); }, []);
-  return <Dialog title={title} open onOpenChange={changeOpen}>{children}</Dialog>;
+  useLayoutEffect(() => {
+    if (!visible) return;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => { requestAnimationFrame(() => { if (!document.querySelector('[role="dialog"][aria-modal="true"]') && opener.current?.isConnected) opener.current.focus(); }); };
+  }, [visible]);
+  return <Dialog title={title} open={visible} onOpenChange={changeOpen}>{onCollapse && <button type="button" className="modal-collapse-control" aria-label={`收起 ${title}`} onClick={onCollapse}><MinusIcon size={18} /></button>}{children}</Dialog>;
 }
 export function Notice({ kind, children }: { kind: 'success' | 'error' | 'info'; children: ReactNode }) { return <div className={`notice ${kind}`} role={kind === 'error' ? 'alert' : 'status'}><Icon name={kind === 'success' ? 'success' : kind === 'error' ? 'warning' : 'sparkle'} size={17} /><span>{children}</span></div>; }

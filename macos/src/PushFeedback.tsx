@@ -8,7 +8,7 @@ export type PushRun = { id: string; targets: PushTarget[]; pending: string[]; co
 export type PushState = { phase: 'pushing' | 'success'; full: boolean };
 type Batch = { id: string; repositoryIds: string[] };
 type PushActivity = {
-  runs: Record<string, PushRun>;
+  runs: Record<string, PushRun[]>;
   begin: (targets: RepositoryActionTarget[]) => Batch;
   complete: (batch: Batch, target: RepositoryActionTarget) => void;
   finish: (batch: Batch) => void;
@@ -17,7 +17,7 @@ const PushContext = createContext<PushActivity | null>(null);
 const successDuration = 2600;
 
 export function PushFeedbackProvider({ sessionId, children }: { sessionId: string; children: ReactNode }) {
-  const [runs, setRuns] = useState<Record<string, PushRun>>({});
+  const [runs, setRuns] = useState<Record<string, PushRun[]>>({});
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => {
     setRuns({});
@@ -33,33 +33,34 @@ export function PushFeedbackProvider({ sessionId, children }: { sessionId: strin
       const run = grouped[target.repositoryId] ||= { id, targets: [], pending: [], completed: [], visible: [] };
       run.targets.push({ taskId: target.task.id, path: target.task.path! }); run.pending.push(target.task.id);
     }
-    setRuns(current => ({ ...current, ...grouped }));
+    setRuns(current => { const next = { ...current }; for (const [repositoryId, run] of Object.entries(grouped)) next[repositoryId] = [...(current[repositoryId] || []), run]; return next; });
     return { id, repositoryIds: Object.keys(grouped) };
   }, []);
   const complete = useCallback((batch: Batch, target: RepositoryActionTarget) => {
     const repositoryId = target.repositoryId, taskId = target.task.id;
     setRuns(current => {
-      const run = current[repositoryId]; if (run?.id !== batch.id) return current;
-      return { ...current, [repositoryId]: { ...run, pending: run.pending.filter(id => id !== taskId), completed: [...new Set([...run.completed, taskId])], visible: [...new Set([...run.visible, taskId])] } };
+      const runs = current[repositoryId]; if (!runs?.some(run => run.id === batch.id)) return current;
+      return { ...current, [repositoryId]: runs.map(run => run.id !== batch.id ? run : { ...run, pending: run.pending.filter(id => id !== taskId), completed: [...new Set([...run.completed, taskId])], visible: [...new Set([...run.visible, taskId])] }) };
     });
     later(`${batch.id}:${repositoryId}:${taskId}`, () => setRuns(current => {
-      const run = current[repositoryId]; if (run?.id !== batch.id) return current;
-      return { ...current, [repositoryId]: { ...run, visible: run.visible.filter(id => id !== taskId) } };
+      const runs = current[repositoryId]; if (!runs?.some(run => run.id === batch.id)) return current;
+      return { ...current, [repositoryId]: runs.map(run => run.id !== batch.id ? run : { ...run, visible: run.visible.filter(id => id !== taskId) }) };
     }));
   }, [later]);
   const finish = useCallback((batch: Batch) => {
     setRuns(current => {
       const next = { ...current };
       for (const repositoryId of batch.repositoryIds) {
-        const run = next[repositoryId]; if (run?.id !== batch.id) continue;
-        if (!run.completed.length) delete next[repositoryId];
-        else next[repositoryId] = { ...run, pending: [] };
+        const runs = next[repositoryId]; if (!runs) continue;
+        const remaining = runs.filter(run => run.id !== batch.id || run.completed.length).map(run => run.id !== batch.id ? run : { ...run, pending: [] });
+        if (remaining.length) next[repositoryId] = remaining; else delete next[repositoryId];
       }
       return next;
     });
     for (const repositoryId of batch.repositoryIds) later(`${batch.id}:${repositoryId}`, () => setRuns(current => {
-      if (current[repositoryId]?.id !== batch.id) return current;
-      const next = { ...current }; delete next[repositoryId]; return next;
+      if (!current[repositoryId]?.some(run => run.id === batch.id)) return current;
+      const next = { ...current }, remaining = next[repositoryId].filter(run => run.id !== batch.id);
+      if (remaining.length) next[repositoryId] = remaining; else delete next[repositoryId]; return next;
     }));
   }, [later]);
   const value = useMemo(() => ({ runs, begin, complete, finish }), [runs, begin, complete, finish]);
@@ -74,19 +75,18 @@ export function usePushActivity(): PushActivity {
 function localTargets(run: PushRun, tasks: RepositoryTask[]) {
   return run.targets.filter(target => tasks.some(task => !task.remote && task.path === target.path && task.id === target.taskId));
 }
-export function repositoryPushState(run: PushRun | undefined, tasks: RepositoryTask[]): PushState | undefined {
-  if (!run) return;
-  const targets = localTargets(run, tasks), local = tasks.filter(task => !task.remote && task.path);
-  const pushing = targets.some(target => run.pending.includes(target.taskId));
-  const covered = pushing ? targets : targets.filter(target => run.completed.includes(target.taskId));
+export function repositoryPushState(runs: PushRun[] | undefined, tasks: RepositoryTask[]): PushState | undefined {
+  if (!runs?.length) return;
+  const local = tasks.filter(task => !task.remote && task.path);
+  const pushing = runs.some(run => localTargets(run, tasks).some(target => run.pending.includes(target.taskId)));
+  const covered = runs.flatMap(run => localTargets(run, tasks).filter(target => run.pending.includes(target.taskId) || run.completed.includes(target.taskId)));
   if (!covered.length) return;
   return { phase: pushing ? 'pushing' : 'success', full: local.length > 0 && local.every(task => covered.some(target => target.taskId === task.id)) };
 }
-export function branchPushState(run: PushRun | undefined, tasks: RepositoryTask[]): PushState | undefined {
-  if (!run) return;
-  const targets = localTargets(run, tasks);
-  if (targets.some(target => run.pending.includes(target.taskId))) return { phase: 'pushing', full: true };
-  if (targets.some(target => run.visible.includes(target.taskId))) return { phase: 'success', full: true };
+export function branchPushState(runs: PushRun[] | undefined, tasks: RepositoryTask[]): PushState | undefined {
+  if (!runs?.length) return;
+  if (runs.some(run => localTargets(run, tasks).some(target => run.pending.includes(target.taskId)))) return { phase: 'pushing', full: true };
+  if (runs.some(run => localTargets(run, tasks).some(target => run.visible.includes(target.taskId)))) return { phase: 'success', full: true };
 }
 
 export function PushFeedbackIcon({ state, size = 16 }: { state: PushState | undefined; size?: number }) {

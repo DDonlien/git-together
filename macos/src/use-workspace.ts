@@ -15,6 +15,10 @@ import { linkedTasks } from './branch-links';
 type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[] } & BranchBehaviorPreferences;
 const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
+const writePrefix = (repositoryId: string) => `write:${JSON.stringify(repositoryId)}:`;
+export function repositoryActionBusy(busy: Record<string, boolean>, repositoryId: string): boolean {
+  return !!busy[repositoryId] && !Object.keys(busy).some(key => key.startsWith(writePrefix(repositoryId)) && busy[key]);
+}
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; loading?: boolean; error: string; checkedAt: number }
 export function useWorkspace() {
   const updates = useUpdates();
@@ -195,7 +199,7 @@ export function useWorkspace() {
   const updatePreferences = (change: Partial<Preferences>) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...change })); };
   async function task(key: string, run: () => Promise<Catalog>) {
     const installation = updates.installationRef.current;
-    if (running.current.has(key)) throw new Error('该操作正在执行，请稍候。');
+    if (running.current.has(key) || [...running.current].some(item => item.startsWith(writePrefix(key)))) throw new Error('该操作正在执行，请稍候。');
     running.current.add(key); setBusy(current => ({ ...current, [key]: true }));
     try { return accept(await run()); }
     catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
@@ -210,10 +214,11 @@ export function useWorkspace() {
     await ensureService();
     const link = catalogRef.current.links.find(link => link.repositoryId === input.repositoryId);
     if (!link) throw new Error('请先关联本地目录。');
-    if (running.current.has(input.repositoryId)) throw new Error('这个仓库正在执行操作，请稍后重试。');
+    const key = writePrefix(input.repositoryId) + JSON.stringify(input.taskId);
+    if (running.current.has(input.repositoryId) || running.current.has(key)) throw new Error('这个工作目录正在执行操作，请稍后重试。');
     const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees]);
     const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees]) === resource);
-    running.current.add(input.repositoryId); setBusy(current => ({ ...current, [input.repositoryId]: true }));
+    running.current.add(key); setBusy(current => ({ ...current, [key]: true, [input.repositoryId]: true }));
     localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
     try {
       const result = await importAPI(method, input);
@@ -234,7 +239,10 @@ export function useWorkspace() {
         } catch { result.warning = [result.warning, `${method === 'pushCommit' ? '推送已完成' : method === 'applySync' ? '操作已完成' : '提交已创建'}，文件列表刷新失败；正在自动重新读取。`].filter(Boolean).join(' '); }
       }
       return result;
-    } finally { running.current.delete(input.repositoryId); if (mounted.current) setBusy(current => ({ ...current, [input.repositoryId]: false })); }
+    } finally {
+      running.current.delete(key);
+      if (mounted.current) setBusy(current => { const next = { ...current }; delete next[key]; next[input.repositoryId] = [...running.current].some(item => item === input.repositoryId || item.startsWith(writePrefix(input.repositoryId))); return next; });
+    }
   }
   return {
     catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload, updates,

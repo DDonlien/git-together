@@ -1,7 +1,7 @@
 import type { Provider, RemoteRepository } from '../src/import-model';
 import type { RepositoryCommit, RepositoryTask } from '../src/repository-model';
 import { topologicalCommits } from '../src/repository-model';
-import type { RemoteCommitDetails, RemoteCommitFile, RemoteFileContent, RemoteRepositoryWorkspace } from '../src/remote-repository-model';
+import type { RemoteCommitDetails, RemoteCommitFile, RemoteFileContent, RemoteHistoryPage, RemoteRepositoryWorkspace } from '../src/remote-repository-model';
 
 // Only AccountService supplies this transport. Paths are built here, never taken
 // from provider links or renderer URLs, so credentials cannot change hosts.
@@ -52,7 +52,7 @@ export function attachDiffPatches(diff: string, files: RemoteCommitFile[]): Remo
 export class RemoteRepositoryReader {
   private base: string;
   private trees = new Map<string, Tree>();
-  private histories = new Map<string, { commits: RepositoryCommit[]; tree: string; limited: boolean }>();
+  private histories = new Map<string, { page: RemoteHistoryPage; tree: string }>();
   constructor(private provider: Provider, repository: Pick<RemoteRepository, 'fullName' | 'defaultBranch'>, private request: RemoteTransport, private now = Date.now) {
     const parts = repository.fullName.split('/');
     if (parts.length !== 2 || parts.some(part => !part || part === '.' || part === '..' || /[\s\0]/.test(part))) throw new Error('无效的远端仓库身份。');
@@ -63,13 +63,28 @@ export class RemoteRepositoryReader {
   private endpoint(path: string, params: Record<string, string> = {}): string {
     const query = new URLSearchParams(params); return `${this.base}${path}${query.size ? `?${query}` : ''}`;
   }
-  private async history(head: string, signal?: AbortSignal) {
-    const cached = this.histories.get(head); if (cached) return cached;
-    const { value } = await this.request(this.endpoint('/commits', { sha: head, [this.provider === 'github' ? 'per_page' : 'limit']: '50', page: '1', ...(this.provider === 'gitea' ? { stat: 'false' } : {}) }), 'json', signal);
-    if (!Array.isArray(value) || !value.length) throw new Error('远端分支没有返回其 HEAD 提交。');
+  private async readHistoryPage(head: string, page: number, signal?: AbortSignal) {
+    sha(head);
+    if (!Number.isSafeInteger(page) || page < 1) throw new Error('提交历史页码超出数值范围。');
+    const key = `${head}:${page}`; const cached = this.histories.get(key); if (cached) return cached;
+    const { value, headers } = await this.request(this.endpoint('/commits', { sha: head, [this.provider === 'github' ? 'per_page' : 'limit']: '50', page: String(page), ...(this.provider === 'gitea' ? { stat: 'false' } : {}) }), 'json', signal);
+    if (!Array.isArray(value) || page === 1 && !value.length) throw new Error(page === 1 ? '远端分支没有返回其 HEAD 提交。' : '远端提交历史分页返回格式无效。');
     const commits = value.map(commitValue);
-    if (commits[0].id !== head || !record(value[0]) || !record(value[0].commit) || !record(value[0].commit.tree)) throw new Error('远端分支提交与 HEAD 不一致。');
-    return remember(this.histories, head, { commits, tree: sha(value[0].commit.tree.sha), limited: value.length >= 50 });
+    let tree = '';
+    if (page === 1) {
+      if (commits[0].id !== head || !record(value[0]) || !record(value[0].commit) || !record(value[0].commit.tree)) throw new Error('远端分支提交与 HEAD 不一致。');
+      tree = sha(value[0].commit.tree.sha);
+    }
+    const result = { page: { head, page, commits, hasMore: /rel="?next"?/.test(headers.get('link') || '') || value.length >= 50 }, tree };
+    return remember(this.histories, key, result);
+  }
+  private async history(head: string, signal?: AbortSignal) {
+    const { page, tree } = await this.readHistoryPage(head, 1, signal);
+    return { commits: page.commits, tree, hasMore: page.hasMore };
+  }
+  async historyPage(head: string, page: number, signal?: AbortSignal): Promise<RemoteHistoryPage> {
+    if (page < 2) throw new Error('提交历史页码超出安全范围。');
+    return (await this.readHistoryPage(head, page, signal)).page;
   }
   private async tree(treeId: string, signal?: AbortSignal): Promise<Tree> {
     const cached = this.trees.get(treeId); if (cached) return cached;
@@ -131,14 +146,13 @@ export class RemoteRepositoryReader {
     const items = [...branches].sort(([a], [b]) => Number(b === this.defaultBranch) - Number(a === this.defaultBranch) || a.localeCompare(b));
     const tasks: RepositoryTask[] = []; const commits = new Map<string, RepositoryCommit>();
     let cursor = 0;
-    let limited = false;
     await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
       while (cursor < items.length) {
         const [branch, head] = items[cursor++]; signal?.throwIfAborted();
         const task: RepositoryTask = { id: `remote:${branch}`, branch, head, path: null, files: [], tree: [], error: '', remote: true, treeComplete: false };
         tasks.push(task);
         try {
-          const history = await this.history(head, signal); limited ||= history.limited;
+          const history = await this.history(head, signal); task.historyHasMore = history.hasMore;
           for (const commit of history.commits) if (!commits.has(commit.id)) commits.set(commit.id, { ...commit, refs: [] });
           const tree = await this.tree(history.tree, signal);
           task.tree = [...tree.entries].filter(([, item]) => item.type !== 'tree').map(([path]) => path); task.treeComplete = tree.complete;
@@ -149,7 +163,6 @@ export class RemoteRepositoryReader {
       }
     }));
     for (const [branch, head] of branches) commits.get(head)?.refs.push(`origin/${branch}`);
-    if (limited) warnings.push('每个分支当前读取最近 50 条提交；图线只使用真实父节点，不代表全部历史。');
     const order = new Map(items.map(([branch], index) => [branch, index])); tasks.sort((a, b) => order.get(a.branch)! - order.get(b.branch)!);
     return { source: 'remote', checkedAt: this.now(), tasks, commits: topologicalCommits([...commits.values()]), complete: !tasks.some(task => task.error) && tasks.every(task => task.treeComplete) && !warnings.some(warning => warning.startsWith('分支超过')), warnings };
   }

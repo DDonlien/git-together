@@ -1,8 +1,20 @@
 # 本地开发
 
+## 0.27.0：企业 GitHub、GitLab 与 Gitee（2026-10-12）
+
+账号设置提供 GitHub、GitHub 企业版、GitLab、Gitee 和 Gitea。企业 GitHub 域名可自由填写，例如 `github.dxc.com`；GitLab 同时支持官方和自建服务，并保留完整的多层组织路径。三个新平台沿用现有仓库、分支、历史、更改列表和 Git 操作入口。
+
+企业 GitHub、GitLab 和 Gitee 网页授权需在对应域名登记 OAuth 应用，在账号表单的「网页授权应用配置」中填写 Client ID 和必要的 Client Secret；后续留空复用按平台与域名加密保存的配置。GitLab 公共客户端使用 PKCE，无需 Secret；企业 GitHub 服务器与 Gitee 使用授权码及 Secret。SSO 身份验证在系统浏览器完成，令牌连接仍可使用。真实企业 SSO、管理员授权及私有平台访问需实际登录验收，受控接口核对不能替代。
+
+浏览器开发继续使用页面 `127.0.0.1:4173` 和 Rust 服务 `127.0.0.1:4175`，授权经同源 `/api/authorization/` 代理，回调为 `http://127.0.0.1:4176/oauth/github/callback`；桌面回调仍为 `http://127.0.0.1:4174/oauth/github/callback`。注册应用时以当前表单显示的回调地址为准，可分别登记两个地址。固定端口由 Rust 决定，避免浏览器开发占用正在运行的安装版回调服务。
+
+GitHub App 的回调必须匹配应用登记地址，开发者需在已有应用登记中包含4176地址；仅加密配置恢复不能证明该地址已登记。本轮没有修改远端应用登记或执行真实GitHub同意流程。此限制与GitHub OAuth App的loopback端口规则不同，不能混用。参见[GitHub App回调说明](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url)。
+
+本轮类型检查、Rust 检查、生产构建及受控接口核对通过；未使用真实企业凭据，未运行历史后台测试、更新安装版或生成发布包。
+
 ## 0.22.0：Tauri 2与Rust后台（2026-10-11）
 
-当前开发、生产入口均已迁到Rust后台，React/Material界面和有限DTO保持。桌面直接调用同进程Rust；浏览器开发使用Rust服务4175及授权回调4174，Vite仅提供界面和有限代理。旧Electron/server目录及旧后台回归保留为历史参考，未进入生产包；旧回归不证明Rust实现。本轮按用户要求未新增或运行测试。
+开发、生产入口在此版本迁到Rust后台，React/Material界面和有限DTO保持。桌面直接调用同进程Rust；浏览器开发使用Rust服务4175，Vite仅提供界面和有限代理；当前授权回调端口见上方0.27.0说明。旧Electron/server目录及旧后台回归保留为历史参考，未进入生产包；旧回归不证明Rust实现。本轮按用户要求未新增或运行测试。
 
 准备Node.js 22+、npm、Rust 1.90+、Xcode Command Line Tools、Git；LFS仓库另需Git LFS。`macos/package.json`是版本权威来源，Cargo版本随其同步，Tauri配置与Rust编译版本直接读取该文件。
 

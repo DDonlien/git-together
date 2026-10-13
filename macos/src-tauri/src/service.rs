@@ -178,7 +178,12 @@ impl Service {
             persistent,
             client: client.clone(),
             diagnostics,
-            authorization: Authorization::new(weak.clone(), root.clone(), client.clone()),
+            authorization: Authorization::new(
+                weak.clone(),
+                root.clone(),
+                client.clone(),
+                component == "preview",
+            ),
             state: RwLock::new(State {
                 value,
                 revision: 0,
@@ -317,7 +322,8 @@ impl Service {
             readers.insert(pkey, p.clone());
             p
         };
-        let network = Network::new(&repository, &provider)?.with_diagnostics(self.diagnostics.clone());
+        let network =
+            Network::new(&repository, &provider)?.with_diagnostics(self.diagnostics.clone());
         Ok(Context {
             repository,
             link,
@@ -420,7 +426,7 @@ impl Service {
         reauthorize: bool,
     ) -> Result<Value> {
         util::allowed(input, &["provider", "host", "token", "name"])?;
-        let kind = util::field(input, "provider", 10)?;
+        let kind = util::field(input, "provider", 32)?;
         let host = provider::host(&kind, &util::field(input, "host", 512)?)?;
         let token = util::field(input, "token", 4096)?;
         let name = util::field(input, "name", 120)?;
@@ -433,7 +439,7 @@ impl Service {
             token.clone(),
             self.client.clone(),
         );
-        let (user, _) = provisional.get("/user", &[], "json", &c).await?;
+        let user = provisional.user(&c).await?;
         let login = util::field(&user, "login", 120)?;
         if login.is_empty() || login.contains('/') || login.chars().any(char::is_whitespace) {
             return Err("无法识别账号身份。".into());
@@ -568,7 +574,7 @@ impl Service {
         let mut repos = None;
         if !token.is_empty() {
             let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone());
-            let (user, _) = p.get("/user", &[], "json", cancel).await?;
+            let user = p.user(cancel).await?;
             if !text(&user, "login").eq_ignore_ascii_case(text(&saved["account"], "login")) {
                 return Err("新令牌不属于这个账号，请添加另一个账号。".into());
             }
@@ -792,7 +798,19 @@ impl Service {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .child_token();
-        let request = self.dispatch(method, &input, &cancel);
+        let request = git::READ_CONTEXT.scope(
+            git::Options {
+                diagnostics: Some(self.diagnostics.clone()),
+                resource: if text(&input, "repositoryId").is_empty() {
+                    String::new()
+                } else {
+                    util::digest(text(&input, "repositoryId").as_bytes())[..24].into()
+                },
+                cancel: Some(cancel.clone()),
+                ..git::Options::default()
+            },
+            self.dispatch(method, &input, &cancel),
+        );
         tokio::pin!(request);
         let result = tokio::select! {
             result = &mut request => result,
@@ -803,16 +821,40 @@ impl Service {
                 request.await
             }
         };
-        let failures = result.as_ref().ok().and_then(|value| value["tasks"].as_array())
-            .map(|tasks| tasks.iter().filter(|task| !text(task, "error").is_empty()).count()).unwrap_or(0);
+        let failures = result
+            .as_ref()
+            .ok()
+            .and_then(|value| value["tasks"].as_array())
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|task| !text(task, "error").is_empty())
+                    .count()
+            })
+            .unwrap_or(0);
         let mut details = json!({"event":"api","outcome":match &result {
             Err(error) if cancel.is_cancelled() || git::diagnostic_code(error) == "aborted" => "cancelled",
             Err(_) => "failure", Ok(_) if failures > 0 => "partial", Ok(_) => "success"
         },"method":method,"durationMs":(util::now()-started).max(0)});
-        if let Err(error) = &result { details["code"] = json!(git::diagnostic_code(error)); }
-        if failures > 0 { details["failures"] = json!(failures); }
+        if let Err(error) = &result {
+            details["code"] = json!(git::diagnostic_code(error));
+        }
+        if failures > 0 {
+            details["failures"] = json!(failures);
+        }
+        details["activeRequests"] = json!(self.active.load(Ordering::SeqCst));
+        if let Ok(value) = &result {
+            if let Some(tasks) = value["tasks"].as_array() {
+                details["tasks"] = json!(tasks.len());
+                details["items"] = json!(tasks
+                    .iter()
+                    .map(|task| task["tree"].as_array().map_or(0, Vec::len))
+                    .sum::<usize>());
+            }
+        }
         if !text(&input, "repositoryId").is_empty() {
-            details["resource"] = json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
+            details["resource"] =
+                json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
         }
         self.diagnostics.record(&details, false);
         result
@@ -1072,7 +1114,7 @@ impl Service {
                 util::allowed(input, &["repositoryId"])?;
                 return self.fetch(&context, cancel).await;
             }
-            "remoteWorkspace" | "remoteCommit" | "remoteFile" => {
+            "remoteWorkspace" | "remoteHistory" | "remoteCommit" | "remoteFile" => {
                 let result = match method {
                     "remoteWorkspace" => {
                         util::allowed(input, &["repositoryId", "checkParticipation"])?;
@@ -1085,6 +1127,19 @@ impl Service {
                             .provider
                             .workspace(&context.repository, cancel, check_participation)
                             .await?
+                    }
+                    "remoteHistory" => {
+                        util::allowed(input, &["repositoryId", "head", "page"])?;
+                        let head = util::sha(text(input, "head"))?;
+                        let page = input["page"]
+                            .as_u64()
+                            .filter(|page| (2..=9_007_199_254_740_991).contains(page))
+                            .ok_or("提交历史页码超出数值范围。")?;
+                        let value = context
+                            .provider
+                            .history_page(&context.repository, &head, page, cancel)
+                            .await?;
+                        json!({"head":value["head"],"page":value["page"],"commits":value["commits"],"hasMore":value["hasMore"]})
                     }
                     "remoteCommit" => {
                         util::allowed(input, &["repositoryId", "commitId"])?;
@@ -1398,6 +1453,9 @@ impl Service {
             if context.provider.kind() == "gitea" {
                 p.extend(["src", "commit", &id]);
             } else {
+                if context.provider.kind() == "gitlab" {
+                    p.push("-");
+                }
                 p.extend(["blob", &id]);
             }
             p.extend(path.split('/'));
@@ -1473,7 +1531,7 @@ fn valid_state(v: &Value) -> bool {
                     && ["id", "provider", "host", "login", "name", "updatedAt"]
                         .iter()
                         .all(|k| a["account"][k].is_string())
-                    && matches!(text(&a["account"], "provider"), "github" | "gitea")
+                    && provider::supported(text(&a["account"], "provider"))
             })
         })
         && v["repositories"].as_array().is_some_and(|r| {
@@ -1561,34 +1619,15 @@ fn check_context(next: &Value, c: &Context) -> Result<()> {
     }
 }
 fn replace_repositories(next: &mut Value, id: &str, repos: Vec<Value>) {
-    let linked: Vec<_> = next["links"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|l| l["repositoryId"].clone())
-        .collect();
-    let found: Vec<_> = repos.iter().map(|r| r["id"].clone()).collect();
-    let mut unavailable: Vec<_> = next["repositories"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|r| {
-            text(r, "accountId") == id && linked.contains(&r["id"]) && !found.contains(&r["id"])
-        })
-        .cloned()
-        .collect();
-    for r in &mut unavailable {
-        r["available"] = json!(false);
-    }
+    // Only a fully successful paginated listing reaches this function. Its
+    // contents are authoritative, including the removal of deleted repos.
+    // Failed listings never replace the cache; local directory mappings are
+    // retained without keeping an absent remote repository visible.
     next["repositories"]
         .as_array_mut()
         .unwrap()
         .retain(|r| text(r, "accountId") != id);
     next["repositories"].as_array_mut().unwrap().extend(repos);
-    next["repositories"]
-        .as_array_mut()
-        .unwrap()
-        .extend(unavailable);
 }
 fn merge_link(
     next: &mut Value,

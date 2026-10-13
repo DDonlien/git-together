@@ -378,7 +378,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 ## 项目概况
 
 - 项目名称：GitTogether Standalone。
-- 当前工作区：`codex-standalone-ts/`；分支：`main`，跟踪`origin/main`。2026-10-10用户指定main为后续开发和更新包来源；本次保留历史工作区目录作为命名例外，不覆盖`main/`中旧`git-together/main`工作区。后续从main继续，不退回旧分支。
+- 当前工作区：`codex-standalone-ts/`；分支：`main`，跟踪`origin/main`。2026-10-10用户指定main为后续开发和更新包来源；2026-10-12按用户要求清理本地及origin的非main分支。历史目录名仍作为命名例外保留，`main/`与`desktop-overview-split/`保存旧实现的原提交及文件，现为detached HEAD。后续从真实main工作区继续，不将旧快照目录当作最新源码。
 - 以用户提供的 Wireframes v0.1 为产品范围。用户 2026-10-02 明确要求从头实现，不继承 GitButler 代码、组件、工作流或产品限制。
 - 此版已接入真实账号、远端和关联worktree只读浏览，并支持用户明确请求的未关联分支下载。Commit 已按用户 2026-10-10 请求接通当前关联工作目录的真实本地提交，AI 说明使用本机已登录 Codex CLI；其余六项行尾Git动作与在线协作仍未接入执行；不能将模拟成功显示为真实Git、Push、AI服务或Presence结果。
 - 用户要求 TS 与 macOS Liquid Glass。视觉参照 Apple 当前材料规范；本机 macOS 26.6.2，不能将本地运行称为已验证 macOS 27。

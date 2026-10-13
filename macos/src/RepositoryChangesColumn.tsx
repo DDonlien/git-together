@@ -31,7 +31,7 @@ export function RepositoryChangesColumn({ tasks, selection, commit, remoteCommit
         {localTasks.map(task => <MenuItem key={task.id} aria-current={activeId === task.id ? 'true' : undefined} onClick={() => onLocalChoice(task.id)}><span className="graph-menu-branch">{task.branch}<small>{task.path || '未检出分支'}</small></span>{activeId === task.id && <Icon name="check" size={14} />}</MenuItem>)}
       </Menu>}
       <Menu label="差异显示方式" placement="end" trigger={<IconButton icon="list" label="差异显示方式" />}>
-        <MenuItem aria-current={!grouped ? 'true' : undefined} onClick={() => setGrouped(false)}>文件列表{!grouped && <Icon name="check" size={14} />}</MenuItem>
+        <MenuItem aria-current={!grouped ? 'true' : undefined} onClick={() => setGrouped(false)}>按跟踪状态分组{!grouped && <Icon name="check" size={14} />}</MenuItem>
         <MenuItem aria-current={grouped ? 'true' : undefined} onClick={() => setGrouped(true)}>按状态分组{grouped && <Icon name="check" size={14} />}</MenuItem>
       </Menu>
     </RepositoryColumnHeading>

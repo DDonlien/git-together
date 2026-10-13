@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GitSignals } from './branch-links';
-import { IconButton, type IconName } from './ui';
+import { Icon, IconButton, type IconName } from './ui';
+import { useRepositoryOperations } from './RepositoryOperationProvider';
+import type { RepositoryActionTarget } from './repository-action-model';
 import { logDiagnostic } from './diagnostics-api';
 
 type ActionKey = 'pull' | 'latest' | 'commit' | 'submit' | 'push' | 'clear';
@@ -12,13 +14,13 @@ const groups: { key: keyof GitSignals; label: string; actions: Action[] }[] = [
   ] },
   { key: 'commit', label: '待提交', actions: [
     { key: 'commit', label: 'Commit', icon: 'commit', description: '确认提交说明和文件清单后，仅创建本地提交。' },
-    { key: 'submit', label: 'Submit', icon: 'upload', description: 'AI 生成说明，确认文件清单后创建本地提交并推送。' },
+    { key: 'submit', label: 'Submit', icon: 'upload', description: '填写或 AI 生成说明，确认文件清单后创建本地提交并推送。' },
   ] },
   { key: 'push', label: '本地内容', actions: [{ key: 'push', label: 'Push', icon: 'arrowUp', description: '推送所选范围内已有的本地提交。' }] },
   { key: 'clear', label: '清理', actions: [{ key: 'clear', label: 'Clean', icon: 'clear', description: '以远端为准清理或恢复本地文件。' }] },
 ];
 
-type ActionCallbacks = { onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>> };
+type ActionCallbacks = { onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };
 
 export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden, unlinked = false, onDownload, downloadBlocked = false, downloadBusy = false, ...callbacks }: {
   itemLabel: string; signals: GitSignals; hidden: boolean; onToggleHidden?: () => void;
@@ -32,7 +34,8 @@ export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidde
   </div>;
 }
 
-export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, onPull, onLatest, onClean, busy = false, actionErrors = {} }: { label: string; signals: GitSignals } & ActionCallbacks) {
+export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, onPull, onLatest, onClean, busy = false, actionErrors = {}, operationScope, operationTargets }: { label: string; signals: GitSignals } & ActionCallbacks) {
+  const operations = useRepositoryOperations();
   const blocked = busy || Object.values(signals).some(signal => signal.status === 'reading');
   const [pressed, setPressed] = useState<ActionKey | null>(null);
   const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,11 +51,15 @@ export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, 
       return <div key={group.key} className="git-action-group" role="group" aria-label={group.label}>
         {group.actions.map(action => {
           const ownSignal = signals[action.key === 'submit' ? 'commit' : action.key];
+          const operation = operationScope ? operations.get(action.key === 'clear' ? 'clean' : action.key, operationScope, operationTargets) : undefined;
+          const pending = operation?.state === 'preparing' || operation?.state === 'working';
+          const actionBlocked = !operation && (blocked || !!operationTargets && operations.blocked(operationTargets));
           const callback = action.key in callbacks ? callbacks[action.key as keyof typeof callbacks] : undefined;
           const error = actionErrors[action.key] ? `${action.label}：${actionErrors[action.key]}` : '';
-          const description = `${action.description} ${ownSignal.detail} ${ownSignal.statusDetail || ''} ${error}`;
+          const operationDetail = operation ? `${({ preparing: '正在准备', ready: '等待确认', working: '正在执行', failed: '执行未完成', completed: '已完成' } as const)[operation.state]}；点击查看原任务。` : '';
+          const description = `${operationDetail || action.description} ${ownSignal.detail} ${ownSignal.statusDetail || ''} ${error}`;
           const badge = error && <span className="git-action-read-badge error" role="img" aria-label={error} data-action-name={error} tabIndex={blocked ? -1 : 0} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()}>!</span>;
-          if (callback) return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${blocked ? ' is-blocked' : ''}`}><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={blocked || (['commit', 'submit', 'push'].includes(action.key) && !hasCount)} onClick={callback} />{badge}</span>;
+          if (callback || operation) return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${actionBlocked ? ' is-blocked' : ''}`}><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={actionBlocked || !operation && ['commit', 'submit', 'push'].includes(action.key) && !hasCount} aria-busy={pending || undefined} onClick={operation ? () => operations.restore(operation.id) : callback} />{operation && <span className="git-operation-indicator" data-state={operation.state} aria-hidden="true">{pending ? <Icon name="spinner" size={10} className="spin" /> : operation.state === 'failed' ? '!' : <Icon name={operation.state === 'completed' ? 'check' : 'clock'} size={10} />}</span>}{badge}</span>;
           // Missing callbacks represent an unavailable task/scope; execution
           // is enabled only when the parent supplies a validated target range.
           return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${blocked ? ' is-blocked' : ''}${pressed === action.key && !blocked ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={blocked ? -1 : 0} aria-label={`${action.label}：${description} 当前范围没有可操作的工作目录。`}

@@ -24,7 +24,7 @@ function fixture() {
     if (url.pathname.endsWith('/repos/search')) return Response.json({ ok: true, data: [] });
     const page = Number(url.searchParams.get('page'));
     if (url.hostname === 'api.github.com') return Response.json(page === 1 ? [repo(1, 'alice/project')] : page === 2 ? [repo(2, 'org/team'), repo(3, 'friend/shared')] : [], { headers: page === 1 ? { Link: '<https://evil.test/credentials>; rel="next"' } : {} });
-    return Response.json(page === 1 && !unavailable ? [repo(1, 'alice/project')] : page === 2 ? [repo(2, 'org/team')] : []);
+    return Response.json(unavailable && page === 1 ? [repo(2, 'org/team')] : page === 1 ? [repo(1, 'alice/project')] : page === 2 ? [repo(2, 'org/team')] : []);
   };
   return { request, requests, setFailure: (value: boolean) => { failRepos = value; }, setUnavailable: (value: boolean) => { unavailable = value; } };
 }
@@ -92,6 +92,28 @@ test('repository failure preserves a verified account and supports isolated retr
   f.setFailure(true); await service.handle('refresh', { accountId: result.accounts[0].id });
   assert.equal((await catalog(service)).repositories.length, 2);
 });
+test('complete account listings remove deleted repositories, while failed listings retain the cache and local mapping', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'gittogether-deleted-repository-test-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const directory = join(root, 'checkout'); await mkdir(directory);
+  const git = (args: string[]) => execute('git', ['-C', directory, ...args]);
+  await git(['init', '-b', 'main']); await git(['config', 'user.email', 'fixture@example.test']); await git(['config', 'user.name', 'Fixture']); await git(['remote', 'add', 'origin', 'https://git.example.test/alice/project.git']);
+  await writeFile(join(directory, 'tracked.txt'), 'keep me\n'); await git(['add', 'tracked.txt']); await git(['commit', '-m', 'Keep local checkout']);
+  const before = (await git(['status', '--porcelain'])).stdout; const head = (await git(['rev-parse', 'HEAD'])).stdout; const index = await readFile(join(directory, '.git', 'index'));
+  const f = fixture(); const service = new AccountService(sessionStore(), f.request); await service.handle('connect', connect('gitea'));
+  const initial = await catalog(service); const deletedRepository = initial.repositories[0];
+  await service.handle('link', { repositoryId: deletedRepository.id, path: directory });
+  f.setFailure(true); await service.handle('refresh', { accountId: initial.accounts[0].id });
+  let updated = await catalog(service);
+  assert.ok(updated.repositories.some(repository => repository.id === deletedRepository.id));
+  assert.equal(updated.links[0].repositoryId, deletedRepository.id);
+  f.setFailure(false); f.setUnavailable(true); await service.handle('refresh', { accountId: initial.accounts[0].id });
+  updated = await catalog(service);
+  assert.ok(!updated.repositories.some(repository => repository.id === deletedRepository.id));
+  assert.ok(updated.repositories.some(repository => repository.fullName === 'org/team'));
+  assert.equal(updated.links[0].repositoryId, deletedRepository.id);
+  assert.equal((await git(['status', '--porcelain'])).stdout, before); assert.equal((await git(['rev-parse', 'HEAD'])).stdout, head); assert.deepEqual(await readFile(join(directory, '.git', 'index')), index);
+});
+
 test('failed credential persistence is atomic and does not poison later operations', async () => {
   const f = fixture(); let fail = true; let saved: SavedState | null = null;
   const store: CredentialStore = { kind: 'encrypted', load: async () => null, save: async state => { if (fail) throw new Error('Keychain unavailable'); saved = structuredClone(state); } };
@@ -133,9 +155,10 @@ test('local mapping verifies exact remote, handles spaces, reads real status/Dif
   await assert.rejects(service.handle('diff', { repositoryId: id, path: '../../secrets' }), /不在更改列表/);
   await assert.rejects(service.handle('link', { repositoryId: initial.repositories[1].id, path: directory }), /远端不是/);
   assert.equal((await catalog(service)).links.length, 1);
-  f.setUnavailable(true); await service.handle('refresh', { accountId: initial.accounts[0].id });
-  assert.equal((await catalog(service)).repositories.find(repo => repo.id === id)?.available, false); assert.equal((await catalog(service)).links.length, 1);
-  await service.handle('unlink', { repositoryId: id }); assert.equal((await catalog(service)).links.length, 0);
+  f.setFailure(true); await service.handle('refresh', { accountId: initial.accounts[0].id });
+  assert.ok((await catalog(service)).repositories.some(repo => repo.id === id)); assert.equal((await catalog(service)).links.length, 1);
+  f.setFailure(false); f.setUnavailable(true); await service.handle('refresh', { accountId: initial.accounts[0].id });
+  assert.ok(!(await catalog(service)).repositories.some(repo => repo.id === id)); assert.equal((await catalog(service)).links.length, 1);
   assert.equal((await git(['status', '--porcelain'])).stdout, before); assert.equal((await git(['rev-parse', 'HEAD'])).stdout, head); assert.deepEqual(await readFile(join(directory, '.git', 'index')), indexBefore);
   assert.equal(await readFile(join(directory, 'test.txt'), 'utf8'), 'after\n');
 });

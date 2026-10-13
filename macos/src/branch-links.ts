@@ -15,14 +15,21 @@ export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState, hidd
   return tasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
 }
 
-export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>) {
-  if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。' };
-  const tasks = linkedTasks(link, local, hiddenEntries);
+export type AssociationStatus = { label: string; detail: string; verified: boolean };
+
+export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>): AssociationStatus {
+  if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。', verified: true };
+  const allTasks = linkedTasks(link, local);
+  const tasks = allTasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
+  const observedPaths = new Set(allTasks.map(task => task.path));
+  const mappingRead = (link.worktrees || [{ path: link.path }]).every(item => observedPaths.has(item.path));
   const expected = new Set([...(remote.workspace?.tasks.map(task => task.branch) || []), ...tasks.map(task => task.branch)].filter(branch => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, branch))));
   const linked = new Set(tasks.filter(task => !task.error).map(task => task.branch));
   const completeBranches = !!remote.workspace && !remote.error && !remote.workspace.warnings.some(warning => warning.startsWith('分支超过'));
-  const complete = completeBranches && expected.size > 0 && [...expected].every(branch => linked.has(branch)) && tasks.every(task => !task.error) && !local?.error;
-  return { label: !tasks.length ? '尚未关联' : complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || link.path}` };
+  const verified = completeBranches && !!local?.workspace && local.path === link.path && mappingRead && allTasks.length > 0 && tasks.every(task => !task.error) && !local.error;
+  const complete = verified && expected.size > 0 && [...expected].every(branch => linked.has(branch));
+  return { label: !verified ? '关联待确认' : !tasks.length ? '已关联' : complete ? '完全关联' : '部分关联', verified,
+    detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${!tasks.length && allTasks.length ? '当前可见范围没有已关联分支，保存的目录关联仍保留；' : ''}${completeBranches ? '' : '远端分支范围尚未完整读取；'}${[local?.error, remote.error, tasks.filter(task => task.error).map(task => task.error).join('；')].filter(Boolean).join('；') || link.path}` };
 }
 
 export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };

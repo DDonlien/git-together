@@ -16,7 +16,10 @@ export function branchHiddenEntries(repositoryId: string, preferences: BranchBeh
     // An unpublished local HEAD or a dirty directory is evidence the remote
     // account query cannot classify; keep it visible until it can be confirmed.
     const localUnknown = localTasks.some(local => local.branch === task.branch && (!!local.error || local.head !== task.head || local.files.length > 0));
-    if (task.hasAccountCommits === false && !task.error && !localUnknown && !shown.has(key)) hidden.add(key);
+    // Creating a repository also counts as work on its sole branch. Missing
+    // creation evidence cannot establish that this branch was never worked on.
+    const creationUnknown = remoteTasks.length === 1 && task.hasAccountCreation === undefined;
+    if (task.hasAccountCommits === false && task.hasAccountCreation !== true && !creationUnknown && !task.error && !task.participationError && !localUnknown && !shown.has(key)) hidden.add(key);
   }
   return hidden;
 }

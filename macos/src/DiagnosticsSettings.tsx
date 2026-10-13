@@ -9,7 +9,8 @@ export function DiagnosticsSettings() {
   const [busy, setBusy] = useState<'open' | 'copy' | null>(null);
   useEffect(() => {
     let mounted = true;
-    const read = () => { void diagnosticsStatus().then(value => { if (mounted) { setStatus(value); setError(''); } }).catch(() => { if (mounted) setError('无法读取本地日志状态，请检查程序与服务是否为最新版本。'); }); };
+    let reading = false;
+    const read = () => { if (reading) return; reading = true; void diagnosticsStatus().then(value => { if (mounted) { setStatus(value); setError(''); } }).catch(() => { if (mounted) setError('无法读取本地日志状态，请检查程序与服务是否为最新版本。'); }).finally(() => { reading = false; }); };
     read(); const timer = setInterval(read, 10_000);
     return () => { mounted = false; clearInterval(timer); };
   }, []);
@@ -26,6 +27,6 @@ export function DiagnosticsSettings() {
       <Button disabled={!status || !!busy || !!status.error} onClick={() => void action('open')}>{busy === 'open' ? '正在打开…' : '打开日志文件夹'}</Button>
       <Button disabled={!status || !!busy || !!status.error} onClick={() => void action('copy')}>{busy === 'copy' ? '正在复制…' : '复制日志文件到剪贴板'}</Button>
     </div>
-    <div aria-live="polite" className={error || status?.error || status?.limited || message ? 'diagnostics-feedback' : undefined}>{(error || status?.error) && <Notice kind="error">{error || status?.error}</Notice>}{status?.limited && <Notice kind="info">日志达到空间上限，已移除较早记录；当前记录可能不足 24 小时。</Notice>}{message && <p>{message}</p>}</div>
+    <div aria-live="polite" className={error || status?.error || status?.limited || message ? 'diagnostics-feedback' : undefined}>{(error || status?.error) && <Notice kind="error">{error || status?.error}</Notice>}{(status?.capacityLimited || (status?.limited && !status?.dropped)) && <Notice kind="info">日志达到空间上限，已移除较早记录；当前记录可能不足 24 小时。</Notice>}{!!status?.dropped && <Notice kind="info">日志暂未能完整写入，累计 {status.dropped} 条记录未写入；性能记录可能不完整。</Notice>}{message && <p>{message}</p>}</div>
   </div></section>;
 }

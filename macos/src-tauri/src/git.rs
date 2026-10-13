@@ -11,6 +11,12 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
+// Background queues await permits; foreground writes never queue behind reads.
+// Four read processes and two fetches bound IO pressure without hiding data.
+static READ_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+static FETCH_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+tokio::task_local! { pub(crate) static READ_CONTEXT: Options; }
+
 #[derive(Clone, Default)]
 pub struct Options {
     pub environment: Vec<(String, String)>,
@@ -158,6 +164,16 @@ async fn run_process(
     options: Options,
     details: &mut Value,
 ) -> Result<String> {
+    let cancellation = options.cancel.clone().unwrap_or_default();
+    if cancellation.is_cancelled() { return Err("操作已取消。".into()); }
+    let slots = if text(details, "verb") == "fetch" { Some(&FETCH_SLOTS) } else if !options.write { Some(&READ_SLOTS) } else { None };
+    let queued_at = std::time::Instant::now();
+    let _permit = if let Some(slots) = slots { Some(tokio::select! {
+        permit = slots.acquire() => permit.map_err(|_| "Git读取队列已停止。")?,
+        _ = cancellation.cancelled() => return Err("操作已取消。".into()),
+    }) } else { None };
+    details["queueMs"] = json!(queued_at.elapsed().as_millis() as u64);
+    if let Some(slots) = slots { details["activeRequests"] = json!((if text(details, "verb") == "fetch" { 2 } else { 4 }) - slots.available_permits()); }
     let mut command = Command::new(util::find_tool("git")?);
     command
         .args([
@@ -240,6 +256,7 @@ async fn run_process(
         .await
         .map_err(|_| "Git输出读取失败。")?
         .map_err(|_| "Git输出读取失败。")?;
+    details["bytes"] = json!(output.len());
     let error = errors
         .await
         .map_err(|_| "Git状态读取失败。")?
@@ -257,7 +274,7 @@ async fn run_process(
     String::from_utf8(output).map_err(|_| "Git输出包含无法读取的文字。".into())
 }
 pub async fn read(root: &Path, args: &[&str]) -> Result<String> {
-    run(root, args, Options::default()).await
+    run(root, args, READ_CONTEXT.try_with(Clone::clone).unwrap_or_default()).await
 }
 pub fn changes(status: &str) -> Vec<Value> {
     let records: Vec<&str> = status.split('\0').collect();

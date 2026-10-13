@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Icon, IconButton, Notice } from './ui';
 import { OutlinedTextField } from './material-inputs';
-import { RepositoryActionDialog } from './RepositoryActionDialog';
+import { useRepositoryOperations } from './RepositoryOperationProvider';
+import { repositoryOperationScope } from './repository-action-model';
 import type { RepositoryTask } from './repository-model';
 import type { GenerateCommitMessage, LocalSubmitInput, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 
@@ -13,18 +14,22 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
   const [summary, setSummary] = useState(''), [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false), [generating, setGenerating] = useState(false);
   const [error, setError] = useState(''), [feedback, setFeedback] = useState('');
-  const [submitPopup, setSubmitPopup] = useState(false);
+  const operations = useRepositoryOperations();
+  const scope = repositoryOperationScope(repositoryId || '', task.branch, task.id);
+  const targets = repositoryId ? [{ repositoryId, repositoryName, task, draft: summary || description ? { summary, description } : undefined }] : [];
+  const submitPopup = operations.get('submit', scope, targets);
+  const taskBusy = operations.blocked(targets);
   const running = useRef(false), generation = useRef<AbortController | null>(null);
   const intent = useRef<LocalSubmitInput | null>(null);
   useEffect(() => () => generation.current?.abort(), []);
   const ready = !!repositoryId && !!task.path && !!task.changeKey && !!task.files.length && !task.error;
-  const disabled = !task.path || submitting;
+  const disabled = !task.path || submitting || taskBusy;
   const edit = () => { intent.current = null; generation.current?.abort(); setGenerating(false); setFeedback(''); setError(''); };
   // A failed, definitely outdated snapshot can be reviewed and submitted anew;
   // network retries of the same snapshot retain their idempotency identity.
   if (intent.current && (intent.current.expectedHead !== task.head || intent.current.changeKey !== task.changeKey)) intent.current = null;
   async function submit() {
-    if (!ready || !onSubmit || !summary.trim() || running.current || generating || submitPopup) return;
+    if (!ready || !onSubmit || !summary.trim() || running.current || generating || taskBusy) return;
     running.current = true; generation.current?.abort(); setGenerating(false); setSubmitting(true); setError(''); setFeedback('');
     const input = intent.current || { repositoryId: repositoryId!, taskId: task.id, expectedHead: task.head, changeKey: task.changeKey!, summary, description, operationId: crypto.randomUUID() };
     intent.current = input;
@@ -60,13 +65,12 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
       {feedback && <p className="repository-commit-feedback" role="status">{feedback}</p>}
     </div>
     <div className="repository-commit-actions"><small>{task.path ? `全部 ${task.files.length} 个更改` : '关联本地目录后提交'}</small><div className="repository-commit-buttons">
-      <IconButton type="button" icon={generating ? 'close' : 'sparkle'} label={generating ? '取消 AI 生成' : 'AI 生成提交说明'} title={generating ? '取消 AI 生成' : 'AI 生成提交说明'} className="repository-ai-commit" disabled={!ready || submitting || submitPopup || !onGenerate} aria-busy={generating} onClick={() => void generate()} />
-      <Button type="submit" disabled={!ready || !onSubmit || !summary.trim() || submitting || generating || submitPopup} aria-busy={submitting}>{submitting && <Icon name="spinner" className="spin" size={14} />}{submitting ? '提交中…' : 'Commit'}</Button>
-      <Button type="button" variant="primary" disabled={!ready || !onSubmit || !onGenerate || !onPush || submitting || generating || submitPopup} onClick={() => setSubmitPopup(true)}><Icon name="upload" size={14} />Submit</Button>
+      <IconButton type="button" icon={generating ? 'close' : 'sparkle'} label={generating ? '取消 AI 生成' : 'AI 生成提交说明'} title={generating ? '取消 AI 生成' : 'AI 生成提交说明'} className="repository-ai-commit" disabled={!ready || submitting || taskBusy || !onGenerate} aria-busy={generating} onClick={() => void generate()} />
+      <Button type="submit" disabled={!ready || !onSubmit || !summary.trim() || submitting || generating || taskBusy} aria-busy={submitting}>{submitting && <Icon name="spinner" className="spin" size={14} />}{submitting ? '提交中…' : 'Commit'}</Button>
+      <Button type="button" variant="primary" disabled={!submitPopup && (!ready || !onSubmit || !onGenerate || !onPush || submitting || generating || taskBusy)} aria-busy={submitPopup?.state === 'preparing' || submitPopup?.state === 'working'} onClick={() => { if (submitPopup) operations.restore(submitPopup.id); else if (repositoryId && onSubmit && onGenerate && onPush) operations.open({ mode: 'submit', scope, targets, onCommit: onSubmit, onGenerate, onPush, onDraftChange: (_target, draft) => { edit(); setSummary(draft.summary); setDescription(draft.description); }, onCommitted: (_target, result) => { setSummary(''); setDescription(''); setError(result.warning || ''); intent.current = null; onCommitted?.(task.id, result.commitId); }, onComplete: setFeedback }); }}><Icon name={submitPopup?.state === 'preparing' || submitPopup?.state === 'working' ? 'spinner' : submitPopup?.state === 'completed' ? 'check' : 'upload'} className={submitPopup?.state === 'preparing' || submitPopup?.state === 'working' ? 'spin' : undefined} size={14} />Submit</Button>
     </div></div>
   </form>
   {hidden && error && <Notice kind="error">{error}</Notice>}
   {hidden && feedback && <p className="repository-commit-feedback" role="status">{feedback}</p>}
-  {submitPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="submit" targets={[{ repositoryId, repositoryName, task }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onCommitted={(_target, result) => { setSummary(''); setDescription(''); setError(result.warning || ''); intent.current = null; onCommitted?.(task.id, result.commitId); }} onComplete={setFeedback} onClose={() => setSubmitPopup(false)} />}
   </>;
 }

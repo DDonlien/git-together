@@ -57,6 +57,10 @@ test('remote read DTOs reject malformed workspace, commit and blob envelopes', a
   t.mock.method(globalThis, 'fetch', async () => Response.json({ ok: true, value }));
   const repositoryId = 'fixture';
   assert.equal((await importAPI('remoteWorkspace', { repositoryId })).source, 'remote');
+  value = { head: 'a'.repeat(40), page: 2, commits: [], hasMore: false };
+  assert.equal((await importAPI('remoteHistory', { repositoryId, head: 'a'.repeat(40), page: 2 })).hasMore, false);
+  value = { head: 'b'.repeat(40), page: 2, commits: [], hasMore: false };
+  await assert.rejects(importAPI('remoteHistory', { repositoryId, head: 'a'.repeat(40), page: 2 }), /历史分页返回格式无效/);
   value = { source: 'remote', checkedAt: 1, complete: true, commits: [], tasks: [{ path: '/local/secret' }], warnings: [] };
   await assert.rejects(importAPI('remoteWorkspace', { repositoryId }), /工作台返回格式无效/);
   value = { commit: { id: 'invalid', summary: 'bad', author: 'bad', time: 'bad' }, files: [], diff: '', tree: [], treeComplete: true, warnings: [] };

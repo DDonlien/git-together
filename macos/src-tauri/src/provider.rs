@@ -22,19 +22,36 @@ pub fn client() -> Result<Client> {
         .build()
         .map_err(|_| "无法初始化账号连接。".into())
 }
+pub fn supported(kind: &str) -> bool {
+    matches!(
+        kind,
+        "github" | "github-enterprise" | "gitlab" | "gitee" | "gitea"
+    )
+}
+fn github(kind: &str) -> bool {
+    matches!(kind, "github" | "github-enterprise")
+}
 pub fn host(provider: &str, input: &str) -> Result<String> {
-    if provider == "github" {
-        return Ok("https://github.com".into());
-    }
-    if provider != "gitea" {
+    if !supported(provider) {
         return Err("不支持该账号服务。".into());
     }
+    let input = input.trim();
+    let input = if input.is_empty() {
+        match provider {
+            "github" => "https://github.com",
+            "gitlab" => "https://gitlab.com",
+            "gitee" => "https://gitee.com",
+            _ => input,
+        }
+    } else {
+        input
+    };
     let parsed = Url::parse(&if input.contains("://") {
         input.to_owned()
     } else {
         format!("https://{input}")
     })
-    .map_err(|_| "请输入有效的 Gitea 域名。")?;
+    .map_err(|_| "请输入有效的代码托管域名。")?;
     let local = matches!(
         parsed.host_str(),
         Some("localhost" | "127.0.0.1" | "[::1]" | "::1")
@@ -45,12 +62,17 @@ pub fn host(provider: &str, input: &str) -> Result<String> {
         || parsed.query().is_some()
         || parsed.fragment().is_some()
         || parsed.path() != "/"
+        || parsed.host_str().is_none()
     {
         return Err(
-            "Gitea 必须使用 HTTPS 域名，不含用户信息、路径或查询参数；HTTP 仅限本机。".into(),
+            "代码托管服务必须使用 HTTPS 域名，不含用户信息、路径或查询参数；HTTP 仅限本机。".into(),
         );
     }
-    Ok(parsed.origin().ascii_serialization())
+    let origin = parsed.origin().ascii_serialization();
+    if provider == "github" && origin != "https://github.com" {
+        return Err("自定义GitHub域名请选择GitHub企业版，未向其他域名发送令牌。".into());
+    }
+    Ok(origin)
 }
 fn encoded(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes())
@@ -60,7 +82,7 @@ fn encoded(s: &str) -> String {
 pub fn repo_path(repo: &Value) -> Result<String> {
     let name = text(repo, "fullName");
     let parts: Vec<_> = name.split('/').collect();
-    if parts.len() != 2
+    if parts.len() < 2
         || parts.iter().any(|p| {
             p.is_empty()
                 || matches!(*p, "." | "..")
@@ -70,9 +92,12 @@ pub fn repo_path(repo: &Value) -> Result<String> {
         return Err("无效的远端仓库身份。".into());
     }
     Ok(format!(
-        "/repos/{}/{}",
-        encoded(parts[0]),
-        encoded(parts[1])
+        "/repos/{}",
+        parts
+            .iter()
+            .map(|part| encoded(part))
+            .collect::<Vec<_>>()
+            .join("/")
     ))
 }
 
@@ -99,11 +124,44 @@ impl Provider {
         &self.token
     }
     pub fn api(&self) -> String {
-        if self.kind() == "github" {
-            "https://api.github.com".into()
-        } else {
-            format!("{}/api/v1", text(&self.account, "host"))
+        let host = text(&self.account, "host");
+        match self.kind() {
+            "github" => "https://api.github.com".into(),
+            "github-enterprise" if host.ends_with(".ghe.com") => {
+                format!("https://api.{}", host.trim_start_matches("https://"))
+            }
+            "github-enterprise" => format!("{host}/api/v3"),
+            "gitlab" => format!("{host}/api/v4"),
+            "gitee" => format!("{host}/api/v5"),
+            _ => format!("{host}/api/v1"),
         }
+    }
+    fn page_size(&self) -> &str {
+        if self.kind() == "gitea" {
+            "limit"
+        } else {
+            "per_page"
+        }
+    }
+    fn repository_path(&self, repo: &Value) -> Result<String> {
+        if self.kind() == "gitlab" {
+            Ok(format!(
+                "/projects/{}",
+                repo["remoteId"]
+                    .as_u64()
+                    .filter(|id| *id > 0)
+                    .ok_or("无效的远端项目身份。")?
+            ))
+        } else {
+            repo_path(repo)
+        }
+    }
+    pub async fn user(&self, cancel: &CancellationToken) -> Result<Value> {
+        let (mut user, _) = self.get("/user", &[], "json", cancel).await?;
+        if self.kind() == "gitlab" {
+            user["login"] = user["username"].clone();
+        }
+        Ok(user)
     }
     pub async fn get(
         &self,
@@ -117,6 +175,12 @@ impl Provider {
         }
         let mut url = Url::parse(&(self.api() + path)).map_err(|_| "无效的账号服务地址。")?;
         url.query_pairs_mut().extend_pairs(query.iter().copied());
+        // Gitee's documented v5 authentication is a query parameter. Keep it
+        // in the Rust transport only; redirects and raw URL logging stay off.
+        if self.kind() == "gitee" {
+            url.query_pairs_mut()
+                .append_pair("access_token", &self.token);
+        }
         let mut request = self
             .client
             .get(url)
@@ -124,10 +188,10 @@ impl Provider {
                 "Authorization",
                 format!(
                     "{} {}",
-                    if self.kind() == "github" {
-                        "Bearer"
-                    } else {
+                    if self.kind() == "gitea" {
                         "token"
+                    } else {
+                        "Bearer"
                     },
                     self.token
                 ),
@@ -136,19 +200,27 @@ impl Provider {
                 "Accept",
                 if format == "text" {
                     "text/plain"
-                } else if self.kind() == "github" {
+                } else if github(self.kind()) {
                     "application/vnd.github+json"
                 } else {
                     "application/json"
                 },
             );
-        if self.kind() == "github" {
+        if github(self.kind()) {
             request = request.header("X-GitHub-Api-Version", "2022-11-28");
         }
         let operation = async {
             let mut response = request.send().await.map_err(transport_error)?;
             let status = response.status().as_u16();
             let headers = response.headers().clone();
+            if github(self.kind())
+                && headers
+                    .get("x-github-sso")
+                    .and_then(|v| v.to_str().ok())
+                    .is_some_and(|v| v.starts_with("required") || v.starts_with("partial-results"))
+            {
+                return Err("企业要求SSO授权，当前仓库范围未完整开放。请先在企业网站完成SSO登录并授权令牌，或重新进行网页授权。".into());
+            }
             if status == 401 {
                 return Err("令牌无效或已过期，请在设置中重新连接账号。".into());
             }
@@ -164,6 +236,9 @@ impl Provider {
             }
             if status == 403 {
                 return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
+            }
+            if format == "status" && status == 404 {
+                return Ok((json!(status), headers));
             }
             if !response.status().is_success() {
                 return Err(format!(
@@ -193,11 +268,31 @@ impl Provider {
         tokio::select! { result = operation => result, _ = cancel.cancelled() => Err("操作已取消。".into()) }
     }
     pub fn record(&self, raw: &Value) -> Result<Value> {
+        let normalized;
+        let raw = if self.kind() == "gitlab" {
+            if !matches!(text(raw, "visibility"), "public" | "internal" | "private") {
+                return Err("GitLab项目可见性无效。".into());
+            }
+            let level = [
+                raw["permissions"]["project_access"]["access_level"].as_u64(),
+                raw["permissions"]["group_access"]["access_level"].as_u64(),
+            ]
+            .into_iter()
+            .flatten()
+            .max();
+            normalized = json!({"id":raw["id"], "name":raw["name"], "full_name":raw["path_with_namespace"], "description":raw["description"], "default_branch":raw["default_branch"], "private":raw["visibility"] != "public", "updated_at":raw["last_activity_at"], "fork":raw["forked_from_project"].is_object(), "owner":{"type":match text(&raw["namespace"], "kind") {"group"=>"Organization", "user"=>"User", _=>""}}, "permissions":level.map(|n|json!({"admin":n>=50,"maintain":n>=40,"push":n>=30,"pull":n>=20}))});
+            &normalized
+        } else {
+            raw
+        };
         let id = raw["id"].as_u64().ok_or("仓库列表中包含无效的记录。")?;
         let name = raw["name"].as_str().ok_or("仓库名称无效。")?;
         let full = raw["full_name"].as_str().ok_or("仓库身份无效。")?;
+        if self.kind() != "gitlab" && full.split('/').count() != 2 {
+            return Err("无效的远端仓库身份。".into());
+        }
         repo_path(&json!({"fullName":full}))?;
-        let mut value = json!({"id":format!("{}:{id}", text(&self.account,"id")),"remoteId":id,"accountId":text(&self.account,"id"),"name":name,"fullName":full,"description":text(raw,"description"),"defaultBranch":text(raw,"default_branch"),"private":raw["private"]==true,"url":format!("{}/{}/{}",text(&self.account,"host"),encoded(full.split('/').next().unwrap()),encoded(full.split('/').nth(1).unwrap())),"available":true});
+        let mut value = json!({"id":format!("{}:{id}", text(&self.account,"id")),"remoteId":id,"accountId":text(&self.account,"id"),"name":name,"fullName":full,"description":text(raw,"description"),"defaultBranch":text(raw,"default_branch"),"private":raw["private"]==true,"url":format!("{}/{}",text(&self.account,"host"),full.split('/').map(encoded).collect::<Vec<_>>().join("/")),"available":true});
         if let Some(date) = raw["updated_at"]
             .as_str()
             .filter(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok())
@@ -207,7 +302,10 @@ impl Provider {
         if let Some(fork) = raw["fork"].as_bool() {
             value["fork"] = json!(fork);
         }
-        if self.kind() == "github" {
+        if matches!(
+            self.kind(),
+            "github" | "github-enterprise" | "gitlab" | "gitee"
+        ) {
             match text(&raw["owner"], "type") {
                 "Organization" => value["ownerType"] = json!("organization"),
                 "User" => value["ownerType"] = json!("user"),
@@ -235,17 +333,7 @@ impl Provider {
         let mut stalled = 0;
         for page in 1..=10_000 {
             let page = page.to_string();
-            let mut query = vec![
-                ("page", page.as_str()),
-                (
-                    if self.kind() == "github" {
-                        "per_page"
-                    } else {
-                        "limit"
-                    },
-                    "100",
-                ),
-            ];
+            let mut query = vec![("page", page.as_str()), (self.page_size(), "100")];
             query.extend(parameters.iter().map(|(k, v)| (*k, v.as_str())));
             let (value, headers) = self.get(path, &query, "json", cancel).await?;
             let rows = if path == "/repos/search" && value["ok"] == true {
@@ -296,7 +384,7 @@ impl Provider {
         cancel: &CancellationToken,
         uid: Option<u64>,
     ) -> Result<Vec<Value>> {
-        let params = if self.kind() == "github" {
+        let params = if github(self.kind()) {
             vec![
                 ("visibility", "all".into()),
                 (
@@ -307,8 +395,25 @@ impl Provider {
         } else {
             vec![]
         };
-        let mut repositories = self.paged("/user/repos", &params, cancel).await?;
-        if self.kind() == "github" {
+        let params = if self.kind() == "gitlab" {
+            vec![("membership", "true".into()), ("simple", "false".into())]
+        } else if self.kind() == "gitee" {
+            vec![("type", "all".into())]
+        } else {
+            params
+        };
+        let mut repositories = self
+            .paged(
+                if self.kind() == "gitlab" {
+                    "/projects"
+                } else {
+                    "/user/repos"
+                },
+                &params,
+                cancel,
+            )
+            .await?;
+        if github(self.kind()) {
             match self
                 .paged(
                     "/user/repos",
@@ -345,7 +450,7 @@ impl Provider {
                     }
                 }
             }
-        } else {
+        } else if self.kind() == "gitea" {
             let uid = match uid {
                 Some(v) => Some(v),
                 None => self
@@ -408,7 +513,7 @@ impl Provider {
                 let p = self.clone();
                 let c = cancel.clone();
                 tasks.spawn(async move {
-                    let base = repo_path(&r)?;
+                    let base = p.repository_path(&r)?;
                     if !r["fork"].is_boolean() {
                         match p
                             .get(&base, &[], "json", &c)
@@ -428,7 +533,7 @@ impl Provider {
                             _ => append_error(&mut r, "来源分类未能读取。"),
                         }
                     }
-                    if p.kind() == "gitea" {
+                    if matches!(p.kind(), "gitea" | "gitee") {
                         let owner = text(&r, "fullName")
                             .split('/')
                             .next()
@@ -464,6 +569,23 @@ impl Provider {
                             }
                         }
                     }
+                    if p.kind() == "gitlab" {
+                        if text(&r, "fullName").split('/').next().is_some_and(|owner| {
+                            owner.eq_ignore_ascii_case(text(&p.account, "login"))
+                        }) && r["ownerType"] == "user"
+                        {
+                            r["collaborator"] = json!(false);
+                        } else if let Some(uid) = uid {
+                            match p
+                                .get(&format!("{base}/members/{uid}"), &[], "status", &c)
+                                .await
+                            {
+                                Ok((v, _)) if v == 200 => r["collaborator"] = json!(true),
+                                Ok((v, _)) if v == 404 => r["collaborator"] = json!(false),
+                                _ => append_error(&mut r, "直接项目成员关系未确认。"),
+                            }
+                        }
+                    }
                     if c.is_cancelled() {
                         return Err("操作已取消。".into());
                     }
@@ -496,46 +618,68 @@ impl Provider {
         cache.insert(key, v.clone());
         v
     }
-    async fn history(&self, repo: &Value, head: &str, cancel: &CancellationToken) -> Result<Value> {
-        let key = format!("h:{}:{head}", text(repo, "id"));
+    pub async fn history_page(
+        &self,
+        repo: &Value,
+        head: &str,
+        page: u64,
+        cancel: &CancellationToken,
+    ) -> Result<Value> {
+        util::sha(head)?;
+        let key = format!("h:{}:{head}:{page}", text(repo, "id"));
         if let Some(v) = self.cached(&key).await {
             return Ok(v);
         }
-        let (v, _) = self
+        let page_s = page.to_string();
+        let (v, headers) = self
             .get(
-                &(repo_path(repo)? + "/commits"),
+                &(self.repository_path(repo)?
+                    + if self.kind() == "gitlab" {
+                        "/repository/commits"
+                    } else {
+                        "/commits"
+                    }),
                 &[
-                    ("sha", head),
                     (
-                        if self.kind() == "github" {
-                            "per_page"
+                        if self.kind() == "gitlab" {
+                            "ref_name"
                         } else {
-                            "limit"
+                            "sha"
                         },
-                        "50",
+                        head,
                     ),
-                    ("page", "1"),
+                    (self.page_size(), "50"),
+                    ("page", &page_s),
                     ("stat", "false"),
                 ],
                 "json",
                 cancel,
             )
             .await?;
-        let rows = v
-            .as_array()
-            .filter(|v| !v.is_empty())
-            .ok_or("远端分支没有返回 HEAD 提交。")?;
+        let rows = v.as_array().ok_or("远端提交历史返回格式无效。")?;
+        if page == 1 && rows.is_empty() {
+            return Err("远端分支没有返回 HEAD 提交。".into());
+        }
         let commits: Vec<_> = rows.iter().map(commit_value).collect::<Result<_>>()?;
-        if text(&commits[0], "id") != head {
+        if page == 1 && text(&commits[0], "id") != head {
             return Err("远端分支提交与 HEAD 不一致。".into());
         }
-        let tree = util::sha(text(&rows[0]["commit"]["tree"], "sha"))?;
-        Ok(self
-            .remember(
-                key,
-                json!({"commits":commits,"tree":tree,"limited":rows.len()>=50}),
-            )
-            .await)
+        let tree = if page != 1 {
+            String::new()
+        } else if self.kind() == "gitlab" {
+            head.to_owned()
+        } else {
+            util::sha(text(&rows[0]["commit"]["tree"], "sha"))?
+        };
+        Ok(self.remember(key, json!({"head":head,"page":page,"commits":commits,"tree":tree,"hasMore":next(&headers)||rows.len()>=50})).await)
+    }
+    async fn history(&self, repo: &Value, head: &str, cancel: &CancellationToken) -> Result<Value> {
+        let key = format!("h:{}:{head}:workspace", text(repo, "id"));
+        if let Some(v) = self.cached(&key).await {
+            return Ok(v);
+        }
+        let first = self.history_page(repo, head, 1, cancel).await?;
+        Ok(self.remember(key, json!({"commits":first["commits"],"tree":first["tree"],"limited":first["hasMore"]})).await)
     }
     async fn gitea_verified_emails(
         &self,
@@ -585,6 +729,77 @@ impl Provider {
                     .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
             })
             .collect()
+    }
+    async fn account_created_repository(
+        &self,
+        repo: &Value,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        if self.kind() != "gitea" {
+            return Err("当前平台未提供可核对的仓库创建记录，继续显示唯一分支。".into());
+        }
+        let key = format!(
+            "participation-creation:{}:{}",
+            text(&self.account, "id"),
+            text(repo, "id")
+        );
+        if let Some(value) = self.cached(&key).await.filter(|value| {
+            value["checkedAt"]
+                .as_i64()
+                .is_some_and(|time| util::now() - time < 300_000)
+        }) {
+            return value["found"]
+                .as_bool()
+                .ok_or("仓库创建记录格式无效。".into());
+        }
+        let remote_id = repo["remoteId"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or("无效的远端仓库身份。")?;
+        let base = repo_path(repo)?;
+        let (metadata, _) = self.get(&base, &[], "json", cancel).await?;
+        if metadata["id"].as_u64() != Some(remote_id) {
+            return Err("仓库创建记录与当前仓库身份不一致。".into());
+        }
+        let date = chrono::DateTime::parse_from_rfc3339(text(&metadata, "created_at"))
+            .map_err(|_| "仓库创建日期无法确认。")?
+            .with_timezone(&chrono::Utc)
+            .date_naive()
+            .to_string();
+        // Activity recipients and organization owners are not the creator.
+        // Query the creation day, and only trust the matching repo's actor.
+        for page in 1..=10 {
+            let page_s = page.to_string();
+            let (value, headers) = self
+                .get(
+                    &format!("{base}/activities/feeds"),
+                    &[("date", &date), ("page", &page_s), ("limit", "100")],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("仓库创建活动格式无效。")?;
+            for activity in rows {
+                if activity["op_type"] != "create_repo" {
+                    continue;
+                }
+                if activity["repo_id"].as_u64() != Some(remote_id) {
+                    return Err("仓库创建活动与当前仓库身份不一致。".into());
+                }
+                let actor = text(&activity["act_user"], "login");
+                if actor.is_empty() {
+                    return Err("仓库创建者身份无法确认。".into());
+                }
+                let found = actor.eq_ignore_ascii_case(text(&self.account, "login"));
+                self.remember(key, json!({"found":found,"checkedAt":util::now()}))
+                    .await;
+                return Ok(found);
+            }
+            if rows.is_empty() || (!next(&headers) && rows.len() < 100) {
+                return Err("未找到可核对的仓库创建活动，继续显示唯一分支。".into());
+            }
+        }
+        Err("仓库创建活动超过读取上限，继续显示唯一分支。".into())
     }
     async fn account_commits(
         &self,
@@ -797,7 +1012,53 @@ impl Provider {
         if let Some(v) = self.cached(&key).await {
             return Ok(v);
         }
-        let base = repo_path(repo)?;
+        let base = self.repository_path(repo)?;
+        if self.kind() == "gitlab" {
+            let mut entries = BTreeMap::new();
+            let mut complete = true;
+            for page in 1..=200 {
+                let page = page.to_string();
+                let (rows, headers) = self
+                    .get(
+                        &format!("{base}/repository/tree"),
+                        &[
+                            ("ref", id),
+                            ("recursive", "true"),
+                            ("per_page", "100"),
+                            ("page", &page),
+                        ],
+                        "json",
+                        cancel,
+                    )
+                    .await?;
+                let rows = rows.as_array().ok_or("GitLab文件树返回格式无效。")?;
+                let before = entries.len();
+                for item in rows {
+                    let kind = text(item, "type");
+                    if !matches!(kind, "tree" | "blob" | "commit") {
+                        return Err("GitLab文件树包含无效条目。".into());
+                    }
+                    entries.insert(
+                        util::file_path(text(item, "path"))?,
+                        json!({"sha":util::sha(text(item, "id"))?,"type":kind}),
+                    );
+                }
+                let more = next(&headers) || rows.len() >= 100;
+                if !more || rows.is_empty() {
+                    break;
+                }
+                if entries.len() == before || entries.len() >= 20_000 || page == "200" {
+                    complete = false;
+                    break;
+                }
+            }
+            let result = json!({"entries":entries,"complete":complete});
+            return if complete {
+                Ok(self.remember(key, result).await)
+            } else {
+                Ok(result)
+            };
+        }
         let mut entries = BTreeMap::new();
         let mut complete = true;
         let insert =
@@ -906,18 +1167,13 @@ impl Provider {
             let page_s = page.to_string();
             let (v, h) = self
                 .get(
-                    &(repo_path(repo)? + "/branches"),
-                    &[
-                        ("page", &page_s),
-                        (
-                            if self.kind() == "github" {
-                                "per_page"
-                            } else {
-                                "limit"
-                            },
-                            "100",
-                        ),
-                    ],
+                    &(self.repository_path(repo)?
+                        + if self.kind() == "gitlab" {
+                            "/repository/branches"
+                        } else {
+                            "/branches"
+                        }),
+                    &[("page", &page_s), (self.page_size(), "100")],
                     "json",
                     cancel,
                 )
@@ -932,7 +1188,11 @@ impl Provider {
                     name,
                     util::sha(text(
                         &r["commit"],
-                        if self.kind() == "github" { "sha" } else { "id" },
+                        if github(self.kind()) || self.kind() == "gitee" {
+                            "sha"
+                        } else {
+                            "id"
+                        },
                     ))?,
                 );
             }
@@ -957,7 +1217,12 @@ impl Provider {
         });
         Ok((out, limited))
     }
-    pub async fn workspace(&self, repo: &Value, cancel: &CancellationToken, check_participation: bool) -> Result<Value> {
+    pub async fn workspace(
+        &self,
+        repo: &Value,
+        cancel: &CancellationToken,
+        check_participation: bool,
+    ) -> Result<Value> {
         let (items, limited) = self.branches(repo, cancel).await?;
         let mut tasks = Vec::new();
         let mut commits = Vec::new();
@@ -965,6 +1230,7 @@ impl Provider {
         if limited {
             warnings.push("分支超过单次读取上限（1000 个）；当前显示已读取分支。".to_string());
         }
+        let sole_branch = !limited && items.len() == 1;
         let mut pending = VecDeque::from(items.clone());
         let mut jobs = tokio::task::JoinSet::new();
         loop {
@@ -981,9 +1247,10 @@ impl Provider {
                         Ok(history) => history,
                         Err(error) => {
                             task["error"] = json!(error);
-                            return (task, vec![], false);
+                            return (task, vec![]);
                         }
                     };
+                    task["historyHasMore"] = history["limited"].clone();
                     // File-tree health must not discard a verified branch tip
                     // and its history: the graph and sync counts need them.
                     match p.tree(&r, text(&history, "tree"), &c).await {
@@ -992,27 +1259,28 @@ impl Provider {
                             task["treeComplete"] = tree["complete"].clone();
                             if check_participation {
                                 match p.account_commits(&r, &head, &c).await {
-                                    Ok(found) => task["hasAccountCommits"] = json!(found),
+                                    Ok(found) => {
+                                        task["hasAccountCommits"] = json!(found);
+                                        if sole_branch && !found {
+                                            match p.account_created_repository(&r, &c).await {
+                                                Ok(created) => task["hasAccountCreation"] = json!(created),
+
                                     Err(error) => task["participationError"] = json!(error),
                                 }
                             }
                         }
                         Err(error) => task["error"] = json!(format!("文件树读取失败：{error}")),
                     }
-                    (task, history["commits"].as_array().unwrap().clone(), history["limited"] == true)
+                    (task, history["commits"].as_array().unwrap().clone())
                 });
             }
             match jobs.join_next().await {
-                Some(Ok((t, c, l))) => {
+                Some(Ok((t, c))) => {
                     if let Some(error) = t["participationError"].as_str() {
                         warnings.push(format!("分支参与记录：{}：{}", text(&t, "branch"), error));
                     }
                     if t["treeComplete"] != true && t["error"] == "" {
                         warnings.push(format!("{} 的文件树读取不完整。", text(&t, "branch")));
-                    }
-                    if l && !warnings.iter().any(|s| s.starts_with("每个分支")) {
-                        warnings
-                            .push("每个分支当前读取最近 50 条提交；图线只使用真实父节点。".into());
                     }
                     tasks.push(t);
                     commits.extend(c);
@@ -1056,7 +1324,92 @@ impl Provider {
         if let Some(v) = self.cached(&key).await {
             return Ok(v);
         }
-        let base = repo_path(repo)?;
+        let base = self.repository_path(repo)?;
+        if self.kind() == "gitlab" {
+            let (raw, _) = self
+                .get(
+                    &format!("{base}/repository/commits/{id}"),
+                    &[],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let mut commit = commit_value(&raw)?;
+            if text(&commit, "id") != id {
+                return Err("GitLab提交身份不匹配。".into());
+            }
+            commit["description"] = json!(text(&raw, "message")
+                .split_once('\n')
+                .map(|(_, body)| body.trim_start())
+                .unwrap_or(""));
+            let mut files = Vec::new();
+            let mut warnings = Vec::new();
+            for page in 1..=30 {
+                let page_s = page.to_string();
+                let (rows, headers) = self
+                    .get(
+                        &format!("{base}/repository/commits/{id}/diff"),
+                        &[("per_page", "100"), ("page", &page_s)],
+                        "json",
+                        cancel,
+                    )
+                    .await?;
+                let rows = rows.as_array().ok_or("GitLab提交更改返回格式无效。")?;
+                for file in rows {
+                    let path = util::file_path(text(file, "new_path"))?;
+                    let old = util::file_path(text(file, "old_path"))?;
+                    let status = if file["new_file"] == true {
+                        "added"
+                    } else if file["deleted_file"] == true {
+                        "removed"
+                    } else if file["renamed_file"] == true {
+                        "renamed"
+                    } else {
+                        "modified"
+                    };
+                    let mut record =
+                        json!({"path":path,"status":status,"patch":file["diff"].as_str()});
+                    if file["renamed_file"] == true {
+                        record["previousPath"] = json!(old);
+                    }
+                    if file["too_large"] == true || file["collapsed"] == true {
+                        warnings
+                            .push("部分GitLab补丁超过平台差异上限，当前内容不完整。".to_owned());
+                    }
+                    files.push(record);
+                }
+                if !next(&headers) && rows.len() < 100 || rows.is_empty() {
+                    break;
+                }
+                if page == 30 {
+                    warnings.push("提交文件超过读取上限，当前列表不完整。".into());
+                }
+            }
+            let tree = self.tree(repo, id, cancel).await?;
+            if tree["complete"] != true {
+                warnings.push("所选提交的文件树不完整。".into());
+            }
+            warnings.sort();
+            warnings.dedup();
+            let diff = files
+                .iter()
+                .map(|file| {
+                    format!(
+                        "--- a/{}\n+++ b/{}\n{}",
+                        file["previousPath"].as_str().unwrap_or(text(file, "path")),
+                        text(file, "path"),
+                        file["patch"].as_str().unwrap_or("# 接口未提供文本补丁")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let result = json!({"commit":commit,"files":files,"diff":diff,"tree":tree_paths(&tree),"treeComplete":tree["complete"],"warnings":warnings});
+            return if tree["complete"] == true && warnings.is_empty() {
+                Ok(self.remember(key, result).await)
+            } else {
+                Ok(result)
+            };
+        }
         let mut files = Vec::new();
         let mut commit = json!({});
         let mut tree = String::new();
@@ -1090,7 +1443,7 @@ impl Provider {
                 }
                 files.push(f1);
             }
-            if self.kind() != "github" || !next(&h) {
+            if !github(self.kind()) || !next(&h) {
                 break;
             }
             if page == 30 {
@@ -1150,15 +1503,25 @@ impl Provider {
     ) -> Result<Value> {
         util::sha(id)?;
         util::file_path(path)?;
-        let base = repo_path(repo)?;
-        let (v, _) = self
-            .get(&format!("{base}/git/commits/{id}"), &[], "json", cancel)
-            .await?;
-        let t = self
-            .tree(
+        let base = self.repository_path(repo)?;
+        let t = if self.kind() == "gitlab" {
+            self.tree(repo, id, cancel).await?
+        } else {
+            let (v, _) = self
+                .get(
+                    &format!(
+                        "{base}{}/commits/{id}",
+                        if self.kind() == "gitee" { "" } else { "/git" }
+                    ),
+                    &[],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            self.tree(
                 repo,
                 &util::sha(text(
-                    if self.kind() == "gitea" {
+                    if matches!(self.kind(), "gitea" | "gitee") {
                         &v["commit"]["tree"]
                     } else {
                         &v["tree"]
@@ -1167,7 +1530,8 @@ impl Provider {
                 ))?,
                 cancel,
             )
-            .await?;
+            .await?
+        };
         let e = &t["entries"][path];
         if e.is_null() {
             return Err("这个文件不在已读取的所选提交文件树中。".into());
@@ -1182,7 +1546,15 @@ impl Provider {
         }
         let (b, _) = self
             .get(
-                &format!("{base}/git/blobs/{}", util::sha(text(e, "sha"))?),
+                &format!(
+                    "{base}{}/blobs/{}",
+                    if self.kind() == "gitlab" {
+                        "/repository"
+                    } else {
+                        "/git"
+                    },
+                    util::sha(text(e, "sha"))?
+                ),
                 &[],
                 "json",
                 cancel,
@@ -1216,6 +1588,12 @@ impl Provider {
     }
 }
 fn next(h: &HeaderMap) -> bool {
+    if h.get("x-next-page")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| !v.is_empty() && v != "0")
+    {
+        return true;
+    }
     h.get("link")
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.contains("rel=\"next\"") || v.contains("rel=next"))
@@ -1235,6 +1613,23 @@ fn tree_paths(t: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 fn commit_value(v: &Value) -> Result<Value> {
+    if v["parent_ids"].is_array() {
+        let message = v["message"].as_str().ok_or("GitLab提交说明无效。")?;
+        let author = v["author_name"].as_str().ok_or("GitLab提交作者无效。")?;
+        let date = v["authored_date"]
+            .as_str()
+            .filter(|date| chrono::DateTime::parse_from_rfc3339(date).is_ok())
+            .ok_or("GitLab提交日期无效。")?;
+        let parents = v["parent_ids"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|id| util::sha(id.as_str().ok_or("GitLab父提交无效。")?))
+            .collect::<Result<Vec<_>>>()?;
+        return Ok(
+            json!({"id":util::sha(text(v,"id"))?,"summary":message.lines().next().unwrap_or(""),"author":author,"time":date,"parents":parents,"refs":[]}),
+        );
+    }
     let msg = v["commit"]["message"]
         .as_str()
         .ok_or("远端提交返回格式无效。")?;
@@ -1357,10 +1752,9 @@ impl Network {
         repo_path(repo)?;
         let full = text(repo, "fullName");
         let url = format!(
-            "{}/{}/{}.git",
+            "{}/{}.git",
             text(&p.account, "host"),
-            encoded(full.split('/').next().unwrap()),
-            encoded(full.split('/').nth(1).unwrap())
+            full.split('/').map(encoded).collect::<Vec<_>>().join("/")
         );
         if util::identity(&url) != util::identity(text(repo, "url")) {
             return Err("仓库远端与访问账号不匹配。".into());
@@ -1377,7 +1771,11 @@ impl Network {
                 ("GITTOGETHER_DOWNLOAD_ORIGIN".into(), origin),
                 (
                     "GITTOGETHER_DOWNLOAD_USER".into(),
-                    text(&p.account, "login").into(),
+                    if p.kind() == "gitlab" {
+                        "oauth2".into()
+                    } else {
+                        text(&p.account, "login").into()
+                    },
                 ),
                 ("GITTOGETHER_DOWNLOAD_TOKEN".into(), p.token().into()),
                 ("GIT_ASKPASS".into(), "".into()),

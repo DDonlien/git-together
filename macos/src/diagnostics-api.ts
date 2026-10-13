@@ -1,7 +1,11 @@
 import { diagnosticFailure, rendererDiagnostic, type DiagnosticInput, type DiagnosticsStatus } from './diagnostics-model';
+import { installPerformanceDiagnostics } from './performance-diagnostics';
 
 let reportingFailure = false;
 let installed = false;
+let stopDiagnostics: (() => void) | undefined;
+const pending: DiagnosticInput[] = [];
+let sending = false, dropped = 0;
 async function request(method: 'status' | 'record' | 'open' | 'copy', value: unknown = {}) {
   if (window.gittogether?.diagnostics) {
     const bridge = window.gittogether.diagnostics;
@@ -31,16 +35,47 @@ export async function copyDiagnostics(): Promise<number> {
 export function logDiagnostic(value: DiagnosticInput) {
   if (!installed || typeof window === 'undefined') return;
   const clean = rendererDiagnostic(value); if (!clean) return;
-  void request('record', clean).then(() => { reportingFailure = false; }).catch(() => {
-    // Never recursively log a failed logging request or print its input/error.
+  if (pending.length >= 128) { dropped++; return; }
+  pending.push(clean);
+  if (!sending) void drain();
+}
+async function drain() {
+  sending = true;
+  let reportingLoss = 0;
+  try {
+    while (pending.length) {
+      reportingLoss = dropped; dropped = 0;
+      if (reportingLoss) await request('record', { event: 'performance', phase: 'renderer-log-queue', outcome: 'partial', dropped: reportingLoss });
+      reportingLoss = 0;
+      await request('record', pending.shift()!); reportingFailure = false;
+    }
+  } catch {
+    // Never recursively log the logger or print inputs/errors. Bounded memory
+    // and one in-flight request keep a slow disk/bridge out of the GUI path.
+    dropped += pending.length + 1 + reportingLoss; pending.length = 0;
     if (!reportingFailure) console.warn('GitTogether 本地日志服务不可用，诊断记录可能不完整。'); reportingFailure = true;
-  });
+  } finally { sending = false; }
 }
 export function installDiagnostics() {
   if (installed) return; installed = true;
-  window.addEventListener('error', event => logDiagnostic({ event: 'renderer', outcome: 'failure', ...diagnosticFailure(event.error) }));
-  window.addEventListener('unhandledrejection', event => logDiagnostic({ event: 'renderer', outcome: 'failure', ...diagnosticFailure(event.reason) }));
-  for (const outcome of ['online', 'offline'] as const) window.addEventListener(outcome, () => logDiagnostic({ event: 'renderer', outcome }));
-  document.addEventListener('visibilitychange', () => logDiagnostic({ event: 'renderer', outcome: document.hidden ? 'hidden' : 'visible' }));
+  const error = (event: ErrorEvent) => logDiagnostic({ event: 'renderer', outcome: 'failure', ...diagnosticFailure(event.error) });
+  const rejection = (event: PromiseRejectionEvent) => logDiagnostic({ event: 'renderer', outcome: 'failure', ...diagnosticFailure(event.reason) });
+  const online = () => logDiagnostic({ event: 'renderer', outcome: 'online' });
+  const offline = () => logDiagnostic({ event: 'renderer', outcome: 'offline' });
+  const visibility = () => logDiagnostic({ event: 'renderer', outcome: document.hidden ? 'hidden' : 'visible' });
+  window.addEventListener('error', error); window.addEventListener('unhandledrejection', rejection);
+  window.addEventListener('online', online); window.addEventListener('offline', offline);
+  document.addEventListener('visibilitychange', visibility);
   logDiagnostic({ event: 'renderer', outcome: 'start' });
+  const stopPerformance = installPerformanceDiagnostics(logDiagnostic);
+  const stop = () => {
+    if (!installed) return;
+    stopPerformance(); installed = false;
+    window.removeEventListener('error', error); window.removeEventListener('unhandledrejection', rejection);
+    window.removeEventListener('online', online); window.removeEventListener('offline', offline);
+    document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', stop);
+  };
+  stopDiagnostics = stop;
+  window.addEventListener('pagehide', stop, { once: true });
 }
+if (import.meta.hot) import.meta.hot.dispose(() => stopDiagnostics?.());

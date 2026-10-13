@@ -1,10 +1,11 @@
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
-import { isRemoteCommitDetails, isRemoteFileContent, isRemoteWorkspace } from './remote-repository-model';
+import { isRemoteCommitDetails, isRemoteFileContent, isRemoteHistoryPage, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
 import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
+import { performanceRequestStarted, performanceRequestFinished } from './performance-diagnostics';
 import { isRepositorySyncPlan, isRepositorySyncResult } from './repository-sync-model';
 
 export class LocalServiceError extends Error {
@@ -29,6 +30,7 @@ export const generateCommitMessage: GenerateCommitMessage = async (input, signal
 };
 export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal): Promise<ApiOutputs[M]> {
   const requestId = crypto.randomUUID(); const started = performance.now();
+  performanceRequestStarted();
   logDiagnostic({ event: 'api', outcome: 'start', method, requestId });
   try {
     const value = await readImportAPI(method, input, signal, requestId);
@@ -37,7 +39,7 @@ export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs
   } catch (problem) {
     logDiagnostic({ event: 'api', outcome: signal?.aborted ? 'cancelled' : 'failure', method, requestId, ...diagnosticFailure(problem), durationMs: Math.round(performance.now() - started) });
     throw problem;
-  }
+  } finally { performanceRequestFinished(); }
 }
 async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal, requestId?: string): Promise<ApiOutputs[M]> {
   let envelope: unknown;
@@ -55,7 +57,14 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
       throw new LocalServiceError('connection', '无法连接本地账号服务。请点击「重新连接」检查；输入仍保留。');
     }
     if (response.status >= 500) throw new LocalServiceError('server', `本地账号服务返回 HTTP ${response.status}，请重新连接后重试。`, response.status);
-    try { envelope = await response.json(); }
+    try {
+      const started = performance.now();
+      envelope = await response.json();
+      const durationMs = Math.round(performance.now() - started);
+      const bytes = Number(response.headers.get('content-length'));
+      // Includes body transfer and decoding, not a claim of pure parse CPU time.
+      if (durationMs >= 8 || method === 'remoteWorkspace' || method === 'localWorkspace') logDiagnostic({ event: 'performance', phase: 'response-read', outcome: 'success', method, requestId, durationMs, ...(Number.isSafeInteger(bytes) && bytes > 0 ? { bytes } : {}) });
+    }
     catch {
       if (signal?.aborted) throw signal.reason;
       if (timeout.aborted) throw new LocalServiceError('timeout', '本地账号服务响应超时。请重新连接检查；输入仍保留，不会自动重复提交。');
@@ -63,6 +72,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     }
     if (!response.ok && isRecord(envelope) && envelope.ok === true) throw new Error('账号服务返回格式无效。');
   }
+  const validationStarted = performance.now();
   if (!isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '账号服务返回格式无效。');
   const value = envelope.value;
   if (method === 'status') {
@@ -105,6 +115,8 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || value.opened !== true) throw new Error('仓库页面打开结果无效。');
   } else if (method === 'remoteWorkspace') {
     if (!isRemoteWorkspace(value)) throw new Error('远端工作台返回格式无效。');
+  } else if (method === 'remoteHistory') {
+    if (!isRemoteHistoryPage(value) || !('head' in input) || value.head !== input.head || !('page' in input) || value.page !== input.page) throw new Error('远端历史分页返回格式无效。');
   } else if (method === 'remoteCommit') {
     if (!isRemoteCommitDetails(value)) throw new Error('远端提交返回格式无效。');
   } else if (method === 'remoteFile') {
@@ -113,5 +125,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || !isCatalog(value.catalog) || !Array.isArray(value.matchedRepositoryIds) || !value.matchedRepositoryIds.every(id => typeof id === 'string')) throw new Error('仓库批量匹配结果返回格式无效。');
   } else if (!isCatalog(value)) throw new Error('账号列表返回格式无效。');
   // The finite method above determines the validated result shape.
+  const durationMs = Math.round(performance.now() - validationStarted);
+if (durationMs >= 8 || method === 'remoteWorkspace' || method === 'localWorkspace') logDiagnostic({ event: 'performance', phase: 'response-validate', outcome: durationMs >= 50 ? 'partial' : 'success', method, requestId, durationMs, tasks: isRecord(value) && 'tasks' in value && Array.isArray(value.tasks) ? value.tasks.length : 0 });
   return value as ApiOutputs[M];
 }
