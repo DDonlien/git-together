@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, Icon, Menu, MenuItem, Popover } from './ui';
 import { RepositoryColumnHeading } from './RepositoryColumnHeading';
-import { commitMatchesSearch, graphNavigationIndex, layoutCommitGraph, nextGraphMatch, parseCommitSearch, repositoryGraphBranches, repositoryGraphCommits, type GraphBranch } from './commit-graph';
+import { commitMatchesSearch, graphNavigationIndex, graphRowHeight, graphVisibleWindow, layoutCommitGraph, nextGraphMatch, parseCommitSearch, repositoryGraphBranches, repositoryGraphCommits, type GraphBranch } from './commit-graph';
 import type { RepositoryCommit, RepositoryWorkspace } from './repository-model';
+
+// Reuse the browser's locale/timezone formatters while scrolling between rows.
+const graphTimeFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+const graphDateFormat = new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric' });
 
 function GraphText({ text, term }: { text: string; term: string }) {
   const at = term ? text.toLowerCase().indexOf(term) : -1;
@@ -17,7 +21,7 @@ function CommitActions({ commit, onCopy, onLocateParent }: { commit?: Repository
   </>;
 }
 
-function BranchFilter({ branches, selection, onChange, title }: { branches: GraphBranch[]; selection: ReadonlySet<string> | null; onChange: (selection: ReadonlySet<string> | null) => void; title: string }) {
+const BranchFilter = memo(function BranchFilter({ branches, selection, onChange, title }: { branches: GraphBranch[]; selection: ReadonlySet<string> | null; onChange: (selection: ReadonlySet<string> | null) => void; title: string }) {
   const [open, setOpen] = useState(false);
   const allRef = useRef<HTMLInputElement>(null);
   const count = branches.filter(branch => selection === null || selection.has(branch.branch)).length;
@@ -44,9 +48,9 @@ function BranchFilter({ branches, selection, onChange, title }: { branches: Grap
       </fieldset>
     </div>
   </Popover>;
-}
+});
 
-export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string }) {
+export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel, loading = false }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string; loading?: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -55,29 +59,57 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
   const scrollRef = useRef<HTMLDivElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const menuFocus = useRef<string | null>(null);
+  const requestedFocus = useRef<string | null>(null);
   const branches = useMemo(() => repositoryGraphBranches(workspace), [workspace]);
   const defaultSelection = useMemo(() => defaultHiddenBranches?.size ? new Set(branches.filter(branch => !defaultHiddenBranches.has(branch.branch)).map(branch => branch.branch)) : null, [branches, defaultHiddenBranches]);
   const effectiveSelection = branchSelection === 'all' ? null : branchSelection || defaultSelection;
   const rows = useMemo(() => layoutCommitGraph(repositoryGraphCommits(workspace, branches, effectiveSelection)), [workspace, branches, effectiveSelection]);
+  const [windowRange, setWindowRange] = useState(() => graphVisibleWindow(rows.length, 0, 0));
+  const range = { start: Math.min(windowRange.start, rows.length), end: Math.min(windowRange.end, rows.length), firstVisible: Math.min(windowRange.firstVisible, Math.max(0, rows.length - 1)) };
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current!;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      // A collapsed column keeps its last viewport until it becomes visible again.
+      if (!scroll.clientHeight) return;
+      const next = graphVisibleWindow(rows.length, scroll.scrollTop, scroll.clientHeight);
+      setWindowRange(current => current.start === next.start && current.end === next.end && current.firstVisible === next.firstVisible ? current : next);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    const observer = new ResizeObserver(schedule);
+    scroll.addEventListener('scroll', schedule, { passive: true }); observer.observe(scroll); measure();
+    return () => { scroll.removeEventListener('scroll', schedule); observer.disconnect(); cancelAnimationFrame(frame); };
+  }, [rows.length]);
+  useLayoutEffect(() => {
+    if (requestedFocus.current) { buttons.current.get(requestedFocus.current)?.focus({ preventScroll: true }); requestedFocus.current = null; }
+  });
   const byId = useMemo(() => new Map(rows.map((row, index) => [row.commit.id, index])), [rows]);
   const query = useMemo(() => parseCommitSearch(search), [search]);
   const matches = useMemo(() => rows.flatMap((row, index) => commitMatchesSearch(row.commit, query) ? [index] : []), [rows, query]);
   const matchSet = useMemo(() => new Set(matches), [matches]);
-  const lanes = Math.max(1, ...rows.map(row => row.width));
+  const lanes = useMemo(() => Math.max(1, ...rows.map(row => row.width)), [rows]);
   const task = workspace.tasks.find(item => item.id === focusedTask);
   const selectedBranches = branches.filter(branch => effectiveSelection === null || effectiveSelection.has(branch.branch));
   const branchName = effectiveSelection === null || selectedBranches.length === branches.length && branches.length > 0 ? '全部分支' : selectedBranches.length === 1 ? selectedBranches[0].branch : selectedBranches.length ? `${selectedBranches.length} 个分支` : '未选择分支';
-  const headIds = new Set(workspace.tasks.filter(item => item.path).map(item => item.head));
+  const headIds = useMemo(() => new Set(workspace.tasks.filter(item => item.path).map(item => item.head)), [workspace.tasks]);
   const cursorId = cursor && byId.has(cursor) ? cursor : rows[0]?.commit.id;
-  // Match the 30px text stack plus 6px padding on both sides in styles.css.
-  const rowHeight = 42;
+  const tabStopIndex = cursorId && byId.get(cursorId)! >= range.start && byId.get(cursorId)! < range.end ? byId.get(cursorId)! : range.firstVisible;
+  const rowHeight = graphRowHeight;
+  const changeBranches = useCallback((selection: ReadonlySet<string> | null) => { setBranchSelection(selection === null ? 'all' : selection); onBranchFilterChange?.(selection); setContext(null); }, [onBranchFilterChange]);
   const choose = useCallback((id: string | null, toggle = false) => {
     const next = toggle && id === selected ? null : id;
-    if (id) { setCursor(id); buttons.current.get(id)?.focus({ preventScroll: true }); buttons.current.get(id)?.closest('tr')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+    if (id) {
+      setCursor(id); requestedFocus.current = id;
+      const scroll = scrollRef.current!, top = byId.get(id)! * rowHeight;
+      if (top < scroll.scrollTop) scroll.scrollTop = top;
+      else if (top + rowHeight > scroll.scrollTop + scroll.clientHeight) scroll.scrollTop = top + rowHeight - scroll.clientHeight;
+      setWindowRange(graphVisibleWindow(rows.length, scroll.scrollTop, scroll.clientHeight));
+    }
     const workingTask = rows.find(row => row.commit.id === next)?.commit.workingTask;
     setSelected(next); setFeedback(''); onSelectCommit?.(workingTask ? null : next, selected);
     if (workingTask) onSelectWorkingTask?.(workingTask.id);
-  }, [selected, rows, onSelectCommit, onSelectWorkingTask]);
+  }, [selected, rows, byId, onSelectCommit, onSelectWorkingTask]);
   function locateFromMenu(id: string) { menuFocus.current = id; choose(id); }
   function locateParent(commit: RepositoryCommit, fromMenu = false) {
     const parent = commit.parents[0];
@@ -114,33 +146,38 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
   }, [query.term, matches, byId, selected, rows, choose]);
   return <>
     <RepositoryColumnHeading title={branchName} disclosureLabel="分支图" icon="branch" controls="repository-graph-column" titleContent={
-      <BranchFilter branches={branches} selection={effectiveSelection !== null && selectedBranches.length === branches.length ? null : effectiveSelection} title={branchName} onChange={selection => { setBranchSelection(selection === null ? 'all' : selection); onBranchFilterChange?.(selection); setContext(null); }} />
+      <BranchFilter branches={branches} selection={effectiveSelection !== null && selectedBranches.length === branches.length ? null : effectiveSelection} title={branchName} onChange={changeBranches} />
     } />
     {feedback && <p className="repository-data-note" role="status">{feedback}</p>}
     {!workspace.complete && !workspace.source && workspace.commits.length > 0 && <p className="repository-data-note">最近提交；完整分支关系等待服务更新。</p>}
     <div ref={scrollRef} className="repository-graph-scroll">
-      {rows.length ? <table className="repository-graph-table" aria-label="提交历史"><colgroup><col style={{ width: lanes * 14 + 20 }} /><col /><col style={{ width: 78 }} /></colgroup><tbody>
-        {rows.map(({ commit, lane, color, incoming, incomingLocal, edges }, index) => {
+      {rows.length ? <table className="repository-graph-table" aria-label="提交历史" aria-rowcount={rows.length}><colgroup><col style={{ width: lanes * 14 + 20 }} /><col /><col style={{ width: 78 }} /></colgroup><tbody>
+        <tr className="repository-graph-spacer" aria-hidden="true"><td colSpan={3} style={{ height: range.start * rowHeight }} /></tr>
+        {rows.slice(range.start, range.end).map(({ commit, lane, color, incoming, incomingLocal, edges }, offset) => {
+          const index = range.start + offset;
           const workingTask = commit.workingTask;
+          const time = workingTask ? null : new Date(commit.time), timeLabel = time ? graphTimeFormat.format(time) : '';
           const isHead = headIds.has(commit.id);
           const missingParent = edges.some(edge => edge.boundary);
           const label = workingTask ? `${commit.summary} · ${workingTask.branch} · ${workingTask.path}` : `${commit.summary} · ${commit.author} · ${commit.id}${commit.refs.length ? ` · ${commit.refs.join(', ')}` : ''}${isHead ? ' · HEAD' : ''}${commit.unpublished ? ' · 未推送' : commit.localOnly ? ' · 本地提交' : ''}${missingParent ? ' · 父提交未读取' : ''}`;
-          return <tr key={commit.id} data-commit-id={workingTask ? undefined : commit.id} data-working-task={workingTask?.id} className={`${selected === commit.id ? 'selected' : ''} ${query.term && !matchSet.has(index) ? 'graph-dimmed' : ''} ${task?.head === commit.id ? 'graph-task-head' : ''} ${workingTask ? 'graph-working-row' : ''}`} onClick={() => choose(commit.id, true)} onContextMenu={event => { event.preventDefault(); choose(commit.id); if (!workingTask) setContext({ id: commit.id, x: event.clientX, y: event.clientY }); }}>
+          return <tr key={commit.id} aria-rowindex={index + 1} data-commit-id={workingTask ? undefined : commit.id} data-working-task={workingTask?.id} className={`${selected === commit.id ? 'selected' : ''} ${query.term && !matchSet.has(index) ? 'graph-dimmed' : ''} ${task?.head === commit.id ? 'graph-task-head' : ''} ${workingTask ? 'graph-working-row' : ''}`} onClick={() => choose(commit.id, true)} onContextMenu={event => { event.preventDefault(); choose(commit.id); if (!workingTask) setContext({ id: commit.id, x: event.clientX, y: event.clientY }); }}>
             <td className="repository-graph-lane"><svg width={lanes * 14 + 14} height={rowHeight} viewBox={`0 0 ${lanes * 14 + 14} ${rowHeight}`} aria-hidden="true">
               {edges.map((edge, edgeIndex) => <path key={edgeIndex} d={edge.from === edge.to ? `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} V ${edge.boundary ? rowHeight - 3 : rowHeight}` : `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} C ${edge.from * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight}`} className={`graph-line graph-color-${edge.color}${edge.boundary ? ' graph-boundary' : ''}${edge.local ? ' graph-local-edge' : ''}`} />)}
               {incoming && <path d={`M ${lane * 14 + 12} 0 V ${rowHeight / 2}`} className={`graph-line graph-color-${color}${incomingLocal ? ' graph-local-edge' : ''}`} />}
               {isHead && !commit.unpublished && <circle cx={lane * 14 + 12} cy={rowHeight / 2} r="6" className="graph-head-marker" />}
               <circle cx={lane * 14 + 12} cy={rowHeight / 2} r={workingTask || commit.unpublished || commit.parents.length > 1 ? 4 : 3.5} className={`graph-node graph-color-${color}${workingTask ? ' graph-working-node' : commit.unpublished ? ' graph-unpublished-node' : commit.parents.length > 1 ? ' graph-merge-node' : ''}`} />
             </svg></td>
-            <td><button ref={element => { if (element) buttons.current.set(commit.id, element); else buttons.current.delete(commit.id); }} className="repository-graph-description" tabIndex={cursorId === commit.id ? 0 : -1} onFocus={() => setCursor(commit.id)} onKeyDown={event => keyboard(event, index)} aria-pressed={selected === commit.id} aria-label={label} title={`${label}${workingTask ? '' : `\n${new Date(commit.time).toLocaleString()}`}\n↑ ↓ 导航 · ← 父提交 · → 子提交 · Esc 取消`}>
+            <td><button ref={element => { if (element) buttons.current.set(commit.id, element); else buttons.current.delete(commit.id); }} className="repository-graph-description" tabIndex={tabStopIndex === index ? 0 : -1} onFocus={() => setCursor(commit.id)} onKeyDown={event => keyboard(event, index)} aria-pressed={selected === commit.id} aria-label={label} title={`${label}${workingTask ? '' : `\n${timeLabel}`}\n↑ ↓ 导航 · ← 父提交 · → 子提交 · Esc 取消`}>
               <strong><GraphText text={commit.summary} term={query.term} /></strong>
               <span className="graph-row-secondary">{workingTask ? <span className="graph-working-identity" title={workingTask.path || undefined}><GraphText text={workingTask.branch} term={query.term} /><span> · 工作目录</span></span> : <code><GraphText text={commit.id.slice(0, 8)} term={query.term} /></code>}{commit.localOnly && <span className="commit-ref graph-local-ref" title={commit.unpublished ? '尚未在当前读取的远端分支中出现' : '本地历史中的提交，远端推送状态尚未确认'}>{commit.unpublished ? '未推送' : '本地提交'}</span>}{isHead && <span className="commit-ref graph-head-ref" title="本地工作目录的 HEAD">HEAD</span>}{commit.refs.length > 0 && <span className="commit-ref-list">{commit.refs.map(ref => <span className={`commit-ref graph-color-${color}${ref.startsWith('origin/') || ref.startsWith('refs/remotes/') ? ' graph-remote-ref' : ''}`} key={ref} title={ref}><Icon name={ref.startsWith('origin/') || ref.startsWith('refs/remotes/') ? 'download' : 'branch'} size={10} /><span className="commit-ref-name"><GraphText text={ref.replace(/^refs\/(heads|remotes)\//, '')} term={query.term} /></span></span>)}</span>}{missingParent && <span className="graph-boundary-label" title="真实父提交不在当前读取范围内，不连接相邻提交">…</span>}</span>
             </button></td>
-            <td className="repository-graph-byline" title={workingTask?.path || commit.author}><span>{workingTask ? '本地' : commit.author}</span>{workingTask ? <span>未提交</span> : <time dateTime={commit.time} title={new Date(commit.time).toLocaleString()}>{new Date(commit.time).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</time>}</td>
+            <td className="repository-graph-byline" title={workingTask?.path || commit.author}><span>{workingTask ? '本地' : commit.author}</span>{workingTask ? <span>未提交</span> : <time dateTime={commit.time} title={timeLabel}>{graphDateFormat.format(time!)}</time>}</td>
           </tr>;
         })}
+        <tr className="repository-graph-spacer" aria-hidden="true"><td colSpan={3} style={{ height: (rows.length - range.end) * rowHeight }} /></tr>
       </tbody></table> : <div className="repository-column-empty"><Icon name="branch" size={28} /><p>{effectiveSelection !== null ? selectedBranches.length ? '所选分支在当前读取范围内尚无提交' : '选择分支以显示提交' : emptyLabel || (workspace.complete ? '仓库尚无提交' : '分支图读取等待服务更新')}</p></div>}
     </div>
+    {loading && <div className="repository-graph-loading" role="status"><Icon name="spinner" className="spin" size={14} /><span>正在加载…</span></div>}
     {context && byId.has(context.id) && <div className="repository-graph-context" style={{ left: context.x, top: context.y }}><Menu label="提交操作" open placement="start" focusOnOpen="first" onOpenChange={open => { if (!open) { const id = menuFocus.current || context.id; menuFocus.current = null; setContext(null); requestAnimationFrame(() => buttons.current.get(id)?.focus({ preventScroll: true })); } }} trigger={<button className="graph-context-anchor" aria-label="提交操作" />}><CommitActions commit={rows[byId.get(context.id)!]?.commit} onCopy={text => void copy(text)} onLocateParent={commit => locateParent(commit, true)} /></Menu></div>}
   </>;
 }

@@ -1587,7 +1587,7 @@ dependencies = [
 
 [[package]]
 name = "gittogether"
-version = "0.31.0"
+version = "0.31.1"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -1607,6 +1607,7 @@ dependencies = [
  "reqwest",
  "rusty-leveldb",
  "security-framework",
+ "semver",
  "serde",
  "serde_json",
  "sha1 0.10.7",

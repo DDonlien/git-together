@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
+
 选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
 
 分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits和hasAccountPush结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
@@ -288,7 +290,7 @@ AccountService 从已保存仓库、账号与关联定位真实 worktree，复�
 
 controller 在提交前后递增本地读取版本，丢弃写入前轮询的迟到响应；成功立即重新读取共享 localWorkspace，再触发一次仓库远端状态检查，不清空其他任务选择和草稿。图谱从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
 
-commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。使用本机已登录 Codex CLI 的 exec，在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 运行，忽略用户 config/rules，禁用 shell、多 agent、apps、plugins、hooks、web search 与 MCP；不读取聊天账号令牌，不执行仓库命令。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。150秒超时及显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。原始 CLI 输出和提交正文不进入诊断日志。
+commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。Windows 在 PATH/native CLI 与已安装桌面版的 LocalAppData/OpenAI/Codex/bin 缓存中比较实际语义版本，使用新版 CLI，避免旧 PATH 副本拒绝当前模型。通过该 CLI 的 app-server 只读 config/read 与 model/list 获取工具名称和实际推荐模型，不创建会话或修改全局配置；生成说明时使用此推荐模型，保留登录/provider。随后在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 执行 exec，忽略 rules，禁用 shell、多 agent、apps、plugins、hooks 和 web search，并为每个已配置 MCP 显式设置 enabled=false；空 mcp_servers 表不会清除合并配置。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。每个本地版本探测最多5秒，配置及模型目录读取最多20秒，生成子进程最多150秒；显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。CLI 失败按模型不可用、认证、版本参数、网络或其他生成失败显示固定提示；诊断只记受控分类及退出码，原始 CLI 输出、配置值和提交正文不进入日志。
 
 推送反馈（0.22.11）：RepositoryActionDraftsProvider内的PushFeedbackProvider保存服务会话级临时状态，统一Dashboard、仓库详情和更改栏Push/Submit入口。批次UUID与实际repository/task/path绑定；成功才记录completed，失败清除未完成pending，旧批次定时器不能覆盖新操作。仓库全部/部分覆盖按所有本地worktree判断，分支固定实线/双勾；成功标识约2600ms后消失。原有逐worktree Commit→Push顺序、操作幂等和错误重试不变；push/submit不调用横条成功回调，commit仍可提示本地提交已创建。官方Material Web LinearProgress使用不确定型，批量数字仅表示完成目录数。
 

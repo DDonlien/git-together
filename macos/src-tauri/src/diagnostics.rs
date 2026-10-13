@@ -228,6 +228,10 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
             clean[key] = v[key].clone();
         }
     }
+    if !renderer && event == "api" && text(v, "method") == "generateCommitMessage"
+        && ["codex-model", "codex-auth", "codex-version", "codex-network", "codex-generation"].contains(&text(v, "code")) {
+        clean["code"] = v["code"].clone();
+    }
     for key in ["durationMs", "retryMs", "failures", "tasks"] {
         if v[key].as_u64().is_some_and(|n| n <= 1_000_000_000_000) {
             clean[key] = v[key].clone();

@@ -1,10 +1,13 @@
+import { useId, useState } from 'react';
 import type { LocalFile } from './import-model';
-import { Checkbox } from './ui';
+import { Checkbox, Icon } from './ui';
 import { fileChangeKind } from './file-tree';
 
 export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange }: {
   files: LocalFile[]; paths: string[]; branch: string; disabled: boolean; onChange: (paths: string[]) => void;
 }) {
+  const id = useId();
+  const [collapsed, setCollapsed] = useState({ Tracked: false, Untracked: false });
   const selected = new Set(paths);
   const toggle = (scope: LocalFile[]) => {
     const remove = scope.every(file => selected.has(file.path)), next = new Set(paths);
@@ -16,8 +19,10 @@ export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange
     {[true, false].map(tracked => {
       const group = files.filter(file => file.tracked === tracked), count = group.filter(file => selected.has(file.path)).length;
       if (!group.length) return null;
-      return <section className="submit-file-group" key={String(tracked)} aria-label={tracked ? 'Tracked' : 'Untracked'}>
-        <div className="submit-file-group-heading"><span>{tracked ? 'Tracked' : 'Untracked'} <small>{group.length}</small></span><Checkbox checked={count === group.length} mixed={count > 0 && count < group.length} disabled={disabled} label={`选择${tracked ? 'Tracked' : 'Untracked'}：${branch}`} onChange={() => toggle(group)} /></div>
+      const name = tracked ? 'Tracked' : 'Untracked';
+      return <section className="submit-file-group" key={name} aria-label={name}>
+        <div className="submit-file-group-heading"><button type="button" className="submit-file-group-toggle" aria-label={`${collapsed[name] ? '展开' : '收起'} ${name}：${branch}`} aria-expanded={!collapsed[name]} aria-controls={`${id}-${name}`} onClick={() => setCollapsed(current => ({ ...current, [name]: !current[name] }))}><Icon name={collapsed[name] ? 'right' : 'down'} size={14} /><span>{name} <small>{group.length}</small></span></button><Checkbox checked={count === group.length} mixed={count > 0 && count < group.length} disabled={disabled} label={`选择${name}：${branch}`} onChange={() => toggle(group)} /></div>
+        <div id={`${id}-${name}`} hidden={collapsed[name]}>
         {group.map(file => {
           const kind = fileChangeKind(file.status) || 'modified', name = kind === 'added' ? '新增' : kind === 'deleted' ? '删除' : '修改';
           return <div className={`submit-file-row${selected.has(file.path) ? ' is-included' : ''}`} key={file.path} data-change={kind}>
@@ -26,6 +31,7 @@ export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange
             </button><Checkbox checked={selected.has(file.path)} disabled={disabled} label={`包含文件：${branch} / ${file.path}`} onChange={() => toggle([file])} />
           </div>;
         })}
+        </div>
       </section>;
     })}
   </div>;
