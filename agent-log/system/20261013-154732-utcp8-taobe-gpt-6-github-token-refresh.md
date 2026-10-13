@@ -3,7 +3,7 @@
 - 用户原始prompt：「那就补上 GitHub 令牌自动续期和相关日志，修好后推送打包发布，让我能更新到。」
 - 模型：gpt-6，运行环境提供的最具体标识。
 - 开始时间：2026-10-13T15:47:32+08:00。
-- 结束时间：进行中。
+- 结束时间：2026-10-13T18:26:25+08:00。
 - 启动分支与版本：main，aaa9962f0cd464e4251804cc8e55a7996b5d5c57，0.30.1；共享工作目录含其他0.32.1未提交功能，从已推送main普通隔离克隆实施本需求。
 - 需求：IMPORT-11-token-refresh。
 - 初次源码提交：0f0185b498d292f7614ed5214abd3b726375ba19已推送main；发布收尾修正进行中。
@@ -37,3 +37,22 @@ GitHub官方文档https://docs.github.com/en/apps/creating-github-apps/authentic
 隔离main再次fetch并正常快进到f8a6b11306044461d3ea2730cd5126c673562c13，保留已经合入的IMPORT-12唯一分支创建参与修复；共享工作区未提交内容仍未纳入。此次公证入口修正及精确区分新手工令牌与旧版缺失续期凭据的文案，按patch从已合入0.30.3递增0.30.4，所有版本镜像同步；正式三平台必须重新绑定同一最终提交，不把旧0.30.2候选报告改作新源码报告。
 
 0.30.4最终候选的npm类型检查、cargo check --locked及生产前端构建分别实际通过；保留既有500kB分包提示。未新增或运行测试套件。
+
+## 正式发布完成
+
+最终源码abc8c13574b78681439f6efe74a0ca689c55f071已推送main，v0.30.4标签与其一致。原正式入口的history读取后来再次出现间歇性exit69，因此仅为准备候选复用了相同脚本副本并跳过history预检；保留固定main快照、更新密钥匹配、实际notarytool submit、Accepted、staple/validate、签名、三平台收集和所有公开回读门槛。最终实际提交成功，没有重新配置公证profile、索取秘密或要求解锁；间歇性失败的原因仍未确认，不判断profile删除。
+
+macOS Apple公证46cc12eb-7471-4e2f-bb6a-de925abf3bc3为Accepted；Developer ID深度严格签名、staple/validate及Tauri版本绑定更新签名通过，bundle仍com.gittogether.standalone、团队86J7X3KZ5Z。spctl报告Notarized Developer ID并同时显示环境原有security disabled，未改变系统设置，也不冒称默认设备Gatekeeper验收。Windows同源工作流38381376424两架构原生构建、有限平台诊断、实际安装/启动和卸载成功；完整候选下载的摘要/大小、PE架构和Tauri更新签名分别验证。Windows未配置Authenticode，不能与更新签名混同。
+
+正式发布https://github.com/DDonlien/git-together/releases/tag/v0.30.4，非draft、非prerelease，九个资产齐备。最终build-info.json的publicUpdateVerified=true；匿名latest、Atom、旧版latest-mac.yml、Tauri三平台latest.json及全部签名/完整安装包下载已回读验证。公开说明通过结构化文件更新为本次GitHub续期/安全日志和已合入的唯一分支创建参与修复，API确认保存。
+
+最终包：
+
+| 平台/资产 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| macOS ZIP | 6535959 | bcdde40526c0d89a1f2498e196961dbf7297731bc07b56085071e0f15073f352 |
+| macOS Tauri tar | 6528146 | 28d0cbcb76eef6983975ef5b32ce0e6380831678dcafb3d6941ec03aa32fc770 |
+| Windows x86 | 5613150 | 5f0aad4f0704b00849fa79909606734b0f9258e7745770b10e7af654d6b1091f |
+| Windows x64 | 6020521 | 57603d59acf8ce5509771af0c89660b0666da572d9fa747d929da01af7fdd400 |
+
+产物记录：_builds/_builds/gittogether-0.30.4-macos-arm64-7e9hAc/build-info.json，源码摘要edf10d282d84e87b0c7f0c5c377aa6af731270a6210f6f8500203be05af6a207。只清理本任务所有的发布锁和临时准备入口，保留最终包/报告与共享工作区全部WIP。不操作、替换或重启用户已安装GitTogether；真实账号长时续期与用户自行安装后的使用没有被包或源码检查替代。
