@@ -87,6 +87,7 @@ fn failure(output: &[u8]) -> String {
     .into()
 }
 pub fn diagnostic_code(message: &str) -> &'static str {
+    if message.contains("HTTP 401") || message.contains("授权已失效") { return "permission"; }
     if message.starts_with("Git LFS未找到") {
         return "git-lfs-missing";
     }

@@ -7,7 +7,7 @@ use reqwest::{header::HeaderMap, Client};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::Arc,
+    sync::{Arc, Weak},
     time::Duration,
 };
 use tokio::sync::Mutex;
@@ -80,6 +80,8 @@ pub fn repo_path(repo: &Value) -> Result<String> {
 pub struct Provider {
     pub account: Value,
     token: String,
+    authorization: Option<(Weak<crate::service::Service>, String)>,
+    diagnostics: Option<crate::diagnostics::Diagnostics>,
     client: Client,
     cache: Arc<Mutex<BTreeMap<String, Value>>>,
 }
@@ -88,6 +90,8 @@ impl Provider {
         Self {
             account,
             token,
+            authorization: None,
+            diagnostics: None,
             client,
             cache: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -95,8 +99,54 @@ impl Provider {
     pub fn kind(&self) -> &str {
         text(&self.account, "provider")
     }
-    pub fn token(&self) -> &str {
-        &self.token
+    pub fn with_authorization(
+        mut self,
+        service: Weak<crate::service::Service>,
+        generation: String,
+    ) -> Self {
+        if self.kind() == "github" {
+            self.authorization = Some((service, generation));
+        }
+        self
+    }
+    pub fn with_diagnostics(mut self, diagnostics: crate::diagnostics::Diagnostics) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
+    }
+    async fn access_token(
+        &self,
+        rejected: Option<&str>,
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        if cancel.is_cancelled() {
+            return Err("操作已取消。".into());
+        }
+        match &self.authorization {
+            Some((service, generation)) => {
+                service
+                    .upgrade()
+                    .ok_or("账号服务已退出。")?
+                    .github_token(text(&self.account, "id"), generation, rejected, cancel)
+                    .await
+            }
+            None => Ok(self.token.clone()),
+        }
+    }
+    fn http_failure(&self, status: u16, headers: &HeaderMap) {
+        if let Some(diagnostics) = &self.diagnostics {
+            let rate_limited = status == 429
+                || status == 403
+                    && headers
+                        .get("x-ratelimit-remaining")
+                        .is_some_and(|remaining| remaining == "0");
+            let mut record = json!({"event":"provider-read","outcome":"failure","provider":self.kind(),"endpoint":"other","httpStatus":status,"code":if rate_limited{"rate-limit"}else if status==401||status==403{"permission"}else{"connection"},"resource":&util::digest(text(&self.account,"id"))[..24]});
+            if status == 401 && self.kind() == "github" {
+                record["event"] = json!("authorization");
+                record["authorizationStage"] = json!("token-rejected");
+                record["authReason"] = json!("rejected");
+            }
+            diagnostics.record(&record, false);
+        }
     }
     pub fn api(&self) -> String {
         if self.kind() == "github" {
@@ -117,78 +167,89 @@ impl Provider {
         }
         let mut url = Url::parse(&(self.api() + path)).map_err(|_| "无效的账号服务地址。")?;
         url.query_pairs_mut().extend_pairs(query.iter().copied());
-        let mut request = self
-            .client
-            .get(url)
-            .header(
-                "Authorization",
-                format!(
-                    "{} {}",
-                    if self.kind() == "github" {
-                        "Bearer"
-                    } else {
-                        "token"
-                    },
-                    self.token
-                ),
-            )
-            .header(
-                "Accept",
-                if format == "text" {
-                    "text/plain"
-                } else if self.kind() == "github" {
-                    "application/vnd.github+json"
-                } else {
-                    "application/json"
-                },
-            );
-        if self.kind() == "github" {
-            request = request.header("X-GitHub-Api-Version", "2022-11-28");
-        }
         let operation = async {
-            let mut response = request.send().await.map_err(transport_error)?;
-            let status = response.status().as_u16();
-            let headers = response.headers().clone();
-            if status == 401 {
-                return Err("令牌无效或已过期，请在设置中重新连接账号。".into());
-            }
-            if status == 429
-                || (status == 403
-                    && headers
-                        .get("x-ratelimit-remaining")
-                        .is_some_and(|v| v == "0"))
-            {
-                return Err(format!(
-                    "远端访问频率受限（HTTP {status}）；保留上次结果，等待下次检查。"
-                ));
-            }
-            if status == 403 {
-                return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
-            }
-            if !response.status().is_success() {
-                return Err(format!(
-                    "账号服务返回 HTTP {status}；请检查服务与令牌权限。"
-                ));
-            }
-            if format == "status" {
-                return Ok((json!(status), headers));
-            }
-            if response.content_length().is_some_and(|n| n > 8_000_000) {
-                return Err("账号服务响应过大。".into());
-            }
-            let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
-                if bytes.len() + chunk.len() > 8_000_000 {
+            let mut token = self.access_token(None, cancel).await?;
+            for attempt in 0..2 {
+                let mut request = self
+                    .client
+                    .get(url.clone())
+                    .header(
+                        "Authorization",
+                        format!(
+                            "{} {}",
+                            if self.kind() == "github" {
+                                "Bearer"
+                            } else {
+                                "token"
+                            },
+                            token
+                        ),
+                    )
+                    .header(
+                        "Accept",
+                        if format == "text" {
+                            "text/plain"
+                        } else if self.kind() == "github" {
+                            "application/vnd.github+json"
+                        } else {
+                            "application/json"
+                        },
+                    );
+                if self.kind() == "github" {
+                    request = request.header("X-GitHub-Api-Version", "2022-11-28");
+                }
+                let mut response = request.send().await.map_err(transport_error)?;
+                let status = response.status().as_u16();
+                let headers = response.headers().clone();
+                if !response.status().is_success() {
+                    self.http_failure(status, &headers);
+                }
+                if status == 401 {
+                    if attempt == 0 && self.authorization.is_some() {
+                        token = self.access_token(Some(&token), cancel).await?;
+                        continue;
+                    }
+                    return Err("令牌已失效或被撤销（HTTP 401），请在设置中重新连接账号。".into());
+                }
+                if status == 429
+                    || (status == 403
+                        && headers
+                            .get("x-ratelimit-remaining")
+                            .is_some_and(|v| v == "0"))
+                {
+                    return Err(format!(
+                        "远端访问频率受限（HTTP {status}）；保留上次结果，等待下次检查。"
+                    ));
+                }
+                if status == 403 {
+                    return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
+                }
+                if !response.status().is_success() {
+                    return Err(format!(
+                        "账号服务返回 HTTP {status}；请检查服务与令牌权限。"
+                    ));
+                }
+                if format == "status" {
+                    return Ok((json!(status), headers));
+                }
+                if response.content_length().is_some_and(|n| n > 8_000_000) {
                     return Err("账号服务响应过大。".into());
                 }
-                bytes.extend_from_slice(&chunk);
+                let mut bytes = Vec::new();
+                while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                    if bytes.len() + chunk.len() > 8_000_000 {
+                        return Err("账号服务响应过大。".into());
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                let value = if format == "text" {
+                    Value::String(String::from_utf8(bytes).map_err(|_| "账号服务返回了无效文本。")?)
+                } else {
+                    serde_json::from_slice(&bytes).map_err(|_| "账号服务返回了无效 JSON 数据。")?
+                };
+                return Ok((value, headers));
             }
-            let value = if format == "text" {
-                Value::String(String::from_utf8(bytes).map_err(|_| "账号服务返回了无效文本。")?)
-            } else {
-                serde_json::from_slice(&bytes).map_err(|_| "账号服务返回了无效 JSON 数据。")?
-            };
-            Ok((value, headers))
+            unreachable!("the bounded HTTP retry returns on its final attempt")
         };
         tokio::select! { result = operation => result, _ = cancel.cancelled() => Err("操作已取消。".into()) }
     }
@@ -1347,6 +1408,7 @@ pub fn transport_error(e: reqwest::Error) -> String {
 pub const CREDENTIAL_HELPER:&str="!f() { test \"$1\" = get || exit 0; protocol=; host=; while IFS=\"=\" read -r key value; do case \"$key\" in protocol) protocol=\"$value\";; host) host=\"$value\";; esac; done; if test \"$protocol://$host\" = \"$GITTOGETHER_DOWNLOAD_ORIGIN\"; then printf \"username=%s\\npassword=%s\\n\" \"$GITTOGETHER_DOWNLOAD_USER\" \"$GITTOGETHER_DOWNLOAD_TOKEN\"; fi; }; f";
 #[derive(Clone)]
 pub struct Network {
+    provider: Provider,
     pub url: String,
     env: Vec<(String, String)>,
     diagnostics: Option<crate::diagnostics::Diagnostics>,
@@ -1370,6 +1432,7 @@ impl Network {
             .origin()
             .ascii_serialization();
         Ok(Self {
+            provider: p.clone(),
             url,
             diagnostics: None,
             resource: util::digest(text(repo, "id").as_bytes())[..24].into(),
@@ -1379,7 +1442,6 @@ impl Network {
                     "GITTOGETHER_DOWNLOAD_USER".into(),
                     text(&p.account, "login").into(),
                 ),
-                ("GITTOGETHER_DOWNLOAD_TOKEN".into(), p.token().into()),
                 ("GIT_ASKPASS".into(), "".into()),
                 ("SSH_ASKPASS".into(), "".into()),
             ],
@@ -1412,6 +1474,8 @@ impl Network {
         }
         a.extend_from_slice(args);
         let mut environment = self.env.clone();
+        let authorization_cancel=cancel.clone().unwrap_or_default();
+        environment.push(("GITTOGETHER_DOWNLOAD_TOKEN".into(),self.provider.access_token(None,&authorization_cancel).await?));
         if let Some(proxy) = crate::proxy::environment(root, &self.url).await? {
             environment.push(proxy);
         }

@@ -3,6 +3,7 @@ pub mod ai;
 pub mod credentials;
 pub mod diagnostics;
 pub mod git;
+pub mod github_token;
 pub mod oauth;
 pub mod operations;
 pub mod platform;

@@ -26,6 +26,7 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 | ai | 每分支当前更改生成Summary/Description，沿用本机Codex配置，返回前复核任务 |
 | credentials / preferences | Keychain、旧Electron密文读取、新AES-GCM原子存储和限定偏好迁移 |
 | oauth | Rust loopback网页授权与设备授权，PKCE/state、实例绑定及加密开发配置 |
+| github_token | GitHub官方续期交换及有限凭据模型，网页/设备方式隔离、响应校验与安全失败原因 |
 | diagnostics | 24小时本机有限日志、打开文件夹及复制日志文件 |
 | updates | Tauri签名更新、版本绑定、确认后立即安装与重启 |
 | presence | 加密插件配置、远端只读观察者、本机 Bridge 读取与独立状态有效性 |
@@ -139,7 +140,15 @@ R-05中已选文件退出更改列表时仍保留树选择；本地和远端均�
 
 `server/github-authorization.ts` 实现官方 GitHub 设备授权，仅在服务端持有 device_code 和 access_token；renderer 只得到随机会话 ID、公开验证码、固定验证网页、有效期与轮询间隔。最多 8 个并行等待会话，过期清理；服务端限频、slow_down 延长、单会话重复请求合并、完成结果幂等。网页拒绝/过期/无配置与网络失败分开表达，不回显第三方错误详情。取消在凭据保存前通过 AbortSignal 和提交门阻止导入；已进入原子保存的取消返回真实完成结果。React 等待循环可取消，Strict Mode effect 重放不取消真实服务会话；卸载停止等待并尽力取消服务会话。
 
-采用 [GitHub App 官方设备流程](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token)，不申请传统 OAuth 的 repo 写 scope，不打包 client secret。权限和仓库范围由自有 GitHub App 配置与用户安装/授权共同决定。收到有效期时保存到账号元信息，过期需重新网页授权；未实现 refresh token 自动续期，不保存该 refresh token。同一身份重新授权更新凭据并保留 ID/本地关联，新身份另建账号。真实流程仍需自有 Client ID 与用户同意，测试 provider 不进入运行入口。
+采用 [GitHub App 官方设备流程](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)，不申请传统 OAuth 的 repo 写 scope，不打包 client secret。权限和仓库范围由自有 GitHub App 配置与用户安装/授权共同决定。同一身份重新授权更新凭据并保留 ID/本地关联，新身份另建账号。旧TypeScript原型仅保存访问令牌有效期、不保存续期令牌；当前Rust客户端从0.30.2起采用下列自动续期机制。真实流程仍需自有Client ID与用户同意。
+
+GitHub令牌自动续期（0.30.2，IMPORT-11-token-refresh）：网页/设备交换由同一github_token模型读取access_token、expires_in、refresh_token及refresh_token_expires_in。续期令牌、有效期与原授权方式保存在accounts-v2.encrypted的私有githubOAuth项，公有Catalog仅保留原authorizationExpiresAt，不传回任何令牌。网页续期恢复已有加密开发应用配置，设备续期无需client secret；仅请求固定GitHub官方HTTPS端点，不改变scope、权限、主机或TLS策略。
+
+Service按账号及明确授权代次串行续期；API或Git网络操作在到期前120秒获取更新凭据。401最多续期并重试一次只读API，403/限流不触发续期，Git写操作不自动重放。自动轮换保留authorizationId与仓库/任务上下文；重新授权和手工替换凭据生成新代次，旧读取/写计划继续被隔离。账号目录刷新与目录匹配比较授权代次，不把正常轮换误认为账号变更。
+
+续期交换在独立任务中完成；HTTP/IPC调用取消仅停止等待，已经开始的轮换仍尝试原子加密保存。保存失败时保留待保存结果、15秒后可重试保存，不重复使用已被GitHub轮换的旧续期令牌；待保存结果阻止重启安装，移除账号或替换授权后清除旧结果。暂时网络/服务失败按账号退避60秒；缺失或到期续期凭据退避5分钟，并显示明确重新授权原因，保留账号/仓库/本地关联。旧版本登录缺少续期凭据，需升级后正常重新授权一次。
+
+授权诊断只记录有限阶段、原因、HTTP状态、相对有效期及账号哈希。阶段包括token-received、token-rejected、refresh-start、refresh-complete、refresh-failed、refresh-unavailable和storage-load；区分expiring/expired、缺少/到期/失效续期凭据、配置、网络、保存和授权竞争。原始OAuth响应、URL参数、access_token、refresh_token、secret和账号名称均不入日志；Renderer不能写入这些后台专用字段。
 
 Vite 只监听 loopback，HTTP 中间件要求本机 Host、同源 Origin / Sec-Fetch-Site、专用请求头、JSON POST 及大小限制，无 CORS 放行。静态 Sites 包装不运行这个本地账号服务，UI 会明确报不可用，不把 HTML 当作导入成功。
 
