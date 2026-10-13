@@ -319,3 +319,7 @@ Presence组织独立维护，Web绑定需组织和Git仓库两重ownership；同
 ## 本机授权监听错误与备用流程
 
 IMPORT-11-windows-oauth-port：Rust 保留 socket bind 的 ErrorKind 和 raw_os_error，只将 AddrInUse 报为占用，将 PermissionDenied 报为系统拒绝。后台授权日志仅保留受控类别和数值系统错误码；不记录凭据、授权网址或验证码。GitHub 的这两类监听失败返回带 flow=device 的有限公开设备会话，设置页复用现有设备授权、轮询、取消与账号导入接口。原正常网页流程及其他 provider 不改变。设备授权无需本机端口或应用密钥，但须开发者在自有 GitHub App 开启；公开配置状态及真实 Windows 用户同意分别验收。
+
+## Presence设备名称（PRESENCE-05-device-name，0.30.11）
+
+managed world版本3可带可选deviceName，来源为服务端已验证设备凭证对应的登记名称。Rust允许旧帧缺席/null，仅接受非空且不超过120字符的名称；PresencePerson在精确仓库/分支过滤及有效操作状态确认后聚合同身份的设备名。UI在人员名称后的括号中显示去重名称，旧帧显示设备未知；设备名纳入弹窗roster布局键，账号/头像/分支状态仍分别保存。

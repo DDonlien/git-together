@@ -25,12 +25,12 @@ export function PresenceAvatarGroup({ repository, branch, people, className = ''
   const label = `${branch === undefined ? repository.name : branch} · ${people.length} 位协作人员`;
   const color = { '--presence-color': presenceRepositoryColor(id) } as CSSProperties;
   // Recalculate the shared popup's viewport placement when its roster changes.
-  const roster = JSON.stringify(people.map(person => [person.userId, person.displayName, person.branches]));
+  const roster = JSON.stringify(people.map(person => [person.userId, person.displayName, person.deviceNames, person.branches]));
   return <Popover key={roster} label={label} open={open} onOpenChange={setOpen} placement="start" className={`presence-avatar-popover ${className}`} style={color} trigger={<button ref={trigger} type="button" className="presence-avatar-trigger" aria-haspopup="dialog" title={label} onClick={event => event.stopPropagation()}>
     <span className="presence-avatar-stack">{people.slice(0, 3).map((person, index) => <span key={person.userId} style={{ zIndex: 3 - index }}><PresenceAvatar person={person} /></span>)}</span>
   </button>}>
     <div className="presence-people-content" style={color}><div className="presence-people-heading"><div><strong>{branch === undefined ? repository.name : branch}</strong><small>{people.length} 位正在操作{branch === undefined ? '此仓库' : '此分支'}</small></div><Button variant="quiet" aria-label="关闭协作人员" onClick={() => { setOpen(false); trigger.current?.focus(); }}><Icon name="close" size={13} /></Button></div>
-    <ul className="presence-people-list">{people.map(person => <li key={person.userId}><PresenceAvatar person={person} large /><div><strong>{person.displayName}</strong>{person.scope && <small>{person.scope}</small>}<ul className="presence-people-branches">{person.branches.map(entry => <li key={entry.branch || ''}><span title={entry.branch || undefined}>{entry.branch || '分离 HEAD'}</span><small>{presenceWorkLabels[entry.state]}</small></li>)}</ul></div></li>)}</ul>
+    <ul className="presence-people-list">{people.map(person => <li key={person.userId}><PresenceAvatar person={person} large /><div><strong>{person.displayName} ({person.deviceNames.join('、')})</strong>{person.scope && <small>{person.scope}</small>}<ul className="presence-people-branches">{person.branches.map(entry => <li key={entry.branch || ''}><span title={entry.branch || undefined}>{entry.branch || '分离 HEAD'}</span><small>{presenceWorkLabels[entry.state]}</small></li>)}</ul></div></li>)}</ul>
     <div className="presence-avatar-legend"><span><i className="editing" />编辑中</span><span><i className="changed" />未 Commit</span><span><i className="committed" />未 Push</span></div></div>
   </Popover>;
 }

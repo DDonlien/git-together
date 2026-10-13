@@ -117,6 +117,8 @@ pub struct Session {
     identity_id: String,
     #[serde(default)]
     server_id: String,
+    #[serde(default)]
+    device_name: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -717,6 +719,9 @@ fn valid_session(session: &Session) -> bool {
         && valid_id(&session.user_id)
         && valid_id(&session.identity_id)
         && valid_id(&session.device_id)
+        && session.device_name.as_ref().is_none_or(|name| {
+            !name.trim().is_empty() && name.chars().count() <= 120
+        })
         && !session.display_name.is_empty()
         && session.display_name.chars().count() <= 200
         && session.avatar_url.as_ref().is_none_or(|value| {
