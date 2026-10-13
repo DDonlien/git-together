@@ -1121,3 +1121,13 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .repository-sync-dialog details li > span { flex-shrink: 0; color: var(--muted); }
 .repository-sync-dialog details code { overflow-wrap: anywhere; white-space: normal; }
 .repository-sync-dialog .commit-composer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-top: 8px; }
+
+/* Collapsed operations keep their own button and release the modal focus trap. */
+.ogui-overlay__surface:has(.modal-collapse-control) { position: relative; }
+.ogui-overlay__surface:has(.modal-collapse-control) .ogui-overlay__header > strong { padding-right: 34px; }
+.modal-collapse-control { position: absolute; top: 20px; right: 56px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.modal-collapse-control:hover { background: var(--surface-hover); }
+.modal-collapse-control:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.git-operation-indicator { position: absolute; top: -3px; right: -3px; width: 12px; height: 12px; display: grid; place-items: center; border-radius: 50%; background: var(--menu-surface); color: var(--blue); font-size: 10px; pointer-events: none; }
+.git-operation-indicator[data-state="failed"] { color: var(--danger); }
+@media (max-width: 600px) { .modal-collapse-control { top: 18px; right: 52px; } }

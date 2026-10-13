@@ -8,9 +8,9 @@ import { SearchBar } from './material-inputs';
 import { RepositoryRowActions } from './RepositoryActions';
 import { PushFeedbackIcon, PushProgress, repositoryPushState, usePushActivity } from './PushFeedback';
 import { DashboardActionNames } from './DashboardActionNames';
-import { RepositoryOperationDialog } from './RepositoryOperationDialog';
+import { useRepositoryOperations } from './RepositoryOperationProvider';
 import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
-import { repositoryActionTargets } from './repository-action-model';
+import { repositoryActionTargets, repositoryOperationScope } from './repository-action-model';
 import { gitSignals, hiddenEntryKey, linkedTasks } from './branch-links';
 import { RepositoryGraph } from './RepositoryGraph';
 import { RepositoryColumnHeading } from './RepositoryColumnHeading';
@@ -48,7 +48,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const [localTaskChoice, setLocalTaskChoice] = useState<string | null>(initialCommitTask || null);
   const [commitOpenRequest, setCommitOpenRequest] = useState(0);
   const [branchSelection, setBranchSelection] = useState<ReadonlySet<string> | null | undefined>(undefined);
-  const [action, setAction] = useState<{ mode: RepositoryActionMode; targets: RepositoryActionTarget[] } | null>(null);
+  const operations = useRepositoryOperations();
   const [actionFeedback, setActionFeedback] = useState('');
   const [repositoryOpenError, setRepositoryOpenError] = useState('');
   const [openingRepository, setOpeningRepository] = useState(false);
@@ -96,7 +96,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const generate = generateCommitMessage || generateWithService;
   const openAction = (mode: RepositoryActionMode) => {
     setActionFeedback('');
-    setAction({ mode, targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current) });
+    operations.open({ mode, scope: repositoryOperationScope(repository.id), targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onComplete: setActionFeedback });
   };
   const openRepository = async (event: MouseEvent<HTMLAnchorElement>) => {
     if (!window.gittogether) return;
@@ -111,16 +111,15 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const defaultHiddenBranches = useMemo(() => new Set(workspace.tasks.filter(task => hiddenEntries?.has(hiddenEntryKey(repository.id, task.branch))).map(task => task.branch)), [workspace.tasks, hiddenEntries, repository.id]);
   return <main className="repository-workspace-view" aria-label="仓库工作台">
     <section className="repository-overview flat-group" aria-label="仓库信息">
-      <div className="repository-overview-heading"><div className="repository-overview-title"><div className="repository-managed-title"><span className="repository-detail-folder" title={folder.title}><Icon name={folder.icon} size={24} /><PresenceManagedMark repository={repository} /></span><div><h1>{repository.name}</h1><p title={repository.url}><a className="repository-url" href={repository.url} target="_blank" rel="noopener noreferrer" aria-label={`用默认浏览器打开 ${repository.fullName}`} aria-busy={openingRepository || undefined} onClick={openRepository} onAuxClick={event => { if (event.button === 1) void openRepository(event); }}>{repository.url}</a></p></div></div></div><div className="repository-overview-actions"><DashboardActionNames><RepositoryRowActions itemLabel={`${repository.fullName} · 当前筛选分支`} signals={signals} hidden={!!hiddenEntries?.has(hiddenEntryKey(repository.id))} onToggleHidden={onToggleHidden} onPull={repository.available && actionTasks.length ? () => openAction('pull') : undefined} onLatest={repository.available && actionTasks.length ? () => openAction('latest') : undefined} onClean={repository.available && actionTasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!action || !repository.available} /></DashboardActionNames></div></div>
+      <div className="repository-overview-heading"><div className="repository-overview-title"><div className="repository-managed-title"><span className="repository-detail-folder" title={folder.title}><Icon name={folder.icon} size={24} /><PresenceManagedMark repository={repository} /></span><div><h1>{repository.name}</h1><p title={repository.url}><a className="repository-url" href={repository.url} target="_blank" rel="noopener noreferrer" aria-label={`用默认浏览器打开 ${repository.fullName}`} aria-busy={openingRepository || undefined} onClick={openRepository} onAuxClick={event => { if (event.button === 1) void openRepository(event); }}>{repository.url}</a></p></div></div></div><div className="repository-overview-actions"><DashboardActionNames><RepositoryRowActions operationScope={repositoryOperationScope(repository.id)} operationTargets={actionTasks.map(task => ({ repositoryId: repository.id, repositoryName: repository.fullName, task }))} itemLabel={`${repository.fullName} · 当前筛选分支`} signals={signals} hidden={!!hiddenEntries?.has(hiddenEntryKey(repository.id))} onToggleHidden={onToggleHidden} onPull={repository.available && actionTasks.length ? () => openAction('pull') : undefined} onLatest={repository.available && actionTasks.length ? () => openAction('latest') : undefined} onClean={repository.available && actionTasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!repository.available} /></DashboardActionNames></div></div>
       {(onSearchChange || focus) && <div className="repository-overview-tools">{onSearchChange && <div className="repository-workspace-search"><SearchBar inputRef={searchRef} value={globalSearch} onChange={onSearchChange} placeholder="搜索文件或提交…" /></div>}{focus && <Button variant="quiet" onClick={() => setFocusedTask(null)}>取消聚焦</Button>}</div>}
       {!repository.available && <Notice kind="info">账号目前无权访问此仓库；这里显示上次读取的信息。</Notice>}
       <PresenceManagedDetails repository={repository} />
       <RepositoryPresence repository={repository} />
     </section>
     {repositoryOpenError && <Notice kind="error">{repositoryOpenError}</Notice>}
-    {pushState && <div className="repository-push-status"><PushFeedbackIcon state={pushState} />{pushState.phase === 'pushing' && <PushProgress completed={pushRun.completed.length} total={pushRun.targets.length} />}</div>}
+    {pushState && <div className="repository-push-status"><PushFeedbackIcon state={pushState} />{pushState.phase === 'pushing' && <PushProgress completed={pushRun.reduce((count, run) => count + run.completed.length, 0)} total={pushRun.reduce((count, run) => count + run.targets.length, 0)} />}</div>}
     {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
-    {action && <RepositoryOperationDialog mode={action.mode} targets={action.targets} onSync={applySync} onCommit={commit} onPush={push} onGenerate={generate} onComplete={setActionFeedback} onClose={() => setAction(null)} />}
     {current?.error && <Notice kind="error">{current.error}{snapshot && ' 显示上次读取的本地状态。'} 正在自动重试。</Notice>}
     {remoteState?.error && <Notice kind="error">{remoteState.error}{remoteState.workspace && ' 显示上次读取的远端内容。'}</Notice>}
     {remoteState?.workspace?.warnings.map(warning => <p className="repository-workspace-warning" key={warning}>{warning}</p>)}

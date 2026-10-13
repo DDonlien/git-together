@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject, type TdHTMLAttributes } from 'react';
 import { accountLabel, providerName, type Account, type LocalLink, type RemoteRepository } from './import-model';
-import type { WorkspaceController } from './use-workspace';
+import { repositoryActionBusy, type WorkspaceController } from './use-workspace';
 import { useRemoteRepository } from './use-remote-repository';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import { Button, Icon, IconButton, Notice } from './ui';
@@ -12,9 +12,9 @@ import { usePresence } from './PresenceProvider';
 import { presencePeople, presenceRepositoryId, managedOrganizations, managedOrganizationKey } from './presence-model';
 import { PresenceManagedMark, PresenceManagedNames, usePresenceRepositoryIcon } from './PresenceManaged';
 import { PushFeedbackIcon, branchPushState, repositoryPushState, usePushActivity } from './PushFeedback';
-import { RepositoryOperationDialog } from './RepositoryOperationDialog';
+import { useRepositoryOperations } from './RepositoryOperationProvider';
 import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
-import { repositoryActionTargets } from './repository-action-model';
+import { repositoryActionTargets, repositoryOperationScope } from './repository-action-model';
 import { generateCommitMessage } from './import-api';
 import { DashboardActionNames } from './DashboardActionNames';
 import { MultiFilterMenu } from './MultiFilterMenu';
@@ -81,7 +81,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const [sort, setSort] = useState<DashboardSort>({ key: 'repository', direction: 'asc' });
   const [matchingPhase, setMatchingPhase] = useState<'choosing' | 'matching' | null>(null);
   const [directoryMatch, setDirectoryMatch] = useState<DirectoryMatchFeedback | null>(null);
-  const [action, setAction] = useState<{ mode: RepositoryActionMode; targets: RepositoryActionTarget[] } | null>(null);
+  const operations = useRepositoryOperations();
   const [actionFeedback, setActionFeedback] = useState('');
   useEffect(() => {
     if (!directoryMatch) return;
@@ -118,7 +118,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const hiddenCount = (repo: RemoteRepository) => showHidden ? [...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).length : 0;
   const actionRepositories = filtered.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
   const batchSignals = aggregateGitSignals(actionRepositories.map(rowSignals));
-  const openAction = (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => { setActionFeedback(''); setAction({ mode, targets }); };
+  const openAction = (mode: RepositoryActionMode, targets: RepositoryActionTarget[], scope: string) => { setActionFeedback(''); operations.open({ mode, targets, scope, onSync: controller.applySync, onCommit: controller.submitCommit, onPush: controller.pushCommit, onGenerate: generateCommitMessage, onComplete: setActionFeedback }); };
   const rows: DashboardRepositoryRow[] = filtered.map(repo => ({
     repo,
     account: accountsById.get(repo.accountId)!,
@@ -190,7 +190,6 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
       </div>
       {directoryMatch && <Notice kind={directoryMatch.kind}>{directoryMatch.message}</Notice>}
       {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
-      {action && <RepositoryOperationDialog mode={action.mode} targets={action.targets} onSync={controller.applySync} onCommit={controller.submitCommit} onPush={controller.pushCommit} onGenerate={generateCommitMessage} onComplete={setActionFeedback} onClose={() => setAction(null)} />}
       {visibleAccounts.filter(account => account.error).map(account => <Notice kind="error" key={account.id}>{account.name}：{account.error}{account.updatedAt && ' 已保留上次读取的仓库列表。'} 正在自动重试。</Notice>)}
       {incompleteClassification && <Notice kind="info">分类尚未读全{coverage.unknown > 0 ? `：${coverage.unknown} 个仓库的所选分类未确认` : ''}。当前只显示已确认的匹配项，全选可查看已读取的完整目录。{coverage.errors.length > 0 && ` ${coverage.errors[0]}`}</Notice>}
       <section className="remote-repository-group flat-group" aria-label="仓库列表">
@@ -208,7 +207,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
 
 function DashboardRepositoryRows({ repository: repo, account, controller, localPath, modifiedAt, expanded, onToggle, onOpen, onConfigure, onDownload, showHidden, onToggleHidden, taskSearch, onAction, onHiddenBranches }: {
   repository: RemoteRepository; account: Account; controller: WorkspaceController; localPath?: string; modifiedAt?: string; expanded: boolean; onToggle: () => void; onOpen: (id: string, taskId?: string) => void; onConfigure: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; showHidden: boolean; onToggleHidden: (key: string) => void;
-  taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void; onHiddenBranches: (key: string, entries: string[]) => void;
+  taskSearch: string; onAction: (mode: RepositoryActionMode, targets: RepositoryActionTarget[], scope: string) => void; onHiddenBranches: (key: string, entries: string[]) => void;
 }) {
   const folder = usePresenceRepositoryIcon(repo);
   const branchesId = useId();
@@ -250,7 +249,7 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   const tasks = linkedTasks(link, local, hiddenEntries).filter(task => taskMatchesSearch(task, taskSearch));
   const signals = gitSignals(tasks, state, local, undefined, repo.available);
   const readFeedback = repositoryReadFeedback(gitSignals(linkedTasks(link, local, hiddenEntries), state, local, undefined, repo.available));
-  const openAction = (mode: RepositoryActionMode) => onAction(mode, repositoryActionTargets(repo, tasks, mode, state, local));
+  const openAction = (mode: RepositoryActionMode) => onAction(mode, repositoryActionTargets(repo, tasks, mode, state, local), repositoryOperationScope(repo.id));
   return <>
     <tbody><tr className={`dashboard-repository-row${hidden ? ' dashboard-hidden-row' : ''}`}>
       <td><div className="remote-name"><div className="repository-icon-anchor" aria-busy={readFeedback.reading || pushState?.phase === 'pushing'}><IconButton className="repository-icon-tile repository-disclosure" icon={folder.icon} title={folder.title} aria-description={folder.title} label={`${expanded ? '收起' : '展开'}分支：${repo.fullName} · ${accountLabel(account)}`} aria-expanded={expanded} aria-controls={branchesId} onClick={onToggle} /><PresenceManagedMark repository={repo} /><RepositoryReadBadge {...readFeedback} reading={readFeedback.reading && !pushState} /><PushFeedbackIcon state={pushState} /></div><div><div className="repository-name-line"><button className="repository-link" title={repo.fullName} onClick={() => onOpen(repo.id)}>{repo.name}</button><PresenceAvatars repository={repo} /></div><small><span className="repository-visibility">{repo.private ? '私有' : '公开'}</span>{repo.description ? ` · ${repo.description}` : ''}</small></div></div></td>
@@ -260,13 +259,13 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
       <td><RepositoryDate value={repo.updatedAt} source="远端更新日期" /></td>
       <td><RepositoryDate value={modifiedAt} source="本地最近提交日期" /></td>
       <td><button className={`local-path local-path-action ${localPath ? '' : 'muted'}`} title={association.detail} aria-label={`配置本地目录：${repo.fullName} · ${accountLabel(account)}`} disabled={!repo.available && !localPath} onClick={() => onConfigure(repo)}><span>{association.label}</span>{localPath && <small>{localPath}</small>}</button></td>
-      <td className="repository-action-cell"><RepositoryRowActions itemLabel={`${repo.fullName} · 当前筛选分支`} signals={signals} hidden={hidden} onPull={repo.available && tasks.length ? () => openAction('pull') : undefined} onLatest={repo.available && tasks.length ? () => openAction('latest') : undefined} onClean={repo.available && tasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={!!controller.busy[repo.id] || !ready} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
+      <td className="repository-action-cell"><RepositoryRowActions operationScope={repositoryOperationScope(repo.id)} operationTargets={tasks.map(task => ({ repositoryId: repo.id, repositoryName: repo.fullName, task }))} itemLabel={`${repo.fullName} · 当前筛选分支`} signals={signals} hidden={hidden} onPull={repo.available && tasks.length ? () => openAction('pull') : undefined} onLatest={repo.available && tasks.length ? () => openAction('latest') : undefined} onClean={repo.available && tasks.length ? () => openAction('clean') : undefined} onCommit={() => openAction('commit')} onSubmit={() => openAction('submit')} onPush={() => openAction('push')} busy={repositoryActionBusy(controller.busy, repo.id) || !ready} onToggleHidden={() => onToggleHidden(hiddenEntryKey(repo.id))} /></td>
     </tr></tbody>
-    <tbody ref={branchesRef} id={branchesId} className={`dashboard-repository-branches${branchesOpen ? ' is-expanded' : ''}${branchesSettled ? ' is-settled' : ''}`} aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} aria-hidden={!expanded} inert={!expanded} hidden={!branchesMounted} onTransitionEnd={event => { if (event.target instanceof HTMLTableCellElement && event.propertyName === 'height') { if (expanded) setBranchesSettled(true); else setBranchesMounted(false); } }}>{branchesMounted && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} onOpen={onOpen} downloadBusy={!!controller.busy[repo.id]} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} taskSearch={taskSearch} onAction={onAction} />}</tbody>
+    <tbody ref={branchesRef} id={branchesId} className={`dashboard-repository-branches${branchesOpen ? ' is-expanded' : ''}${branchesSettled ? ' is-settled' : ''}`} aria-label={`远端分支：${repo.fullName} · ${accountLabel(account)}`} aria-hidden={!expanded} inert={!expanded} hidden={!branchesMounted} onTransitionEnd={event => { if (event.target instanceof HTMLTableCellElement && event.propertyName === 'height') { if (expanded) setBranchesSettled(true); else setBranchesMounted(false); } }}>{branchesMounted && <RepositoryBranchRows repository={repo} state={state} blocked={!ready} link={link} localState={local} onConfigure={onConfigure} onDownload={onDownload} onOpen={onOpen} downloadBusy={repositoryActionBusy(controller.busy, repo.id)} hiddenEntries={hiddenEntries} showHidden={showHidden} onToggleHidden={onToggleHidden} taskSearch={taskSearch} onAction={onAction} />}</tbody>
   </>;
 }
 
-export function RepositoryBranchRows({ repository, state, blocked = false, link, localState, onConfigure, onDownload, downloadBusy = false, hiddenEntries, showHidden = false, onToggleHidden, onOpen, taskSearch = '', onAction }: { repository: RemoteRepository; state: RemoteRepositoryState; blocked?: boolean; link?: LocalLink; localState?: LocalRepositoryState; onConfigure?: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; downloadBusy?: boolean; hiddenEntries?: ReadonlySet<string>; showHidden?: boolean; onToggleHidden?: (key: string) => void; onOpen?: (id: string, taskId?: string) => void; taskSearch?: string; onAction?: (mode: RepositoryActionMode, targets: RepositoryActionTarget[]) => void }) {
+export function RepositoryBranchRows({ repository, state, blocked = false, link, localState, onConfigure, onDownload, downloadBusy = false, hiddenEntries, showHidden = false, onToggleHidden, onOpen, taskSearch = '', onAction }: { repository: RemoteRepository; state: RemoteRepositoryState; blocked?: boolean; link?: LocalLink; localState?: LocalRepositoryState; onConfigure?: (repository: RemoteRepository, branch?: string) => void; onDownload?: (repository: RemoteRepository, branch: string) => void; downloadBusy?: boolean; hiddenEntries?: ReadonlySet<string>; showHidden?: boolean; onToggleHidden?: (key: string) => void; onOpen?: (id: string, taskId?: string) => void; taskSearch?: string; onAction?: (mode: RepositoryActionMode, targets: RepositoryActionTarget[], scope: string) => void }) {
   const { workspace, loading } = state;
   const presence = usePresence();
   const pushActivity = usePushActivity();
@@ -286,7 +285,7 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
       <BranchCell colSpan={3}><div className="dashboard-branch-content"><div className="branch-label" title={branch}>{push ? <PushFeedbackIcon state={push} size={13} /> : <Icon name="branch" size={13} />}<span>{branch}</span><PresenceAvatars repository={repository} branch={branch} /></div>{branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}{presenceOnly && <small className="dashboard-default-branch">仅协作端</small>}</div></BranchCell>
       <BranchCell aria-hidden="true"></BranchCell><BranchCell aria-hidden="true"></BranchCell><BranchCell aria-hidden="true"></BranchCell>
       <BranchCell><button className={`local-path local-path-action ${paths.length ? '' : 'muted'}`} title={paths.join('\n') || '选择该分支的真实工作目录，或包含它的父目录'} aria-label={`配置分支目录：${repository.fullName} · ${branch}`} disabled={blocked || (!repository.available && !paths.length) || !onConfigure} onClick={() => onConfigure?.(repository, branch)}>{paths.length ? `${paths[0]}${paths.length > 1 ? ` +${paths.length - 1}` : ''}` : '关联工作目录'}</button></BranchCell>
-      <BranchCell className="repository-action-cell"><RepositoryRowActions itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(tasks, state, localState, branch, repository.available)} hidden={hidden} onPull={onAction && repository.available && tasks.length ? () => onAction('pull', repositoryActionTargets(repository, tasks, 'pull', state, localState)) : undefined} onLatest={onAction && repository.available && tasks.length ? () => onAction('latest', repositoryActionTargets(repository, tasks, 'latest', state, localState)) : undefined} onClean={onAction && repository.available && tasks.length ? () => onAction('clean', repositoryActionTargets(repository, tasks, 'clean', state, localState)) : undefined} onCommit={onAction ? () => onAction('commit', repositoryActionTargets(repository, tasks, 'commit', state, localState)) : onOpen ? () => { const task = tasks.find(task => task.path && task.files.length); if (task) onOpen(repository.id, task.id); } : undefined} onSubmit={onAction ? () => onAction('submit', repositoryActionTargets(repository, tasks, 'submit', state, localState)) : undefined} onPush={onAction ? () => onAction('push', repositoryActionTargets(repository, tasks, 'push', state, localState)) : undefined} busy={blocked || downloadBusy} unlinked={!paths.length} onDownload={onDownload ? () => onDownload(repository, branch) : undefined} downloadBusy={downloadBusy} downloadBlocked={blocked || !repository.available || !workspace?.tasks.some(task => task.branch === branch) || !!(link && !link.worktrees && !localState?.workspace)} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></BranchCell>
+      <BranchCell className="repository-action-cell"><RepositoryRowActions operationScope={repositoryOperationScope(repository.id, branch)} operationTargets={tasks.map(task => ({ repositoryId: repository.id, repositoryName: repository.fullName, task }))} itemLabel={`${repository.fullName} · ${branch}`} signals={gitSignals(tasks, state, localState, branch, repository.available)} hidden={hidden} onPull={onAction && repository.available && tasks.length ? () => onAction('pull', repositoryActionTargets(repository, tasks, 'pull', state, localState), repositoryOperationScope(repository.id, branch)) : undefined} onLatest={onAction && repository.available && tasks.length ? () => onAction('latest', repositoryActionTargets(repository, tasks, 'latest', state, localState), repositoryOperationScope(repository.id, branch)) : undefined} onClean={onAction && repository.available && tasks.length ? () => onAction('clean', repositoryActionTargets(repository, tasks, 'clean', state, localState), repositoryOperationScope(repository.id, branch)) : undefined} onCommit={onAction ? () => onAction('commit', repositoryActionTargets(repository, tasks, 'commit', state, localState), repositoryOperationScope(repository.id, branch)) : onOpen ? () => { const task = tasks.find(task => task.path && task.files.length); if (task) onOpen(repository.id, task.id); } : undefined} onSubmit={onAction ? () => onAction('submit', repositoryActionTargets(repository, tasks, 'submit', state, localState), repositoryOperationScope(repository.id, branch)) : undefined} onPush={onAction ? () => onAction('push', repositoryActionTargets(repository, tasks, 'push', state, localState), repositoryOperationScope(repository.id, branch)) : undefined} busy={blocked || downloadBusy} unlinked={!paths.length} onDownload={onDownload ? () => onDownload(repository, branch) : undefined} downloadBusy={downloadBusy} downloadBlocked={blocked || !repository.available || !workspace?.tasks.some(task => task.branch === branch) || !!(link && !link.worktrees && !localState?.workspace)} onToggleHidden={onToggleHidden ? () => onToggleHidden(key) : undefined} /></BranchCell>
     </tr>; })}
     {!!branchWarnings.length && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><Notice kind="info">{branchWarnings.join(' ')}</Notice></BranchCell></tr>}
   </>;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Button as BaseButton, IconButton as BaseIconButton, GlassSystemProvider, SearchField, Dialog, type ButtonProps } from 'open-glass-ui';
 import { componentTheme } from './theme';
 export { SegmentedControl as Segmented, Select, TextField, Textarea, Switch, Menu, MenuItem, Popover, Toolbar } from 'open-glass-ui';
@@ -17,6 +17,7 @@ import { CloudArrowDownIcon } from '@phosphor-icons/react/dist/csr/CloudArrowDow
 import { CloudArrowUpIcon } from '@phosphor-icons/react/dist/csr/CloudArrowUp';
 import { DownloadSimpleIcon } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { PlusIcon } from '@phosphor-icons/react/dist/csr/Plus';
+import { MinusIcon } from '@phosphor-icons/react/dist/csr/Minus';
 import { XIcon } from '@phosphor-icons/react/dist/csr/X';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/csr/DotsThree';
 import { SlidersHorizontalIcon } from '@phosphor-icons/react/dist/csr/SlidersHorizontal';
@@ -68,14 +69,18 @@ export function SearchInput({ value, onChange, placeholder, inputRef }: { value:
   useEffect(() => { if (inputRef) { inputRef.current = document.getElementById(id) as HTMLInputElement; return () => { inputRef.current = null; }; } }, [id, inputRef]);
   return <SearchField id={id} label={placeholder} aria-label={placeholder} value={value} onValueChange={onChange} placeholder={placeholder} className="search-field" />;
 }
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({ title, children, onClose, visible = true, onCollapse }: { title: string; children: ReactNode; onClose: () => void; visible?: boolean; onCollapse?: () => void }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  // A stable callback keeps the library's focus trap from restarting on every
-  // field edit. Controlled dialogs mount open, so restore focus on unmount.
+  // A stable callback keeps the focus trap from restarting on field edits.
+  // Hiding releases the trap without unmounting the owning operation.
   const changeOpen = useCallback((open: boolean) => { if (!open) closeRef.current(); }, []);
-  useEffect(() => () => { requestAnimationFrame(() => { if (opener.current?.isConnected) opener.current.focus(); }); }, []);
-  return <Dialog title={title} open onOpenChange={changeOpen}>{children}</Dialog>;
+  useLayoutEffect(() => {
+    if (!visible) return;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => { requestAnimationFrame(() => { if (!document.querySelector('[role="dialog"][aria-modal="true"]') && opener.current?.isConnected) opener.current.focus(); }); };
+  }, [visible]);
+  return <Dialog title={title} open={visible} onOpenChange={changeOpen}>{onCollapse && <button type="button" className="modal-collapse-control" aria-label={`收起 ${title}`} onClick={onCollapse}><MinusIcon size={18} /></button>}{children}</Dialog>;
 }
 export function Notice({ kind, children }: { kind: 'success' | 'error' | 'info'; children: ReactNode }) { return <div className={`notice ${kind}`} role={kind === 'error' ? 'alert' : 'status'}><Icon name={kind === 'success' ? 'success' : kind === 'error' ? 'warning' : 'sparkle'} size={17} /><span>{children}</span></div>; }

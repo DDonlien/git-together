@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { Button, Icon, Notice } from './ui';
 import { RepositoryCommitComposer } from './RepositoryCommitComposer';
-import { RepositoryActionDialog } from './RepositoryActionDialog';
+import { useRepositoryOperations } from './RepositoryOperationProvider';
+import { repositoryOperationScope } from './repository-action-model';
 import type { GenerateCommitMessage, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { RepositoryCommitDetails } from './RepositoryCommitDetails';
 import { RepositoryChangedFiles } from './RepositoryChangedFiles';
@@ -17,7 +17,10 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
   repository?: RemoteRepository; repositoryId?: string; onSubmit?: SubmitLocalCommit; onGenerate?: GenerateCommitMessage;
   repositoryName?: string; onPush?: PushLocalCommit; onCommitted?: (taskId: string, commitId: string) => void; published?: boolean;
 }) {
-  const [pushPopup, setPushPopup] = useState(false);
+  const operations = useRepositoryOperations();
+  const scope = repositoryOperationScope(repositoryId || '', task.branch, task.id);
+  const targets = repositoryId ? [{ repositoryId, repositoryName: repositoryName || '', task, commitId: selectedCommit?.id }] : [];
+  const pushPopup = operations.get('push', scope, targets);
   const history = selectedCommit && historyState?.id === selectedCommit.id ? historyState : undefined;
   const details = history?.details;
   return <section className="repository-change-task" aria-label={`更改任务：${task.branch}`}>
@@ -42,8 +45,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
     <RepositoryCommitComposer hidden={!!selectedCommit} task={task} repositoryId={repositoryId} repositoryName={repositoryName} onSubmit={onSubmit} onGenerate={onGenerate} onPush={onPush} onCommitted={onCommitted} />
     {selectedCommit && <>
       <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />
-      <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || !onGenerate} onClick={() => setPushPopup(true)}><Icon name="arrowUp" size={14} />Push</Button></div>
-      {pushPopup && repositoryId && onSubmit && onGenerate && onPush && <RepositoryActionDialog mode="push" targets={[{ repositoryId, repositoryName: repositoryName || '', task, commitId: selectedCommit.id }]} onCommit={onSubmit} onGenerate={onGenerate} onPush={onPush} onClose={() => setPushPopup(false)} />}
+      <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={!pushPopup && (published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || !onGenerate || operations.blocked(targets))} aria-busy={pushPopup?.state === 'working'} onClick={() => { if (pushPopup) operations.restore(pushPopup.id); else if (repositoryId && onSubmit && onGenerate && onPush) operations.open({ mode: 'push', scope, targets, onCommit: onSubmit, onGenerate, onPush }); }}><Icon name="arrowUp" size={14} />Push</Button></div>
     </>}
   </section>;
 }

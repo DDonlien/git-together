@@ -331,3 +331,7 @@ PresenceBranch保留有效快照的serverId、userId/identityId、deviceId、org
 RemoteWorkspaceActions由详情和人员卡片共用，沿用RemoteActionDialog和Provider的有限预览、AI说明、执行、重试Push及备份恢复。目标状态结合所属server连接判断，不把另一台在线服务器当作离线目标可执行。人员卡片关闭后确认弹窗仍独立挂载，任务的server/device/workspace/action冻结；服务端与目标继续核验实时权限和文件变化。协议字段、部署及用户双设备运行验收分别记录。
 
 支持此字段的服务器在控制state返回`worktreeIdentity: true`；客户端只向已声明支持的服务器公布worktreeId，连接旧严格Schema服务器时仍使用原announce字段，避免新客户端使旧服务器拒绝登记。
+
+仓库操作收起（0.31.0，IMPORT-14-operation-collapse）：App内RepositoryOperationProvider在路由外维护服务会话级操作记录，打开时复制目标快照，按入口范围及真实工作目录恢复。所有OperationDialog持续挂载；visible只控制公共Dialog的Portal、遮罩和焦点锁，不改变AI/同步准备的effect依赖、操作UUID、草稿或结果。Dashboard仓库/分支、仓库顶部、中栏Submit/选中提交Push复用宿主。隐藏完成留存原按钮，活动Commit/Submit/Push沿用成功关闭；异步完成不关闭其他任务。服务instanceId改变清理记录，显式取消才中断可取消的准备并清理预览。
+
+客户端写忙碌按repositoryId/taskId隔离，并汇总仓库状态继续阻止目录变更和重复操作；具体物理路径的活动弹窗阻止重叠范围。同仓库其他worktree可继续准备/确认，Rust已有git-common-dir队列仍串行真实写入。PushFeedbackProvider按仓库保存多个批次，更新/定时器只作用于自身UUID，聚合任务状态时不会覆盖兄弟任务；恢复弹窗不创建新请求。

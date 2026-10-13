@@ -4,7 +4,7 @@ import { OutlinedTextField } from './material-inputs';
 import { RepositoryCommitFiles } from './RepositoryCommitFiles';
 import { PushFeedbackProvider, PushProgress, usePushActivity } from './PushFeedback';
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
-import type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
+import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 export type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
 
 type SavedDraft = { draft: CommitDraft; edited: Record<keyof CommitDraft, boolean>; generated: boolean; head: string; changeKey?: string; paths?: string[] };
@@ -21,12 +21,12 @@ function draftKey(target: RepositoryActionTarget): string {
 
 // Freeze the reviewed worktrees and file lists when opening. Later filtering or
 // heartbeat reads must not silently widen the operation's scope.
-export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, onPush, onCommitted, onDraftChange, onComplete, onClose }: {
+export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, onPush, onCommitted, onDraftChange, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished }: {
   mode: Extract<RepositoryActionMode, 'commit' | 'submit' | 'push'>; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onGenerate: GenerateCommitMessage; onPush: PushLocalCommit;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void;
   onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
   onComplete?: (message: string) => void; onClose: () => void;
-}) {
+} & RepositoryOperationControls) {
   const sharedDrafts = useContext(DraftsContext), fallbackDrafts = useRef(new Map<string, SavedDraft>());
   const drafts = sharedDrafts || fallbackDrafts.current;
   const pushActivity = usePushActivity();
@@ -53,6 +53,8 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   const current = useRef(entries), running = useRef(false);
   const [generating, setGenerating] = useState(mode === 'submit' && entries.some(entry => entry.paths.length && !entry.generated && !(entry.edited.summary && entry.draft.summary.trim()))), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [phase, setPhase] = useState<'commit' | 'push' | null>(null);
+  const [finished, setFinished] = useState(false);
+  useEffect(() => { onStateChange?.(finished ? 'completed' : busy ? 'working' : error ? 'failed' : generating ? 'preparing' : 'ready'); }, [finished, busy, error, generating, onStateChange]);
   const generation = useRef<AbortController | null>(null);
   const update = (index: number, change: Partial<Entry> | ((entry: Entry) => Partial<Entry>)) => {
     current.current = current.current.map((entry, item) => {
@@ -98,9 +100,9 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
     })();
     return () => controller.abort();
   }, [selectionKey]);
-  const close = () => { if (running.current) return; generation.current?.abort(); onClose(); };
+  const close = () => { if (running.current) { onCollapse?.(); return; } generation.current?.abort(); onClose(); };
   const included = entries.filter(entry => mode === 'push' || entry.paths.length);
-  const ready = included.length > 0 && !busy && included.every(entry => mode === 'push' || entry.committed || !!entry.draft.summary.trim());
+  const ready = included.length > 0 && !finished && !busy && included.every(entry => mode === 'push' || entry.committed || !!entry.draft.summary.trim());
   async function confirm() {
     if (!ready || running.current) return;
     running.current = true; generation.current?.abort(); setGenerating(false); setBusy(true); setError('');
@@ -129,12 +131,12 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
         }
       }
       if (mode === 'commit') onComplete?.(`已创建 ${included.length} 个本地提交。`);
-      running.current = false; onClose();
+      running.current = false; setFinished(true); (onFinished || onClose)();
     } catch (problem) { setError(`${activeTarget}：${problem instanceof Error ? problem.message : '操作未完成。'}`); }
     finally { if (pushBatch) pushActivity.finish(pushBatch); running.current = false; setBusy(false); setPhase(null); }
   }
   const pushOnly = mode === 'push' || mode === 'submit' && included.length > 0 && included.every(entry => entry.committed);
-  return <Modal title={mode === 'commit' ? 'Commit' : mode === 'push' ? 'Push' : 'Submit'} onClose={close}>
+  return <Modal title={mode === 'commit' ? 'Commit' : mode === 'push' ? 'Push' : 'Submit'} onClose={close} visible={visible} onCollapse={onCollapse}>
     <div className="repository-action-dialog">
       <p className="repository-submit-count">{included.length} 个工作目录{mode !== 'push' && ` · 已选 ${entries.reduce((count, entry) => count + entry.paths.length, 0)} / ${entries.reduce((count, entry) => count + entry.task.files.length, 0)} 个更改`}</p>
       {generating && <p className="repository-submit-generating" role="status"><Icon name="spinner" className="spin" size={16} />正在准备提交内容…</p>}
@@ -153,7 +155,7 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
       {!entries.length && <p>当前范围内没有可执行的更改。</p>}
       {error && <Notice kind="error">{error}</Notice>}
       {busy && phase === 'push' && <PushProgress completed={entries.filter(entry => entry.pushed).length} total={included.length} />}
-      <div className="modal-actions"><Button type="button" disabled={busy} onClick={close}>取消</Button><Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{pushOnly ? '推送' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></div>
+      <div className="modal-actions">{finished ? <Button type="button" variant="primary" onClick={close}>完成</Button> : <><Button type="button" disabled={busy} onClick={close}>取消</Button><Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{pushOnly ? '推送' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></>}</div>
     </div>
   </Modal>;
 }
