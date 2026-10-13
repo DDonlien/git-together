@@ -120,6 +120,171 @@ fn commit(id: &str, email: Option<&str>, login: Option<&str>, parents: &[&str]) 
     })
 }
 
+fn push(id: &str, actor: &str) -> Value {
+    json!({"op_type":"commit_repo","repo_id":1,"act_user":{"login":actor},"content":json!({"Commits":[{"Sha1":id}],"HeadCommit":{"Sha1":id}}).to_string()})
+}
+
+#[tokio::test]
+async fn authenticated_push_preserves_branches_when_git_email_is_different() {
+    let mut data = Fixture::new(vec![commit(
+        HEAD,
+        Some("git@personal.example.test"),
+        None,
+        &[],
+    )]);
+    data.responses.insert(
+        "/user/emails".into(),
+        json!([{"email":"account@work.example.test","verified":true}]),
+    );
+    data.responses.insert(
+        format!("{BASE}/activities/feeds"),
+        json!([push(HEAD, "CURRENT")]),
+    );
+    let fixture = serve(data).await;
+    let workspace = fixture
+        .provider
+        .workspace(&repository(), &CancellationToken::new(), true)
+        .await
+        .unwrap();
+    assert_eq!(workspace["warnings"], json!([]));
+    for task in workspace["tasks"].as_array().unwrap() {
+        assert_eq!(task["hasAccountPush"], true);
+        assert_eq!(task["hasAccountCommits"], false);
+        assert!(task["participationError"].is_null());
+    }
+}
+
+#[tokio::test]
+async fn push_actor_repo_and_branch_ancestry_are_required() {
+    let other = "cccccccccccccccccccccccccccccccccccccccc";
+    for scenario in [
+        "other-actor",
+        "unrelated-commit",
+        "compare-url-only",
+        "other-repo",
+        "missing-actor",
+        "malformed-content",
+    ] {
+        let mut activity = push(HEAD, "current");
+        match scenario {
+            "other-actor" => activity["act_user"]["login"] = json!("other"),
+            "unrelated-commit" => activity = push(other, "current"),
+            "compare-url-only" => activity["content"] = json!(json!({"Commits":[],"HeadCommit":{"Sha1":other},"CompareURL":format!("compare/{HEAD}...{other}"),"Message":HEAD}).to_string()),
+            "other-repo" => activity["repo_id"] = json!(2),
+            "missing-actor" => activity["act_user"] = Value::Null,
+            "malformed-content" => activity["content"] = json!("not-json"),
+            _ => unreachable!(),
+        }
+        let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
+        data.responses
+            .insert(format!("{BASE}/activities/feeds"), json!([activity]));
+        let fixture = serve(data).await;
+        let proof = fixture
+            .provider
+            .account_participation(&repository(), HEAD, &CancellationToken::new())
+            .await;
+        if matches!(
+            scenario,
+            "other-repo" | "missing-actor" | "malformed-content"
+        ) {
+            assert!(
+                proof.unwrap_err().contains("推送记录核对未完成"),
+                "{scenario}"
+            );
+        } else {
+            assert_eq!(
+                proof.unwrap(),
+                json!({"hasAccountCommits":false,"hasAccountPush":false}),
+                "{scenario}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn push_pagination_works_without_link_and_denied_reads_stay_unknown() {
+    let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
+    data.responses.insert(
+        format!("{BASE}/activities/feeds"),
+        json!(vec![push(HEAD, "other"); 50]),
+    );
+    data.responses.insert(
+        format!("{BASE}/activities/feeds?page=2"),
+        json!([push(HEAD, "current")]),
+    );
+    let fixture = serve(data).await;
+    assert_eq!(
+        fixture
+            .provider
+            .account_participation(&repository(), HEAD, &CancellationToken::new())
+            .await
+            .unwrap()["hasAccountPush"],
+        true
+    );
+    assert!(fixture
+        .fixture
+        .calls
+        .lock()
+        .await
+        .contains(&format!("{BASE}/activities/feeds?page=2")));
+
+    let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
+    data.failures
+        .insert(format!("{BASE}/activities/feeds"), StatusCode::FORBIDDEN);
+    let fixture = serve(data).await;
+    let workspace = fixture
+        .provider
+        .workspace(&repository(), &CancellationToken::new(), true)
+        .await
+        .unwrap();
+    assert!(workspace["tasks"][0]["hasAccountCommits"].is_null());
+    assert!(text(&workspace["tasks"][0], "participationError").contains("推送记录核对未完成"));
+
+    let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
+    for page in 1..=10 {
+        let key = if page == 1 {
+            format!("{BASE}/activities/feeds")
+        } else {
+            format!("{BASE}/activities/feeds?page={page}")
+        };
+        data.responses
+            .insert(key, json!(vec![push(HEAD, "other"); 50]));
+    }
+    let fixture = serve(data).await;
+    assert!(fixture
+        .provider
+        .account_participation(&repository(), HEAD, &CancellationToken::new())
+        .await
+        .unwrap_err()
+        .contains("最多500条"));
+}
+
+#[tokio::test]
+async fn positive_push_survives_incomplete_author_identity_and_history() {
+    let parent = "cccccccccccccccccccccccccccccccccccccccc";
+    let mut data = Fixture::new(vec![commit(
+        HEAD,
+        Some("foreign@example.test"),
+        None,
+        &[parent],
+    )]);
+    data.failures
+        .insert("/user/emails".into(), StatusCode::FORBIDDEN);
+    data.responses.insert(
+        format!("{BASE}/activities/feeds"),
+        json!([push(HEAD, "current")]),
+    );
+    let fixture = serve(data).await;
+    assert_eq!(
+        fixture
+            .provider
+            .account_participation(&repository(), HEAD, &CancellationToken::new())
+            .await
+            .unwrap(),
+        json!({"hasAccountPush":true})
+    );
+}
+
 #[tokio::test]
 async fn imported_foreign_authors_are_a_normal_negative_result() {
     let fixture = serve(Fixture::new(vec![commit(
@@ -143,10 +308,10 @@ async fn imported_foreign_authors_are_a_normal_negative_result() {
     }
     fixture
         .provider
-        .account_commits(&repository(), HEAD, &CancellationToken::new())
+        .account_participation(&repository(), HEAD, &CancellationToken::new())
         .await
         .unwrap();
-    assert!(!fixture
+    assert!(fixture
         .fixture
         .calls
         .lock()
@@ -162,11 +327,14 @@ async fn verified_email_and_platform_account_are_positive_evidence() {
         ("different@example.test", Some("CURRENT")),
     ] {
         let fixture = serve(Fixture::new(vec![commit(HEAD, Some(email), login, &[])])).await;
-        assert!(fixture
-            .provider
-            .account_commits(&repository(), HEAD, &CancellationToken::new())
-            .await
-            .unwrap());
+        assert_eq!(
+            fixture
+                .provider
+                .account_participation(&repository(), HEAD, &CancellationToken::new())
+                .await
+                .unwrap()["hasAccountCommits"],
+            true
+        );
         if login.is_some() {
             assert!(!fixture
                 .fixture
@@ -179,11 +347,14 @@ async fn verified_email_and_platform_account_are_positive_evidence() {
     let mut data = Fixture::new(vec![commit(HEAD, Some("legacy@example.test"), None, &[])]);
     data.responses.insert("/user/emails".into(), json!([{"email":"current@example.test","verified":true},{"email":"legacy@example.test","verified":false}]));
     let fixture = serve(data).await;
-    assert!(!fixture
-        .provider
-        .account_commits(&repository(), HEAD, &CancellationToken::new())
-        .await
-        .unwrap());
+    assert_eq!(
+        fixture
+            .provider
+            .account_participation(&repository(), HEAD, &CancellationToken::new())
+            .await
+            .unwrap()["hasAccountCommits"],
+        false
+    );
 }
 
 #[tokio::test]
@@ -263,7 +434,7 @@ async fn incomplete_history_is_unknown_but_later_positive_evidence_wins() {
     .await;
     let error = fixture
         .provider
-        .account_commits(&repository(), HEAD, &CancellationToken::new())
+        .account_participation(&repository(), HEAD, &CancellationToken::new())
         .await
         .unwrap_err();
     assert!(error.contains("分支历史尚未完整确认"));
@@ -274,11 +445,14 @@ async fn incomplete_history_is_unknown_but_later_positive_evidence_wins() {
     data.failures
         .insert("/user/emails".into(), StatusCode::FORBIDDEN);
     let fixture = serve(data).await;
-    assert!(fixture
-        .provider
-        .account_commits(&repository(), HEAD, &CancellationToken::new())
-        .await
-        .unwrap());
+    assert_eq!(
+        fixture
+            .provider
+            .account_participation(&repository(), HEAD, &CancellationToken::new())
+            .await
+            .unwrap()["hasAccountCommits"],
+        true
+    );
 }
 
 #[tokio::test]
@@ -344,11 +518,14 @@ async fn default_mode_skips_participation_reads_and_negative_results_are_cached(
         .await
         .contains(&"/user/emails".into()));
     for _ in 0..2 {
-        assert!(!fixture
-            .provider
-            .account_commits(&repository(), HEAD, &CancellationToken::new())
-            .await
-            .unwrap());
+        assert_eq!(
+            fixture
+                .provider
+                .account_participation(&repository(), HEAD, &CancellationToken::new())
+                .await
+                .unwrap()["hasAccountCommits"],
+            false
+        );
     }
     assert_eq!(
         fixture

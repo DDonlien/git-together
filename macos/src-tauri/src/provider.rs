@@ -724,12 +724,70 @@ impl Provider {
         }
         Err("仓库创建活动超过读取上限，继续显示唯一分支。".into())
     }
-    async fn account_commits(
+    async fn account_pushed_commits(
+        &self,
+        repo: &Value,
+        commits: &std::collections::BTreeSet<String>,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        let remote_id = repo["remoteId"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or("无效的远端仓库身份。")?;
+        let base = repo_path(repo)?;
+        // Git authors and committers are not the authenticated push actor.
+        // A push counts only when its actor and repo match, and its commit is
+        // in this branch's actual ancestry. Never match names or CompareURL.
+        for page in 1..=10 {
+            let page_s = page.to_string();
+            let (value, headers) = self
+                .get(
+                    &format!("{base}/activities/feeds"),
+                    &[("page", &page_s), ("limit", "50")],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("仓库推送活动格式无效。")?;
+            for activity in rows {
+                if activity["op_type"] != "commit_repo" {
+                    continue;
+                }
+                if activity["repo_id"].as_u64() != Some(remote_id) {
+                    return Err("仓库推送活动与当前仓库身份不一致。".into());
+                }
+                let actor = text(&activity["act_user"], "login");
+                if actor.is_empty() {
+                    return Err("仓库推送者身份无法确认。".into());
+                }
+                if !actor.eq_ignore_ascii_case(text(&self.account, "login")) {
+                    continue;
+                }
+                let content: Value = serde_json::from_str(text(activity, "content"))
+                    .map_err(|_| "仓库推送提交记录格式无效。")?;
+                let pushed = content["Commits"]
+                    .as_array()
+                    .ok_or("仓库推送提交记录格式无效。")?;
+                for commit in pushed.iter().chain(std::iter::once(&content["HeadCommit"])) {
+                    let id = util::sha(text(commit, "Sha1"))?;
+                    if commits.contains(&id) {
+                        return Ok(true);
+                    }
+                }
+            }
+            // Some Gitea servers cap pages at 50 without a Link header.
+            if rows.is_empty() || (!next(&headers) && rows.len() < 50) {
+                return Ok(false);
+            }
+        }
+        Err("仓库推送活动尚未完整读取（最多500条），继续显示该分支。".into())
+    }
+    async fn account_participation(
         &self,
         repo: &Value,
         head: &str,
         cancel: &CancellationToken,
-    ) -> Result<bool> {
+    ) -> Result<Value> {
         let key = format!(
             "participation:{}:{}:{head}",
             text(&self.account, "id"),
@@ -740,9 +798,7 @@ impl Provider {
                 .as_i64()
                 .is_some_and(|time| util::now() - time < 300_000)
             {
-                return value["found"]
-                    .as_bool()
-                    .ok_or("分支参与记录格式无效。".into());
+                return Ok(value["proof"].clone());
             }
         }
         let kind = self.kind();
@@ -775,9 +831,10 @@ impl Provider {
                 return Err("平台未能确认提交作者的账号身份。".into());
             }
             let found = !rows.is_empty();
-            self.remember(key, json!({"found":found,"checkedAt":util::now()}))
+            let proof = json!({"hasAccountCommits":found});
+            self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
                 .await;
-            return Ok(found);
+            return Ok(proof);
         }
         let mut emails = std::collections::BTreeSet::new();
         if kind == "gitlab" {
@@ -847,6 +904,7 @@ impl Provider {
         let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
         let mut gitea_emails = None;
         let mut incomplete_gitea_identity = false;
+        let mut history_complete = false;
         for page in 1..=10 {
             let page_s = page.to_string();
             let (value, _) = self
@@ -899,9 +957,10 @@ impl Provider {
                     }
                 };
                 if found {
-                    self.remember(key, json!({"found":true,"checkedAt":util::now()}))
+                    let proof = json!({"hasAccountCommits":true});
+                    self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
                         .await;
-                    return Ok(true);
+                    return Ok(proof);
                 }
                 let commit = commit_value(row)?;
                 seen.insert(text(&commit, "id").to_owned());
@@ -914,22 +973,43 @@ impl Provider {
                 );
             }
             if parents.iter().all(|id| seen.contains(id)) {
-                if incomplete_gitea_identity {
-                    let detail = match &gitea_emails {
-                        Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
-                        _ => "部分提交缺少作者邮箱。".into(),
-                    };
-                    return Err(format!("无法判断是否包含当前账号的提交；{detail}继续显示该分支。"));
-                }
-                self.remember(key, json!({"found":false,"checkedAt":util::now()}))
-                    .await;
-                return Ok(false);
+                history_complete = true;
+                break;
             }
             if rows.is_empty() {
                 break;
             }
         }
-        Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into())
+        let mut proof = json!({});
+        if kind == "gitea" {
+            let pushed = self
+                .account_pushed_commits(repo, &seen, cancel)
+                .await
+                .map_err(|error| format!("当前账号推送记录核对未完成：{error}"))?;
+            proof["hasAccountPush"] = json!(pushed);
+            if pushed {
+                if history_complete && !incomplete_gitea_identity {
+                    proof["hasAccountCommits"] = json!(false);
+                }
+                self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
+                    .await;
+                return Ok(proof);
+            }
+        }
+        if !history_complete {
+            return Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into());
+        }
+        if incomplete_gitea_identity {
+            let detail = match &gitea_emails {
+                Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
+                _ => "部分提交缺少作者邮箱。".into(),
+            };
+            return Err(format!("无法判断是否包含当前账号的提交；{detail}继续显示该分支。"));
+        }
+        proof["hasAccountCommits"] = json!(false);
+        self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
+            .await;
+        Ok(proof)
     }
     pub async fn tree(&self, repo: &Value, id: &str, cancel: &CancellationToken) -> Result<Value> {
         util::sha(id)?;
@@ -1132,10 +1212,10 @@ impl Provider {
                             task["tree"] = json!(tree_paths(&tree));
                             task["treeComplete"] = tree["complete"].clone();
                             if check_participation {
-                                match p.account_commits(&r, &head, &c).await {
-                                    Ok(found) => {
-                                        task["hasAccountCommits"] = json!(found);
-                                        if sole_branch && !found {
+                                match p.account_participation(&r, &head, &c).await {
+                                    Ok(proof) => {
+                                        task.as_object_mut().unwrap().extend(proof.as_object().unwrap().clone());
+                                        if sole_branch && proof["hasAccountCommits"] == false && proof["hasAccountPush"] != true {
                                             match p.account_created_repository(&r, &c).await {
                                                 Ok(created) => task["hasAccountCreation"] = json!(created),
                                                 Err(error) => task["participationError"] = json!(error),
