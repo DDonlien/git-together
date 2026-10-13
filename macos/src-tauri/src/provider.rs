@@ -647,6 +647,77 @@ impl Provider {
             })
             .collect()
     }
+    async fn account_created_repository(
+        &self,
+        repo: &Value,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        if self.kind() != "gitea" {
+            return Err("当前平台未提供可核对的仓库创建记录，继续显示唯一分支。".into());
+        }
+        let key = format!(
+            "participation-creation:{}:{}",
+            text(&self.account, "id"),
+            text(repo, "id")
+        );
+        if let Some(value) = self.cached(&key).await.filter(|value| {
+            value["checkedAt"]
+                .as_i64()
+                .is_some_and(|time| util::now() - time < 300_000)
+        }) {
+            return value["found"]
+                .as_bool()
+                .ok_or("仓库创建记录格式无效。".into());
+        }
+        let remote_id = repo["remoteId"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or("无效的远端仓库身份。")?;
+        let base = repo_path(repo)?;
+        let (metadata, _) = self.get(&base, &[], "json", cancel).await?;
+        if metadata["id"].as_u64() != Some(remote_id) {
+            return Err("仓库创建记录与当前仓库身份不一致。".into());
+        }
+        let date = chrono::DateTime::parse_from_rfc3339(text(&metadata, "created_at"))
+            .map_err(|_| "仓库创建日期无法确认。")?
+            .with_timezone(&chrono::Utc)
+            .date_naive()
+            .to_string();
+        // Activity recipients and organization owners are not the creator.
+        // Query the creation day, and only trust the matching repo's actor.
+        for page in 1..=10 {
+            let page_s = page.to_string();
+            let (value, headers) = self
+                .get(
+                    &format!("{base}/activities/feeds"),
+                    &[("date", &date), ("page", &page_s), ("limit", "100")],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("仓库创建活动格式无效。")?;
+            for activity in rows {
+                if activity["op_type"] != "create_repo" {
+                    continue;
+                }
+                if activity["repo_id"].as_u64() != Some(remote_id) {
+                    return Err("仓库创建活动与当前仓库身份不一致。".into());
+                }
+                let actor = text(&activity["act_user"], "login");
+                if actor.is_empty() {
+                    return Err("仓库创建者身份无法确认。".into());
+                }
+                let found = actor.eq_ignore_ascii_case(text(&self.account, "login"));
+                self.remember(key, json!({"found":found,"checkedAt":util::now()}))
+                    .await;
+                return Ok(found);
+            }
+            if rows.is_empty() || (!next(&headers) && rows.len() < 100) {
+                return Err("未找到可核对的仓库创建活动，继续显示唯一分支。".into());
+            }
+        }
+        Err("仓库创建活动超过读取上限，继续显示唯一分支。".into())
+    }
     async fn account_commits(
         &self,
         repo: &Value,
@@ -1026,6 +1097,7 @@ impl Provider {
         if limited {
             warnings.push("分支超过单次读取上限（1000 个）；当前显示已读取分支。".to_string());
         }
+        let sole_branch = !limited && items.len() == 1;
         let mut pending = VecDeque::from(items.clone());
         let mut jobs = tokio::task::JoinSet::new();
         loop {
@@ -1053,7 +1125,15 @@ impl Provider {
                             task["treeComplete"] = tree["complete"].clone();
                             if check_participation {
                                 match p.account_commits(&r, &head, &c).await {
-                                    Ok(found) => task["hasAccountCommits"] = json!(found),
+                                    Ok(found) => {
+                                        task["hasAccountCommits"] = json!(found);
+                                        if sole_branch && !found {
+                                            match p.account_created_repository(&r, &c).await {
+                                                Ok(created) => task["hasAccountCreation"] = json!(created),
+                                                Err(error) => task["participationError"] = json!(error),
+                                            }
+                                        }
+                                    }
                                     Err(error) => task["participationError"] = json!(error),
                                 }
                             }
