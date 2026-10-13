@@ -14,6 +14,9 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
+#[cfg(test)]
+mod tests;
+
 pub fn client() -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(15))
@@ -632,6 +635,9 @@ impl Provider {
                         .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
                 })
                 .collect::<Result<Vec<_>>>()?;
+            if emails.is_empty() {
+                return Err("当前账号没有可用于匹配的已验证邮箱。".into());
+            }
             self.remember(key.into(), json!({"emails":emails,"checkedAt":util::now()}))
                 .await
         };
@@ -840,7 +846,7 @@ impl Provider {
         let mut seen = std::collections::BTreeSet::new();
         let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
         let mut gitea_emails = None;
-        let mut unresolved_gitea_author = false;
+        let mut incomplete_gitea_identity = false;
         for page in 1..=10 {
             let page_s = page.to_string();
             let (value, _) = self
@@ -877,12 +883,16 @@ impl Provider {
                         if gitea_emails.is_none() {
                             gitea_emails = Some(self.gitea_verified_emails(cancel).await);
                         }
+                        let author_email = text(&row["commit"]["author"], "email");
+                        // Imported authors need no local platform account. A negative
+                        // result only stays unknown when the identity data is missing.
+                        incomplete_gitea_identity |= author_email.is_empty()
+                            || gitea_emails.as_ref().unwrap().is_err();
                         let matched = gitea_emails.as_ref().is_some_and(|result| {
                             result.as_ref().is_ok_and(|emails| {
-                                emails.contains(&text(&row["commit"]["author"], "email").to_lowercase())
+                                emails.contains(&author_email.to_lowercase())
                             })
                         });
-                        unresolved_gitea_author |= !matched;
                         matched
                     } else {
                         false
@@ -904,14 +914,12 @@ impl Provider {
                 );
             }
             if parents.iter().all(|id| seen.contains(id)) {
-                // A complete history is not a complete identity mapping. Null
-                // Gitea authors cannot prove the current account never worked.
-                if unresolved_gitea_author {
+                if incomplete_gitea_identity {
                     let detail = match &gitea_emails {
                         Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
-                        _ => "部分提交作者未关联平台账号或已验证邮箱。".into(),
+                        _ => "部分提交缺少作者邮箱。".into(),
                     };
-                    return Err(format!("Gitea无法确认分支参与记录；{detail}继续显示该分支。"));
+                    return Err(format!("无法判断是否包含当前账号的提交；{detail}继续显示该分支。"));
                 }
                 self.remember(key, json!({"found":false,"checkedAt":util::now()}))
                     .await;
