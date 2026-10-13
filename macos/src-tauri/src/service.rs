@@ -551,8 +551,9 @@ impl Service {
                 if !expired && rejected.is_none() {
                     return Ok(text(&saved, "token").into());
                 }
-                let message = if saved["account"]["authorizationExpiresAt"].is_string()
-                    || text(&saved, "token").starts_with("ghu_")
+                let message = if saved["authorizationId"].is_null()
+                    && (saved["account"]["authorizationExpiresAt"].is_string()
+                        || text(&saved, "token").starts_with("ghu_"))
                 {
                     "这份GitHub授权已失效，旧版本没有保存续期凭据；请在设置中重新网页授权一次，之后会自动续期。"
                 } else {

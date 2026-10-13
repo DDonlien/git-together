@@ -6,7 +6,7 @@
 - 结束时间：进行中。
 - 启动分支与版本：main，aaa9962f0cd464e4251804cc8e55a7996b5d5c57，0.30.1；共享工作目录含其他0.32.1未提交功能，从已推送main普通隔离克隆实施本需求。
 - 需求：IMPORT-11-token-refresh。
-- 提交：尚未执行，用户已明确授权提交/推送和联合发布。
+- 初次源码提交：0f0185b498d292f7614ed5214abd3b726375ba19已推送main；发布收尾修正进行中。
 
 ## 上下文与成功标准
 
@@ -27,3 +27,13 @@ GitHub官方文档https://docs.github.com/en/apps/creating-github-apps/authentic
 版本从隔离main的0.30.1递增patch至0.30.2，修复现有授权而非新增权限，npm根锁和Rust版本镜像同步。npm run check、Cargo locked检查和前端生产构建已通过；前端保留既有500kB分包警告。Rust unused-variable警告已修正；未运行测试套件，未操作用户安装版，也不把编译等同实际用户续期成功。
 
 公证预检：默认profile与显式login.keychain-db均报No Keychain password item found for profile: gittogether-notary。安全地检查Keychain元信息、常见保存目录、私钥文件名及环境配置，没有找到备用公证配置；没有读取或输出密码、没有请求解锁。Developer ID签名证书仍有效。打包脚本固定使用登录钥匙串并支持GITTOGETHER_NOTARY_KEYCHAIN覆盖，避免未来复用依赖临时默认搜索列表；公证未通过前不能正式发布。继续推送和准备候选包，已异步询问现有配置的其他保存位置。
+
+## 公证读取复核与最终来源
+
+0.30.2候选完成Developer ID签名（bundle身份与团队一致，deep/strict通过），实际公证提交仍exit69；只记录notarized=false/publicUpdateVerified=false，不作为正式更新。Windows 38378554453的x86/x64原生构建、安装、启动及有限平台诊断通过，下载的完整候选包大小/摘要和Tauri版本绑定更新签名已验证，仍未公开发布。
+
+2026-10-13 18:03后直接notarytool及xcrun默认查询均正常返回同名gittogether-notary的27条历史；没有重建profile、索取秘密、改变钥匙串或请求解锁。相同工具显式指定login.keychain-db仍exit69。由此撤回本任务强制登录钥匙串的默认路径，只在显式GITTOGETHER_NOTARY_KEYCHAIN设置时追加路径；保留既有默认profile读取。此前默认读取偶发失败的原因尚未证实，不能把未读到判断为凭据已被删除。
+
+隔离main再次fetch并正常快进到f8a6b11306044461d3ea2730cd5126c673562c13，保留已经合入的IMPORT-12唯一分支创建参与修复；共享工作区未提交内容仍未纳入。此次公证入口修正及精确区分新手工令牌与旧版缺失续期凭据的文案，按patch从已合入0.30.3递增0.30.4，所有版本镜像同步；正式三平台必须重新绑定同一最终提交，不把旧0.30.2候选报告改作新源码报告。
+
+0.30.4最终候选的npm类型检查、cargo check --locked及生产前端构建分别实际通过；保留既有500kB分包提示。未新增或运行测试套件。

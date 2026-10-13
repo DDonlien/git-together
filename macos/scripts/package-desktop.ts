@@ -18,8 +18,9 @@ if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('
 const sourceEntries = ['src', 'src-tauri', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
 const notaryProfile = process.env.GITTOGETHER_NOTARY_PROFILE || 'gittogether-notary';
-const notaryKeychain = process.env.GITTOGETHER_NOTARY_KEYCHAIN || join(homedir(), 'Library/Keychains/login.keychain-db');
-const notaryCredentials = ['--keychain-profile', notaryProfile, '--keychain', notaryKeychain];
+// A file override can exclude an existing profile in the default keychain store.
+const notaryKeychain = process.env.GITTOGETHER_NOTARY_KEYCHAIN;
+const notaryCredentials = ['--keychain-profile', notaryProfile, ...(notaryKeychain ? ['--keychain', notaryKeychain] : [])];
 const signingKey = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
 const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
 const execute = promisify(execFile);
