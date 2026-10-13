@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRemoteControl } from './RemoteControlProvider';
-import { controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteAction, type ControlResult, type RemoteFile } from './remote-control-model';
+import { controlDeviceOnline, controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
 import { OutlinedTextField } from './material-inputs';
 import { Button, Checkbox, Modal, Notice } from './ui';
 
-function RemoteActionDialog({ device, workspace, action, onClose }: { device: ControlDevice; workspace: ControlWorkspace; action: RemoteAction; onClose: () => void }) {
+export function RemoteActionDialog({ device, workspace, action, onClose }: RemoteActionTarget & { onClose: () => void }) {
   const control = useRemoteControl()!;
   const [preview, setPreview] = useState<ControlResult | null>(null);
   const [files, setFiles] = useState<RemoteFile[]>([]);
@@ -84,13 +84,20 @@ function RemoteActionDialog({ device, workspace, action, onClose }: { device: Co
     </div>
   </Modal>;
 }
-export function RemoteControlProjects({ repositoryId }: { repositoryId: string }) {
+export function RemoteWorkspaceActions({ device, workspace, onAction, label, compact = false }: { device: ControlDevice; workspace: ControlWorkspace; onAction: (target: RemoteActionTarget) => void; label?: string; compact?: boolean }) {
   const control = useRemoteControl();
   const status = control?.status;
-  const [target, setTarget] = useState<{ device: ControlDevice; workspace: ControlWorkspace; action: RemoteAction } | null>(null);
   const [error, setError] = useState('');
   if (!control || !status?.enabled) return null;
-  const peers = status.devices.filter(device => !device.isCurrent && device.deviceId !== status.deviceId).flatMap(device => device.workspaces.filter(w => w.repositoryId === repositoryId).map(workspace => ({ device, workspace })));
+  const jobs = status.jobs.filter(job => job.serverId === device.serverId && job.deviceId === device.deviceId && job.workspaceId === workspace.id);
+  const pending = jobs.some(job => ['queued', 'running'].includes(job.status));
+  const latest = jobs.find(job => !['preview', 'generate'].includes(job.kind));
+  const previous = latest?.previousId ? jobs.find(job => job.id === latest.previousId) : undefined;
+  const retry = latest?.status === 'failed' && latest.kind === 'retryPush' ? previous : latest;
+  const recover = latest?.status === 'failed' && latest.kind === 'restore' ? previous : latest;
+  const organization = status.teams.find(team => team.serverId === device.serverId && team.id === workspace.teamId);
+  const online = controlDeviceOnline(status, device);
+  const heading = label || `${device.name} · ${workspace.branch}${organization ? ` · ${organization.name || organization.id}` : ''}`;
   async function followup(job: ControlJob, kind: 'retryPush' | 'restore') {
     if (!control) return;
     setError('');
@@ -98,28 +105,29 @@ export function RemoteControlProjects({ repositoryId }: { repositoryId: string }
     try { await control.enqueue({ serverId: job.serverId, deviceId: job.deviceId, workspaceId: job.workspaceId, repositoryId: job.repositoryId, action: job.action, kind, previousId: job.id }); }
     catch (problem) { setError(problem instanceof Error ? problem.message : '远端请求未完成。'); }
   }
+  return <div className={'remote-target' + (compact ? ' presence-remote-target' : '')}>
+    <div className="remote-target-heading"><strong>{heading}</strong><small>{online ? '在线' : '离线'}</small></div>
+    <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => <Button key={action} aria-label={`${heading} · ${remoteActionLabels[action]}`} disabled={control.busy || !online || (pending && action !== 'abort')} onClick={() => onAction({ device, workspace, action })}>{remoteActionLabels[action]}</Button>)}</div>
+    {latest && <div className={'remote-job-result' + (latest.error ? ' is-error' : '')} role="status"><span>{controlJobLabel(latest)}</span>
+      {latest.result?.warning && <small>{latest.result.warning}</small>}
+      {retry?.result?.phase === 'committed' && retry.action === 'submit' && <Button disabled={control.busy || !online || pending} onClick={() => void followup(retry, 'retryPush')}>重试推送</Button>}
+      {recover?.result?.phase === 'discarded' && recover.result.backupId && <Button disabled={control.busy || !online || pending} onClick={() => void followup(recover, 'restore')}>恢复更改</Button>}
+    </div>}
+    {error && <Notice kind="error">{error}</Notice>}
+  </div>;
+}
+
+export function RemoteControlProjects({ repositoryId }: { repositoryId: string }) {
+  const control = useRemoteControl();
+  const status = control?.status;
+  const [target, setTarget] = useState<RemoteActionTarget | null>(null);
+  if (!control || !status?.enabled) return null;
+  const peers = status.devices.filter(device => !device.isCurrent && device.deviceId !== status.deviceId).flatMap(device => device.workspaces.filter(workspace => workspace.repositoryId === repositoryId).map(workspace => ({ device, workspace })));
   return <div className="remote-control-projects"><h3>远端控制</h3>
     {!status.registered && <p className="presence-empty">正在连接 Presence，自动登记此设备。</p>}
     {status.registered && !peers.length && <p className="presence-empty">暂无可操作的其他设备或协作成员。</p>}
-    {peers.map(({ device, workspace }) => {
-      const jobs = status.jobs.filter(j => j.serverId === device.serverId && j.deviceId === device.deviceId && j.workspaceId === workspace.id);
-      const pending = jobs.some(j => ['queued', 'running'].includes(j.status));
-      const latest = jobs.find(j => !['preview', 'generate'].includes(j.kind));
-      const previous = latest?.previousId ? jobs.find(j => j.id === latest.previousId) : undefined;
-      const retry = latest?.status === 'failed' && latest.kind === 'retryPush' ? previous : latest;
-      const recover = latest?.status === 'failed' && latest.kind === 'restore' ? previous : latest;
-      const organization = status.teams.find(t => t.serverId === device.serverId && t.id === workspace.teamId);
-      return <div className="remote-target" key={(device.serverId || '') + device.deviceId + workspace.id}>
-        <div className="remote-target-heading"><strong>{device.name} · {workspace.branch}{organization && ` · ${organization.name || organization.id}`}</strong><small>{device.online && status.connection === 'connected' ? '在线' : '离线'}</small></div>
-        <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => <Button key={action} disabled={!device.online || status.connection !== 'connected' || (pending && action !== 'abort')} onClick={() => setTarget({ device, workspace, action })}>{remoteActionLabels[action]}</Button>)}</div>
-        {latest && <div className={'remote-job-result' + (latest.error ? ' is-error' : '')} role="status"><span>{controlJobLabel(latest)}</span>
-          {latest.result?.warning && <small>{latest.result.warning}</small>}
-          {retry?.result?.phase === 'committed' && retry.action === 'submit' && <Button disabled={!device.online || pending} onClick={() => void followup(retry, 'retryPush')}>重试推送</Button>}
-          {recover?.result?.phase === 'discarded' && recover.result.backupId && <Button disabled={!device.online || pending} onClick={() => void followup(recover, 'restore')}>恢复更改</Button>}
-        </div>}
-      </div>;
-    })}
-    {(error || control.error || status.error) && <Notice kind="error">{error || control.error || status.error}</Notice>}
+    {peers.map(({ device, workspace }) => <RemoteWorkspaceActions key={(device.serverId || '') + device.deviceId + workspace.id} device={device} workspace={workspace} onAction={setTarget} />)}
+    {(control.error || status.error) && <Notice kind="error">{control.error || status.error}</Notice>}
     {target && <RemoteActionDialog key={(target.device.serverId || '') + target.device.deviceId + target.workspace.id + target.action} {...target} onClose={() => setTarget(null)} />}
   </div>;
 }

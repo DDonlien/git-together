@@ -45,9 +45,13 @@ export function presenceProjectSummary(project: PresenceProject, valid: boolean)
 }
 
 export type PresenceWorkState = 'editing' | 'changed' | 'committed';
+export type PresenceBranch = {
+  branch: string | null; state: PresenceWorkState;
+  sources: { serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null }[];
+};
 export type PresencePerson = {
   userId: string; displayName: string; avatarUrl: string | null; state: PresenceWorkState;
-  branches: { branch: string | null; state: PresenceWorkState }[];
+  branches: PresenceBranch[];
   deviceNames: string[];
   scope?: string;
 };
@@ -79,9 +83,14 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       const deviceName = session.deviceName?.trim() || '设备未知';
       if (!person.deviceNames.includes(deviceName)) person.deviceNames.push(deviceName);
       if (workPriority[state] > workPriority[person.state]) person.state = state;
-      const existing = person.branches.find(value => value.branch === project.branch);
-      if (!existing) person.branches.push({ branch: project.branch, state });
-      else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
+      let existing = person.branches.find(value => value.branch === project.branch);
+      if (!existing) {
+        existing = { branch: project.branch, state, sources: [] };
+        person.branches.push(existing);
+      } else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
+      if (!existing.sources.some(source => source.deviceId === session.deviceId && source.worktreeId === project.worktreeId)) {
+        existing.sources.push({ serverId: session.serverId, userId: session.userId, identityId: session.identityId, deviceId: session.deviceId, worktreeId: project.worktreeId, organizationId: project.organizationId ?? null });
+      }
     }
   }
   return [...people.values()].sort((a, b) => a.userId.localeCompare(b.userId)).map(person => ({ ...person, branches: person.branches.sort((a, b) => (a.branch || '').localeCompare(b.branch || '')) }));

@@ -652,6 +652,7 @@ impl RemoteControl {
         c: &Configuration,
         allowed: &Value,
         teams: &Value,
+        worktree_identity: bool,
     ) -> Result<BTreeMap<String, Workspace>> {
         let catalog = self.service.catalog().await?;
         let mut result = BTreeMap::new();
@@ -699,6 +700,9 @@ impl RemoteControl {
                         vec!["commit", "submit", "abort", "discard"]
                     };
                     let mut public = json!({"id":id,"repositoryId":remote,"branch":task["branch"],"head":task["head"],"teamId":scope.map(|s|s["id"].clone()),"actions":actions});
+                    if worktree_identity {
+                        public["worktreeId"] = json!(util::digest(text(task, "path")));
+                    }
                     if let Some(scope) = scope {
                         public["scopeVersion"] = scope["revision"].clone();
                     }
@@ -728,7 +732,12 @@ impl RemoteControl {
         }
         self.bound(c)?;
         let mapped = self
-            .mapped(c, &state["repositories"], &state["teams"])
+            .mapped(
+                c,
+                &state["repositories"],
+                &state["teams"],
+                state["worktreeIdentity"] == true,
+            )
             .await?;
         self.http(c, "announce", Some(&json!({"name":c.name,"workspaces":mapped.values().map(|w|&w.public).collect::<Vec<_>>()}))).await?;
         *self.workspaces.write().await = mapped;

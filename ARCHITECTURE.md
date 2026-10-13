@@ -323,3 +323,11 @@ IMPORT-11-windows-oauth-port：Rust 保留 socket bind 的 ErrorKind 和 raw_os_
 ## Presence设备名称（PRESENCE-05-device-name，0.30.11）
 
 managed world版本3可带可选deviceName，来源为服务端已验证设备凭证对应的登记名称。Rust允许旧帧缺席/null，仅接受非空且不超过120字符的名称；PresencePerson在精确仓库/分支过滤及有效操作状态确认后聚合同身份的设备名。UI在人员名称后的括号中显示去重名称，旧帧显示设备未知；设备名纳入弹窗roster布局键，账号/头像/分支状态仍分别保存。
+
+## Presence人员卡片与远程工作目录
+
+PresenceBranch保留有效快照的serverId、userId/identityId、deviceId、organizationId及worktreeId来源。人员仍按身份/组织聚合；远程目标只能从ControlStatus授权devices/workspaces中选择，逐项匹配同一服务器、设备、用户、仓库、分支和组织。工作区新增可选worktreeId，Rust采用与Presence发布相同的路径SHA256；它不改变workspaceId、请求范围或权限判断。旧设备缺少字段时只允许唯一分支目标，多个可能目录不选。
+
+RemoteWorkspaceActions由详情和人员卡片共用，沿用RemoteActionDialog和Provider的有限预览、AI说明、执行、重试Push及备份恢复。目标状态结合所属server连接判断，不把另一台在线服务器当作离线目标可执行。人员卡片关闭后确认弹窗仍独立挂载，任务的server/device/workspace/action冻结；服务端与目标继续核验实时权限和文件变化。协议字段、部署及用户双设备运行验收分别记录。
+
+支持此字段的服务器在控制state返回`worktreeIdentity: true`；客户端只向已声明支持的服务器公布worktreeId，连接旧严格Schema服务器时仍使用原announce字段，避免新客户端使旧服务器拒绝登记。

@@ -70,7 +70,7 @@
 .global-sidebar.is-collapsed .sidebar-repository-entry { padding-right: 0; }
 .global-sidebar.is-collapsed .sidebar-repository-entry > .presence-avatar-popover, .global-sidebar.is-collapsed .sidebar-repository-entry > .repository-item::before { display: none; }
 .global-sidebar.is-collapsed .sidebar-repository-entry > .repository-item { width: var(--sidebar-button-size); height: var(--sidebar-button-size); flex: 0 0 var(--sidebar-button-size); padding: 0; }
-.ogui-disclosure__surface:has(.presence-people-content) { width: min(340px, calc(100vw - 16px)); min-width: 0; max-height: calc(100dvh - 16px); overflow: hidden; }
+.ogui-disclosure__surface:has(.presence-people-content) { width: min(400px, calc(100vw - 16px)); min-width: 0; max-height: calc(100dvh - 16px); overflow: hidden; }
 .ogui-popover__content:has(.presence-people-content) { padding: 0; }
 .presence-people-content { font-size: 12px; }
 .presence-people-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
@@ -85,9 +85,20 @@
 .presence-people-list > li > div { min-width: 0; flex: 1; }
 .presence-people-list strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
 .presence-people-branches { margin-top: 5px; }
-.presence-people-branches li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 3px 0; }
-.presence-people-branches li > span { min-width: 0; overflow-wrap: anywhere; }
+.presence-people-branches > li { padding: 6px 0; }
+.presence-people-branches > li + li { border-top: 1px solid var(--line); }
+.presence-branch-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.presence-branch-heading > span { min-width: 0; overflow-wrap: anywhere; }
 .presence-people-branches small { flex-shrink: 0; color: var(--muted); font-size: 10px; }
+.presence-remote-target { padding: 6px 0 0; }
+.presence-remote-target + .presence-remote-target { margin-top: 6px; }
+.presence-remote-target .remote-target-heading strong { color: var(--muted); font-size: 11px; font-weight: 400; }
+.presence-remote-target .remote-target-actions { margin-top: 6px; gap: 6px; }
+.presence-remote-target .app-button { min-height: 28px; padding: 4px 10px; font-size: 11px; }
+.presence-remote-target .remote-job-result { font-size: 11px; overflow-wrap: anywhere; }
+.presence-remote-empty { margin: 6px 0 0; color: var(--muted); font-size: 10px; }
+.presence-people-content > .notice { margin: 4px 14px; }
+.presence-action-boundary { display: contents; }
 .presence-avatar-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 .presence-avatar-legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .presence-avatar-legend i { width: 10px; height: 10px; border: 1.5px solid var(--presence-color); border-radius: 50%; }
