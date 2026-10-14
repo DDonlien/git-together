@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { releaseBranch, updateSource } from '../src/update-model';
 import { notarizationResult, prepareDesktopRelease } from './desktop-release';
 import { buildWindowsPackages } from './windows-release';
+import { prepareNotarization } from './notarization';
 
 const clientRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(join(clientRoot, 'package.json'), 'utf8')) as { version: string };
@@ -17,10 +18,6 @@ const tauri = JSON.parse(await readFile(join(clientRoot, 'src-tauri/tauri.conf.j
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('此打包入口需要 Apple Silicon macOS。');
 const sourceEntries = ['src', 'src-tauri', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
-const notaryProfile = process.env.GITTOGETHER_NOTARY_PROFILE || 'gittogether-notary';
-// A file override can exclude an existing profile in the default keychain store.
-const notaryKeychain = process.env.GITTOGETHER_NOTARY_KEYCHAIN;
-const notaryCredentials = ['--keychain-profile', notaryProfile, ...(notaryKeychain ? ['--keychain', notaryKeychain] : [])];
 const signingKey = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
 const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
 const execute = promisify(execFile);
@@ -60,7 +57,7 @@ try {
   const keyInfo = await stat(signingKey);
   if (!keyInfo.isFile() || (keyInfo.mode & 0o077)) throw new Error('Tauri 更新签名密钥必须是仅当前用户可读的文件。');
   if ((await readFile(signingKey + '.pub', 'utf8')).trim() !== tauri.plugins.updater.pubkey) throw new Error('Tauri 更新密钥与应用内置公钥不一致，停止发布。');
-  await execute('/usr/bin/xcrun', ['notarytool', 'history', ...notaryCredentials, '--output-format', 'json']);
+  const notary = await prepareNotarization();
   await run('npm', ['run', 'check']);
   await run(cargo, ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--locked']);
   const output = await mkdtemp(join(buildRoot, `gittogether-${manifest.version}-macos-arm64-`));
@@ -92,8 +89,7 @@ try {
   const zipPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.zip`);
   await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath]);
   console.log('Rust 应用已签名，正在等待 Apple 公证…');
-  const submission = await execute('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, ...notaryCredentials, '--wait', '--output-format', 'json'], { maxBuffer: 1024 * 1024 });
-  const notarization = notarizationResult(submission.stdout);
+  const notarization = notarizationResult(await notary.submit(zipPath));
   await writeFile(join(output, 'notarization.json'), JSON.stringify(notarization, null, 2) + '\n');
   await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath]);
   await run('/usr/bin/xcrun', ['stapler', 'validate', applicationPath]);
@@ -116,7 +112,7 @@ try {
   const tauriManifestPath = join(output, 'latest.json');
   const platforms = Object.fromEntries(windows.map(p => [p.platform, { signature: p.signature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(p.installerPath)}` }]));
   await writeFile(tauriManifestPath, JSON.stringify({ version: manifest.version, notes: `GitTogether ${manifest.version}`, pub_date: new Date().toISOString(), platforms: { 'darwin-aarch64': { signature: tarSignature, url: `https://github.com/${updateSource.owner}/${updateSource.repo}/releases/download/v${manifest.version}/${basename(tarPath)}` }, ...platforms } }, null, 2) + '\n');
-  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, framework: 'Tauri 2', backend: 'Rust', architecture: 'arm64', signature: 'Developer ID', notarized: true, size: bytes.length, windows, tauri: { tarPath, signaturePath, manifestPath: tauriManifestPath, signature: tarSignature, sha256: createHash('sha256').update(tarBytes).digest('hex'), size: tarBytes.length } };
+  const result = { applicationPath, zipPath, updateMetadataPath, sha256, sha512, sourceSha256, sourceBranch, sourceCommit, version: manifest.version, framework: 'Tauri 2', backend: 'Rust', architecture: 'arm64', signature: 'Developer ID', notarized: true, notarization: { ...notarization, profile: notary.profile, storage: notary.storage }, size: bytes.length, windows, tauri: { tarPath, signaturePath, manifestPath: tauriManifestPath, signature: tarSignature, sha256: createHash('sha256').update(tarBytes).digest('hex'), size: tarBytes.length } };
   await writeFile(join(output, 'build-info.json'), JSON.stringify(result, null, 2) + '\n');
   console.log('公证及更新签名通过，正在发布并核对两种公开更新源…');
   const publication = await release.publish(result);
