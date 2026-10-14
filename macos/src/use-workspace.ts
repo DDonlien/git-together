@@ -11,11 +11,13 @@ import { diagnosticFailure } from './diagnostics-model';
 import { useUpdates } from './use-updates';
 import { branchHiddenEntries, type BranchBehaviorPreferences } from './branch-behavior';
 import { linkedTasks } from './branch-links';
+import { usesSystemAuthentication } from './repository-auth-model';
 
 type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[] } & BranchBehaviorPreferences;
 const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
 const writePrefix = (repositoryId: string) => `write:${JSON.stringify(repositoryId)}:`;
+const sameLocalDirectories = (left: string | undefined, right: string) => !!left && JSON.stringify(JSON.parse(left).slice(0, 4)) === JSON.stringify(JSON.parse(right).slice(0, 4));
 export function repositoryActionBusy(busy: Record<string, boolean>, repositoryId: string): boolean {
   return !!busy[repositoryId] && !Object.keys(busy).some(key => key.startsWith(writePrefix(repositoryId)) && busy[key]);
 }
@@ -119,21 +121,21 @@ export function useWorkspace() {
     },
     onError: (_resource, problem) => { if (!updates.installingRef.current && problem instanceof LocalServiceError) setError(problem.message); },
   });
-  const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees])) : [];
+  const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system'])) : [];
   useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
-    triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees]), fetchVersions[link.repositoryId] ?? 0])),
+    triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']), fetchVersions[link.repositoryId] ?? 0])),
     onReading: (resource, loading) => {
       const [instanceId, repositoryId, path] = JSON.parse(resource) as [string, string, string];
-      if (instanceId !== catalogRef.current.instanceId || !catalogRef.current.links.some(link => JSON.stringify([instanceId, link.repositoryId, link.path, link.worktrees]) === resource)) return;
+      if (instanceId !== catalogRef.current.instanceId || !catalogRef.current.links.some(link => JSON.stringify([instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']) === resource)) return;
       setLocalStates(current => {
         const previous = current[repositoryId];
-        const state = previous?.mappingKey === resource ? previous : { path, mappingKey: resource, snapshot: null, error: '', checkedAt: 0 };
+        const state = previous && sameLocalDirectories(previous.mappingKey, resource) ? { ...previous, mappingKey: resource } : { path, mappingKey: resource, snapshot: null, error: '', checkedAt: 0 };
         return state.loading === loading ? current : { ...current, [repositoryId]: { ...state, loading } };
       });
     },
     run: async (resource, signal) => {
-      const [instanceId, repositoryId, path, worktrees] = JSON.parse(resource) as [string, string, string, unknown];
-      const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path && JSON.stringify(link.worktrees) === JSON.stringify(worktrees === null ? undefined : worktrees));
+      const [instanceId, repositoryId, path, worktrees, authentication] = JSON.parse(resource) as [string, string, string, unknown, string];
+      const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path && JSON.stringify(link.worktrees) === JSON.stringify(worktrees === null ? undefined : worktrees) && (link.authentication || 'system') === authentication);
       if (!currentLink()) return;
       const readVersion = localReadVersions.current.get(resource) || 0;
       try {
@@ -154,7 +156,7 @@ export function useWorkspace() {
         if (changed) setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
         setLocalStates(current => {
           const previous = current[repositoryId];
-          const retained = preserveLocalWorkspace(previous?.mappingKey === resource ? previous.workspace : undefined, workspace);
+          const retained = preserveLocalWorkspace(previous && sameLocalDirectories(previous.mappingKey, resource) ? previous.workspace : undefined, workspace);
           // Unchanged file/status/history payloads keep their identity and open UI state.
           const stable = previous?.path === path && JSON.stringify(previous.workspace) === JSON.stringify(retained) ? previous.workspace : retained;
           return { ...current, [repositoryId]: { path, mappingKey: resource, snapshot: null, workspace: stable, loading: false, error: '', checkedAt: Date.now() } };
@@ -172,7 +174,7 @@ export function useWorkspace() {
   });
   const linkIdentities = JSON.stringify(catalog.links);
   useEffect(() => {
-    const resources = new Set(catalogRef.current.links.map(link => JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees])));
+    const resources = new Set(catalogRef.current.links.map(link => JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system'])));
     for (const resource of localChanges.current.keys()) if (!resources.has(resource)) localChanges.current.delete(resource);
     for (const resource of localReadVersions.current.keys()) if (!resources.has(resource)) localReadVersions.current.delete(resource);
     setChangeVersions(current => {
@@ -184,12 +186,12 @@ export function useWorkspace() {
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
     setLocalStates(current => {
-      const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && JSON.stringify([catalogRef.current.instanceId, id, link.path, link.worktrees]) === state.mappingKey)));
+      const retained = Object.fromEntries(Object.entries(current).filter(([id, state]) => catalogRef.current.links.some(link => link.repositoryId === id && sameLocalDirectories(state.mappingKey, JSON.stringify([catalogRef.current.instanceId, id, link.path, link.worktrees, link.authentication || 'system'])))));
       return Object.keys(retained).length === Object.keys(current).length ? current : retained;
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched);
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched, new Set(catalog.links.filter(usesSystemAuthentication).map(link => link.repositoryId)));
   const hiddenEntries = new Set(preferences.hiddenEntries || []);
   for (const repository of catalog.repositories) for (const key of branchHiddenEntries(repository.id, preferences, remoteStates[repository.id]?.workspace?.tasks, linkedTasks(catalog.links.find(link => link.repositoryId === repository.id), localStates[repository.id]))) hiddenEntries.add(key);
   useEffect(() => {
@@ -218,8 +220,8 @@ export function useWorkspace() {
     if (!link) throw new Error('请先关联本地目录。');
     const key = writePrefix(input.repositoryId) + JSON.stringify(input.taskId);
     if (running.current.has(input.repositoryId) || running.current.has(key)) throw new Error('这个工作目录正在执行操作，请稍后重试。');
-    const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees]);
-    const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees]) === resource);
+    const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']);
+    const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees, item.authentication || 'system']) === resource);
     running.current.add(key); setBusy(current => ({ ...current, [key]: true, [input.repositoryId]: true }));
     localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
     try {
@@ -266,6 +268,7 @@ export function useWorkspace() {
       if (!result.cancelled) accept(result.catalog);
       return result;
     }),
+    setRepositoryAuthentication: async (repositoryId: string, authentication: import('./repository-auth-model').RepositoryAuthentication) => { const next = await task(repositoryId, async () => { await ensureService(); return importAPI('setRepositoryAuthentication', { repositoryId, authentication }); }); setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] || 0) + 1 })); return next; },
     refresh: (accountId: string) => task(accountId, () => importAPI('refresh', { accountId })),
     removeAccount: (accountId: string) => task(accountId, () => importAPI('removeAccount', { accountId })),
     link: (repositoryId: string, path: string, branch?: string) => task(repositoryId, () => importAPI('link', { repositoryId, path, ...(branch === undefined ? {} : { branch }) })),

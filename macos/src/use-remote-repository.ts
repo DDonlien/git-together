@@ -11,9 +11,11 @@ const resourceKey = (repository: RemoteRepository, instanceId: string) => JSON.s
 // Associated repositories are owned by useWorkspace across page/filter changes.
 // Unassociated ones use the same reader on demand. Both retain successful SHA
 // snapshots and share the timer/trigger serialization and cancellation rules.
-export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void) {
-  const identities = repositories.map(repository => resourceKey(repository, instanceId));
-  const resources = enabled && instanceId ? repositories.filter(repository => repository.available).map(repository => resourceKey(repository, instanceId)) : [];
+export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void, systemRepositories: ReadonlySet<string> = new Set()) {
+  const keyFor = (repository: RemoteRepository) => resourceKey(repository, instanceId);
+  const systemModes = useRef(systemRepositories); systemModes.current = systemRepositories;
+  const identities = repositories.map(keyFor);
+  const resources = enabled && instanceId ? repositories.filter(repository => repository.available || systemRepositories.has(repository.id)).map(keyFor) : [];
   const current = useRef(new Set<string>()); current.current = new Set(resources);
   const known = useRef(new Set<string>()); known.current = new Set(identities);
   const [states, setStates] = useState<Record<string, RemoteRepositoryState>>({});
@@ -25,13 +27,16 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     });
   }, [identityKey]);
   useAutoRefresh({ resources, intervalMs: syncIntervals.remote,
-    triggers: Object.fromEntries(repositories.map(repository => [resourceKey(repository, instanceId), (changes[repository.id] ?? 0) * 2 + Number(checkParticipation)])),
+    triggers: Object.fromEntries(repositories.map(repository => [keyFor(repository), (changes[repository.id] ?? 0) * 2 + Number(checkParticipation)])),
     onReading: (key, loading) => setStates(previous => {
       const state = previous[key] || { workspace: null, error: '', loading: false };
       return state.loading === loading ? previous : { ...previous, [key]: { ...state, loading } };
     }),
     run: async (key, signal) => {
       const [, repositoryId] = JSON.parse(key) as [string, string];
+      const repository = repositories.find(repository => repository.id === repositoryId)!;
+      const system = systemRepositories.has(repositoryId);
+      const sameAuthentication = () => current.current.has(key) && systemModes.current.has(repositoryId) === system;
       let taskFailures = false;
       let readFailure: Error | undefined;
       // Provider contents do not depend on local remote-tracking refs. Keep
@@ -40,9 +45,17 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
         () => null,
         problem => problem instanceof Error ? problem : new Error('本地远端引用更新失败。'),
       );
+      if (!repository.available) {
+        const failure = await fetching;
+        if (signal.aborted || !sameAuthentication()) return;
+        if (!failure) onFetched?.(repositoryId);
+        setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: false, error: ['应用账号目前无权读取此仓库。', failure ? `系统 Git 引用更新失败：${failure.message}` : '系统 Git 引用已更新。'].join(' ') } }));
+        if (failure) throw failure;
+        return;
+      }
       try {
         const workspace = await importAPI('remoteWorkspace', { repositoryId, ...(checkParticipation ? { checkParticipation: true } : {}) }, signal);
-        if (signal.aborted || !current.current.has(key)) return;
+        if (signal.aborted || !sameAuthentication()) return;
         setStates(previous => {
           // Removed mappings and restarted services cannot inherit old contents.
           const retained = Object.entries(previous).filter(([id]) => known.current.has(id) && id !== key);
@@ -50,13 +63,13 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
         });
         taskFailures = workspace.tasks.some(task => !!task.error);
       } catch (problem) {
-        if (signal.aborted || !current.current.has(key)) return;
+        if (signal.aborted || !sameAuthentication()) return;
         const failure = problem instanceof Error ? problem : new Error('读取远端仓库失败。');
         readFailure = failure;
         setStates(previous => ({ ...previous, [key]: { workspace: previous[key]?.workspace || null, loading: true, error: failure.message } }));
       }
       const fetchFailure = await fetching;
-      if (signal.aborted || !current.current.has(key)) return;
+      if (signal.aborted || !sameAuthentication()) return;
       // Wake the existing local reader after refs/objects change. Its working
       // change fingerprint excludes tracking refs, avoiding a fetch loop.
       if (!fetchFailure) onFetched?.(repositoryId);
@@ -69,9 +82,9 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     },
   });
   return Object.fromEntries(repositories.map(repository => {
-    const key = resourceKey(repository, instanceId);
+    const key = keyFor(repository);
     const state = states[key] || { workspace: null, loading: current.current.has(key), error: '' };
-    return [repository.id, !repository.available ? { ...state, loading: false, error: '访问账号目前无权读取此仓库。' } : !current.current.has(key) && state.loading ? { ...state, loading: false } : state];
+    return [repository.id, !repository.available && !systemRepositories.has(repository.id) ? { ...state, loading: false, error: '访问账号目前无权读取此仓库。' } : !current.current.has(key) && state.loading ? { ...state, loading: false } : state];
   })) as Record<string, RemoteRepositoryState>;
 }
 

@@ -322,6 +322,7 @@ pub async fn push(
         return Err("所选提交不属于当前分支历史，未推送。".into());
     }
     let reference = format!("refs/heads/{branch}");
+    let network = network.for_push(root).await?;
     let remote_head = |s: String| -> Result<Option<String>> {
         let rows: Vec<_> = s
             .lines()
@@ -438,6 +439,7 @@ pub async fn download(
                 30,
             )
             .await?;
+        network.configure_system(&store).await?;
         network
             .run(
                 &store,
@@ -457,11 +459,7 @@ pub async fn download(
             .await?
             .trim()
             != "true"
-        || util::identity(
-            git::read(&store, &["remote", "get-url", "origin"])
-                .await?
-                .trim(),
-        ) != util::identity(&network.url)
+        || git::remote_identity(git::read(&store, &["remote", "get-url", "origin"]).await?.trim()).await? != util::identity(&network.url)
     {
         return Err("分支存储身份不匹配，未修改文件。".into());
     }
@@ -710,6 +708,7 @@ async fn inventory(root: &Path, cancel: &CancellationToken) -> Result<Inventory>
 }
 async fn state_key(root: &Path, files: &Inventory) -> Result<String> {
     let head = git::read(root, &["rev-parse", "HEAD"]).await?;
+    let config = git::read(root, &["config", "--null", "--list"]).await?;
     let refs = git::read(root, &["show-ref"]).await.unwrap_or_default();
     let trees = git::read(root, &["worktree", "list", "--porcelain", "-z"]).await?;
     let index = git::read(
@@ -719,7 +718,7 @@ async fn state_key(root: &Path, files: &Inventory) -> Result<String> {
     .await?;
     let bytes = fs::read(index.trim()).unwrap_or_default();
     Ok(util::digest(
-        serde_json::to_vec(&(head, refs, trees, util::digest(bytes), files))
+        serde_json::to_vec(&(head, refs, trees, util::digest(bytes), util::digest(config), files))
             .map_err(|_| "文件状态编码失败。")?,
     ))
 }
@@ -748,6 +747,7 @@ async fn snapshot(
     network: &Network,
     cancel: &CancellationToken,
 ) -> Result<String> {
+    let network = network.for_worktree(root);
     fs::create_dir(destination).map_err(|_| "无法创建远端快照。")?;
     network
         .run(
@@ -759,6 +759,7 @@ async fn snapshot(
             30,
         )
         .await?;
+    network.configure_system(destination).await?;
     network
         .run(
             destination,
@@ -854,6 +855,7 @@ async fn snapshot(
     network
         .hydrate(destination, &head, Some(cancel.clone()))
         .await?;
+    network.preserve_remotes(root, destination, branch, &head).await?;
     git::read(
         destination,
         &["fsck", "--connectivity-only", "--no-dangling"],
@@ -889,6 +891,7 @@ pub async fn prepare(
     cancel: &CancellationToken,
 ) -> Result<SyncPlan> {
     idle(root).await?;
+    let configuration = git::read(root, &["config", "--null", "--list"]).await?;
     let task = git::task(root).await?;
     if task["id"] != input["taskId"] || task["branch"] == "Detached HEAD" {
         return Err("工作目录分支已变化，请刷新后重试。".into());
@@ -1037,6 +1040,9 @@ pub async fn prepare(
     }
     let inventory = inventory(root, cancel).await?;
     let current = git::task(root).await?;
+    if git::read(root, &["config", "--null", "--list"]).await? != configuration {
+        return Err("Git 连接或认证配置已变化，请重新预览。".into());
+    }
     if current["head"] != task["head"] || current["branch"] != task["branch"] {
         return Err("分支或提交已变化，请重新预览。".into());
     }

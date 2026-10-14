@@ -26,8 +26,9 @@ pub struct Options {
     pub write: bool,
     pub diagnostics: Option<crate::diagnostics::Diagnostics>,
     pub resource: String,
+    pub system_authentication: bool,
 }
-fn failure(output: &[u8]) -> String {
+fn failure(output: &[u8], system_authentication: bool) -> String {
     let out = String::from_utf8_lossy(output).to_lowercase();
     if out.contains("no space left")
         || out.contains("not enough space on the disk")
@@ -43,8 +44,14 @@ fn failure(output: &[u8]) -> String {
         || out.contains("returned error: 401")
         || out.contains("returned error: 403")
         || out.contains("access denied")
+        || out.contains("permission denied (publickey")
+        || out.contains("permission to ") && out.contains(" denied")
     {
-        "远端拒绝访问，请在设置中检查账号权限。"
+        if system_authentication {
+            "远端拒绝访问，当前使用系统 Git/SSH，请检查凭据助手、SSH 密钥或该账号的仓库权限。"
+        } else {
+            "远端拒绝访问，请在设置中检查应用账号的仓库授权和写权限。"
+        }
     } else if out.contains("couldn't find remote ref") || out.contains("could not find remote ref")
     {
         "Git远端分支不存在，请刷新分支列表。"
@@ -290,7 +297,7 @@ async fn run_process(
     }
     // check-ignore uses 1 for a successful read with no ignored paths.
     if !status.success() && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
-        return Err(failure(&error));
+        return Err(failure(&error, options.system_authentication));
     }
     if output.len() > 16_000_000 {
         return Err("Git输出超过可读取范围；未发布不完整结果。".into());
@@ -608,4 +615,22 @@ pub fn merge_history(commits: Vec<Value>) -> Vec<Value> {
         }
     }
     result
+}
+
+// Resolve SSH host aliases only for repository matching. The original URL is
+// still passed to Git, preserving its port, user, key and agent configuration.
+pub async fn remote_identity(value: &str) -> Result<Option<String>> {
+    let identity = util::identity(value);
+    let ssh = value.starts_with("ssh://") || !value.contains("://") && value.contains(':');
+    if !ssh { return Ok(identity); }
+    let Some(identity) = identity else { return Ok(None); };
+    let Some((host, path)) = identity.split_once('/') else { return Ok(None); };
+    let mut command = Command::new(util::find_tool("ssh")?);
+    command.args(["-G", "--", host]).env("PATH", tool_path()).kill_on_drop(true);
+    let result = tokio::time::timeout(Duration::from_secs(5), command.output()).await
+        .map_err(|_| "读取系统 SSH 配置超时。")?.map_err(|_| "无法读取系统 SSH 配置。")?;
+    if !result.status.success() { return Err("系统 SSH 配置无法解析，请检查该仓库的 SSH 连接。".into()); }
+    let output = String::from_utf8_lossy(&result.stdout);
+    let hostname = output.lines().find_map(|line| line.strip_prefix("hostname ")).unwrap_or(host);
+    Ok(Some(format!("{}/{path}", hostname.to_lowercase())))
 }

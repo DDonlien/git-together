@@ -304,9 +304,6 @@ impl Service {
                 .find(|r| text(r, "id") == id)
                 .cloned()
                 .ok_or("仓库不存在，请重新加载列表。")?;
-            if r["available"] != true {
-                return Err("访问账号目前无法访问这个仓库，请在设置中检查权限。".into());
-            }
             let a = state.value["accounts"]
                 .as_array()
                 .unwrap()
@@ -323,6 +320,7 @@ impl Service {
                 .unwrap_or(Value::Null);
             (r, l, a)
         };
+        if !repository_accessible(&repository, &link) { return Err("应用账号无法访问该仓库，请检查仓库授权；已有本地目录可选系统认证。".into()); }
         let identity = context_identity(&repository, &link, &saved);
         let pkey = format!("{id}:{identity}");
         let mut readers = self.readers.lock().await;
@@ -339,7 +337,7 @@ impl Service {
             p
         };
         let network =
-            Network::new(&repository, &provider)?.with_diagnostics(self.diagnostics.clone());
+            Network::new(&repository, &provider)?.for_link(&link).with_diagnostics(self.diagnostics.clone());
         Ok(Context {
             repository,
             link,
@@ -369,7 +367,7 @@ impl Service {
             .find(|l| l["repositoryId"] == r["id"])
             .cloned()
             .unwrap_or(Value::Null);
-        if r["available"] != true || context_identity(r, &l, a) != context.identity {
+        if !repository_accessible(r, &l) || context_identity(r, &l, a) != context.identity {
             return Err("账号、仓库或目录关联已变化，请重新读取或预览。".into());
         }
         Ok(())
@@ -382,7 +380,7 @@ impl Service {
         let expected = util::identity(text(repo, "url")).ok_or("仓库远端无效。")?;
         for name in names.lines() {
             let url = git::read(&root, &["remote", "get-url", name]).await?;
-            if util::identity(url.trim()).as_ref() == Some(&expected) {
+            if util::identity(url.trim()).as_ref() == Some(&expected) || git::remote_identity(url.trim()).await?.as_ref() == Some(&expected) {
                 return Ok(root);
             }
         }
@@ -1086,7 +1084,7 @@ impl Service {
             "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
-            "link" | "unlink" | "matchAccountRepositories" => Some("保存仓库关联"),
+            "link" | "unlink" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
             _ => None,
         }
         .map(|name| self.foreground(name))
@@ -1306,6 +1304,35 @@ impl Service {
                 open(url.as_str()).await?;
                 return Ok(json!({"opened":true}));
             }
+            "accountRepositoryAccess" | "openAccountAccessSettings" => {
+                util::allowed(input, &["accountId"])?;
+                let id = util::field(input, "accountId", 100)?;
+                let saved = self.saved(&id).await?;
+                if method == "openAccountAccessSettings" {
+                    if text(&saved["account"], "provider") != "github" { return Err("请到该服务的账号设置管理仓库授权。".into()); }
+                    let target = if crate::repository_access::github_app(&saved) { "https://github.com/settings/installations" } else if text(&saved, "token").starts_with("gho_") { "https://github.com/settings/applications" } else { "https://github.com/settings/tokens" };
+                    open(target).await?;
+                    return Ok(json!({"opened":true}));
+                }
+                let repositories = self.catalog().await?["repositories"].as_array().unwrap().iter()
+                    .filter(|repo| text(repo, "accountId") == id).cloned().collect::<Vec<_>>();
+                let result = crate::repository_access::inspect(&saved, &self.account_provider(&saved), &repositories, cancel).await?;
+                if github_token::generation(&self.saved(&id).await?) != github_token::generation(&saved) { return Err("账号已重新授权，请重新检查。".into()); }
+                return Ok(result);
+            }
+            "setRepositoryAuthentication" => {
+                util::allowed(input, &["repositoryId", "authentication"])?;
+                let id = util::field(input, "repositoryId", 160)?;
+                let mode = util::field(input, "authentication", 16)?;
+                if !matches!(mode.as_str(), "system" | "account") { return Err("认证方式无效。".into()); }
+                let _guard = self.serial(format!("link:{id}")).await;
+                if self.running_targets.lock().unwrap_or_else(|e| e.into_inner()).values().any(|(key, _, _)| key.starts_with(&format!("{id}:"))) { return Err("仓库操作正在执行，完成后可切换认证方式。".into()); }
+                return self.mutate(|next| {
+                    let link = next["links"].as_array_mut().unwrap().iter_mut().find(|link| text(link, "repositoryId") == id).ok_or("请先关联本地目录。")?;
+                    link["authentication"] = json!(mode);
+                    Ok(())
+                }).await;
+            }
             "connect" => return self.connect(input, None, None, false).await,
             "updateAccount" => return self.update_account(input, cancel).await,
             "refresh" => {
@@ -1482,7 +1509,7 @@ impl Service {
                     cancel,
                 )
                 .await?;
-                let result=async{self.validate_path(&context.repository,path.to_str().ok_or("下载路径无法读取。")?).await?;self.validate(&context).await?;existing.push(json!({"branch":branch,"path":path.to_string_lossy()}));self.mutate(|next|{check_context(next,&context)?;next["links"].as_array_mut().unwrap().retain(|l|text(l,"repositoryId")!=id);next["links"].as_array_mut().unwrap().push(json!({"repositoryId":id,"path":if context.link.is_null(){path.to_string_lossy().to_string()}else{text(&context.link,"path").into()},"worktrees":existing}));Ok(())}).await}.await;
+                let result=async{self.validate_path(&context.repository,path.to_str().ok_or("下载路径无法读取。")?).await?;self.validate(&context).await?;existing.push(json!({"branch":branch,"path":path.to_string_lossy()}));self.mutate(|next|{check_context(next,&context)?;next["links"].as_array_mut().unwrap().retain(|l|text(l,"repositoryId")!=id);next["links"].as_array_mut().unwrap().push(json!({"repositoryId":id,"path":if context.link.is_null(){path.to_string_lossy().to_string()}else{text(&context.link,"path").into()},"worktrees":existing,"authentication":if context.link.is_null() || context.link["authentication"]=="account" {"account"}else{"system"}}));Ok(())}).await}.await;
                 return result
                     .map_err(|e| format!("{e} 下载目录已保留：{}，可重新关联。", path.display()));
             }
@@ -1781,7 +1808,7 @@ impl Service {
                         operations::submit(&root, input, self, &context, cancel).await?
                     }
                     "pushCommit" => {
-                        if context.repository["permissions"]["push"] == false {
+                        if context.link["authentication"] == "account" && context.repository["permissions"]["push"] == false {
                             return Err("访问账号目前没有此仓库推送权限。".into());
                         }
                         util::sha(text(input, "expectedHead"))?;
@@ -1992,6 +2019,7 @@ fn valid_state(v: &Value) -> bool {
             l.iter().all(|l| {
                 l["repositoryId"].is_string()
                     && l["path"].is_string()
+                    && (l["authentication"].is_null() || matches!(text(l,"authentication"), "system" | "account"))
                     && (l["worktrees"].is_null()
                         || l["worktrees"].as_array().is_some_and(|w| {
                             w.len() <= 64
@@ -2009,6 +2037,9 @@ fn roots(link: &Value) -> Result<Vec<Value>> {
         .as_array()
         .cloned()
         .unwrap_or_else(|| vec![json!({"path":link["path"],"branch":""})]))
+}
+fn repository_accessible(repository: &Value, link: &Value) -> bool {
+    repository["available"] == true || !link.is_null() && text(link, "authentication") != "account"
 }
 fn context_identity(r: &Value, l: &Value, a: &Value) -> String {
     util::digest(
@@ -2048,7 +2079,7 @@ fn check_context(next: &Value, c: &Context) -> Result<()> {
         .find(|l| l["repositoryId"] == r["id"])
         .cloned()
         .unwrap_or(Value::Null);
-    if context_identity(r, &l, a) != c.identity || r["available"] != true {
+    if context_identity(r, &l, a) != c.identity || !repository_accessible(r, &l) {
         Err("账号、仓库或关联已经变化，请重新读取。".into())
     } else {
         Ok(())
@@ -2098,7 +2129,7 @@ fn merge_link(
     next["links"]
         .as_array_mut()
         .unwrap()
-        .push(json!({"repositoryId":id,"path":primary,"worktrees":retained}));
+        .push(json!({"repositoryId":id,"path":primary,"worktrees":retained,"authentication":if previous["authentication"] == "account" {"account"}else{"system"}}));
     Ok(())
 }
 async fn discover(
@@ -2135,9 +2166,9 @@ async fn discover(
             let names = git::read(&path, &["remote"]).await?;
             let mut identities = Vec::new();
             for n in names.lines() {
-                identities.push(util::identity(
+                identities.push(git::remote_identity(
                     git::read(&path, &["remote", "get-url", n]).await?.trim(),
-                ));
+                ).await?);
             }
             let matches: Vec<_> = repos
                 .iter()
@@ -2167,9 +2198,9 @@ async fn discover(
                     }
                     let mut own_identities = Vec::new();
                     for name in git::read(&p, &["remote"]).await?.lines() {
-                        own_identities.push(util::identity(
+                        own_identities.push(git::remote_identity(
                             git::read(&p, &["remote", "get-url", name]).await?.trim(),
-                        ));
+                        ).await?);
                     }
                     for r in &matches {
                         let expected = util::identity(text(r, "url"));

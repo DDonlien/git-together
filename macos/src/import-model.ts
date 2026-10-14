@@ -1,3 +1,4 @@
+import type { RepositoryAuthentication, AccountRepositoryAccess } from './repository-auth-model';
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
 import type { RepositoryWorkspace } from './repository-model';
 import type { LocalCommitDetails } from './local-commit-model';
@@ -23,7 +24,7 @@ export type RemoteRepository = {
   permissions?: RepositoryPermissions; metadataError?: string;
 };
 export type LocalWorktreeLink = { branch: string; path: string };
-export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[] };
+export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[]; authentication?: RepositoryAuthentication };
 export type Catalog = {
   instanceId: string;
   revision: number;
@@ -54,6 +55,9 @@ export type ApiInputs = {
   githubAuthPoll: { sessionId: string };
   githubAuthCancel: { sessionId: string };
   refresh: { accountId: string };
+  accountRepositoryAccess: { accountId: string };
+  openAccountAccessSettings: { accountId: string };
+  setRepositoryAuthentication: { repositoryId: string; authentication: RepositoryAuthentication };
   removeAccount: { accountId: string };
   link: { repositoryId: string; path: string; branch?: string };
   downloadBranch: { repositoryId: string; branch: string; parentPath: string; folderName: string };
@@ -99,6 +103,9 @@ export type ApiOutputs = {
   applyFileOperation: FileOperationResult;
   discardFileOperation: { discarded: true };
   status: ServiceInfo;
+  accountRepositoryAccess: AccountRepositoryAccess;
+  openAccountAccessSettings: { opened: true };
+  setRepositoryAuthentication: Catalog;
   catalog: Catalog; connect: Catalog; updateAccount: Catalog; refresh: Catalog; removeAccount: Catalog;
   githubAuthStart: GitHubAuthorization;
   githubAuthPoll: GitHubAuthorizationProgress;
@@ -150,7 +157,7 @@ export function isCatalog(value: unknown): value is Catalog {
       (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
       (r.metadataError === undefined || typeof r.metadataError === 'string') &&
       (r.permissions === undefined || (isRecord(r.permissions) && Object.entries(r.permissions).every(([key, flag]) => repositoryPermissionKeys.some(allowed => allowed === key) && typeof flag === 'boolean')))) &&
-    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' &&
+    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' && (l.authentication === undefined || l.authentication === 'system' || l.authentication === 'account') &&
       (l.worktrees === undefined || Array.isArray(l.worktrees) && l.worktrees.length <= 64 && l.worktrees.every(w => isRecord(w) && typeof w.branch === 'string' && typeof w.path === 'string')));
 }
 

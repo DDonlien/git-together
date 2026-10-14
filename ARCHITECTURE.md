@@ -28,6 +28,14 @@ Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作�
 
 仓库状态排序（IMPORT-13-status-header）：Dashboard通过既有GitSignals和repositoryReadFeedback派生排序级别，读取中或推送中优先于残留错误，同级以仓库身份稳定排序；升序依次为异常、处理中、实际差异、已确认一致、未知。关联仓库继续使用workspace共享读取，未关联读取仍由现有行拥有。行只通过稳定回调报告一个带instanceId/repositoryId键的排序级别，不把新排序变成第二个读取器；相同级别不更新父状态。表头复用原排序状态，折叠/筛选不执行Git或保存账号配置。
 
+## 仓库认证与授权状态（IMPORT-02，2026-10-15）
+
+LocalLink 保存可选 authentication（system / account）；已有记录缺省为 system，首次通过应用下载的分支显式保存 account。系统模式从真实工作目录的 Git remote 及当前分支 remote/pushRemote/pushDefault 选取同仓库连接，保留 SSH 用户、端口、host alias、agent 与 credential helper，不注入应用令牌、不重写已有 Git 配置。应用模式仍使用绑定账号及 HTTPS origin 的独立凭据助手，令牌只在该子进程环境中。SSH -G 仅用于确认 alias 对应的仓库身份，执行 Git 时保留原 URL。Push 的前后引用检查固定同一个实际推送地址；后台 Fetch 使用同一个实际远端及其跟踪引用。快照与新分支存储继承原工作目录必要的本地认证配置，Get Latest 替换目录保留已有 remote/branch 配置；预览状态包含 Git 配置摘要，变化后停止旧计划。
+
+setRepositoryAuthentication 只修改已有 LocalLink；按仓库保存锁及执行任务守卫保护切换，上下文摘要和前端读取资源键包含选择，旧计划/读取不能用于新模式。应用 API 仓库访问失败不阻止系统模式的本地操作；远端 API 浏览仍独立显示其应用账号错误。未知推送数量保持未知，系统模式可显式选择本地提交并由真实 Push 的引用复核确认结果。
+
+repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。安装令牌、细粒度令牌及无法报告令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，每60秒更新且隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录，不发送 Git 写操作。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
+
 ## 当前运行结构
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。

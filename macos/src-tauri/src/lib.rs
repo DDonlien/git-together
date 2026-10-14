@@ -14,6 +14,7 @@ pub mod presence;
 pub mod remote_control;
 mod remote_git;
 pub mod provider;
+pub mod repository_access;
 pub mod proxy;
 pub mod service;
 pub mod update_archive;

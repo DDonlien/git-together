@@ -55,7 +55,7 @@ export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
   })) as GitSignals;
 }
 
-export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true): GitSignals {
+export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true, systemAuthentication = false): GitSignals {
   const tasks = branch ? local.filter(task => task.branch === branch) : local;
   const remoteTasks = branch ? remote.workspace?.tasks.filter(task => task.branch === branch) : remote.workspace?.tasks;
   const localError = localState?.error || (localState?.workspace ? tasks.find(task => task.error)?.error : '') || '';
@@ -67,8 +67,8 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
   // Read health is independent of the last observed Git count. A transport
   // failure must not become "one file", or invalidate unrelated local changes.
   for (const key of Object.keys(result) as (keyof GitSignals)[]) {
-    const error = key === 'commit' ? localError : key === 'fetch' ? remoteError : [localError, remoteError].filter(Boolean).join('；');
-    const reading = key === 'commit' ? localReading : key === 'fetch' ? remoteReading : localReading || remoteReading;
+    const error = key === 'commit' || systemAuthentication ? localError : key === 'fetch' ? remoteError : [localError, remoteError].filter(Boolean).join('；');
+    const reading = key === 'commit' || systemAuthentication ? localReading : key === 'fetch' ? remoteReading : localReading || remoteReading;
     if (reading || error) Object.assign(result[key], {
       status: reading ? 'reading' : 'error',
       statusDetail: `${reading ? '正在读取，等待实际结果。' : `读取异常：${error}`} ${error && reading ? `上次异常：${error}。` : ''}已有数字保留上次读取结果，不代表本次读取成功。`,
