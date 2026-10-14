@@ -12,6 +12,9 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod tests;
+
 pub async fn idle(root: &Path) -> Result<()> {
     for name in [
         "MERGE_HEAD",
@@ -411,7 +414,21 @@ pub async fn download(
         return Err("请输入一个独立的文件夹名称。".into());
     }
     git::read(&parent, &["check-ref-format", "--branch", &branch]).await?;
-    let destination = parent.join(&name);
+    let project_name: String = text(repo, "name")
+        .chars()
+        .map(|c| if c <= '\u{1f}' || ['/', '\\', ':', '*', '?', '"', '<', '>', '|'].contains(&c) { '-' } else { c })
+        .collect();
+    let project_name = project_name.trim_end_matches(['.', ' ']);
+    let project = parent.join(if project_name.is_empty() { "repository" } else { project_name });
+    match project.symlink_metadata() {
+        Ok(metadata) if !metadata.is_dir() || metadata.file_type().is_symlink() => {
+            return Err("仓库容器不是可用的实际目录，未修改文件。".into());
+        }
+        Ok(_) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(_) => return Err("仓库容器目录不可访问，未修改文件。".into()),
+    }
+    let destination = project.join(&name);
     if destination.symlink_metadata().is_ok() {
         return Err("目标目录已经存在，未覆盖文件。".into());
     }
@@ -556,6 +573,7 @@ pub async fn download(
         if destination.symlink_metadata().is_ok() {
             return Err("目标文件夹已出现，未覆盖文件。".into());
         }
+        fs::create_dir_all(&project).map_err(|_| "无法创建仓库容器目录。")?;
         network
             .run(
                 &store,

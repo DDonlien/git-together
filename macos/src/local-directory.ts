@@ -1,5 +1,15 @@
 export type DirectoryChooser = () => Promise<string | null>;
 
+export function displayLocalPath(path: string): string {
+  return /^(?:[a-z]:[\\/]|\\\\|\/\/)/i.test(path) ? path.replaceAll('/', '\\') : path;
+}
+
+export function joinLocalPath(parent: string, ...folders: string[]): string {
+  const path = displayLocalPath(parent);
+  const separator = path.startsWith('/') ? '/' : '\\';
+  return [path.replace(separator === '/' ? /\/+$/ : /\\+$/, ''), ...folders].join(separator);
+}
+
 export async function chooseLocalDirectory(chooser: DirectoryChooser | undefined = typeof window === 'undefined' ? undefined : window.gittogether?.chooseDirectory): Promise<string | null> {
   if (!chooser) throw new Error('浏览器预览尚未接入系统文件夹选择器，请使用桌面版。');
   let selected: unknown;

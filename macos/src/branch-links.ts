@@ -2,8 +2,40 @@ import type { LocalLink } from './import-model';
 import type { RepositoryTask } from './repository-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import type { LocalRepositoryState } from './use-workspace';
+import { repositoryDownloadFolderName } from './branch-download-model';
+import { displayLocalPath } from './local-directory';
 
 export const hiddenEntryKey = (repositoryId: string, branch?: string) => JSON.stringify([repositoryId, branch ?? null]);
+
+export function repositoryLocalDirectory(repositoryName: string, link?: LocalLink): string | undefined {
+  if (!link || link.worktrees?.length === 0) return undefined;
+  const paths = (link.worktrees || [{ path: link.path }]).map(item => displayLocalPath(item.path));
+  const windows = !paths[0].startsWith('/');
+  const separator = windows ? '\\' : '/';
+  const compare = (value: string) => windows ? value.toLowerCase() : value;
+  const trim = (path: string) => windows ? path.replace(/\\+$/, '') : path.replace(/\/+$/, '');
+  const unique = [...new Map(paths.map(path => [compare(trim(path)), path])).values()];
+  const parts = unique.map(path => trim(path).split(separator));
+  if (unique.length === 1) {
+    const project = compare(repositoryDownloadFolderName(repositoryName));
+    const folder = compare(parts[0].at(-1)!);
+    // The mapping already proves Git identity. Names only determine whether
+    // this is our project container, never which repository owns a directory.
+    if (compare(parts[0].at(-2) || '') === project && folder.startsWith(`${project}_`) && folder.length > project.length + 1) return parts[0].slice(0, -1).join(separator);
+    return unique[0];
+  }
+  let length = parts[0].length;
+  for (const path of parts.slice(1)) {
+    let shared = 0;
+    while (shared < length && shared < path.length && compare(parts[0][shared]) === compare(path[shared])) shared++;
+    length = shared;
+  }
+  // Different drives/shares have no common local folder. Show actual paths
+  // rather than inventing a repository directory on one of the drives.
+  if (!length || (windows && unique[0].startsWith('\\\\') && length < 4)) return unique.join('；');
+  const common = parts[0].slice(0, length).join(separator);
+  return common ? windows && length === 1 ? `${common}\\` : common : '/';
+}
 
 // Current HEAD owns the directory after a real read, not the saved branch label.
 export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState, hiddenEntries?: ReadonlySet<string>): RepositoryTask[] {
@@ -15,14 +47,14 @@ export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState, hidd
   return tasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
 }
 
-export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>) {
+export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>, directory = link?.path || '') {
   if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。' };
   const tasks = linkedTasks(link, local, hiddenEntries);
   const expected = new Set([...(remote.workspace?.tasks.map(task => task.branch) || []), ...tasks.map(task => task.branch)].filter(branch => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, branch))));
   const linked = new Set(tasks.filter(task => !task.error).map(task => task.branch));
   const completeBranches = !!remote.workspace && !remote.error && !remote.workspace.warnings.some(warning => warning.startsWith('分支超过'));
   const complete = completeBranches && expected.size > 0 && [...expected].every(branch => linked.has(branch)) && tasks.every(task => !task.error) && !local?.error;
-  return { label: !tasks.length ? '尚未关联' : complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || link.path}` };
+  return { label: !tasks.length ? '尚未关联' : complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || directory}` };
 }
 
 export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };

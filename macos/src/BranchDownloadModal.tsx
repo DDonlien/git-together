@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
-import { branchDownloadFolderName, isDownloadFolderName } from './branch-download-model';
-import { chooseLocalDirectory } from './local-directory';
+import { branchDownloadFolderName, isDownloadFolderName, repositoryDownloadFolderName } from './branch-download-model';
+import { chooseLocalDirectory, joinLocalPath } from './local-directory';
 import { LocalDirectoryField } from './LocalRepositoryModal';
 import { Button, Icon, Modal, Notice, TextField } from './ui';
 
@@ -30,7 +30,7 @@ export function BranchDownloadModal({ repository, branch, controller, onClose }:
       onClose();
     } catch (problem) { setError(problem instanceof Error ? problem.message : '分支下载未完成。'); }
   }
-  const target = parentPath ? `${parentPath.replace(/[\\/]$/, '')}/${folderName.trim()}` : '';
+  const target = parentPath ? joinLocalPath(parentPath, repositoryDownloadFolderName(repository.name), folderName.trim()) : '';
   return <Modal title={`下载分支 · ${branch}`} onClose={() => { if (!busy) onClose(); }}>
     <div className="local-repo-identity"><Icon name="branch" size={24} /><div><strong>{repository.fullName}</strong><small>{branch}</small></div></div>
     <form onSubmit={event => void download(event)} aria-busy={downloading}>
