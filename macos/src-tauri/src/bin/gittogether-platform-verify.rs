@@ -266,6 +266,7 @@ async fn verify() -> Result<(), String> {
     }
 
     verify_directory_matching(temporary.path(), &root, &service).await?;
+    verify_file_operations(&root, &service).await?;
 
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
@@ -310,11 +311,56 @@ async fn main() {
     match verify().await {
         Ok(()) => println!(
             "{}",
-            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","summary-only-commit","lfs-filter-and-hooks","lfs-object-integrity","lfs-failure-classification","failed-commit-preserved-state","preserved-staging","bounded-directory-matching","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
+            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","summary-only-commit","lfs-filter-and-hooks","lfs-object-integrity","lfs-failure-classification","failed-commit-preserved-state","preserved-staging","bounded-directory-matching","local-file-operations","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
         ),
         Err(error) => {
             eprintln!("Windows原生校验失败：{error}");
             std::process::exit(1);
         }
     }
+}
+
+pub async fn verify_file_operations(root: &Path, service: &Arc<Service>) -> Result<(), String> {
+    let before_head = git::read(root, &["rev-parse", "HEAD"]).await?;
+    let before_index = git::read(root, &["ls-files", "--stage", "-z"]).await?;
+    fs::create_dir(root.join("file-actions")).map_err(|e| e.to_string())?;
+    fs::create_dir(root.join("file-actions/destination")).map_err(|e| e.to_string())?;
+    fs::create_dir(root.join("file-actions/ignored-cache")).map_err(|e| e.to_string())?;
+    fs::write(root.join("file-actions/.gitignore"), "ignored-cache/\n*.cache\n").map_err(|e| e.to_string())?;
+    fs::write(root.join("file-actions/source.txt"), b"real file\0content").map_err(|e| e.to_string())?;
+    fs::write(root.join("file-actions/.hidden"), "hidden").map_err(|e| e.to_string())?;
+    let task = git::task(root).await?; let task_id = task["id"].as_str().unwrap();
+    let invoke = |method: &'static str, input: serde_json::Value| service.handle(method, input, CancellationToken::new());
+    let entries = invoke("localDirectory", json!({"repositoryId":"release-check:1","taskId":task_id,"path":"file-actions"})).await?;
+    if !entries["entries"].as_array().unwrap().iter().any(|e|e["name"]=="ignored-cache" && e["ignored"]==true && e["directory"]==true) || entries["entries"].as_array().unwrap().iter().any(|e|e["name"]==".git") { return Err("逐目录忽略项或元数据隔离不符合预期。".into()); }
+    let copy = invoke("prepareFileOperation", json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"copy","paths":["file-actions/source.txt"],"destination":"file-actions/destination"})).await?;
+    let apply = json!({"repositoryId":"release-check:1","taskId":task_id,"planId":copy["planId"],"operationId":uuid::Uuid::new_v4().to_string()});
+    let result = invoke("applyFileOperation", apply.clone()).await?;
+    if result["completed"]!=1 || invoke("applyFileOperation",apply).await? != result || fs::read(root.join("file-actions/source.txt")).unwrap()!=fs::read(root.join("file-actions/destination/source.txt")).unwrap() { return Err("复制完整性或请求去重失败。".into()); }
+    if invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"copy","paths":["file-actions/source.txt"],"destination":"file-actions/destination"})).await.is_ok() { return Err("同名内容未被阻止。".into()); }
+    let plan = invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"move","paths":["file-actions/destination/source.txt"],"destination":"file-actions","name":"renamed.txt"})).await?;
+    let result = invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":plan["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await?;
+    if result["completed"]!=1 || root.join("file-actions/destination/source.txt").exists() || !root.join("file-actions/renamed.txt").is_file() { return Err("实际移动/重命名失败。".into()); }
+    let stale = invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"copy","paths":["file-actions/source.txt"],"destination":"file-actions/destination","name":"stale.txt"})).await?;
+    fs::write(root.join("file-actions/source.txt"), "changed after preview").map_err(|e|e.to_string())?;
+    if invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":stale["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await.is_ok() || root.join("file-actions/destination/stale.txt").exists() { return Err("过期预览没有被阻止。".into()); }
+    let cancelled = invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"copy","paths":["file-actions/source.txt"],"destination":"file-actions/destination","name":"cancelled.txt"})).await?;
+    invoke("discardFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":cancelled["planId"]})).await?;
+    if invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":cancelled["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await.is_ok() || root.join("file-actions/destination/cancelled.txt").exists() { return Err("取消仍执行写入。".into()); }
+    for path in ["../outside.txt", ".git/config"] {
+        if invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"delete","paths":[path],"destination":""})).await.is_ok() { return Err("越界路径或Git元数据未被阻止。".into()); }
+    }
+    let external = root.parent().unwrap().join("outside-file-actions.txt");fs::write(&external,"external content").map_err(|e|e.to_string())?;
+    let drop_id=service.file_state.lock().unwrap().drop_files(vec![external.clone()])?;
+    let plan=invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"copy","dropId":drop_id,"destination":"file-actions/destination"})).await?;
+    let result=invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":plan["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await?;
+    if result["completed"]!=1 || !external.exists() || fs::read(root.join("file-actions/destination/outside-file-actions.txt")).unwrap()!=b"external content" { return Err("原生拖入来源复制失败。".into()); }
+    let plan=invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"move","dropId":drop_id,"destination":"file-actions","name":"external-moved.txt"})).await?;
+    let result=invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":plan["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await?;
+    if result["completed"]!=1 || external.exists() || !root.join("file-actions/external-moved.txt").exists() { return Err("原生拖入来源移动失败。".into()); }
+    let plan=invoke("prepareFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"operation":"delete","paths":["file-actions/renamed.txt"],"destination":""})).await?;
+    let result=invoke("applyFileOperation",json!({"repositoryId":"release-check:1","taskId":task_id,"planId":plan["planId"],"operationId":uuid::Uuid::new_v4().to_string()})).await?;
+    if result["completed"]!=1 || !result["error"].as_str().unwrap().is_empty() || root.join("file-actions/renamed.txt").exists() { return Err(format!("系统回收站未完成：{result}")); }
+    if before_head!=git::read(root,&["rev-parse","HEAD"]).await? || before_index!=git::read(root,&["ls-files","--stage","-z"]).await? { return Err("文件操作更改了HEAD或index。".into()); }
+    Ok(())
 }

@@ -2,7 +2,9 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Button, Icon, Menu, MenuItem, Popover } from './ui';
 import { RepositoryColumnHeading } from './RepositoryColumnHeading';
 import { commitMatchesSearch, graphNavigationIndex, graphRowHeight, graphVisibleWindow, layoutCommitGraph, nextGraphMatch, parseCommitSearch, repositoryGraphAuthors, repositoryGraphBranches, repositoryGraphCommits } from './commit-graph';
-import type { RepositoryCommit, RepositoryWorkspace } from './repository-model';
+import type { RepositoryWorkspace } from './repository-model';
+import type { GraphCommit } from './commit-graph';
+import { graphActionLabels, type GraphAction } from './graph-operation-model';
 
 // Reuse the browser's locale/timezone formatters while scrolling between rows.
 const graphTimeFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
@@ -13,11 +15,20 @@ function GraphText({ text, term }: { text: string; term: string }) {
   return at < 0 ? <>{text}</> : <>{text.slice(0, at)}<mark>{text.slice(at, at + term.length)}</mark>{text.slice(at + term.length)}</>;
 }
 
-function CommitActions({ commit, onCopy, onLocateParent }: { commit?: RepositoryCommit; onCopy: (text: string) => void; onLocateParent: (commit: RepositoryCommit) => void }) {
+function CommitActions({ commit, onCopy, onLocateParent, onAction, onOpenCommit, onLocateWorktree }: { commit?: GraphCommit; onCopy: (text: string) => void; onLocateParent: (commit: GraphCommit) => void; onAction?: (action: GraphAction, commit: GraphCommit) => void; onOpenCommit?: (commit: GraphCommit) => void; onLocateWorktree?: (commit: GraphCommit) => void }) {
+  const committed = !!commit && !commit.workingTask;
   return <>
-    <MenuItem disabled={!commit} onClick={() => commit && onCopy(commit.id)}><Icon name="copy" size={14} />复制完整提交哈希</MenuItem>
-    <MenuItem disabled={!commit} onClick={() => commit && onCopy(commit.summary)}><Icon name="copy" size={14} />复制提交说明</MenuItem>
-    <MenuItem disabled={!commit?.parents.length} onClick={() => commit && onLocateParent(commit)}><Icon name="branch" size={14} />定位父提交</MenuItem>
+    <div className="graph-menu-group-label">标准 Git 操作</div>
+    {(['compare', 'branch', 'tag', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'abort'] as const).map(action => <MenuItem key={action} disabled={!onAction || !commit || !committed && action !== 'abort'} onClick={() => commit && onAction?.(action, commit)}><Icon name={action === 'branch' || action === 'merge' || action === 'rebase' ? 'branch' : action === 'compare' ? 'code' : action === 'abort' ? 'close' : 'commit'} size={14} />{graphActionLabels[action]}</MenuItem>)}
+    <div className="graph-menu-group-label">Git Together · 非 AI</div>
+    <MenuItem disabled={!onAction || !committed} onClick={() => commit && onAction?.('worktree', commit)}><Icon name="folder" size={14} />创建并关联工作目录</MenuItem>
+    <MenuItem disabled={!onLocateWorktree || !commit} onClick={() => commit && onLocateWorktree?.(commit)}><Icon name="folder" size={14} />定位关联工作目录</MenuItem>
+    <MenuItem disabled={!onOpenCommit || !committed} onClick={() => commit && onOpenCommit?.(commit)}><Icon name="external" size={14} />在远端打开提交</MenuItem>
+    <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.id)}><Icon name="copy" size={14} />复制完整提交哈希</MenuItem>
+    <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.summary)}><Icon name="copy" size={14} />复制提交说明</MenuItem>
+    <MenuItem disabled={!committed || !commit?.parents.length} onClick={() => commit && onLocateParent(commit)}><Icon name="branch" size={14} />定位父提交</MenuItem>
+    <div className="graph-menu-group-label">AI 操作</div>
+    <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>
   </>;
 }
 
@@ -54,7 +65,7 @@ function GraphFilter({ label, options, selection, onChange, title }: { label: st
   </Popover>;
 }
 
-export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel, loading = false, historyLoadingBranches = new Set(), historyErrorsByBranch = {}, onLoadMoreHistory }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string; loading?: boolean; historyLoadingBranches?: ReadonlySet<string>; historyErrorsByBranch?: Record<string, string>; onLoadMoreHistory?: (branches: readonly string[], retry?: boolean) => void }) {
+export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel, onAction, onOpenCommit, onLocateWorktree, loading = false, historyLoadingBranches = new Set(), historyErrorsByBranch = {}, onLoadMoreHistory }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string; onAction?: (action: GraphAction, commit: GraphCommit) => void; onOpenCommit?: (commit: GraphCommit) => void; onLocateWorktree?: (commit: GraphCommit) => void; loading?: boolean; historyLoadingBranches?: ReadonlySet<string>; historyErrorsByBranch?: Record<string, string>; onLoadMoreHistory?: (branches: readonly string[], retry?: boolean) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -127,7 +138,7 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
     if (workingTask) onSelectWorkingTask?.(workingTask.id);
   }, [selected, rows, byId, onSelectCommit, onSelectWorkingTask]);
   function locateFromMenu(id: string) { menuFocus.current = id; choose(id); }
-  function locateParent(commit: RepositoryCommit, fromMenu = false) {
+  function locateParent(commit: GraphCommit, fromMenu = false) {
     const parent = commit.parents[0];
     if (byId.has(parent)) { if (fromMenu) locateFromMenu(parent); else choose(parent); }
     else setFeedback('父提交不在当前筛选或已读取范围内。');
@@ -143,7 +154,7 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
     else if (key === 'Escape') { event.preventDefault(); choose(null); }
     else if (key === 'ArrowLeft') { event.preventDefault(); if (rows[index].commit.parents.length) locateParent(rows[index].commit); }
     else if (key === 'ArrowRight') { event.preventDefault(); const child = rows.slice(0, index).reverse().find(row => row.commit.parents.includes(rows[index].commit.id)); if (child) choose(child.commit.id); }
-    else if (key === 'ContextMenu' || key === 'F10' && event.shiftKey) { event.preventDefault(); if (!rows[index].commit.workingTask) { const rect = event.currentTarget.getBoundingClientRect(); choose(rows[index].commit.id); setContext({ id: rows[index].commit.id, x: rect.left, y: rect.bottom }); } }
+    else if (key === 'ContextMenu' || key === 'F10' && event.shiftKey) { event.preventDefault(); { const rect = event.currentTarget.getBoundingClientRect(); choose(rows[index].commit.id); setContext({ id: rows[index].commit.id, x: rect.left, y: rect.bottom }); } }
   }
   useEffect(() => {
     const target = loadMoreRef.current, root = scrollRef.current;
@@ -190,7 +201,7 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
           const missingParent = edges.some(edge => edge.boundary);
           const parentBoundaryLabel = '父提交在筛选外或未读取';
           const label = workingTask ? `${commit.summary} · ${workingTask.branch} · ${workingTask.path}` : `${commit.summary} · ${commit.author} · ${commit.id}${commit.refs.length ? ` · ${commit.refs.join(', ')}` : ''}${isHead ? ' · HEAD' : ''}${commit.unpublished ? ' · 未推送' : commit.localOnly ? ' · 本地提交' : ''}${missingParent ? ` · ${parentBoundaryLabel}` : ''}`;
-          return <tr key={commit.id} aria-rowindex={index + 1} data-commit-id={workingTask ? undefined : commit.id} data-working-task={workingTask?.id} className={`${selected === commit.id ? 'selected' : ''} ${query.term && !matchSet.has(index) ? 'graph-dimmed' : ''} ${task?.head === commit.id ? 'graph-task-head' : ''} ${workingTask ? 'graph-working-row' : ''}`} onClick={() => choose(commit.id, true)} onContextMenu={event => { event.preventDefault(); choose(commit.id); if (!workingTask) setContext({ id: commit.id, x: event.clientX, y: event.clientY }); }}>
+          return <tr key={commit.id} aria-rowindex={index + 1} data-commit-id={workingTask ? undefined : commit.id} data-working-task={workingTask?.id} className={`${selected === commit.id ? 'selected' : ''} ${query.term && !matchSet.has(index) ? 'graph-dimmed' : ''} ${task?.head === commit.id ? 'graph-task-head' : ''} ${workingTask ? 'graph-working-row' : ''}`} onClick={() => choose(commit.id, true)} onContextMenu={event => { event.preventDefault(); choose(commit.id); setContext({ id: commit.id, x: event.clientX, y: event.clientY }); }}>
             <td className="repository-graph-lane"><svg width={lanes * 14 + 14} height={rowHeight} viewBox={`0 0 ${lanes * 14 + 14} ${rowHeight}`} aria-hidden="true">
               {edges.map((edge, edgeIndex) => <path key={edgeIndex} d={edge.from === edge.to ? `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} V ${edge.boundary ? rowHeight - 3 : rowHeight}` : `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} C ${edge.from * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight}`} className={`graph-line graph-color-${edge.color}${edge.boundary ? ' graph-boundary' : ''}${edge.local ? ' graph-local-edge' : ''}`} />)}
               {incoming && <path d={`M ${lane * 14 + 12} 0 V ${rowHeight / 2}`} className={`graph-line graph-color-${color}${incomingLocal ? ' graph-local-edge' : ''}`} />}
@@ -213,6 +224,6 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
       </div>}
     </div>
     {loading && <div className="repository-graph-loading" role="status"><Icon name="spinner" className="spin" size={14} /><span>正在加载…</span></div>}
-    {context && byId.has(context.id) && <div className="repository-graph-context" style={{ left: context.x, top: context.y }}><Menu label="提交操作" open placement="start" focusOnOpen="first" onOpenChange={open => { if (!open) { const id = menuFocus.current || context.id; menuFocus.current = null; setContext(null); requestAnimationFrame(() => buttons.current.get(id)?.focus({ preventScroll: true })); } }} trigger={<button className="graph-context-anchor" aria-label="提交操作" />}><CommitActions commit={rows[byId.get(context.id)!]?.commit} onCopy={text => void copy(text)} onLocateParent={commit => locateParent(commit, true)} /></Menu></div>}
+    {context && byId.has(context.id) && <div className="repository-graph-context" style={{ left: context.x, top: context.y }}><Menu label="提交操作" open placement="start" focusOnOpen="first" onOpenChange={open => { if (!open) { const id = menuFocus.current || context.id; menuFocus.current = null; setContext(null); requestAnimationFrame(() => buttons.current.get(id)?.focus({ preventScroll: true })); } }} trigger={<button className="graph-context-anchor" aria-label="提交操作" />}><CommitActions commit={rows[byId.get(context.id)!]?.commit} onCopy={text => void copy(text)} onLocateParent={commit => locateParent(commit, true)} onAction={onAction} onOpenCommit={onOpenCommit} onLocateWorktree={onLocateWorktree} /></Menu></div>}
   </>;
 }

@@ -52,7 +52,7 @@ export type PresenceBranch = {
 export type PresencePerson = {
   userId: string; displayName: string; avatarUrl: string | null; state: PresenceWorkState;
   branches: PresenceBranch[];
-  deviceNames: string[];
+  deviceName: string;
   scope?: string;
 };
 export const presenceWorkLabels: Record<PresenceWorkState, string> = { editing: '编辑中', changed: '有未 Commit 更改', committed: '有未 Push 提交' };
@@ -74,14 +74,12 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       const state = projectWorkState(project);
       if (!state) continue;
       const scope = project.organizationId ? (status.organizations || []).find(o => o.serverId === session.serverId && o.id === project.organizationId)?.name || '托管组织' : '个人';
-      const key = `${session.serverId || ''}:${project.organizationId || 'personal'}:${session.identityId || session.userId}`;
+      const key = JSON.stringify([session.serverId || '', project.organizationId || null, session.identityId || session.userId, session.deviceId]);
       let person = people.get(key);
       if (!person) {
-        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceNames: [], scope };
+        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceName: session.deviceName?.trim() || '设备未知', scope };
         people.set(key, person);
       }
-      const deviceName = session.deviceName?.trim() || '设备未知';
-      if (!person.deviceNames.includes(deviceName)) person.deviceNames.push(deviceName);
       if (workPriority[state] > workPriority[person.state]) person.state = state;
       let existing = person.branches.find(value => value.branch === project.branch);
       if (!existing) {

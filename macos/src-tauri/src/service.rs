@@ -1,5 +1,5 @@
 use crate::{
-    ai, credentials,
+    ai, credentials, graph_operations,
     diagnostics::Diagnostics,
     git, github_token,
     oauth::Authorization,
@@ -69,6 +69,9 @@ pub struct Service {
     readers: Mutex<BTreeMap<String, Provider>>,
     results: Mutex<VecDeque<(String, String, Value)>>,
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
+    pub file_state: std::sync::Mutex<crate::files::State>,
+    merge_plans: Mutex<BTreeMap<String, (String, Arc<graph_operations::MergePlan>)>>,
+    cancelled_graph_preparations: Mutex<VecDeque<(String, i64)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
     foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
@@ -205,6 +208,9 @@ impl Service {
             readers: Mutex::new(BTreeMap::new()),
             results: Mutex::new(VecDeque::new()),
             plans: Mutex::new(BTreeMap::new()),
+            file_state: std::sync::Mutex::new(crate::files::State::default()),
+            merge_plans: Mutex::new(BTreeMap::new()),
+            cancelled_graph_preparations: Mutex::new(VecDeque::new()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
@@ -1056,7 +1062,7 @@ impl Service {
         }
         let _target = if matches!(
             method,
-            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage"
+            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "prepareGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree"
         ) {
             let id = uuid::Uuid::new_v4().to_string();
             let key = format!(
@@ -1075,7 +1081,9 @@ impl Service {
         let foreground = match method {
             "submitCommit" => Some("提交"),
             "pushCommit" => Some("推送"),
-            "applySync" => Some("文件变更"),
+            "applySync" | "applyFileOperation" => Some("文件变更"),
+            "applyGraphMerge" | "executeGraph" => Some("图谱操作"),
+            "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
             "link" | "unlink" | "matchAccountRepositories" => Some("保存仓库关联"),
@@ -1158,6 +1166,90 @@ impl Service {
         }
         self.diagnostics.record(&details, false);
         result
+    }
+    pub(crate) async fn graph_workspace(&self, context: &Context, cancel: &CancellationToken) -> Result<Value> {
+        self.local_workspace(context, cancel).await
+    }
+    async fn graph_dispatch(&self, method: &str, input: &Value, context: &Context, cancel: &CancellationToken) -> Result<Value> {
+        if method == "openCommit" {
+            util::allowed(input, &["repositoryId", "commitId"])?;
+            let sha = util::sha(text(input,"commitId"))?;
+            let commit=context.provider.commit(&context.repository,&sha,cancel).await?;
+            if commit["id"]!=sha{return Err("远端没有返回对应提交，未打开其他页面。".into());}
+            let suffix = match text(&context.provider.account,"provider") {"gitlab"=>format!("/-/commit/{sha}"),"gitea"=>format!("/commit/{sha}"),_=>format!("/commit/{sha}")};
+            self.validate(context).await?;
+            open(&format!("{}{suffix}",text(&context.repository,"url").trim_end_matches('/'))).await?;
+            return Ok(json!({"opened":true}));
+        }
+        let task_id=util::field(input,"taskId",4096)?;
+        if method=="discardGraphMerge" {
+            util::allowed(input,&["repositoryId","taskId","planId"])?;
+            let id=util::field(input,"planId",100)?;let mut plans=self.merge_plans.lock().await;
+            if let Some((identity,plan))=plans.get(&id) {if *identity!=context.identity||plan.public["taskId"]!=task_id{return Err("预览不属于当前工作目录。".into());}}
+            return Ok(json!({"discarded":plans.remove(&id).is_some()}));
+        }
+        let root=self.task_root(context,&task_id).await?;
+        match method {
+            "graphSources"=>{util::allowed(input,&["repositoryId","taskId"])?;graph_operations::sources(self,context,&root,cancel).await},
+            "graphPreview"=>{util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","commitId","action","mainline"])?;graph_operations::preview(&root,input,self,context,cancel).await},
+            "cancelGraphPreparation"=>{
+                util::allowed(input,&["repositoryId","taskId","generationId"])?;
+                uuid::Uuid::parse_str(&util::field(input,"generationId",100)?).map_err(|_|"准备标识无效。")?;
+                let key=util::digest(format!("{}:{}:{}",text(input,"repositoryId"),task_id,text(input,"generationId")));
+                let mut cancelled=self.cancelled_graph_preparations.lock().await;
+                cancelled.retain(|(_,created)|util::now()-created<120_000);
+                if cancelled.len()>=128{cancelled.pop_front();}
+                cancelled.push_back((key,util::now()));drop(cancelled);
+                let jobs=self.generations.lock().await;
+                if let Some((id,token))=jobs.get(&root){if id==text(input,"generationId"){token.cancel();}}
+                Ok(json!({"cancelled":true}))
+            },
+            "prepareGraphMerge"=>{
+                util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","sources","generationId"])?;
+                let generation=util::field(input,"generationId",100)?;uuid::Uuid::parse_str(&generation).map_err(|_|"准备标识无效。")?;
+                let token=cancel.child_token();
+                for attempt in 0..=50 {
+                    let mut jobs=self.generations.lock().await;
+                    if let Some((_,previous))=jobs.get(&root) {
+                        if !previous.is_cancelled()||attempt==50{return Err("此工作目录正在准备 AI 操作，请稍后重试。".into());}
+                        drop(jobs);
+                        tokio::select!{_=tokio::time::sleep(Duration::from_millis(100))=>(),_=token.cancelled()=>return Err("同步准备已取消。".into())}
+                    } else {jobs.insert(root.clone(),(generation.clone(),token.clone()));break;}
+                }
+                let key=util::digest(format!("{}:{}:{}",text(input,"repositoryId"),task_id,text(input,"generationId")));
+                if self.cancelled_graph_preparations.lock().await.iter().any(|(id,created)|*id==key&&util::now()-created<120_000){token.cancel();}
+                let result=graph_operations::prepare(&root,input,self,context,&token).await;
+                self.generations.lock().await.remove(&root);
+                let plan=result?;self.validate(context).await?;
+                if token.is_cancelled(){return Err("同步准备已取消。".into());}
+                let public=plan.public.clone();let mut plans=self.merge_plans.lock().await;
+                plans.retain(|_,(_,plan)|util::now()-plan.created<600_000);
+                if plans.len()>=32{return Err("合并预览已达上限，请关闭旧预览。".into());}
+                plans.insert(text(&public,"id").into(),(context.identity.clone(),Arc::new(plan)));Ok(public)
+            },
+            "applyGraphMerge"|"executeGraph"|"createGraphWorktree"=>{
+                util::allowed(input,if method=="applyGraphMerge" {&["repositoryId","taskId","planId","operationId","summary","description"]}else{&["repositoryId","taskId","expectedHead","changeKey","commitId","action","name","resetMode","mainline","parentPath","folderName","operationId"]})?;
+                let operation=util::field(input,"operationId",100)?;uuid::Uuid::parse_str(&operation).map_err(|_|"操作标识无效。")?;
+                let identity=util::digest(format!("{method}:{input}"));
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let _guard=self.claim(&root,cancel).await?;self.validate(context).await?;
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let result=if method=="applyGraphMerge" {
+                    let id=util::field(input,"planId",100)?;
+                    let plan={let plans=self.merge_plans.lock().await;let (owner,plan)=plans.get(&id).ok_or("预览已过期，请重新准备。")?;if *owner!=context.identity||plan.public["repositoryId"]!=input["repositoryId"]||plan.public["taskId"]!=task_id||util::now()-plan.created>=600_000{return Err("预览已变化或过期，请重新准备。".into());}plan.clone()};
+                    let result=graph_operations::apply(&plan,input,self,context,cancel).await?;
+                    self.merge_plans.lock().await.remove(&id);result
+                } else if method=="createGraphWorktree" {
+                    let previous=self.materialized_link(context,cancel).await?;
+                    let path=graph_operations::worktree(&root,input,self,context,cancel).await?;
+                    let name=text(input,"name");let item=json!({"branch":name,"path":path.to_string_lossy()});
+                    let catalog=self.mutate(|next| {check_context(next,context)?;merge_link(next,text(input,"repositoryId"),text(&context.link,"path"),&previous,vec![item],Some(name))}).await;
+                    let task=git::task(&root).await?;let mut result=json!({"taskId":task["id"],"head":task["head"],"branch":task["branch"],"unchanged":true,"worktreePath":path.to_string_lossy()});
+                    match catalog {Ok(catalog)=>result["catalog"]=catalog,Err(_)=>result["warning"]=json!("工作目录已创建，但关联保存未完成；请手动关联这个目录，不要重复创建。")}result
+                } else {graph_operations::execute(&root,input,self,context,cancel).await?};
+                self.remember(operation,identity,result.clone()).await;Ok(result)
+            },_=>Err("不支持该图谱操作。".into())
+        }
     }
     async fn dispatch(
         self: &Arc<Self>,
@@ -1279,6 +1371,9 @@ impl Service {
         }
         let id = util::field(input, "repositoryId", 160)?;
         let context = self.context(&id).await?;
+        if matches!(method, "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
+            return self.graph_dispatch(method, input, &context, cancel).await;
+        }
         match method {
             "link" => {
                 util::allowed(input, &["repositoryId", "path", "branch"])?;
@@ -1490,7 +1585,7 @@ impl Service {
         } else {
             util::field(input, "taskId", 4096)?
         };
-        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync") {
+        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync" | "applyFileOperation") {
             let operation = util::field(input, "operationId", 100)?;
             uuid::Uuid::parse_str(&operation).map_err(|_| "操作标识无效。")?;
             let identity = util::digest(format!("{method}:{input}:{}", context.identity));
@@ -1522,16 +1617,48 @@ impl Service {
                 open(root.to_str().ok_or("目录路径无法读取。")?).await?;
                 Ok(json!({"opened":true}))
             }
+            "localDirectory" => {
+                util::allowed(input, &["repositoryId", "taskId", "path"])?;
+                let result = crate::files::directory(&root, text(input, "path")).await?;
+                self.validate(&context).await?; Ok(result)
+            }
+            "prepareFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "operation", "paths", "sourceTaskId", "dropId", "destination", "name"])?;
+                let source_root = if text(input, "dropId").is_empty() { Some(self.task_root(&context, if text(input, "sourceTaskId").is_empty() { &task_id } else { text(input, "sourceTaskId") }).await?) } else { None };
+                let sources = if let Some(source_root) = &source_root {
+                    input["paths"].as_array().ok_or("请选择文件。")?.iter().map(|path|crate::files::relative(source_root, path.as_str().ok_or("来源路径无效。")?, false)).collect::<Result<Vec<_>>>()?
+                } else {
+                    if text(input, "operation") == "delete" { return Err("拖入文件只能复制或移动。".into()); }
+                    self.file_state.lock().unwrap_or_else(|e|e.into_inner()).sources(text(input,"dropId"))?
+                };
+                let op=text(input,"operation").to_owned();let dest=text(input,"destination").to_owned();let name=text(input,"name").to_owned();let target_root=root.clone();
+                let plan = tokio::task::spawn_blocking(move || crate::files::prepare(&target_root, source_root, sources, &op, &dest, &name)).await.map_err(|_| "文件操作预览失败。")??;
+                self.validate(&context).await?;
+                self.file_state.lock().unwrap_or_else(|e|e.into_inner()).save(format!("{}:{task_id}:{}",context.identity,root.display()),plan)
+            }
+            "discardFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId"])?;
+                self.file_state.lock().unwrap_or_else(|e|e.into_inner()).discard(text(input,"planId"), &format!("{}:{task_id}:{}",context.identity,root.display()));
+                Ok(json!({"discarded":true}))
+            }
+            "applyFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId", "operationId"])?;
+                let _guard=self.claim(&root,cancel).await?;self.validate(&context).await?;
+                let (op, identity)=operation.unwrap();
+                if let Some(value)=self.previous(&op,&identity).await? { return Ok(value); }
+                let plan=self.file_state.lock().unwrap_or_else(|e|e.into_inner()).take(text(input,"planId"), &format!("{}:{task_id}:{}",context.identity,root.display()))?;
+                // Once confirmed, complete this bounded write independently of a
+                // hidden/cancelled renderer request, just like local Commit.
+                let result=tokio::task::spawn_blocking(move || crate::files::apply(plan)).await.map_err(|_| "文件操作未完成，请重新读取目录。")??;
+                self.remember(op,identity,result.clone()).await;Ok(result)
+            }
             "openFile" => {
                 util::allowed(input, &["repositoryId", "source", "taskId", "path"])?;
                 if input["source"] != "local" {
                     return Err("无效的文件来源。".into());
                 }
                 let path = util::file_path(text(input, "path"))?;
-                let t = git::task(&root).await?;
-                if !t["tree"].as_array().unwrap().iter().any(|p| p == &path) {
-                    return Err("文件不属于当前工作目录文件清单。".into());
-                }
+                if Path::new(&path).components().any(|part|part.as_os_str().to_string_lossy().eq_ignore_ascii_case(".git")) { return Err("不能打开Git元数据。".into()); }
                 let file =
                     dunce::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
                 if !file.starts_with(&root)

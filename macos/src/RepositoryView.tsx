@@ -27,10 +27,11 @@ import type { LocalRepositoryState } from './use-workspace';
 import type { ReadRemoteCommit, RemoteRepositoryState } from './remote-repository-model';
 import type { FileTreeChange } from './file-tree';
 import { NavigationControls } from './NavigationControls';
+import { graphOperationScope, type GraphAction, type GraphWrite } from './graph-operation-model';
 
 const noChanges: FileTreeChange[] = [];
 
-export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask, canGoBack = false, canRedo = false, onBack = () => {}, onRedo = () => {}, onRefresh = () => {}, refreshDisabled = false, refreshing = false, refreshFeedback }: {
+export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, writeGraph, generateCommitMessage, initialCommitTask, canGoBack = false, canRedo = false, onBack = () => {}, onRedo = () => {}, onRefresh = () => {}, refreshDisabled = false, refreshing = false, refreshFeedback }: {
   repository: RemoteRepository; account: Account; localPath?: string; localState?: LocalRepositoryState;
   localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; manualHiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
   globalSearch: string; onSearchChange?: (value: string) => void; searchRef?: RefObject<HTMLElement | null>;
@@ -38,6 +39,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   remoteState?: RemoteRepositoryState; readRemoteCommit?: ReadRemoteCommit;
   readLocalCommit?: ReadLocalCommit;
   applySync?: import('./repository-sync-model').ApplyRepositorySync; submitCommit?: SubmitLocalCommit; pushCommit?: PushLocalCommit; generateCommitMessage?: GenerateCommitMessage;
+  writeGraph?: GraphWrite;
   initialCommitTask?: string | null;
   canGoBack?: boolean; canRedo?: boolean; onBack?: () => void; onRedo?: () => void; onRefresh?: () => void; refreshDisabled?: boolean; refreshing?: boolean;
   refreshFeedback?: { kind: 'success' | 'error' | 'info'; message: string } | null;
@@ -105,6 +107,20 @@ export function RepositoryView({ repository, account, localPath, localState, loc
     setActionFeedback('');
     operations.open({ mode, scope: repositoryOperationScope(repository.id), targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onComplete: setActionFeedback });
   };
+  const graphTargets = workspace.tasks.filter(task => !task.remote && task.path && !task.error && task.changeKey && /^[a-f0-9]{40,64}$/.test(task.head));
+  const openGraphAction = (mode: GraphAction, selected: import('./commit-graph').GraphCommit) => {
+    const task = graphTargets.find(task => task.id === selected.workingTask?.id) || graphTargets.find(task => task.id === focus || task.id === localTaskChoice) || graphTargets.find(task => task.branch === repository.defaultBranch) || graphTargets[0];
+    if (!task) { setActionFeedback('请先关联一个本地工作目录，再执行图谱操作。'); return; }
+    operations.open({ kind: 'graph', mode, repository, commit: selected.workingTask ? undefined : selected, scope: graphOperationScope(repository.id, mode, task.id, selected.workingTask ? undefined : selected.id), targets: [{ repositoryId: repository.id, repositoryName: repository.fullName, task }], candidates: structuredClone(graphTargets), onWrite: writeGraph, onComplete: setActionFeedback });
+  };
+  const locateGraphWorktree = (selected: import('./commit-graph').GraphCommit) => {
+    const task = selected.workingTask || graphTargets.find(task => reachableCommitIds(workspace.commits, [task.head]).has(selected.id));
+    if (!task) { setActionFeedback('这个提交尚未关联可定位的本地工作目录。'); return; }
+    setLocalTaskChoice(task.id); setFocusedTask(task.id); setTreeSource('local');
+  };
+  const openGraphCommit = (selected: import('./commit-graph').GraphCommit) => {
+    void importAPI('openCommit', { repositoryId: repository.id, commitId: selected.id }).catch(problem => setActionFeedback(problem instanceof Error ? problem.message : '远端提交打开失败。'));
+  };
   const openRepository = async (event: MouseEvent<HTMLAnchorElement>) => {
     if (!window.gittogether) return;
     event.preventDefault();
@@ -130,15 +146,15 @@ export function RepositoryView({ repository, account, localPath, localState, loc
     {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
     {current?.error && <Notice kind="error">{current.error}{snapshot && ' 显示上次读取的本地状态。'} 正在自动重试。</Notice>}
     {remoteState?.error && <Notice kind="error">{remoteState.error}{remoteState.workspace && ' 显示上次读取的远端内容。'}</Notice>}
-    {remoteState?.workspace?.warnings.map(warning => <p className="repository-workspace-warning" key={warning}>{warning}</p>)}
+    {remoteState?.workspace?.warnings.filter(warning => !warning.startsWith('每个分支当前读取最近 ')).map(warning => <p className="repository-workspace-warning" key={warning}>{warning}</p>)}
     <RepositoryColumns>
-      <section id="repository-graph-column" className="repository-column repository-graph-column flat-group" aria-label="分支图"><RepositoryGraph workspace={workspace} loading={!!remoteState?.loading || !!current?.loading} defaultHiddenBranches={defaultHiddenBranches} search={globalSearch} focusedTask={focus} onBranchFilterChange={setBranchSelection} onSelectCommit={selectCommit} onSelectWorkingTask={setLocalTaskChoice} historyLoadingBranches={history.loadingBranches} historyErrorsByBranch={history.errorsByBranch} onLoadMoreHistory={history.loadMore} emptyLabel={workspace.source === 'remote' && !workspace.commits.length ? remoteState?.loading ? '正在读取远端分支图…' : remoteState?.error || workspace.tasks.find(task => task.error)?.error || '远端仓库尚无提交' : undefined} /></section>
+      <section id="repository-graph-column" className="repository-column repository-graph-column flat-group" aria-label="分支图"><RepositoryGraph onAction={graphTargets.length && repository.available ? openGraphAction : undefined} onOpenCommit={openGraphCommit} onLocateWorktree={locateGraphWorktree} workspace={workspace} loading={!!remoteState?.loading || !!current?.loading} defaultHiddenBranches={defaultHiddenBranches} search={globalSearch} focusedTask={focus} onBranchFilterChange={setBranchSelection} onSelectCommit={selectCommit} onSelectWorkingTask={setLocalTaskChoice} historyLoadingBranches={history.loadingBranches} historyErrorsByBranch={history.errorsByBranch} onLoadMoreHistory={history.loadMore} emptyLabel={workspace.source === 'remote' && !workspace.commits.length ? remoteState?.loading ? '正在读取远端分支图…' : remoteState?.error || workspace.tasks.find(task => task.error)?.error || '远端仓库尚无提交' : undefined} /></section>
       <section id="repository-changes-column" className="repository-column repository-changes-column flat-group" aria-label="Diff 与提交"><RepositoryChangesColumn repository={repository} onConfigure={repository.available ? onConfigure : undefined} expandRequest={commitOpenRequest} repositoryId={repository.id} repositoryName={repository.fullName} onSubmit={commit} onGenerate={generate} onPush={push} onCommitted={(taskId, commitId) => { setCommitSelection({ taskId, commitId }); setCommitOpenRequest(value => value + 1); }} publishedCommits={publishedCommits} tasks={workspace.tasks} selection={selection} commit={selectedCommit} remoteCommits={remoteCommits} localCommits={localCommits} selectedFiles={contextFiles} onSelect={select} search={globalSearch} focus={focus} onFocus={setFocusedTask} localChoice={localTaskChoice} onLocalChoice={setLocalTaskChoice} localPath={localPath} loading={!!localPath && !current && !suppliedWorkspace} /></section>
       <section id="repository-tree-column" className="repository-column repository-tree-column flat-group" aria-label="文件树"><RepositoryColumnHeading title="文件树" icon="folder" controls="repository-tree-column"><Segmented<'remote' | 'local'> className="repository-tree-source" aria-label="文件树来源" aria-controls="repository-file-trees" value={treeSource} onValueChange={setTreeSource} items={[{ value: 'remote', label: '远端' }, { value: 'local', label: '本地' }]} /></RepositoryColumnHeading><div id="repository-file-trees" className={`repository-task-stack ${visibleTreeIds.size === 1 ? 'is-focused' : ''}`}>{workspace.tasks.map(task => {
         const commitId = selectedCommits[task.id];
         const state = task.remote ? remoteCommits[task.id] : localCommits[task.id];
         const details = commitId && state?.id === commitId ? state.details : null;
-        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree task={task} repository={repository} account={account} changes={task.remote || commitId ? details?.files || noChanges : undefined} selected={contextFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
+        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree onChanged={onRefresh} task={task} repository={repository} account={account} changes={task.remote || commitId ? details?.files || noChanges : undefined} selected={contextFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
       })}{!visibleTreeIds.size && <div className="repository-column-empty" role="status"><Icon name="folder" size={26} /><p>{treeSource === 'local' ? !localPath ? '尚未关联本地目录。' : current?.error || (focus ? '这个分支尚无本地文件树。' : '正在读取本地文件树…') : remoteState?.error || (focus ? '这个分支尚无远端文件树。' : remoteState?.workspace ? '远端仓库尚无文件。' : remoteState?.loading ? '正在读取远端文件树…' : '远端文件树尚未接入。')}</p>{treeSource === 'local' && !localPath && <Button onClick={onConfigure} disabled={!repository.available}>关联本地目录</Button>}</div>}</div></section>
     </RepositoryColumns>
   </main>;

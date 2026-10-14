@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
+
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
 
 选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
@@ -337,6 +339,16 @@ IMPORT-11-windows-oauth-port：Rust 保留 socket bind 的 ErrorKind 和 raw_os_
 ## 关联标签与读取健康分离（IMPORT-04-association-refresh）
 
 branch-links.associationStatus区分保存的关联与筛选后可见工作目录，内部verified只表示本地目录和完整远端分支范围已经可靠核对。useAssociationStatus为Dashboard行保留同一服务实例、仓库、目录/分支映射和用户隐藏设置下的最后成功结果；路径/映射排序后比较，避免仅登记顺序不同清空显示。缓存仅在本地和远端读取均完成且核对有效时更新；自动隐藏和读取中间态不作为新的验证结果。解绑或身份/用户筛选变更立即排除旧缓存，提示保留当前失败和上次结果时效。linkedTasks的隐藏排除、统计和真实Git操作范围不变；不修改Catalog持久化、服务/HTTP契约或后台fetch。
+## 图谱有限操作与AI合并（R-05-graph-actions/R-05-ai-sync，0.33.0源码）
+
+新增graphSources、graphPreview、prepareGraphMerge、cancelGraphPreparation、discardGraphMerge、applyGraphMerge、executeGraph、createGraphWorktree、openCommit有限方法；Rust Service仍从当前Git账号、仓库和已验证关联解析目标，不接受调用者命令。写操作复用common-dir队列、前台更新屏障、结果幂等与任务级控制；标准命令保留实际钩子/签名和未完成Git状态。创建worktree后原子保存关联，保存失败保留已创建目录并报告，禁止伪成功或重复创建。
+
+graph_operations使用目标HEAD与changeKey冻结本地状态，私有index保存当前工作内容，临时共享clone逐来源合并。远端分支在临时仓库fetch；浅仓库只在临时目录补齐历史。AI复用受限本机Codex执行器，常规文本仅返回diff3冲突片段替换，不改非冲突内容；修改/删除等无标记冲突采用完整文本约束。各次最多96KB冲突证据，二进制/LFS/链接/子模块及过大片段明确停止。模型无Shell/MCP/apps/plugins/hooks权限，仓库内容视为不可信数据。
+
+预览最多32份且有效10分钟，绑定服务身份、映射、目标快照和来源HEAD；确认复核本地和所有来源，并刷新真实远端追踪引用。LFS在临时目录复用本地缓存、下载并校验后才准备文件发布；具体文件先准备到同卷私有目录，原文件逐项备份。提交失败回退原文件并保留原index；若钩子或外部编辑改变了发布文件，停止覆盖并保留备份路径。确认使用真实Git commit、私有index和MERGE_HEAD，父提交保留原HEAD与实际合入的来源；成功后发布index，不隐式Push。恢复引用使用应用命名空间，历史读取排除这些内部快照。准备取消绑定generationId，提前取消也登记，旧取消不能命中新请求。
+
+RepositoryOperationProvider扩展图谱任务，按仓库、目标目录、动作和所选提交区分；收起/路由切换不卸载，另一目录仍可操作。来源选择按账号内仓库ID、目标路径/分支保存；目标或来源改变立即禁用旧预览，迟到响应不能覆盖手工说明。失败重读目标后重新准备。源码类型/编译与真实Git、Codex、跨平台及安装包验收分别记录。
+
 ## Presence设备名称（PRESENCE-05-device-name，0.30.11）
 
 managed world版本3可带可选deviceName，来源为服务端已验证设备凭证对应的登记名称。Rust允许旧帧缺席/null，仅接受非空且不超过120字符的名称；PresencePerson在精确仓库/分支过滤及有效操作状态确认后聚合同身份的设备名。UI在人员名称后的括号中显示去重名称，旧帧显示设备未知；设备名纳入弹窗roster布局键，账号/头像/分支状态仍分别保存。

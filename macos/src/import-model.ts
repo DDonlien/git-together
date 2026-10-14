@@ -3,6 +3,8 @@ import type { RepositoryWorkspace } from './repository-model';
 import type { LocalCommitDetails } from './local-commit-model';
 import type { CommitDraft, LocalSubmitInput, LocalSubmitResult, LocalPushInput, LocalPushResult } from './local-submit-model';
 import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
+import type { FileDirectory, FileOperationInput, FileOperationPlan, FileOperationResult } from './file-operation-model';
+import type { GraphSnapshot, GraphSourceChoice, GraphSource, GraphPreviewInput, GraphPreview, GraphMergePlan, GraphMergeInput, GraphWriteInput, GraphWriteResult } from './graph-operation-model';
 
 export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea'] as const;
 export type Provider = typeof providers[number];
@@ -68,6 +70,15 @@ export type ApiInputs = {
   discardSync: { repositoryId: string; taskId: string; planId: string };
   generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string; paths?: string[] };
   cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
+  graphSources: { repositoryId: string; taskId: string };
+  graphPreview: GraphPreviewInput;
+  prepareGraphMerge: GraphSnapshot & { sources: GraphSourceChoice[]; generationId: string };
+  cancelGraphPreparation: { repositoryId: string; taskId: string; generationId: string };
+  discardGraphMerge: { repositoryId: string; taskId: string; planId: string };
+  applyGraphMerge: GraphMergeInput;
+  executeGraph: GraphWriteInput;
+  createGraphWorktree: GraphWriteInput;
+  openCommit: { repositoryId: string; commitId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string; checkParticipation?: boolean };
   remoteHistory: { repositoryId: string; head: string; page: number };
@@ -76,9 +87,17 @@ export type ApiInputs = {
   openRepository: { repositoryId: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
   openDirectory: { repositoryId: string; taskId: string };
+  localDirectory: { repositoryId: string; taskId: string; path: string };
+  prepareFileOperation: FileOperationInput;
+  applyFileOperation: { repositoryId: string; taskId: string; planId: string; operationId: string };
+  discardFileOperation: { repositoryId: string; taskId: string; planId: string };
   openLocalDirectory: { path: string };
 };
 export type ApiOutputs = {
+  localDirectory: FileDirectory;
+  prepareFileOperation: FileOperationPlan;
+  applyFileOperation: FileOperationResult;
+  discardFileOperation: { discarded: true };
   status: ServiceInfo;
   catalog: Catalog; connect: Catalog; updateAccount: Catalog; refresh: Catalog; removeAccount: Catalog;
   githubAuthStart: GitHubAuthorization;
@@ -95,6 +114,15 @@ export type ApiOutputs = {
   discardSync: { discarded: boolean };
   generateCommitMessage: CommitDraft;
   cancelCommitGeneration: { cancelled: boolean };
+  graphSources: { sources: GraphSource[]; limited: boolean };
+  graphPreview: GraphPreview;
+  prepareGraphMerge: GraphMergePlan;
+  cancelGraphPreparation: { cancelled: boolean };
+  discardGraphMerge: { discarded: boolean };
+  applyGraphMerge: GraphWriteResult;
+  executeGraph: GraphWriteResult;
+  createGraphWorktree: GraphWriteResult;
+  openCommit: { opened: true };
   remoteWorkspace: RemoteRepositoryWorkspace; remoteHistory: import('./remote-repository-model').RemoteHistoryPage; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
   openDirectory: { opened: true };

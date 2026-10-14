@@ -164,7 +164,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .dashboard-sort-label { position: relative; display: inline-flex; line-height: 14px; }
 .dashboard-sort-label .repository-sort-indicator { position: absolute; right: calc(100% + 3px); top: 50%; transform: translateY(-50%); }
 .dashboard-signal-sort button:hover, .dashboard-signal-sort button[aria-pressed="true"] { color: var(--blue); }
-.dashboard-sort-count { position: absolute; top: -7px; right: -6px; min-width: 13px; height: 12px; padding: 1px 3px; border-radius: 999px; background: var(--blue-bg); color: var(--blue); font-size: 9px; line-height: 10px; text-align: center; }
+.dashboard-sort-count { position: absolute; top: -7px; right: -6px; min-width: 15px; height: 12px; padding: 1px 4px; border-radius: 999px; background: var(--blue-bg); color: var(--blue); font-size: 9px; line-height: 10px; text-align: center; }
 /* Keep row actions reachable while data columns scroll in a narrow window. */
 .remote-repo-table .repository-action-cell { position: sticky; right: 0; z-index: 1; background: var(--content); border-left: 1px solid var(--line); }
 .remote-repo-table th.repository-action-cell { z-index: 2; padding-left: 16px; padding-right: 4px; }
@@ -193,6 +193,11 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table .dashboard-branch-row td:first-child, .remote-repo-table .dashboard-branch-message td { padding-left: calc(var(--repository-icon-size) + var(--icon-label-gap)); }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
 .remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
+/* Reserve a row-tail slot without shifting Git actions relative to their headings. */
+.remote-repo-table.has-repository-pins { min-width: 1276px; }
+.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 332px; }
+.remote-repo-table.has-repository-pins :is(th, td).repository-action-cell { padding-right: 40px; }
+.dashboard-repository-row .repository-pin-button { position: absolute; right: 4px; top: 0; bottom: 0; margin-block: auto; }
 .dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
 .dashboard-repository-branches { background: transparent; }
 .dashboard-repository-branches[aria-hidden='true'] { pointer-events: none; }
@@ -247,7 +252,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .git-action-anchor .ogui-icon-button { width: var(--repository-action-button-size); height: var(--repository-action-button-size); }
 .git-action-anchor[aria-disabled="true"] .ogui-icon-button { pointer-events: none; }
 .git-action-anchor .ogui-icon-button:disabled { background: transparent; color: inherit; }
-.git-action-badge { position: absolute; top: -3px; right: -3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px; outline: 1px solid var(--content); color: var(--content); font-size: 9px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; pointer-events: none; }
+.git-action-badge { position: absolute; top: -3px; right: -3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 14px; padding: 0 4px; border-radius: 999px; outline: 1px solid var(--content); color: var(--content); font-size: 9px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; pointer-events: none; }
 .git-action-badge.good { background: var(--teal); }
 .git-action-badge.warning { background: var(--warning); }
 .git-action-badge.error { background: var(--danger); }
@@ -416,7 +421,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .submit-file-group-heading { margin: 0; border-top: 1px solid var(--line); font-size: 12px; font-weight: 400; }
 .submit-file-group-heading > span { display: flex; gap: 8px; align-items: baseline; }
 .submit-file-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.submit-file-choice { position: relative; isolation: isolate; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 34px; padding: 6px 4px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; color: var(--text); font-size: 12px; }
+.submit-file-choice { position: relative; isolation: isolate; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 34px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; color: var(--text); font-size: 12px; }
 /* Inset state backgrounds by 2px per edge for a 4px gap, while keeping the full row clickable. */
 .submit-file-choice::before { content: ''; position: absolute; inset: 2px 0; z-index: -1; border-radius: inherit; pointer-events: none; }
 .submit-file-choice:hover:not(:disabled)::before { background: var(--surface); }
@@ -468,7 +473,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .graph-local-edge { stroke-dasharray: 3 3; }
 .graph-node.graph-working-node, .graph-node.graph-unpublished-node { fill: var(--graph-row-surface, var(--content)); stroke: currentColor; stroke-width: 1.8; }
 .graph-node.graph-working-node { stroke-dasharray: 2 2; }
-.repository-graph-scroll { --graph-row-height: 42px; flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; padding-inline: var(--repository-column-inset); }
+.repository-graph-scroll { --graph-row-height: 42px; flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; padding: 6px var(--repository-column-inset); }
 .repository-graph-loading { min-height: 32px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 
 .repository-history-more { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 42px; padding: 8px 0 12px; color: var(--muted); font-size: 11px; text-align: center; }
@@ -476,11 +481,15 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-graph-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .repository-graph-table .repository-graph-spacer { cursor: default; }
 .repository-graph-table .repository-graph-spacer td { padding: 0; background: transparent; border-radius: 0; }
-.repository-graph-table td { height: var(--graph-row-height); padding: 0 5px; vertical-align: middle; }
+.repository-graph-table td { height: var(--graph-row-height); padding: 0 6px; vertical-align: middle; }
 .repository-graph-table tr { cursor: pointer; --graph-row-surface: var(--content); }
-.repository-graph-table td { background: var(--graph-row-surface); }
-.repository-graph-table td:first-child { border-radius: 8px 0 0 8px; }
-.repository-graph-table td:last-child { border-radius: 0 8px 8px 0; }
+.repository-graph-table td { position: relative; background: transparent; }
+/* Inset the state layer, not the rows: SVG lanes and virtual row offsets stay continuous. */
+.repository-graph-table td::before { content: ''; position: absolute; inset: 3px 0; background: var(--graph-row-surface); pointer-events: none; }
+.repository-graph-table td:first-child::before { border-radius: 8px 0 0 8px; }
+.repository-graph-table td:last-child::before { border-radius: 0 8px 8px 0; }
+.repository-graph-table td > svg, .repository-graph-table td > button, .repository-graph-byline > span, .repository-graph-byline > time { position: relative; }
+.repository-graph-table .repository-graph-spacer td::before { display: none; }
 .repository-graph-table .repository-graph-lane { padding: 0; overflow: visible; }
 .repository-graph-lane svg { display: block; }
 .repository-graph-table tr:hover { --graph-row-surface: var(--surface); }
@@ -493,8 +502,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-graph-description strong { font-size: 12px; line-height: 16px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 .graph-row-secondary { display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%; height: 13px; }
 .repository-graph-description code { color: var(--muted); font: 9px/13px SFMono-Regular,Menlo,monospace; flex-shrink: 0; }
-.commit-ref-list { display: flex; align-items: center; min-width: 0; gap: 3px; overflow: hidden; }
-.commit-ref { display: inline-flex; align-items: center; gap: 2px; background: color-mix(in srgb,currentColor 12%,transparent); border: 1px solid color-mix(in srgb,currentColor 20%,transparent); border-radius: 3px; padding: 0 3px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 9px/11px SFMono-Regular,Menlo,monospace; }
+.commit-ref-list { display: flex; align-items: center; min-width: 0; gap: 4px; overflow: hidden; }
+.commit-ref { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb,currentColor 12%,transparent); border: 1px solid color-mix(in srgb,currentColor 20%,transparent); border-radius: 3px; padding: 0 6px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 9px/11px SFMono-Regular,Menlo,monospace; }
 .commit-ref > svg { flex-shrink: 0; }
 .commit-ref-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .graph-remote-ref { border-style: dashed; }
@@ -527,14 +536,14 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-tree-path.ogui-button { flex: 1 1 0; min-width: 0; min-height: 24px; height: 24px; padding: 0; justify-content: flex-start; color: var(--muted); font-size: 10px; text-align: left; }
 .repository-tree-path .ogui-button__label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repository-tree-path.ogui-button:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
-.repository-task-tree { flex: 1; min-height: 0; overflow: auto; padding: 0 var(--repository-column-inset); }
-.repository-tree-row { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 0; width: 100%; font-size: 11px; cursor: pointer; text-align: left; border-radius: 5px; list-style: none; }
+.repository-task-tree { flex: 1; min-height: 0; overflow: auto; padding: 6px var(--repository-column-inset); }
+.repository-tree-row { display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 3px 6px; width: 100%; font-size: 11px; cursor: pointer; text-align: left; border-radius: 5px; list-style: none; }
 .repository-tree-row::-webkit-details-marker { display: none; }
 .repository-tree-row:hover { background: var(--surface); }
 .repository-tree-row.selected { background: var(--blue-bg); }
 .repository-tree-row .repository-tree-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .repository-tree-row.tree-file { padding: 0; gap: 2px; }
-.repository-tree-select { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; min-height: 28px; padding: 3px 0; text-align: left; border-radius: 5px; color: inherit; }
+.repository-tree-select { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; min-height: 28px; padding: 3px 6px; text-align: left; border-radius: 5px; color: inherit; }
 /* Inset the visible state layer while retaining the reserved 24px click target. */
 .repository-tree-row .repository-tree-open.icon-button.ogui-control--small { flex: 0 0 24px; width: 24px; height: 24px; min-width: 24px; min-height: 24px; margin-right: 2px; border: 2px solid transparent; background-clip: padding-box; padding: 3px; opacity: 0; pointer-events: none; color: var(--muted); }
 .repository-tree-open.icon-button svg { width: 12px; height: 12px; }
@@ -582,6 +591,13 @@ button.repository-count-action:disabled { opacity: .7; }
 .app-button.ogui-button--quiet { padding-inline: var(--compact-button-padding-inline); }
 .ogui-button__label { display: inline-flex; min-width: 0; align-items: center; justify-content: center; gap: 6px; }
 .icon-button.ogui-control--small { width: var(--compact-height); min-width: var(--compact-height); min-height: var(--compact-height); height: var(--compact-height); padding: 0; color: var(--muted); font-size: 13px; }
+.repository-pin-button.icon-button.ogui-control--small { flex: 0 0 28px; width: 28px; min-width: 28px; height: 28px; min-height: 28px; border-radius: 999px; opacity: 0; pointer-events: none; }
+.repository-pin-button svg { width: 16px; height: 16px; }
+.sidebar-repository-entry:is(:hover, :focus-within) > .repository-pin-button,
+.dashboard-repository-row:is(:hover, :focus-within) .repository-pin-button,
+.repository-pin-button.is-pinned { opacity: 1; pointer-events: auto; }
+.repository-pin-button.is-pinned.icon-button.ogui-control--small { color: var(--blue); background: var(--blue-bg); }
+.repository-pin-button.icon-button.ogui-control--small:hover { background: var(--surface-hover); }
 .icon-button:hover:not(:disabled) { color: var(--text); }
 .icon-button.ogui-icon-button, [role="button"].git-action-anchor { cursor: pointer; }
 .app-button.text-button { color: var(--blue); }
@@ -1151,12 +1167,56 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .repository-sync-dialog details code { overflow-wrap: anywhere; white-space: normal; }
 .repository-sync-dialog .commit-composer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-top: 8px; }
 
-/* Collapsed operations keep their own button and release the modal focus trap. */
-.ogui-overlay__surface:has(.modal-collapse-control) { position: relative; }
-.ogui-overlay__surface:has(.modal-collapse-control) .ogui-overlay__header > strong { padding-right: 34px; }
-.modal-collapse-control { position: absolute; top: 20px; right: 56px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+/* Share the actual title row so wrapped titles keep both controls centered.
+   Contents preserves the public dialog DOM and its existing body padding. */
+.ogui-overlay__surface:has(.modal-collapse-control) { --operation-header-inline: 22px; --operation-header-top: 20px; --operation-header-bottom: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 28px 4px 28px var(--operation-header-inline); }
+.ogui-overlay__surface:has(.modal-collapse-control):has(.repository-action-dialog) { --operation-header-inline: 24px; }
+.ogui-overlay__surface:has(.modal-collapse-control) > .ogui-overlay__header,
+.ogui-overlay__surface:has(.modal-collapse-control) > .ogui-overlay__body { display: contents; }
+.ogui-overlay__surface:has(.modal-collapse-control) .ogui-overlay__header > strong { grid-column: 1; grid-row: 1; min-width: 0; padding: var(--operation-header-top) 0 var(--operation-header-bottom) var(--operation-header-inline); }
+.ogui-overlay__surface:has(.modal-collapse-control) .ogui-overlay__header > button { grid-column: 4; grid-row: 1; align-self: center; margin-top: calc(var(--operation-header-top) - var(--operation-header-bottom)); }
+.ogui-overlay__surface:has(.modal-collapse-control) .ogui-overlay__body > :not(.modal-collapse-control) { grid-column: 1 / -1; padding: inherit; }
+.modal-collapse-control { grid-column: 2; grid-row: 1; align-self: center; margin-top: calc(var(--operation-header-top) - var(--operation-header-bottom)); display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
 .modal-collapse-control:hover { background: var(--surface-hover); }
 .modal-collapse-control:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .git-operation-indicator { position: absolute; top: -3px; right: -3px; width: 12px; height: 12px; display: grid; place-items: center; border-radius: 50%; background: var(--menu-surface); color: var(--blue); font-size: 10px; pointer-events: none; }
 .git-operation-indicator[data-state="failed"] { color: var(--danger); }
-@media (max-width: 600px) { .modal-collapse-control { top: 18px; right: 52px; } }
+@media (max-width: 600px) { .ogui-overlay__surface:has(.modal-collapse-control) { --operation-header-inline: 18px; --operation-header-top: 18px; --operation-header-bottom: 14px; } }
+.graph-menu-group-label { padding: 8px 12px 4px; font-size: 11px; color: var(--muted); }
+.graph-menu-group-label:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--line); }
+.repository-graph-context [role="menu"] { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.ogui-overlay__surface:has(.graph-action-dialog) { width: 560px; max-width: calc(100vw - 32px); border-radius: 22px; }
+.ogui-overlay__surface:has(.graph-action-dialog) .ogui-overlay__body { min-width: 0; }
+.graph-action-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; max-height: calc(100dvh - 160px); overflow-y: auto; font-size: 12px; }
+.graph-action-dialog > *, .graph-merge-review > * { min-width: 0; }
+.graph-operation-identity { margin: 0; overflow-wrap: anywhere; }
+.graph-source-options { max-height: min(400px, calc(100dvh - 120px)); overflow-y: auto; }
+.graph-source-options .filter-option-label small { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-preparing { display: grid; gap: 8px; color: var(--muted); }
+.graph-merge-review { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.graph-merge-sources { display: grid; gap: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.graph-commit-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 4px 0; }
+.graph-worktree-parent { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.graph-worktree-parent .material-text-field { flex: 1; min-width: 0; }
+.graph-action-dialog .dialog-actions { position: sticky; bottom: 0; flex-shrink: 0; padding-top: 12px; background: var(--menu-surface); }
+.prepared-diff { min-width: 0; max-height: min(360px, calc(100dvh - 340px)); min-height: 60px; overflow: auto; border-block: 1px solid var(--line); }
+.prepared-diff-file { min-width: 0; }
+.prepared-diff-file + .prepared-diff-file { border-top: 1px solid var(--line); }
+.prepared-diff-file .submit-file-choice { width: 100%; }
+.prepared-diff-patch { margin: 0; padding: 8px; max-width: 100%; overflow: auto; font-size: 11px; line-height: 1.6; color: var(--text); background: var(--surface); }
+
+/* File operations share the compact tree geometry and Material controls. */
+.local-file-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.file-tree-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px var(--repository-column-inset); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.file-tree-toolbar .material-search-bar { flex: 1; min-width: 0; width: auto; --md-filled-text-field-container-height: 36px; --md-filled-text-field-input-text-size: 11px; }
+.file-tree-toolbar .icon-button { flex-shrink: 0; }
+.local-file-tree .repository-tree-select { user-select: none; }
+.repository-tree-row[data-ignored] { color: color-mix(in srgb,var(--muted) 65%,var(--content)); }
+.repository-tree-row.is-cut { opacity: .55; }
+.local-file-tree .is-drop-target { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--blue-bg); }
+.file-operation-dialog { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.file-operation-preview { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.file-operation-preview li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; font-size: 12px; }
+.file-operation-preview li > span + span { color: var(--muted); font-size: 11px; }
+.file-operation-dialog .notice { margin: 0; }
+.file-operation-dialog .modal-actions { margin-top: 0; }
