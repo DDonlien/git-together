@@ -46,7 +46,7 @@ export function presenceProjectSummary(project: PresenceProject, valid: boolean)
 
 export type PresenceWorkState = 'editing' | 'changed' | 'committed';
 export type PresenceBranch = {
-  branch: string | null; state: PresenceWorkState;
+  branch: string | null; state: PresenceWorkState; changedFileCount: number | null;
   sources: { serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null }[];
 };
 export type PresencePerson = {
@@ -56,6 +56,9 @@ export type PresencePerson = {
   scope?: string;
 };
 export const presenceWorkLabels: Record<PresenceWorkState, string> = { editing: '编辑中', changed: '有未 Commit 更改', committed: '有未 Push 提交' };
+export function presenceBranchWorkLabel(branch: PresenceBranch): string {
+  return branch.changedFileCount !== null && branch.changedFileCount > 0 ? `${branch.changedFileCount} 个文件未 Commit` : presenceWorkLabels[branch.state];
+}
 const workPriority: Record<PresenceWorkState, number> = { editing: 3, changed: 2, committed: 1 };
 
 function projectWorkState(project: PresenceProject): PresenceWorkState | null {
@@ -85,11 +88,13 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       if (workPriority[state] > workPriority[person.state]) person.state = state;
       let existing = person.branches.find(value => value.branch === project.branch);
       if (!existing) {
-        existing = { branch: project.branch, state, sources: [] };
+        existing = { branch: project.branch, state, changedFileCount: 0, sources: [] };
         person.branches.push(existing);
       } else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
       if (!existing.sources.some(source => source.deviceId === session.deviceId && source.worktreeId === project.worktreeId)) {
         existing.sources.push({ serverId: session.serverId, userId: session.userId, identityId: session.identityId, deviceId: session.deviceId, worktreeId: project.worktreeId, organizationId: project.organizationId ?? null });
+        const count = project.gitReady && !project.files.some(file => file.git === 'unknown' || file.pending) ? project.files.filter(file => file.git === 'dirty').length : null;
+        existing.changedFileCount = existing.changedFileCount === null || count === null ? null : existing.changedFileCount + count;
       }
     }
   }

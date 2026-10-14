@@ -155,6 +155,24 @@ async fn authenticated_push_preserves_branches_when_git_email_is_different() {
 }
 
 #[tokio::test]
+async fn branch_creation_activity_without_content_is_not_push_evidence() {
+    for has_push in [false, true] {
+        let mut creation = push(HEAD, "current");
+        creation["content"] = json!("");
+        creation["ref_name"] = json!("refs/heads/main");
+        let mut activities = vec![creation];
+        if has_push {
+            activities.push(push(HEAD, "current"));
+        }
+        let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
+        data.responses.insert(format!("{BASE}/activities/feeds"), json!(activities));
+        let fixture = serve(data).await;
+        let proof = fixture.provider.account_participation(&repository(), HEAD, &CancellationToken::new()).await.unwrap();
+        assert_eq!(proof, json!({"hasAccountCommits":false,"hasAccountPush":has_push}));
+    }
+}
+
+#[tokio::test]
 async fn push_actor_repo_and_branch_ancestry_are_required() {
     let other = "cccccccccccccccccccccccccccccccccccccccc";
     for scenario in [
@@ -164,6 +182,9 @@ async fn push_actor_repo_and_branch_ancestry_are_required() {
         "other-repo",
         "missing-actor",
         "malformed-content",
+        "missing-content",
+        "non-string-content",
+        "whitespace-content",
     ] {
         let mut activity = push(HEAD, "current");
         match scenario {
@@ -173,6 +194,9 @@ async fn push_actor_repo_and_branch_ancestry_are_required() {
             "other-repo" => activity["repo_id"] = json!(2),
             "missing-actor" => activity["act_user"] = Value::Null,
             "malformed-content" => activity["content"] = json!("not-json"),
+            "missing-content" => { activity.as_object_mut().unwrap().remove("content"); },
+            "non-string-content" => activity["content"] = Value::Null,
+            "whitespace-content" => activity["content"] = json!(" "),
             _ => unreachable!(),
         }
         let mut data = Fixture::new(vec![commit(HEAD, Some("foreign@example.test"), None, &[])]);
@@ -185,7 +209,7 @@ async fn push_actor_repo_and_branch_ancestry_are_required() {
             .await;
         if matches!(
             scenario,
-            "other-repo" | "missing-actor" | "malformed-content"
+            "other-repo" | "missing-actor" | "malformed-content" | "missing-content" | "non-string-content" | "whitespace-content"
         ) {
             assert!(
                 proof.unwrap_err().contains("推送记录核对未完成"),

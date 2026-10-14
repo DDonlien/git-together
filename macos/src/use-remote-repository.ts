@@ -11,7 +11,7 @@ const resourceKey = (repository: RemoteRepository, instanceId: string) => JSON.s
 // Associated repositories are owned by useWorkspace across page/filter changes.
 // Unassociated ones use the same reader on demand. Both retain successful SHA
 // snapshots and share the timer/trigger serialization and cancellation rules.
-export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void) {
+export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void, pausedRepositories: ReadonlySet<string> = new Set()) {
   const identities = repositories.map(repository => resourceKey(repository, instanceId));
   const resources = enabled && instanceId ? repositories.filter(repository => repository.available).map(repository => resourceKey(repository, instanceId)) : [];
   const current = useRef(new Set<string>()); current.current = new Set(resources);
@@ -25,6 +25,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
     });
   }, [identityKey]);
   useAutoRefresh({ resources, intervalMs: syncIntervals.remote,
+    pausedResources: repositories.filter(repository => pausedRepositories.has(repository.id)).map(repository => resourceKey(repository, instanceId)),
     triggers: Object.fromEntries(repositories.map(repository => [resourceKey(repository, instanceId), (changes[repository.id] ?? 0) * 2 + Number(checkParticipation)])),
     onReading: (key, loading) => setStates(previous => {
       const state = previous[key] || { workspace: null, error: '', loading: false };

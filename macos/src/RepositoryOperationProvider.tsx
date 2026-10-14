@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { RepositoryOperationDialog } from './RepositoryOperationDialog';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationState } from './repository-action-model';
 
-type OperationInput = Omit<Parameters<typeof RepositoryOperationDialog>[0], 'onClose' | 'onCollapse' | 'visible' | 'onStateChange' | 'onFinished'> & { scope: string };
+type OperationInput = Omit<Parameters<typeof RepositoryOperationDialog>[0], 'onClose' | 'onCollapse' | 'visible' | 'onStateChange' | 'onFinished' | 'pauseRefresh'> & { scope: string };
 type Operation = OperationInput & { id: string; state: RepositoryOperationState };
 type Operations = {
   open: (input: OperationInput) => void; restore: (id: string) => void;
@@ -12,7 +12,7 @@ type Operations = {
 const OperationsContext = createContext<Operations | null>(null);
 const overlaps = (left: readonly RepositoryActionTarget[], right: readonly RepositoryActionTarget[]) => left.some(a => a.task.path && right.some(b => b.task.path === a.task.path));
 
-export function RepositoryOperationProvider({ sessionId, children }: { sessionId: string; children: ReactNode }) {
+export function RepositoryOperationProvider({ sessionId, children, pauseRepositoryRefresh }: { sessionId: string; children: ReactNode; pauseRepositoryRefresh?: (repositoryIds: string[]) => () => void }) {
   const [operations, setOperations] = useState<Operation[]>([]), current = useRef<Operation[]>([]);
   const [active, setActive] = useState<string | null>(null), activeRef = useRef<string | null>(null);
   const save = useCallback((next: Operation[]) => { current.current = next; setOperations(next); }, []);
@@ -26,7 +26,7 @@ export function RepositoryOperationProvider({ sessionId, children }: { sessionId
   const open = useCallback((input: OperationInput) => {
     const existing = get(input.mode, input.scope, input.targets) || current.current.find(operation => operation.state !== 'completed' && overlaps(operation.targets, input.targets));
     if (existing) { restore(existing.id); return; }
-    const operation: Operation = { ...input, id: crypto.randomUUID(), targets: structuredClone(input.targets), state: input.mode === 'commit' || input.mode === 'push' ? 'ready' : 'preparing' };
+    const operation: Operation = { ...input, id: crypto.randomUUID(), targets: structuredClone(input.targets), state: ['commit', 'submit', 'push'].includes(input.mode) ? 'ready' : 'preparing' };
     save([...current.current, operation]); restore(operation.id);
   }, [get, restore, save]);
   const close = useCallback((id: string) => { save(current.current.filter(operation => operation.id !== id)); if (activeRef.current === id) collapse(); }, [save, collapse]);
@@ -43,17 +43,19 @@ export function RepositoryOperationProvider({ sessionId, children }: { sessionId
   }, [close, update]);
   const value = useMemo(() => ({ open, restore, get, blocked }), [open, restore, get, blocked, operations]);
   return <OperationsContext.Provider value={value}>{children}{operations.map(operation =>
-    <OperationDialog key={operation.id} operation={operation} visible={active === operation.id} onCollapse={collapse} onClose={close} onStateChange={update} onFinished={finish} />
+    <OperationDialog key={operation.id} operation={operation} visible={active === operation.id} onCollapse={collapse} onClose={close} onStateChange={update} onFinished={finish} pauseRepositoryRefresh={pauseRepositoryRefresh} />
   )}</OperationsContext.Provider>;
 }
-function OperationDialog({ operation, visible, onCollapse, onClose, onStateChange, onFinished }: {
+function OperationDialog({ operation, visible, onCollapse, onClose, onStateChange, onFinished, pauseRepositoryRefresh }: {
   operation: Operation; visible: boolean; onCollapse: () => void; onClose: (id: string) => void;
   onStateChange: (id: string, state: RepositoryOperationState) => void; onFinished: (id: string) => void;
+  pauseRepositoryRefresh?: (repositoryIds: string[]) => () => void;
 }) {
   const close = useCallback(() => onClose(operation.id), [operation.id, onClose]);
   const update = useCallback((state: RepositoryOperationState) => onStateChange(operation.id, state), [operation.id, onStateChange]);
   const finish = useCallback(() => onFinished(operation.id), [operation.id, onFinished]);
-  return <RepositoryOperationDialog {...operation} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} />;
+  const pauseRefresh = useCallback(() => pauseRepositoryRefresh?.(operation.targets.map(target => target.repositoryId)) || (() => {}), [operation.targets, pauseRepositoryRefresh]);
+  return <RepositoryOperationDialog {...operation} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} pauseRefresh={pauseRefresh} />;
 }
 export function useRepositoryOperations(): Operations {
   const context = useContext(OperationsContext);

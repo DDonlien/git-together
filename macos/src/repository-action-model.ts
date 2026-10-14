@@ -7,7 +7,7 @@ import type { CommitDraft } from './local-submit-model';
 
 export type RepositoryActionMode = 'commit' | 'submit' | 'push' | 'pull' | 'latest' | 'clean';
 export type RepositoryOperationState = 'preparing' | 'ready' | 'working' | 'failed' | 'completed';
-export type RepositoryOperationControls = { visible?: boolean; onCollapse?: () => void; onStateChange?: (state: RepositoryOperationState) => void; onFinished?: () => void };
+export type RepositoryOperationControls = { visible?: boolean; onCollapse?: () => void; onStateChange?: (state: RepositoryOperationState) => void; onFinished?: () => void; pauseRefresh?: () => () => void };
 export const repositoryOperationScope = (repositoryId: string, branch?: string, taskId?: string) => JSON.stringify([repositoryId, branch || null, taskId || null]);
 export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string; draft?: CommitDraft };
 

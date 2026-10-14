@@ -27,9 +27,16 @@ export function useWorkspace() {
   const [localStates, setLocalStates] = useState<Record<string, LocalRepositoryState>>({});
   const localChanges = useRef(new Map<string, Map<string, string>>());
   const localReadVersions = useRef(new Map<string, number>());
+  const refreshPauses = useRef(new Map<string, number>());
+  const refreshBaselines = useRef(new Set<string>());
+  const resumedRepositories = useRef(new Set<string>());
+  const [pausedRepositories, setPausedRepositories] = useState<ReadonlySet<string>>(new Set());
   const [changeVersions, setChangeVersions] = useState<Record<string, number>>({});
   const [fetchVersions, setFetchVersions] = useState<Record<string, number>>({});
   const onFetched = useCallback((repositoryId: string) => {
+    // The operation's resume already schedules a local read. Its remote check
+    // must not schedule a second immediate scan of the same worktrees.
+    if (resumedRepositories.current.delete(repositoryId)) return;
     setFetchVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
   }, []);
   const [loading, setLoading] = useState(true);
@@ -121,6 +128,7 @@ export function useWorkspace() {
   });
   const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees])) : [];
   useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
+    pausedResources: localResources.filter(resource => pausedRepositories.has((JSON.parse(resource) as [string, string])[1])),
     triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees]), fetchVersions[link.repositoryId] ?? 0])),
     onReading: (resource, loading) => {
       const [instanceId, repositoryId, path] = JSON.parse(resource) as [string, string, string];
@@ -151,7 +159,9 @@ export function useWorkspace() {
           if (previous !== undefined && previous !== next) changed = true;
         }
         localChanges.current.set(resource, nextChanges);
-        if (changed) setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
+        // The resumed remote check already covers changes made by the operation.
+        const refreshedOperation = refreshBaselines.current.delete(resource);
+        if (changed && !refreshedOperation) setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
         setLocalStates(current => {
           const previous = current[repositoryId];
           const retained = preserveLocalWorkspace(previous?.mappingKey === resource ? previous.workspace : undefined, workspace);
@@ -189,7 +199,31 @@ export function useWorkspace() {
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched);
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched, pausedRepositories);
+  const pauseRepositoryRefresh = useCallback((repositoryIds: string[]) => {
+    const instanceId = catalogRef.current.instanceId;
+    const ids = [...new Set(repositoryIds)];
+    for (const id of ids) {
+      refreshPauses.current.set(id, (refreshPauses.current.get(id) || 0) + 1);
+      const link = catalogRef.current.links.find(link => link.repositoryId === id);
+      if (link) {
+        const resource = JSON.stringify([instanceId, id, link.path, link.worktrees]);
+        localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
+        refreshBaselines.current.add(resource);
+      }
+    }
+    setPausedRepositories(new Set(refreshPauses.current.keys()));
+    return () => {
+      if (instanceId !== catalogRef.current.instanceId) return;
+      for (const id of ids) {
+        const count = refreshPauses.current.get(id)! - 1;
+        if (count) refreshPauses.current.set(id, count);
+        else { refreshPauses.current.delete(id); resumedRepositories.current.add(id); }
+      }
+      if (mounted.current) setPausedRepositories(new Set(refreshPauses.current.keys()));
+    };
+  }, []);
+  useEffect(() => { refreshPauses.current.clear(); refreshBaselines.current.clear(); resumedRepositories.current.clear(); setPausedRepositories(new Set()); }, [catalog.instanceId]);
   const hiddenEntries = new Set(preferences.hiddenEntries || []);
   for (const repository of catalog.repositories) for (const key of branchHiddenEntries(repository.id, preferences, remoteStates[repository.id]?.workspace?.tasks, linkedTasks(catalog.links.find(link => link.repositoryId === repository.id), localStates[repository.id]))) hiddenEntries.add(key);
   useEffect(() => {
@@ -218,36 +252,18 @@ export function useWorkspace() {
     if (!link) throw new Error('请先关联本地目录。');
     const key = writePrefix(input.repositoryId) + JSON.stringify(input.taskId);
     if (running.current.has(input.repositoryId) || running.current.has(key)) throw new Error('这个工作目录正在执行操作，请稍后重试。');
-    const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees]);
-    const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees]) === resource);
+    const resumeRefresh = pauseRepositoryRefresh([input.repositoryId]);
     running.current.add(key); setBusy(current => ({ ...current, [key]: true, [input.repositoryId]: true }));
-    localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
     try {
-      const result = await importAPI(method, input);
-      const readVersion = (localReadVersions.current.get(resource) || 0) + 1;
-      localReadVersions.current.set(resource, readVersion);
-      if (currentLink()) {
-        setChangeVersions(current => ({ ...current, [input.repositoryId]: (current[input.repositoryId] || 0) + 1 }));
-        try {
-          const workspace = await importAPI('localWorkspace', { repositoryId: input.repositoryId });
-          if (currentLink() && readVersion === localReadVersions.current.get(resource)) {
-            const baseline = new Map(localChanges.current.get(resource));
-            const paths = new Set(workspace.tasks.filter(task => !task.remote && task.path).map(task => task.path!));
-            for (const path of baseline.keys()) if (!paths.has(path)) baseline.delete(path);
-            for (const task of workspace.tasks) if (!task.remote && task.path && !task.error) baseline.set(task.path, JSON.stringify([task.branch, task.changeKey || [task.head, task.files, task.tree]]));
-            localChanges.current.set(resource, baseline);
-            setLocalStates(current => ({ ...current, [input.repositoryId]: { path: link.path, mappingKey: resource, snapshot: null, workspace: preserveLocalWorkspace(current[input.repositoryId]?.workspace, workspace), loading: false, error: '', checkedAt: Date.now() } }));
-          }
-        } catch { result.warning = [result.warning, `${method === 'pushCommit' ? '推送已完成' : method === 'applySync' ? '操作已完成' : '提交已创建'}，文件列表刷新失败；正在自动重新读取。`].filter(Boolean).join(' '); }
-      }
-      return result;
+      return await importAPI(method, input);
     } finally {
       running.current.delete(key);
       if (mounted.current) setBusy(current => { const next = { ...current }; delete next[key]; next[input.repositoryId] = [...running.current].some(item => item === input.repositoryId || item.startsWith(writePrefix(input.repositoryId))); return next; });
+      resumeRefresh();
     }
   }
   return {
-    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates, pausedRepositories, pauseRepositoryRefresh,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

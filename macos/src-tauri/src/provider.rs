@@ -763,7 +763,15 @@ impl Provider {
                 if !actor.eq_ignore_ascii_case(text(&self.account, "login")) {
                     continue;
                 }
-                let content: Value = serde_json::from_str(text(activity, "content"))
+                let raw = activity["content"]
+                    .as_str()
+                    .ok_or("仓库推送提交记录格式无效。")?;
+                // Gitea also emits commit_repo for CreateRef, without commit content.
+                // That event has no SHA evidence and must not invalidate real pushes.
+                if raw.is_empty() {
+                    continue;
+                }
+                let content: Value = serde_json::from_str(raw)
                     .map_err(|_| "仓库推送提交记录格式无效。")?;
                 let pushed = content["Commits"]
                     .as_array()

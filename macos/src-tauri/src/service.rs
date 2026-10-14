@@ -21,6 +21,9 @@ use std::{
 use tokio::sync::{watch, Mutex, OwnedMutexGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod refresh_tests;
+
 struct State {
     value: Value,
     revision: u64,
@@ -1049,20 +1052,37 @@ impl Service {
         if self.installing.load(Ordering::SeqCst) {
             return Err("正在安装更新，请稍后重试。".into());
         }
-        let _target = if matches!(
+        let writing = matches!(
             method,
             "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage"
-        ) {
+        );
+        let repository_read = matches!(method, "localWorkspace" | "remoteWorkspace" | "fetchRepository");
+        let _target = if writing || repository_read {
             let id = uuid::Uuid::new_v4().to_string();
             let key = format!(
                 "{}:{}",
                 text(&input, "repositoryId"),
                 text(&input, "taskId")
             );
-            self.running_targets
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(id.clone(), (key, method.into(), cancel.clone()));
+            {
+                let prefix = format!("{}:", text(&input, "repositoryId"));
+                let mut jobs = self.running_targets.lock().unwrap_or_else(|e| e.into_inner());
+                if repository_read && jobs.values().any(|(target, method, _)| target.starts_with(&prefix)
+                    && matches!(method.as_str(), "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage")) {
+                    cancel.cancel();
+                    return Err("仓库正在提交，自动读取已暂停。".into());
+                }
+                if writing {
+                    // Native renderer aborts do not reach Rust. Foreground work
+                    // releases this repository's existing scans and fetch waiters.
+                    for (target, method, token) in jobs.values() {
+                        if target.starts_with(&prefix) && matches!(method.as_str(), "localWorkspace" | "remoteWorkspace" | "fetchRepository") {
+                            token.cancel();
+                        }
+                    }
+                }
+                jobs.insert(id.clone(), (key, method.into(), cancel.clone()));
+            }
             Some(TargetOperation(self, id))
         } else {
             None
@@ -1084,10 +1104,11 @@ impl Service {
             return Err("正在安装更新，请稍后重试。".into());
         }
         let started = util::now();
-        self.diagnostics.record(
-            &json!({"event":"api","outcome":"start","method":method}),
-            false,
-        );
+        let mut started_event = json!({"event":"api","outcome":"start","method":method});
+        if !text(&input, "repositoryId").is_empty() {
+            started_event["resource"] = json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
+        }
+        self.diagnostics.record(&started_event, false);
         let background = self
             .background
             .lock()
@@ -1097,6 +1118,7 @@ impl Service {
         tokio::pin!(request);
         let result = tokio::select! {
             result = &mut request => result,
+            _ = cancel.cancelled(), if repository_read => Err("仓库读取已取消。".into()),
             _ = background.cancelled(), if foreground.is_none() => {
                 // Let the existing cancellation paths finish their cleanup. Installation
                 // never waits for these readers or the separately owned fetch jobs.

@@ -28,7 +28,7 @@ import type { FileTreeChange } from './file-tree';
 
 const noChanges: FileTreeChange[] = [];
 
-export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask }: {
+export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask, refreshPaused = false }: {
   repository: RemoteRepository; account: Account; localPath?: string; localState?: LocalRepositoryState;
   localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; manualHiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
   globalSearch: string; onSearchChange?: (value: string) => void; searchRef?: RefObject<HTMLElement | null>;
@@ -37,6 +37,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   readLocalCommit?: ReadLocalCommit;
   applySync?: import('./repository-sync-model').ApplyRepositorySync; submitCommit?: SubmitLocalCommit; pushCommit?: PushLocalCommit; generateCommitMessage?: GenerateCommitMessage;
   initialCommitTask?: string | null;
+  refreshPaused?: boolean;
 }) {
   const current = localState?.path === localPath ? localState : undefined;
   const snapshot = current?.snapshot;
@@ -72,9 +73,9 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const selection = commitSelection && workspace.tasks.some(task => task.id === commitSelection.taskId) ? commitSelection : null;
   const selectedCommits = useMemo<Record<string, string>>(() => selection ? { [selection.taskId]: selection.commitId } : {}, [selection]);
   const selectedCommit = workspace.commits.find(commit => commit.id === selection?.commitId);
-  const remoteCommits = useRemoteCommits(workspace.tasks, focus, selectedCommits, readRemoteCommit);
+  const remoteCommits = useRemoteCommits(workspace.tasks, focus, selectedCommits, readRemoteCommit, refreshPaused);
   const localCommits = useLocalCommits(workspace.tasks, selectedCommits, suppliedReadLocalCommit || (async (task, commitId, signal) =>
-    importAPI('localCommit', { repositoryId: repository.id, taskId: task.id, commitId }, signal)));
+    importAPI('localCommit', { repositoryId: repository.id, taskId: task.id, commitId }, signal)), refreshPaused);
   const selectCommit = (id: string | null) => {
     if (!id) { setCommitSelection(null); return; }
     const task = repositoryCommitTask(workspace, id, focus);

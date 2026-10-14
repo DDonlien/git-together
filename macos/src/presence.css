@@ -46,7 +46,7 @@
 .branch-label:has(> .presence-avatar-popover) { overflow: visible; }
 .repository-task-header .branch-label > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .repository-tree-branch:has(.presence-avatar-popover) > strong { padding-right: 0; mask-image: none; text-overflow: ellipsis; }
-.presence-avatar-trigger { display: flex; align-items: center; justify-content: center; min-height: 24px; padding: 3px 6px; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+.presence-avatar-trigger { display: flex; align-items: center; justify-content: center; min-height: 24px; padding: 3px; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
 .presence-avatar-trigger:hover { background: var(--surface-hover); }
 .presence-avatar-trigger:active { background: var(--selection); }
 .presence-avatar-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
@@ -87,6 +87,9 @@
 .presence-people-list > li + li { border-top: 1px solid var(--line); }
 .presence-people-list > li > div { min-width: 0; flex: 1; }
 .presence-people-list strong { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.presence-person-summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.presence-person-summary > small { min-width: 0; overflow-wrap: anywhere; }
+.presence-person-summary .presence-person-work { flex-shrink: 0; white-space: nowrap; font-size: 10px; }
 .presence-people-branches { margin-top: 5px; }
 .presence-people-branches > li { padding: 6px 0; }
 .presence-people-branches > li + li { border-top: 1px solid var(--line); }

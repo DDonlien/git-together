@@ -4,11 +4,12 @@ import { syncIntervals } from './auto-refresh';
 import type { RepositoryTask } from './repository-model';
 import type { LocalCommitDetails, LocalCommitState, ReadLocalCommit } from './local-commit-model';
 
-export function useLocalCommits(tasks: RepositoryTask[], selected: Record<string, string>, read: ReadLocalCommit) {
+export function useLocalCommits(tasks: RepositoryTask[], selected: Record<string, string>, read: ReadLocalCommit, paused = false) {
   const [states, setStates] = useState<Record<string, LocalCommitState>>({});
   const cache = useRef(new Map<string, LocalCommitDetails>());
   const resources = tasks.filter(task => !task.remote && selected[task.id]).map(task => JSON.stringify([task.id, selected[task.id]]));
   useAutoRefresh({ resources, intervalMs: syncIntervals.remote,
+    pausedResources: paused ? resources : [],
     run: async (resource, signal) => {
       const [taskId, commitId] = JSON.parse(resource) as [string, string];
       try {
