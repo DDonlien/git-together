@@ -1587,7 +1587,7 @@ dependencies = [
 
 [[package]]
 name = "gittogether"
-version = "0.31.5"
+version = "0.32.1"
 dependencies = [
  "aes",
  "aes-gcm",

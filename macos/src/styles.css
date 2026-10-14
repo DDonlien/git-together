@@ -182,6 +182,11 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table .dashboard-branch-row td:first-child, .remote-repo-table .dashboard-branch-message td { padding-left: calc(var(--repository-icon-size) + var(--icon-label-gap)); }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
 .remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
+/* Reserve a row-tail slot without shifting Git actions relative to their headings. */
+.remote-repo-table.has-repository-pins { min-width: 1276px; }
+.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 332px; }
+.remote-repo-table.has-repository-pins :is(th, td).repository-action-cell { padding-right: 40px; }
+.dashboard-repository-row .repository-pin-button { position: absolute; right: 4px; top: 0; bottom: 0; margin-block: auto; }
 .dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
 .dashboard-repository-branches { background: transparent; }
 .dashboard-repository-branches[aria-hidden='true'] { pointer-events: none; }
@@ -560,6 +565,13 @@ button.repository-count-action:disabled { opacity: .7; }
 .app-button.ogui-button--quiet { padding-inline: var(--compact-button-padding-inline); }
 .ogui-button__label { display: inline-flex; min-width: 0; align-items: center; justify-content: center; gap: 6px; }
 .icon-button.ogui-control--small { width: var(--compact-height); min-width: var(--compact-height); min-height: var(--compact-height); height: var(--compact-height); padding: 0; color: var(--muted); font-size: 13px; }
+.repository-pin-button.icon-button.ogui-control--small { flex: 0 0 28px; width: 28px; min-width: 28px; height: 28px; min-height: 28px; border-radius: 999px; opacity: 0; pointer-events: none; }
+.repository-pin-button svg { width: 16px; height: 16px; }
+.sidebar-repository-entry:is(:hover, :focus-within) > .repository-pin-button,
+.dashboard-repository-row:is(:hover, :focus-within) .repository-pin-button,
+.repository-pin-button.is-pinned { opacity: 1; pointer-events: auto; }
+.repository-pin-button.is-pinned.icon-button.ogui-control--small { color: var(--blue); background: var(--blue-bg); }
+.repository-pin-button.icon-button.ogui-control--small:hover { background: var(--surface-hover); }
 .icon-button:hover:not(:disabled) { color: var(--text); }
 .icon-button.ogui-icon-button, [role="button"].git-action-anchor { cursor: pointer; }
 .app-button.text-button { color: var(--blue); }

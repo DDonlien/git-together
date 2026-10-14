@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
+
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
 
 选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
