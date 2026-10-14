@@ -8,7 +8,7 @@
 
 GitTogether 是一款面向 macOS 和 Windows 的独立 Git 工作台，把 GitHub、Gitea 和本地 Git 目录放在同一个视野里。它为同时推进多个项目、多个分支的开发者而设计：从仓库总览找到项目，在项目内看清分支、提交和文件，再按需接入本地更改。
 
-[0.33.0](https://github.com/DDonlien/git-together/releases/tag/v0.33.0)发布 macOS Apple Silicon 与 Windows x86/x64。本地文件树支持筛选、排序、类型图标、隐藏项弱化、复制、移动、重命名、回收站删除和外部拖入；操作前预览目标，避免重名覆盖。Git Graph 选中行增加上下与两端留白，同时保持图形行高和连线。发布完成后将核验安装包签名、公证及公开更新源；用户可在设置中自行检查、下载并选择安装。
+[0.33.0](https://github.com/DDonlien/git-together/releases/tag/v0.33.0)已发布 macOS Apple Silicon 与 Windows x86/x64。本地文件树支持筛选、排序、类型图标、隐藏项弱化、复制、移动、重命名、回收站删除和外部拖入；操作前预览目标，避免重名覆盖。Git Graph 选中行增加上下与两端留白，同时保持图形行高和连线。macOS Developer ID 签名、公证与 staple、Windows 双架构安装包、三平台公开下载及更新清单均已核验；用户可在设置中自行检查、下载并选择安装。
 
 ## 一个项目，多条任务线
 
