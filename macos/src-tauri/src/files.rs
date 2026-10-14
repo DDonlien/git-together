@@ -62,6 +62,9 @@ pub fn relative(root: &Path, value: &str, allow_root: bool) -> Result<PathBuf> {
     }
     Ok(path)
 }
+fn api_path(path: &Path) -> Result<String> {
+    path.to_str().map(|path| path.replace('\\', "/")).ok_or_else(|| "文件路径无法读取。".into())
+}
 pub async fn directory(root: &Path, path: &str) -> Result<Value> {
     let folder = relative(root, path, true)?;
     let mut entries = Vec::new(); let mut input = Vec::new();
@@ -158,10 +161,15 @@ fn rename(source: &Path, target: &Path) -> io::Result<()> {
 }
 pub fn apply(plan: Plan) -> Result<Value> {
     for item in &plan.items {
-        if let Some(scope) = &plan.source_scope { relative(scope, item.source.strip_prefix(scope).map_err(|_| "来源不属于关联工作目录。")?.to_str().ok_or("来源路径无法读取。")?, false)?; }
+        if let Some(scope) = &plan.source_scope {
+            // API paths use `/` on every platform; native Windows Path strings use `\\`.
+            let source = item.source.strip_prefix(scope).map_err(|_| "来源不属于关联工作目录。")?;
+            relative(scope, &api_path(source)?, false)?;
+        }
         if fingerprint(&item.source)? != item.fingerprint { return Err("来源内容已变化，请重新预览后操作。".into()); }
         if let Some(target) = &item.target {
-            relative(&plan.root, target.parent().unwrap().strip_prefix(&plan.root).unwrap().to_str().ok_or("目标路径无效。")?, true)?;
+            let parent = target.parent().unwrap().strip_prefix(&plan.root).unwrap();
+            relative(&plan.root, &api_path(parent)?, true)?;
             if fs::symlink_metadata(target).is_ok() { return Err("目标已出现同名文件，未覆盖，请重新预览。".into()); }
         }
     }
@@ -179,4 +187,15 @@ pub fn apply(plan: Plan) -> Result<Value> {
         match result { Ok(()) => completed += 1, Err(e) => { error = e; break; } }
     }
     Ok(json!({"completed":completed,"total":plan.items.len(),"error":error}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::api_path;
+    use std::path::Path;
+
+    #[test]
+    fn native_paths_use_api_separators() {
+        assert_eq!(api_path(Path::new(r"file-actions\source.txt")).unwrap(), "file-actions/source.txt");
+    }
 }
