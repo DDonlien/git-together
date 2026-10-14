@@ -12,7 +12,7 @@ export const performanceMetricKeys = ['frames', 'slowFrames', 'frameMaxMs', 'lag
 type PerformanceDetails = Partial<Record<typeof performanceMetricKeys[number], number>> & { phase?: typeof performancePhases[number] };
 export type DiagnosticDetails = PerformanceDetails & { method?: typeof diagnosticMethods[number]; provider?: Provider; endpoint?: 'identity' | 'repositories' | 'branches' | 'history' | 'tree' | 'commit' | 'file' | 'classification' | 'other'; verb?: 'status' | 'log' | 'diff' | 'worktree' | 'ls-tree' | 'ls-files' | 'rev-parse' | 'for-each-ref' | 'config' | 'fetch' | 'ls-remote' | 'clone' | 'push' | 'other'; code?: DiagnosticCode; httpStatus?: number; durationMs?: number; retryMs?: number; failures?: number; tasks?: number; exitCode?: number; signal?: 'SIGTERM' | 'SIGKILL' | 'SIGABRT' | 'SIGSEGV'; errorKind?: 'Error' | 'TypeError' | 'SyntaxError' | 'RangeError' | 'ReferenceError' | 'AbortError' | 'TimeoutError'; resource?: string; requestId?: string; spanId?: string; parentId?: string };
 export type DiagnosticInput = DiagnosticDetails & { event: DiagnosticEvent; outcome: DiagnosticOutcome };
-export type DiagnosticRecord = DiagnosticInput & { updateStage?: 'check' | 'download' | 'install' | 'extract'; updaterError?: 'Io' | 'Reqwest' | 'Signature' | 'Version' | 'Restore' | 'Updater'; systemCode?: number; updateVersion?: string; errorChain?: string[]; time: string; version: string; component: 'app' | 'preview' | 'authorization' | 'test'; session: string };
+export type DiagnosticRecord = DiagnosticInput & { authorizationStage?: 'token-received' | 'token-rejected' | 'refresh-start' | 'refresh-complete' | 'refresh-failed' | 'refresh-unavailable' | 'storage-load'; authReason?: 'granted' | 'renewed' | 'expiring' | 'expired' | 'rejected' | 'missing-refresh' | 'refresh-expired' | 'refresh-revoked' | 'configuration' | 'network' | 'rate-limit' | 'response' | 'storage' | 'stale' | 'cancelled'; expiresInSeconds?: number; refreshExpiresInSeconds?: number; updateStage?: 'check' | 'download' | 'install' | 'extract'; updaterError?: 'Io' | 'Reqwest' | 'Signature' | 'Version' | 'Restore' | 'Updater'; systemCode?: number; updateVersion?: string; errorChain?: string[]; time: string; version: string; component: 'app' | 'preview' | 'authorization' | 'test'; session: string };
 export type DiagnosticsStatus = { directory: string; retentionHours: 24; maxBytes: number; limited: boolean; error: string; queued?: number; dropped?: number; capacityLimited?: boolean };
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const member = (value: unknown, list: readonly string[]) => typeof value === 'string' && list.includes(value);
@@ -38,7 +38,7 @@ export function diagnosticCode(problem: unknown): DiagnosticCode {
   if (text.split('，', 1)[0].replace(/。$/, '').endsWith('已取消')) return 'aborted';
   if (/证书|certificate/i.test(text)) return 'certificate';
   if (/频率|限流/.test(text)) return 'rate-limit';
-  if (/无权|检查.*权限|账号权限|令牌无效|已过期|拒绝读取/.test(text)) return 'permission';
+  if (/无权|检查.*权限|账号权限|令牌无效|已过期|已失效|被撤销|HTTP 401|续期凭据已到期|拒绝读取/.test(text)) return 'permission';
   if (/版本不一致|版本不匹配/.test(text)) return 'version';
   if (/断开|无法连接|连接中断/.test(text)) return 'connection';
   if (/格式无效|无效.*数据|响应过大/.test(text)) return 'invalid-data';

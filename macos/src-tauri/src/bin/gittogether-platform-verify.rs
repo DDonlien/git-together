@@ -192,14 +192,20 @@ async fn verify() -> Result<(), String> {
     .await?;
     fs::write(root.join("selected.txt"), "original\n").map_err(|e| e.to_string())?;
     fs::write(root.join("保留.txt"), "original\n").map_err(|e| e.to_string())?;
+    git::read(&root, &["lfs", "install", "--local"]).await?;
+    fs::write(root.join(".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n")
+        .map_err(|e| e.to_string())?;
+    fs::write(root.join("asset.bin"), [0, 1, 2, 3]).map_err(|e| e.to_string())?;
     git::read(&root, &["add", "--all"]).await?;
     git::read(&root, &["commit", "--quiet", "-m", "initial"]).await?;
     fs::write(root.join("selected.txt"), "selected\n").map_err(|e| e.to_string())?;
+    let asset = [0, 4, 5, 6, 7];
+    fs::write(root.join("asset.bin"), asset).map_err(|e| e.to_string())?;
     fs::write(root.join("保留.txt"), "keep staged\n").map_err(|e| e.to_string())?;
     git::read(&root, &["add", "--", "保留.txt"]).await?;
     let task = git::task(&root).await?;
     let service = Service::new(storage.clone(), true, "release-check")?;
-    let result = service.handle("submitCommit", json!({"repositoryId":"release-check:1","taskId":task["id"],"expectedHead":task["head"],"changeKey":task["changeKey"],"operationId":uuid::Uuid::new_v4().to_string(),"summary":"select one file","description":"native Windows release validation","paths":["selected.txt"]}), CancellationToken::new()).await?;
+    let result = service.handle("submitCommit", json!({"repositoryId":"release-check:1","taskId":task["id"],"expectedHead":task["head"],"changeKey":task["changeKey"],"operationId":uuid::Uuid::new_v4().to_string(),"summary":"select files with LFS","description":"","paths":["selected.txt","asset.bin"]}), CancellationToken::new()).await?;
     if result["commitId"].as_str().is_none() || result.get("warning").is_some() {
         return Err("本地提交未返回真实SHA。".into());
     }
@@ -209,7 +215,7 @@ async fn verify() -> Result<(), String> {
     )
     .await?;
     let staged = git::read(&root, &["diff", "--cached", "--name-only", "-z"]).await?;
-    if committed.trim() != "selected.txt"
+    if committed.lines().collect::<Vec<_>>() != ["asset.bin", "selected.txt"]
         || staged
             .split('\0')
             .filter(|path| !path.is_empty())
@@ -217,6 +223,46 @@ async fn verify() -> Result<(), String> {
             != ["保留.txt"]
     {
         return Err("选择范围或未选暂存内容核验失败。".into());
+    }
+    let pointer = git::read(&root, &["show", "HEAD:asset.bin"]).await?;
+    if pointer != format!("version https://git-lfs.github.com/spec/v1\noid sha256:{}\nsize {}\n", util::digest(asset), asset.len())
+        || fs::read(root.join("asset.bin")).map_err(|e| e.to_string())? != asset
+        || git::read(&root, &["show", "-s", "--format=%B", "HEAD"]).await?.trim() != "select files with LFS"
+    {
+        return Err("LFS指针、工作文件或Summary单独提交核验失败。".into());
+    }
+    git::read(&root, &["lfs", "fsck", "--objects", "HEAD"]).await?;
+
+    let previous_head = git::read(&root, &["rev-parse", "HEAD"]).await?;
+    let previous_index = fs::read(root.join(".git/index")).map_err(|e| e.to_string())?;
+    let hook = root.join(".git/hooks/pre-commit");
+    fs::write(&hook, "#!/bin/sh\nprintf '%s\\n' 'git-lfs: write: no space left on device' >&2\nexit 1\n")
+        .map_err(|e| e.to_string())?;
+    fs::write(root.join("selected.txt"), "retain after failure\n").map_err(|e| e.to_string())?;
+    let task = git::task(&root).await?;
+    let error = service.handle("submitCommit", json!({"repositoryId":"release-check:1","taskId":task["id"],"expectedHead":task["head"],"changeKey":task["changeKey"],"operationId":uuid::Uuid::new_v4().to_string(),"summary":"failed commit","description":"","paths":["selected.txt"]}), CancellationToken::new()).await
+        .err().ok_or("失败钩子未阻止提交。")?;
+    if git::diagnostic_code(&error) != "ENOSPC"
+        || git::read(&root, &["rev-parse", "HEAD"]).await? != previous_head
+        || fs::read(root.join(".git/index")).map_err(|e| e.to_string())? != previous_index
+        || fs::read(root.join("selected.txt")).map_err(|e| e.to_string())? != b"retain after failure\n"
+    {
+        return Err("提交失败后没有保留原HEAD、暂存区或工作文件。".into());
+    }
+    fs::remove_file(hook).map_err(|e| e.to_string())?;
+
+    for (output, code) in [
+        ("git-lfs: write: no space left on device", "ENOSPC"),
+        ("git-lfs: There is not enough space on the disk", "ENOSPC"),
+        ("git-lfs: command not found", "git-lfs-missing"),
+        ("Git LFS smudge error: [404] Not Found", "git-lfs-object-missing"),
+    ] {
+        let alias = format!("alias.release-lfs-failure=!printf '%s\\n' '{output}' >&2; exit 1");
+        let error = git::read(&root, &["-c", &alias, "release-lfs-failure"]).await
+            .err().ok_or("Git故障诊断未返回失败。")?;
+        if git::diagnostic_code(&error) != code || error.contains(output) {
+            return Err("Git LFS故障分类错误或泄露原始输出。".into());
+        }
     }
 
     verify_directory_matching(temporary.path(), &root, &service).await?;
@@ -264,7 +310,7 @@ async fn main() {
     match verify().await {
         Ok(()) => println!(
             "{}",
-            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","preserved-staging","bounded-directory-matching","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
+            json!({"version":gittogether_core::VERSION,"architecture":std::env::consts::ARCH,"checks":["dpapi-round-trip","tamper-rejected","private-acl","git-unicode-path","selected-commit","summary-only-commit","lfs-filter-and-hooks","lfs-object-integrity","lfs-failure-classification","failed-commit-preserved-state","preserved-staging","bounded-directory-matching","process-tree-cancel","private-diagnostics"],"nativeValidationPassed":true})
         ),
         Err(error) => {
             eprintln!("Windows原生校验失败：{error}");

@@ -1,5 +1,5 @@
 use crate::{
-    credentials, provider,
+    credentials, provider, github_token::{self, Flow},
     service::{self, Service},
     util::{self, text, Result},
 };
@@ -55,6 +55,7 @@ struct Session {
     next: i64,
     token: Option<String>,
     token_expires: Option<String>,
+    refresh: Option<github_token::RefreshCredential>,
     catalog: Option<Value>,
     error: String,
     cancel: CancellationToken,
@@ -336,6 +337,7 @@ impl Authorization {
             next: 0,
             token: None,
             token_expires: None,
+            refresh: None,
             catalog: None,
             error: String::new(),
             cancel: CancellationToken::new(),
@@ -367,10 +369,12 @@ impl Authorization {
         }
         if let Some(token) = s.token.take() {
             let service = self.service.upgrade().ok_or("账号服务已退出。")?;
+            let refresh = s.refresh.take();
             match service
                 .connect(
                     &json!({"provider":s.provider,"host":s.host,"token":token,"name":s.name}),
                     s.token_expires.clone(),
+                    refresh,
                     true,
                 )
                 .await
@@ -400,6 +404,7 @@ impl Authorization {
         }
         s.cancel.cancel();
         s.token = None;
+        s.refresh = None;
         self.finish(&mut s);
         Ok(json!({"cancelled":true}))
     }
@@ -443,6 +448,7 @@ impl Authorization {
             next: util::now() + interval as i64 * 1000,
             token: None,
             token_expires: None,
+            refresh: None,
             catalog: None,
             error: String::new(),
             cancel: CancellationToken::new(),
@@ -485,16 +491,14 @@ impl Authorization {
                 ],
             )
             .await?;
-            if let Some(token) = value["access_token"]
+            if value["access_token"]
                 .as_str()
-                .filter(|t| !t.is_empty() && t.len() <= 4096 && !t.chars().any(char::is_whitespace))
+                .is_some_and(|t| !t.is_empty() && t.len() <= 4096 && !t.chars().any(char::is_whitespace))
             {
-                s.token = Some(token.into());
-                s.token_expires = value["expires_in"]
-                    .as_i64()
-                    .filter(|n| *n > 0)
-                    .and_then(|n| chrono::DateTime::from_timestamp_millis(util::now() + n * 1000))
-                    .map(|d| d.to_rfc3339());
+                let grant=match github_token::grant(&value,Flow::Device) { Ok(grant)=>grant, Err(error)=>{s.error=error.clone();self.finish(&mut s);return Err(error);} };
+                s.token = Some(grant.token);
+                s.token_expires = grant.expires_at;
+                s.refresh = grant.refresh;
             } else {
                 match text(&value, "error") {
                     "authorization_pending" => (),
@@ -583,6 +587,15 @@ impl Authorization {
                 return Err(e);
             }
         };
+        if s.provider == "github" {
+            let grant = match github_token::grant(&value, Flow::Web) {
+                Ok(grant) => grant,
+                Err(error) => { s.error = error.clone(); self.finish(&mut s); return Err(error); }
+            };
+            s.token = Some(grant.token);
+            s.token_expires = grant.expires_at;
+            s.refresh = grant.refresh;
+        } else {
         let token = text(&value, "access_token");
         if token.is_empty() || token.len() > 4096 || token.chars().any(char::is_whitespace) {
             s.error = "平台没有返回有效授权，请检查应用配置与SSO批准后重新开始。".into();
@@ -596,6 +609,8 @@ impl Authorization {
             .filter(|n| *n > 0)
             .and_then(|n| chrono::DateTime::from_timestamp_millis(util::now() + n * 1000))
             .map(|d| d.to_rfc3339());
+        }
+        s.secret.clear();
         Ok(())
     }
     pub async fn web(&self, method: &str, input: Value) -> Result<Value> {

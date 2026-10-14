@@ -1,5 +1,7 @@
 # Tauri / Rust / React 架构
 
+Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
+
 选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
 
 性能记录（IMPORT-14-performance）：performance-diagnostics独立于React状态，以被动输入/滚动监听、交互期间rAF、可见页面1秒心跳及受支持Long Tasks接口按10秒聚合；组件layout effect记录提交观测，业务请求计数不包含日志请求。响应接收/解码与同步校验分开，不为记录大小再序列化大DTO。记录仍通过有限白名单；接口不支持时显式标识，而非把0当证明。前端日志队列128且单请求；Diagnostics以512容量通道交给单独线程，每批64条，记录接受与实际持久化分开。后台写入/清理的IO不进入异步服务执行线程，检查/打开/复制以写入屏障及spawn_blocking完成，队列拒绝和落盘失败均累计丢失并在日志/设置反馈。Git_READ_CONTEXT在Service请求范围传递匿名日志身份和取消令牌；只读4许可、fetch2许可，异步等待记录queueMs，实际写命令不占后台许可。大分支表移除高度动画并一次构建分支Map，不减少数据；首次完整DOM挂载的剩余成本与真实安装版根因仍需后续确认。完整字段/边界见docs/performance-logs.md。
@@ -8,11 +10,15 @@
 
 OAuth应用按平台+origin保存在provider-oauth-v1.encrypted；更换Client ID不继承旧Secret，配置不进入Catalog。GitLab使用PKCE，GHES/Gitee使用授权码+Secret，公共GitHub保留既有App及PKCE。state只用一次，拒绝/取消/过期/失败终止等待并清除会话密钥，令牌获取后重新验证身份。GitHub SSO required/partial-results作为范围未完整开放处理。桌面回调用4174，浏览器开发用4176；开发页通过同源/api/authorization有限代理调用自己的Rust服务，避免占用安装版端口。端口由服务固定决定，renderer不能指定任意redirect_uri。
 
-分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
+分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits和hasAccountPush结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
 
-创建参与（IMPORT-12-branch-behavior-created）：完整远端分支列表只有一个分支且hasAccountCommits=false时，Rust补充hasAccountCreation。Gitea核对仓库remoteId和创建日期，分页读取创建当天的activities/feeds，只信任create_repo活动中同仓库的act_user.login；user_id是接收人，组织owner和管理权限均不作为创建证据。成功结果按账号/仓库缓存五分钟；最多十页，每页100条，只有找到明确创建者才返回true/false。活动缺失、身份/权限/格式失败或平台未提供证据时保留participationError与warning，不把未知写成false。客户端保留创建者及创建身份未知的唯一分支，也拒绝带参与错误的自动隐藏；手动隐藏与显式恢复沿用原优先级。此仓库创建例外不泛化到多分支，默认模式及已有本人提交不额外读取创建活动。官方契约见[Gitea仓库活动](https://docs.gitea.com/api/operations/repo-list-activity-feeds/)。
+导入历史的提交匹配（2026-10-13，IMPORT-12-branch-behavior-import）：设置名称为「未找到我的提交」，沿用既有偏好键和hasAccountCommits字段。Gitea返回空作者账号时，使用当前登录账号的已验证邮箱匹配Git作者邮箱；外部作者没有本地平台账号是正常情况，完整父节点历史和可用邮箱读取完成后没有匹配就返回false。账号邮箱读取失败、没有可用的已验证邮箱、未映射提交缺少作者邮箱及历史不完整保留participationError和可见；后续找到明确本人提交仍优先返回true。hasAccountCreation独立核对创建活动实际操作者，fork或迁移创建的仓库也沿用该记录，不把导入者写进原提交作者；唯一分支例外和多分支筛选范围不变。
 
-仅hide模式通过remoteWorkspace的有限checkParticipation布尔参数发起账号参与核对，旧调用缺省false。Rust Provider在账号凭据与仓库身份边界内，GitHub/企业版/Gitee按平台作者账号查询；Gitea分页读取账号归属；作者账号为空时核对当前账号的已验证邮箱，仍无法映射的作者保留未知，完整历史不能替代完整身份确认。Gitea只信任/user/emails明确verified的记录，不以显示名或公开profile邮箱推断身份。GitLab匹配当前账号与已验证邮箱。不存在贡献的判定要求明确的作者查询空结果或已闭合的完整父节点历史；分页上限1000、身份失败及缺失父节点以participationError和可见warning保留未知。元数据按账号/仓库/HEAD缓存五分钟，邮箱只留服务内存，不回传界面或写入偏好；有脏文件、未知本地HEAD或未推送本地历史时保留分支显示。官方契约见[GitHub提交](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)、[Gitea提交](https://docs.gitea.com/api/operations/repo-get-all-commits/)及[GitLab账号邮箱](https://docs.gitlab.com/api/user_email_addresses/)。
+Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作者、提交者与平台实际推送者是三种不同身份。账号邮箱与Git邮箱不一致时，作者和提交者的Gitea账号都可能为空；Rust在作者未匹配时，独立核对同仓库commit_repo活动的act_user.login，并要求Commits[].Sha1或HeadCommit.Sha1出现在当前HEAD已读取的真实父节点历史中。成功证据写入可选hasAccountPush，不冒称hasAccountCommits=true；推送确认足以保留分支，即使作者或更早历史仍不完整。活动每页50条、最多十页，满页即继续翻页，兼容服务器无Link的50条上限；权限、身份、格式或读取上限失败保留participationError与可见。正常无匹配还要求作者历史完整，创建记录与手动隐藏/恢复保持独立。结果按账号、仓库、HEAD缓存五分钟，不改保存账号或Git邮箱；SHA不得从消息或CompareURL中猜取。
+
+创建参与（IMPORT-12-branch-behavior-created）：完整远端分支列表只有一个分支且hasAccountCommits=false、尚未确认本人推送时，Rust补充hasAccountCreation。Gitea核对仓库remoteId和创建日期，分页读取创建当天的activities/feeds，只信任create_repo活动中同仓库的act_user.login；user_id是接收人，组织owner和管理权限均不作为创建证据。成功结果按账号/仓库缓存五分钟；最多十页，每页100条，只有找到明确创建者才返回true/false。活动缺失、身份/权限/格式失败或平台未提供证据时保留participationError与warning，不把未知写成false。客户端保留创建者及创建身份未知的唯一分支，也拒绝带参与错误的自动隐藏；手动隐藏与显式恢复沿用原优先级。此仓库创建例外不泛化到多分支，默认模式及已有本人提交或推送不额外读取创建活动。官方契约见[Gitea仓库活动](https://docs.gitea.com/api/operations/repo-list-activity-feeds/)。
+
+仅hide模式通过remoteWorkspace的有限checkParticipation布尔参数发起账号参与核对，旧调用缺省false。Rust Provider在账号凭据与仓库身份边界内，GitHub/企业版/Gitee按平台作者账号查询；Gitea分页读取提交历史并独立核对推送活动；作者账号为空时核对当前账号的已验证邮箱，完整父节点历史、可用身份及推送记录读取完成后无匹配正常返回未找到。没有肯定参与证据时，邮箱读取失败、可用已验证邮箱缺失或未映射提交的作者邮箱缺失保留未知。Gitea只信任/user/emails明确verified的记录，不以显示名或公开profile邮箱推断身份。GitLab匹配当前账号与已验证邮箱。未找到当前账号提交的判定要求明确的作者查询空结果或已闭合的完整父节点历史；分页上限1000、身份失败及缺失父节点以participationError和可见warning保留未知。元数据按账号/仓库/HEAD缓存五分钟，邮箱只留服务内存，不回传界面或写入偏好；有脏文件、未知本地HEAD或未推送本地历史时保留分支显示。官方契约见[GitHub提交](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)、[Gitea提交](https://docs.gitea.com/api/operations/repo-get-all-commits/)及[GitLab账号邮箱](https://docs.gitlab.com/api/user_email_addresses/)。
 
 0.24.0 Presence头像：Rust观察者使用远端协议2读取server-authoritative avatarUrl与Bridge只读计算的unpublishedCommits；本机编辑器协议1不变，NAS按连接向旧客户端兼容发送原字段。presencePeople根据有效在线会话、精确仓库/分支和userId聚合操作人员；优先editing、未Commit change、未Push Commit。多设备同账号去重，边框颜色由repositoryId派生，与账号头像分离；已发布提交、仅远端领先及失联不产生头像角标。UI共享AvatarGroup/Popover，未增加读取请求、动态插件或Git写入口。
 
@@ -36,6 +42,7 @@ Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git
 | ai | 每分支当前更改生成Summary/Description，沿用本机Codex配置，返回前复核任务 |
 | credentials / preferences | Keychain、旧Electron密文读取、新AES-GCM原子存储和限定偏好迁移 |
 | oauth | Rust loopback网页授权与设备授权，PKCE/state、实例绑定及加密开发配置 |
+| github_token | GitHub官方续期交换及有限凭据模型，网页/设备方式隔离、响应校验与安全失败原因 |
 | diagnostics | 24小时本机有限日志、打开文件夹及复制日志文件 |
 | updates | Tauri签名更新、版本绑定、确认后立即安装与重启 |
 | presence | 加密插件配置、远端只读观察者、本机 Bridge 读取与独立状态有效性 |
@@ -149,7 +156,15 @@ R-05中已选文件退出更改列表时仍保留树选择；本地和远端均�
 
 `server/github-authorization.ts` 实现官方 GitHub 设备授权，仅在服务端持有 device_code 和 access_token；renderer 只得到随机会话 ID、公开验证码、固定验证网页、有效期与轮询间隔。最多 8 个并行等待会话，过期清理；服务端限频、slow_down 延长、单会话重复请求合并、完成结果幂等。网页拒绝/过期/无配置与网络失败分开表达，不回显第三方错误详情。取消在凭据保存前通过 AbortSignal 和提交门阻止导入；已进入原子保存的取消返回真实完成结果。React 等待循环可取消，Strict Mode effect 重放不取消真实服务会话；卸载停止等待并尽力取消服务会话。
 
-采用 [GitHub App 官方设备流程](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token)，不申请传统 OAuth 的 repo 写 scope，不打包 client secret。权限和仓库范围由自有 GitHub App 配置与用户安装/授权共同决定。收到有效期时保存到账号元信息，过期需重新网页授权；未实现 refresh token 自动续期，不保存该 refresh token。同一身份重新授权更新凭据并保留 ID/本地关联，新身份另建账号。真实流程仍需自有 Client ID 与用户同意，测试 provider 不进入运行入口。
+采用 [GitHub App 官方设备流程](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)，不申请传统 OAuth 的 repo 写 scope，不打包 client secret。权限和仓库范围由自有 GitHub App 配置与用户安装/授权共同决定。同一身份重新授权更新凭据并保留 ID/本地关联，新身份另建账号。旧TypeScript原型仅保存访问令牌有效期、不保存续期令牌；当前Rust客户端从0.30.2起采用下列自动续期机制。真实流程仍需自有Client ID与用户同意。
+
+GitHub令牌自动续期（0.30.2，IMPORT-11-token-refresh）：网页/设备交换由同一github_token模型读取access_token、expires_in、refresh_token及refresh_token_expires_in。续期令牌、有效期与原授权方式保存在accounts-v2.encrypted的私有githubOAuth项，公有Catalog仅保留原authorizationExpiresAt，不传回任何令牌。网页续期恢复已有加密开发应用配置，设备续期无需client secret；仅请求固定GitHub官方HTTPS端点，不改变scope、权限、主机或TLS策略。
+
+Service按账号及明确授权代次串行续期；API或Git网络操作在到期前120秒获取更新凭据。401最多续期并重试一次只读API，403/限流不触发续期，Git写操作不自动重放。自动轮换保留authorizationId与仓库/任务上下文；重新授权和手工替换凭据生成新代次，旧读取/写计划继续被隔离。账号目录刷新与目录匹配比较授权代次，不把正常轮换误认为账号变更。
+
+续期交换在独立任务中完成；HTTP/IPC调用取消仅停止等待，已经开始的轮换仍尝试原子加密保存。保存失败时保留待保存结果、15秒后可重试保存，不重复使用已被GitHub轮换的旧续期令牌；待保存结果阻止重启安装，移除账号或替换授权后清除旧结果。暂时网络/服务失败按账号退避60秒；缺失或到期续期凭据退避5分钟，并显示明确重新授权原因，保留账号/仓库/本地关联。旧版本登录缺少续期凭据，需升级后正常重新授权一次。
+
+授权诊断只记录有限阶段、原因、HTTP状态、相对有效期及账号哈希。阶段包括token-received、token-rejected、refresh-start、refresh-complete、refresh-failed、refresh-unavailable和storage-load；区分expiring/expired、缺少/到期/失效续期凭据、配置、网络、保存和授权竞争。原始OAuth响应、URL参数、access_token、refresh_token、secret和账号名称均不入日志；Renderer不能写入这些后台专用字段。
 
 Vite 只监听 loopback，HTTP 中间件要求本机 Host、同源 Origin / Sec-Fetch-Site、专用请求头、JSON POST 及大小限制，无 CORS 放行。静态 Sites 包装不运行这个本地账号服务，UI 会明确报不可用，不把 HTML 当作导入成功。
 
@@ -277,13 +292,17 @@ use-local-commits仅订阅明确选中的本地task/SHA，缓存最多64份，�
 
 ## 本地提交与 Codex 说明生成（0.22.11，沿用0.18.0原生提交约束）
 
+0.30.1的Submit沿用Commit说明契约：Summary非空即可确认，Description允许为空；AI成功状态只控制是否继续生成，不作为提交门槛。中栏通过每目标的可选draft把当前文本传入弹窗，弹窗修改也回写中栏草稿，避免关闭重开恢复旧值；手工摘要跳过自动生成。确认时取消仍在进行的生成，阻止迟到结果写回。没有手工摘要时仍可自动生成，未手工修改的说明在文件范围变化后重新生成。原有任务快照、选中路径、Commit后Push与仅重试Push的幂等边界保留。
+
+Git错误分类先识别Unix和Windows磁盘不足，再区分LFS命令缺失、对象404及其他过滤器或钩子失败；只返回固定安全提示。Rust提交的add和commit步骤记录受控动词、退出码、耗时及故障代码，不记录原始stderr、正文、文件路径或凭据。
+
 `RepositoryCommitComposer` 为每个已挂载本地任务保存 Summary/Description 草稿，历史视图只隐藏表单；通过有限 submitCommit/generateCommitMessage/cancelCommitGeneration DTO 调用现有受保护 HTTP 或主 frame IPC。Dashboard及仓库页的Commit/Submit打开固定worktree快照弹窗，每个目录按Tracked/Untracked分组，复选状态作为可选paths DTO传给submitCommit/generateCommitMessage；空、重复或已不在当前更改中的路径拒绝。范围随草稿在服务会话内保留，仅相同HEAD/changeKey复用；调整范围取消旧生成，不覆盖手工字段。旧直接提交表单未提供paths时仍提交该目录全部更改。
 
 AccountService 从已保存仓库、账号与关联定位真实 worktree，复核 expectedHead/changeKey、remote 与映射身份，不接受 renderer 命令或任意路径。每个关联根串行执行；operationId 在当前服务实例内对已确认成功结果幂等，同 ID 不同内容拒绝。冲突、待完成 merge/rebase、已有 index.lock、过期快照在写入前拒绝。local-submit 使用真实 Git、私有 index 和独占 index.lock；分别保存原暂存区和从HEAD（unborn使用空树）建立的提交索引；GIT_LITERAL_PATHSPECS防止文件名被当作模式，仅对选中路径add --all，重命名附带原路径，之后再次复核快照，以标准 input 提供提交说明并保留 Git identity/hooks/signing。确认新HEAD的父提交与实际树后，在保存索引中仅将选中路径更新到新HEAD，再原子发布index，未选文件的已暂存内容（包括部分暂存）保持，失败保留原 index；已确认提交但响应/后处理有问题返回真实成功及警告。进入 commit 后不因浏览器断连取消，120秒执行上限仍保留。不会checkout、移动HEAD的reset、push或修改另一个worktree；路径限定的reset仅更新保存索引条目，不改HEAD或工作文件。
 
 controller 在提交前后递增本地读取版本，丢弃写入前轮询的迟到响应；成功立即重新读取共享 localWorkspace，再触发一次仓库远端状态检查，不清空其他任务选择和草稿。图谱从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
 
-commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。使用本机已登录 Codex CLI 的 exec，在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 运行，忽略用户 config/rules，禁用 shell、多 agent、apps、plugins、hooks、web search 与 MCP；不读取聊天账号令牌，不执行仓库命令。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。150秒超时及显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。原始 CLI 输出和提交正文不进入诊断日志。
+commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。Windows 在 PATH/native CLI 与已安装桌面版的 LocalAppData/OpenAI/Codex/bin 缓存中比较实际语义版本，使用新版 CLI，避免旧 PATH 副本拒绝当前模型。通过该 CLI 的 app-server 只读 config/read 与 model/list 获取工具名称和实际推荐模型，不创建会话或修改全局配置；生成说明时使用此推荐模型，保留登录/provider。随后在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 执行 exec，忽略 rules，禁用 shell、多 agent、apps、plugins、hooks 和 web search，并为每个已配置 MCP 显式设置 enabled=false；空 mcp_servers 表不会清除合并配置。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。每个本地版本探测最多5秒，配置及模型目录读取最多20秒，生成子进程最多150秒；显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。CLI 失败按模型不可用、认证、版本参数、网络或其他生成失败显示固定提示；诊断只记受控分类及退出码，原始 CLI 输出、配置值和提交正文不进入日志。
 
 推送反馈（0.22.11）：RepositoryActionDraftsProvider内的PushFeedbackProvider保存服务会话级临时状态，统一Dashboard、仓库详情和更改栏Push/Submit入口。批次UUID与实际repository/task/path绑定；成功才记录completed，失败清除未完成pending，旧批次定时器不能覆盖新操作。仓库全部/部分覆盖按所有本地worktree判断，分支固定实线/双勾；成功标识约2600ms后消失。原有逐worktree Commit→Push顺序、操作幂等和错误重试不变；push/submit不调用横条成功回调，commit仍可提示本地提交已创建。官方Material Web LinearProgress使用不确定型，批量数字仅表示完成目录数。
 
@@ -318,6 +337,17 @@ IMPORT-11-windows-oauth-port：Rust 保留 socket bind 的 ErrorKind 和 raw_os_
 ## 关联标签与读取健康分离（IMPORT-04-association-refresh）
 
 branch-links.associationStatus区分保存的关联与筛选后可见工作目录，内部verified只表示本地目录和完整远端分支范围已经可靠核对。useAssociationStatus为Dashboard行保留同一服务实例、仓库、目录/分支映射和用户隐藏设置下的最后成功结果；路径/映射排序后比较，避免仅登记顺序不同清空显示。缓存仅在本地和远端读取均完成且核对有效时更新；自动隐藏和读取中间态不作为新的验证结果。解绑或身份/用户筛选变更立即排除旧缓存，提示保留当前失败和上次结果时效。linkedTasks的隐藏排除、统计和真实Git操作范围不变；不修改Catalog持久化、服务/HTTP契约或后台fetch。
+## Presence设备名称（PRESENCE-05-device-name，0.30.11）
+
+managed world版本3可带可选deviceName，来源为服务端已验证设备凭证对应的登记名称。Rust允许旧帧缺席/null，仅接受非空且不超过120字符的名称；PresencePerson在精确仓库/分支过滤及有效操作状态确认后聚合同身份的设备名。UI在人员名称后的括号中显示去重名称，旧帧显示设备未知；设备名纳入弹窗roster布局键，账号/头像/分支状态仍分别保存。
+
+## Presence人员卡片与远程工作目录
+
+PresenceBranch保留有效快照的serverId、userId/identityId、deviceId、organizationId及worktreeId来源。人员仍按身份/组织聚合；远程目标只能从ControlStatus授权devices/workspaces中选择，逐项匹配同一服务器、设备、用户、仓库、分支和组织。工作区新增可选worktreeId，Rust采用与Presence发布相同的路径SHA256；它不改变workspaceId、请求范围或权限判断。旧设备缺少字段时只允许唯一分支目标，多个可能目录不选。
+
+RemoteWorkspaceActions由详情和人员卡片共用，沿用RemoteActionDialog和Provider的有限预览、AI说明、执行、重试Push及备份恢复。目标状态结合所属server连接判断，不把另一台在线服务器当作离线目标可执行。人员卡片关闭后确认弹窗仍独立挂载，任务的server/device/workspace/action冻结；服务端与目标继续核验实时权限和文件变化。协议字段、部署及用户双设备运行验收分别记录。
+
+支持此字段的服务器在控制state返回`worktreeIdentity: true`；客户端只向已声明支持的服务器公布worktreeId，连接旧严格Schema服务器时仍使用原announce字段，避免新客户端使旧服务器拒绝登记。
 
 仓库操作收起（0.31.0，IMPORT-14-operation-collapse）：App内RepositoryOperationProvider在路由外维护服务会话级操作记录，打开时复制目标快照，按入口范围及真实工作目录恢复。所有OperationDialog持续挂载；visible只控制公共Dialog的Portal、遮罩和焦点锁，不改变AI/同步准备的effect依赖、操作UUID、草稿或结果。Dashboard仓库/分支、仓库顶部、中栏Submit/选中提交Push复用宿主。隐藏完成留存原按钮，活动Commit/Submit/Push沿用成功关闭；异步完成不关闭其他任务。服务instanceId改变清理记录，显式取消才中断可取消的准备并清理预览。
 

@@ -1607,6 +1607,7 @@ dependencies = [
  "reqwest",
  "rusty-leveldb",
  "security-framework",
+ "semver",
  "serde",
  "serde_json",
  "sha1 0.10.7",

@@ -180,6 +180,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table tbody:last-child tr:last-child td { border-bottom: 0; }
 /* The final repository is followed by its (possibly hidden/empty) branch tbody. */
 .remote-repo-table tbody:has(> .dashboard-repository-row):nth-last-child(2):has(+ .dashboard-repository-branches[aria-hidden='true']) td { border-bottom: 0; }
+.remote-repo-table tbody:last-child tr:last-child td,
+.remote-repo-table tbody:has(+ .dashboard-repository-branches:last-child[hidden]) tr:last-child td { border-bottom: 0; }
 .remote-repo-table td:last-child { padding-right: 0; text-align: right; }
 .remote-name {
   display: flex; gap: var(--icon-label-gap); align-items: center; min-width: 0;
@@ -402,9 +404,9 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-committed-actions small { color: var(--muted); font-size: 10px; }
 .ogui-overlay__surface:has(.repository-action-dialog) { border-radius: 22px; }
 .ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__header { padding-inline: 24px; }
-.ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__body { padding: 0 24px 24px; }
+.ogui-overlay__surface:has(.repository-action-dialog) .ogui-overlay__body { min-width: 0; padding: 0 24px 24px; }
 .repository-action-dialog { display: flex; flex-direction: column; width: 100%; max-height: calc(100dvh - 140px); }
-.repository-submit-content { display: grid; gap: 16px; min-height: 0; max-height: min(620px, calc(100dvh - 220px)); overflow-y: auto; }
+.repository-submit-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-height: 0; max-height: min(620px, calc(100dvh - 220px)); overflow-y: auto; }
 .repository-submit-count { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
 .repository-submit-content h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
 .repository-submit-content h3 svg { flex-shrink: 0; }
@@ -418,6 +420,10 @@ button.repository-count-action:disabled { opacity: .7; }
 /* Inset state backgrounds by 2px per edge for a 4px gap, while keeping the full row clickable. */
 .submit-file-choice::before { content: ''; position: absolute; inset: 2px 0; z-index: -1; border-radius: inherit; pointer-events: none; }
 .submit-file-choice:hover:not(:disabled)::before { background: var(--surface); }
+
+.submit-file-group-toggle { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.submit-file-group-toggle:hover { background: var(--surface); }
+.submit-file-group-toggle > span { display: flex; gap: 8px; align-items: baseline; }
 .submit-file-choice:disabled { cursor: default; }
 .submit-file-path { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .submit-file-mark { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; border: 1px solid currentColor; border-radius: 3px; font-size: 12px; line-height: 1; }
@@ -441,12 +447,13 @@ button.repository-count-action:disabled { opacity: .7; }
 @keyframes push-confirm { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .push-feedback-icon.is-pushing svg, .push-feedback-icon.is-success { animation: none; } }
 .repository-submit-generating { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
-.repository-batch-draft { display: grid; gap: 8px; }
+.repository-batch-draft { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .repository-action-dialog > :not(.repository-submit-content) { flex-shrink: 0; }
 .repository-submit-sha, .repository-submit-result { font-size: 11px; color: var(--muted); }
 .repository-action-dialog > .notice { margin-top: 12px; }
 .repository-commit-buttons { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.repository-commit-buttons .icon-button.repository-ai-commit { width: 32px; height: 32px; border-radius: 50%; background: var(--blue-bg); color: var(--blue); }
+.repository-commit-buttons .icon-button.repository-ai-commit { position: relative; width: 32px; height: 32px; border-radius: 50%; background: var(--blue-bg); color: var(--blue); }
+.repository-ai-progress { position: absolute; inset: 2px; pointer-events: none; background: currentColor; mask: url('./assets/icons/material-symbols/progress-activity.svg') center / contain no-repeat; }
 .repository-commit-feedback { margin: 8px 0 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .repository-commit-composer .notice { margin-block: 8px; font-size: 11px; }
 .repository-column-heading .app-button.repository-graph-branch-trigger { min-width: 0; max-width: 100%; min-height: 28px; height: 28px; padding: 0 var(--compact-button-padding-inline); font-size: 12px; font-weight: 600; }
@@ -461,10 +468,14 @@ button.repository-count-action:disabled { opacity: .7; }
 .graph-local-edge { stroke-dasharray: 3 3; }
 .graph-node.graph-working-node, .graph-node.graph-unpublished-node { fill: var(--graph-row-surface, var(--content)); stroke: currentColor; stroke-width: 1.8; }
 .graph-node.graph-working-node { stroke-dasharray: 2 2; }
-.repository-graph-scroll { --graph-row-height: 42px; flex: 1; min-height: 0; overflow: auto; padding-inline: var(--repository-column-inset); }
+.repository-graph-scroll { --graph-row-height: 42px; flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; padding-inline: var(--repository-column-inset); }
+.repository-graph-loading { min-height: 32px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+
 .repository-history-more { display: flex; flex-direction: column; align-items: center; gap: 6px; min-height: 42px; padding: 8px 0 12px; color: var(--muted); font-size: 11px; text-align: center; }
 .repository-history-more .app-button { min-height: 28px; }
 .repository-graph-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.repository-graph-table .repository-graph-spacer { cursor: default; }
+.repository-graph-table .repository-graph-spacer td { padding: 0; background: transparent; border-radius: 0; }
 .repository-graph-table td { height: var(--graph-row-height); padding: 0 5px; vertical-align: middle; }
 .repository-graph-table tr { cursor: pointer; --graph-row-surface: var(--content); }
 .repository-graph-table td { background: var(--graph-row-surface); }

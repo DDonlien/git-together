@@ -5,6 +5,17 @@ export type GraphCommit = RepositoryCommit & { workingTask?: RepositoryTask; loc
 export type GraphBranch = { branch: string; localHeads: string[]; remoteHeads: string[]; tasks: RepositoryTask[] };
 export type GraphRow = { commit: GraphCommit; lane: number; color: number; incoming: boolean; incomingLocal?: boolean; edges: GraphEdge[]; width: number };
 
+// Match the fixed 30px text stack plus 6px padding on each side in styles.css.
+export const graphRowHeight = 42;
+export function graphVisibleWindow(length: number, scrollTop: number, viewportHeight: number) {
+  // Eight rows (336px) per edge cover fast wheel movement. Nonnegative values
+  // trade mounted row count for coverage without changing the history range.
+  const overscan = 8, height = Math.max(graphRowHeight, viewportHeight);
+  const top = Math.max(0, Math.min(scrollTop, Math.max(0, length * graphRowHeight - height)));
+  const firstVisible = Math.floor(top / graphRowHeight);
+  return { start: Math.max(0, firstVisible - overscan), end: Math.min(length, Math.ceil((top + height) / graphRowHeight) + overscan), firstVisible };
+}
+
 export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBranch[] {
   const branches = new Map<string, GraphBranch>();
   function add(branch: string, head: string, remote: boolean, task?: RepositoryTask) {
@@ -36,6 +47,8 @@ export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches:
   const remote = reachableCommitIds(workspace.commits, branches.flatMap(branch => branch.remoteHeads));
   const unpublished = new Set<string>();
   for (const branch of branches) {
+    // Remote-only branches cannot contribute unpublished local commits.
+    if (!branch.localHeads.length) continue;
     const history = reachableCommitIds(workspace.commits, branch.localHeads);
     // A loaded remote tip in local ancestry proves the commits ahead of it.
     // Missing or divergent tips retain a neutral local label instead.

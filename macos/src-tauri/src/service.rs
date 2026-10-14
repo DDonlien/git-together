@@ -1,7 +1,7 @@
 use crate::{
     ai, credentials,
     diagnostics::Diagnostics,
-    git,
+    git, github_token,
     oauth::Authorization,
     operations::{self, SyncPlan},
     provider::{self, Network, Provider},
@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
+        Arc, Weak,
     },
     time::Duration,
 };
@@ -24,6 +24,13 @@ use tokio_util::sync::CancellationToken;
 struct State {
     value: Value,
     revision: u64,
+    error: String,
+}
+#[derive(Clone, Default)]
+struct TokenRefreshState {
+    generation: String,
+    pending: Option<github_token::Grant>,
+    retry_after: i64,
     error: String,
 }
 #[derive(Clone)]
@@ -54,6 +61,8 @@ pub struct Service {
     pub client: reqwest::Client,
     pub diagnostics: Diagnostics,
     pub authorization: Authorization,
+    reference: Weak<Service>,
+    token_refresh: Mutex<BTreeMap<String, TokenRefreshState>>,
     state: RwLock<State>,
     locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
     serial: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
@@ -184,6 +193,8 @@ impl Service {
                 client.clone(),
                 component == "preview",
             ),
+            reference: weak.clone(),
+            token_refresh: Mutex::new(BTreeMap::new()),
             state: RwLock::new(State {
                 value,
                 revision: 0,
@@ -205,6 +216,9 @@ impl Service {
         service
             .diagnostics
             .record(&json!({"event":"lifecycle","outcome":"start"}), false);
+        if !service.state.try_read().expect("new account state is uncontended").error.is_empty() {
+            service.diagnostics.record(&json!({"event":"storage","outcome":"failure","code":"permission","authorizationStage":"storage-load","authReason":"storage"}),false);
+        }
         Ok(service)
     }
     fn catalog_value(&self, state: &State) -> Value {
@@ -314,11 +328,7 @@ impl Service {
                     readers.remove(&k);
                 }
             }
-            let p = Provider::new(
-                saved["account"].clone(),
-                text(&saved, "token").into(),
-                self.client.clone(),
-            );
+            let p = self.account_provider(&saved);
             readers.insert(pkey, p.clone());
             p
         };
@@ -419,10 +429,291 @@ impl Service {
             .cloned()
             .ok_or("账号不存在，请重新加载列表。".into())
     }
+    fn account_provider(&self, saved: &Value) -> Provider {
+        Provider::new(
+            saved["account"].clone(),
+            text(saved, "token").into(),
+            self.client.clone(),
+        )
+        .with_authorization(self.reference.clone(), github_token::generation(saved))
+        .with_diagnostics(self.diagnostics.clone())
+    }
+    fn authorization_log(
+        &self,
+        saved: &Value,
+        stage: &str,
+        outcome: &str,
+        reason: &str,
+        status: Option<u16>,
+    ) {
+        let mut value = json!({"event":"authorization","method":"refresh","provider":"github","outcome":outcome,"authorizationStage":stage,"authReason":reason,"resource":&util::digest(text(&saved["account"],"id"))[..24]});
+        if let Some(status) = status {
+            value["httpStatus"] = json!(status);
+        }
+        if let Some(ms) = github_token::remaining(&saved["account"]["authorizationExpiresAt"]) {
+            value["expiresInSeconds"] = json!(ms / 1000);
+        }
+        if let Some(ms) = github_token::remaining(&saved["githubOAuth"]["expiresAt"]) {
+            value["refreshExpiresInSeconds"] = json!(ms / 1000);
+        }
+        self.diagnostics.record(&value, false);
+    }
+    pub(crate) async fn github_token(
+        &self,
+        id: &str,
+        generation: &str,
+        rejected: Option<&str>,
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        let saved = self.saved(id).await?;
+        if github_token::generation(&saved) != generation {
+            return Err("账号凭据已更新，请重新读取。".into());
+        }
+        let refresh_state = self
+            .token_refresh
+            .lock()
+            .await
+            .get(id)
+            .filter(|state| state.generation == generation)
+            .cloned();
+        if let Some(state) = &refresh_state {
+            if state.retry_after > util::now() {
+                return Err(state.error.clone());
+            }
+        }
+        let pending = refresh_state.is_some_and(|state| state.pending.is_some());
+        // Two minutes covers short API/Git requests without changing authorization scope.
+        let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
+            .is_some_and(|ms| ms <= 120_000);
+        if !pending
+            && rejected.is_none()
+            && saved["githubOAuth"].is_null()
+            && github_token::remaining(&saved["account"]["authorizationExpiresAt"])
+                .is_none_or(|ms| ms > 0)
+        {
+            return Ok(text(&saved, "token").into());
+        }
+        if !pending && !due && rejected.is_none() {
+            return Ok(text(&saved, "token").into());
+        }
+        if !pending && rejected.is_some_and(|token| token != text(&saved, "token")) {
+            return Ok(text(&saved, "token").into());
+        }
+        let service = self.reference.upgrade().ok_or("账号服务已退出。")?;
+        let id = id.to_owned();
+        let generation = generation.to_owned();
+        let rejected = rejected.map(str::to_owned);
+        // A dropped HTTP/IPC caller must not drop a token that GitHub has already rotated.
+        let worker = tokio::spawn(async move {
+            service
+                .renew_github_token(&id, &generation, rejected.as_deref())
+                .await
+        });
+        tokio::select! {
+            result = worker => result.map_err(|_| "GitHub续期未完成，请稍后重试。".to_string())?,
+            _ = cancel.cancelled() => Err("操作已取消；已开始的授权续期会安全保存。".into()),
+        }
+    }
+    async fn renew_github_token(
+        &self,
+        id: &str,
+        generation: &str,
+        rejected: Option<&str>,
+    ) -> Result<String> {
+        let _guard = self.serial(format!("authorization:{id}")).await;
+        let saved = self.saved(id).await?;
+        if github_token::generation(&saved) != generation {
+            return Err("账号凭据已更新，请重新读取。".into());
+        }
+        let state = {
+            let mut states = self.token_refresh.lock().await;
+            let state = states.entry(id.into()).or_default();
+            if state.generation != generation {
+                *state = TokenRefreshState {
+                    generation: generation.into(),
+                    ..Default::default()
+                };
+            }
+            state.clone()
+        };
+        let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
+            .is_some_and(|ms| ms <= 120_000);
+        if state.pending.is_none()
+            && (!due && rejected.is_none()
+                || rejected.is_some_and(|token| token != text(&saved, "token")))
+        {
+            return Ok(text(&saved, "token").into());
+        }
+        if state.retry_after > util::now() {
+            return Err(state.error);
+        }
+        let _saving = self.foreground("GitHub授权续期")?;
+        let grant = if let Some(grant) = state.pending {
+            grant
+        } else {
+            let Some(refresh) = saved["githubOAuth"].as_object() else {
+                let expired = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
+                    .is_some_and(|ms| ms <= 0);
+                if !expired && rejected.is_none() {
+                    return Ok(text(&saved, "token").into());
+                }
+                let message = if saved["authorizationId"].is_null()
+                    && (saved["account"]["authorizationExpiresAt"].is_string()
+                        || text(&saved, "token").starts_with("ghu_"))
+                {
+                    "这份GitHub授权已失效，旧版本没有保存续期凭据；请在设置中重新网页授权一次，之后会自动续期。"
+                } else {
+                    "当前GitHub令牌已失效且不支持自动续期，请在设置中更新令牌或重新网页授权。"
+                };
+                self.authorization_log(
+                    &saved,
+                    "refresh-unavailable",
+                    "failure",
+                    "missing-refresh",
+                    rejected.map(|_| 401),
+                );
+                self.token_refresh.lock().await.insert(
+                    id.into(),
+                    TokenRefreshState {
+                        generation: generation.into(),
+                        retry_after: util::now() + 300_000,
+                        error: message.into(),
+                        ..Default::default()
+                    },
+                );
+                return Err(message.into());
+            };
+            let refresh: github_token::RefreshCredential =
+                serde_json::from_value(json!(refresh))
+                    .map_err(|_| "GitHub续期配置无效，请重新网页授权。".to_string())?;
+            if github_token::remaining(&json!(refresh.expires_at)).is_some_and(|ms| ms <= 0) {
+                let message = "GitHub续期凭据已到期，请在设置中重新进行网页授权。";
+                self.authorization_log(
+                    &saved,
+                    "refresh-unavailable",
+                    "failure",
+                    "refresh-expired",
+                    None,
+                );
+                self.token_refresh.lock().await.insert(
+                    id.into(),
+                    TokenRefreshState {
+                        generation: generation.into(),
+                        retry_after: util::now() + 300_000,
+                        error: message.into(),
+                        ..Default::default()
+                    },
+                );
+                return Err(message.into());
+            }
+            self.authorization_log(
+                &saved,
+                "refresh-start",
+                "start",
+                if rejected.is_some() {
+                    "rejected"
+                } else if github_token::remaining(&saved["account"]["authorizationExpiresAt"])
+                    .is_some_and(|ms| ms > 0)
+                {
+                    "expiring"
+                } else {
+                    "expired"
+                },
+                rejected.map(|_| 401),
+            );
+            match github_token::renew(&self.client, &self.root, &refresh).await {
+                Ok(grant) => grant,
+                Err(failure) => {
+                    self.authorization_log(
+                        &saved,
+                        "refresh-failed",
+                        "failure",
+                        failure.reason,
+                        failure.status,
+                    );
+                    self.token_refresh.lock().await.insert(
+                        id.into(),
+                        TokenRefreshState {
+                            generation: generation.into(),
+                            retry_after: util::now() + 60_000,
+                            error: failure.message.clone(),
+                            ..Default::default()
+                        },
+                    );
+                    return Err(failure.message);
+                }
+            }
+        };
+        self.token_refresh.lock().await.insert(
+            id.into(),
+            TokenRefreshState {
+                generation: generation.into(),
+                pending: Some(grant.clone()),
+                ..Default::default()
+            },
+        );
+        let result = self
+            .mutate(|next| {
+                let account = next["accounts"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|saved| text(&saved["account"], "id") == id)
+                    .ok_or("账号已移除。")?;
+                if github_token::generation(account) != generation {
+                    return Err("账号凭据已更新，请重新读取。".into());
+                }
+                account["token"] = json!(grant.token);
+                account["githubOAuth"] =
+                    serde_json::to_value(&grant.refresh).map_err(|_| "GitHub续期配置编码失败。")?;
+                account["account"]["authorizationExpiresAt"] = json!(grant.expires_at);
+                account["account"].as_object_mut().unwrap().remove("error");
+                Ok(())
+            })
+            .await;
+        if result.is_err() {
+            let unchanged = self
+                .saved(id)
+                .await
+                .is_ok_and(|saved| github_token::generation(&saved) == generation);
+            if !unchanged {
+                self.token_refresh.lock().await.remove(id);
+            } else {
+                let mut states = self.token_refresh.lock().await;
+                let state = states.get_mut(id).unwrap();
+                state.retry_after = util::now() + 15_000;
+                state.error =
+                    "GitHub续期已完成，但系统加密保存暂未成功；稍后会重试保存，请暂缓重启。".into();
+            }
+            self.authorization_log(
+                &saved,
+                "refresh-failed",
+                "failure",
+                if unchanged { "storage" } else { "stale" },
+                None,
+            );
+            return Err(if unchanged {
+                "GitHub续期已完成，但系统加密保存暂未成功；稍后会重试保存，请暂缓重启。".into()
+            } else {
+                "账号已更新或移除，旧授权续期结果未应用。".into()
+            });
+        }
+        self.token_refresh.lock().await.remove(id);
+        let updated = self.saved(id).await?;
+        self.authorization_log(
+            &updated,
+            "refresh-complete",
+            "success",
+            "renewed",
+            Some(200),
+        );
+        Ok(grant.token)
+    }
     pub async fn connect(
         &self,
         input: &Value,
         expires: Option<String>,
+        refresh: Option<github_token::RefreshCredential>,
         reauthorize: bool,
     ) -> Result<Value> {
         util::allowed(input, &["provider", "host", "token", "name"])?;
@@ -438,7 +729,7 @@ impl Service {
             json!({"provider":kind,"host":host}),
             token.clone(),
             self.client.clone(),
-        );
+        ).with_diagnostics(self.diagnostics.clone());
         let user = provisional.user(&c).await?;
         let login = util::field(&user, "login", 120)?;
         if login.is_empty() || login.contains('/') || login.chars().any(char::is_whitespace) {
@@ -477,7 +768,8 @@ impl Service {
         if let Some(e) = expires {
             account["authorizationExpiresAt"] = json!(e);
         }
-        let p = Provider::new(account.clone(), token.clone(), self.client.clone());
+        let p = Provider::new(account.clone(), token.clone(), self.client.clone())
+            .with_diagnostics(self.diagnostics.clone());
         let repos = match p.repositories(&c, user["id"].as_u64()).await {
             Ok(v) => {
                 account["updatedAt"] = json!(util::iso());
@@ -488,7 +780,7 @@ impl Service {
                 None
             }
         };
-        self.mutate(|next| {
+        let catalog=self.mutate(|next| {
             let duplicate = next["accounts"].as_array().unwrap().iter().position(|a| {
                 a["account"]["provider"] == kind
                     && a["account"]["host"] == host
@@ -498,7 +790,7 @@ impl Service {
                 if !reauthorize || next["accounts"][i]["account"]["id"] != id {
                     return Err("这个账号已经添加。".into());
                 }
-                next["accounts"][i] = json!({"account":account,"token":token});
+                next["accounts"][i] = json!({"account":account,"token":token,"authorizationId":uuid::Uuid::new_v4().to_string(),"githubOAuth":refresh});
                 if let Some(repos) = repos {
                     replace_repositories(next, &id, repos);
                 }
@@ -506,23 +798,29 @@ impl Service {
                 next["accounts"]
                     .as_array_mut()
                     .unwrap()
-                    .push(json!({"account":account,"token":token}));
+                    .push(json!({"account":account,"token":token,"authorizationId":uuid::Uuid::new_v4().to_string(),"githubOAuth":refresh}));
                 if let Some(repos) = repos {
                     next["repositories"].as_array_mut().unwrap().extend(repos);
                 }
             }
             Ok(())
         })
-        .await
+        .await?;
+        if kind == "github" {
+            self.authorization_log(
+                &json!({"account":account,"githubOAuth":refresh}),
+                "token-received",
+                "success",
+                "granted",
+                None,
+            );
+        }
+        Ok(catalog)
     }
     async fn refresh(&self, id: &str, cancel: &CancellationToken) -> Result<Value> {
         let _guard = self.serial(format!("refresh:{id}")).await;
         let saved = self.saved(id).await?;
-        let p = Provider::new(
-            saved["account"].clone(),
-            text(&saved, "token").into(),
-            self.client.clone(),
-        );
+        let p = self.account_provider(&saved);
         let result = p.repositories(cancel, None).await;
         if cancel.is_cancelled() {
             return Err("账号刷新已取消。".into());
@@ -537,7 +835,7 @@ impl Service {
                 .iter()
                 .position(|a| text(&a["account"], "id") == id)
                 .ok_or("账号已移除。")?;
-            if next["accounts"][i]["token"] != saved["token"] {
+            if github_token::generation(&next["accounts"][i]) != github_token::generation(&saved) {
                 return Err("账号凭据已更新，请重新读取。".into());
             }
             match result {
@@ -573,7 +871,7 @@ impl Service {
         let saved = self.saved(&id).await?;
         let mut repos = None;
         if !token.is_empty() {
-            let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone());
+            let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone()).with_diagnostics(self.diagnostics.clone());
             let user = p.user(cancel).await?;
             if !text(&user, "login").eq_ignore_ascii_case(text(&saved["account"], "login")) {
                 return Err("新令牌不属于这个账号，请添加另一个账号。".into());
@@ -587,12 +885,14 @@ impl Service {
                 .iter()
                 .position(|a| text(&a["account"], "id") == id)
                 .ok_or("账号已移除。")?;
-            if next["accounts"][i]["token"] != saved["token"] {
+            if github_token::generation(&next["accounts"][i]) != github_token::generation(&saved) {
                 return Err("账号凭据已更新，请重新打开编辑。".into());
             }
             next["accounts"][i]["account"]["name"] = json!(name);
             if let Some(repos) = repos {
                 next["accounts"][i]["token"] = json!(token);
+                next["accounts"][i]["authorizationId"] = json!(uuid::Uuid::new_v4().to_string());
+                next["accounts"][i].as_object_mut().unwrap().remove("githubOAuth");
                 next["accounts"][i]["account"]["updatedAt"] = json!(util::iso());
                 for key in ["error", "authorizationExpiresAt"] {
                     next["accounts"][i]["account"]
@@ -914,7 +1214,7 @@ impl Service {
                 open(url.as_str()).await?;
                 return Ok(json!({"opened":true}));
             }
-            "connect" => return self.connect(input, None, false).await,
+            "connect" => return self.connect(input, None, None, false).await,
             "updateAccount" => return self.update_account(input, cancel).await,
             "refresh" => {
                 util::allowed(input, &["accountId"])?;
@@ -1416,7 +1716,7 @@ impl Service {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .any(|a| a == &saved)
+                    .any(|a| a["account"]["id"] == saved["account"]["id"] && github_token::generation(a) == github_token::generation(&saved))
                 {
                     return Err("账号已更新或移除，请重新匹配。".into());
                 }
@@ -1480,6 +1780,13 @@ impl Service {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .map_err(|_| "更新安装正在进行中。".to_string())?;
         let reservation = InstallReservation(self);
+        let pending_save = {
+            let accounts=self.state.read().await;
+            let mut states=self.token_refresh.lock().await;
+            states.retain(|id,state|accounts.value["accounts"].as_array().unwrap().iter().any(|saved|text(&saved["account"],"id")==id && github_token::generation(saved)==state.generation));
+            states.values().any(|state|state.pending.is_some())
+        };
+        if pending_save { return Err("GitHub续期凭据尚未完成加密保存，请稍后重试更新；下载包已保留。".into()); }
         let operations = self.foreground.lock().unwrap_or_else(|e| e.into_inner());
         if !operations.is_empty() {
             return Err(format!(
@@ -1528,6 +1835,8 @@ fn valid_state(v: &Value) -> bool {
         && v["accounts"].as_array().is_some_and(|a| {
             a.iter().all(|a| {
                 a["token"].is_string()
+                    && github_token::valid_refresh(&a["githubOAuth"])
+                    && (a["authorizationId"].is_null() || uuid::Uuid::parse_str(text(a,"authorizationId")).is_ok())
                     && ["id", "provider", "host", "login", "name", "updatedAt"]
                         .iter()
                         .all(|k| a["account"][k].is_string())
@@ -1581,7 +1890,7 @@ fn context_identity(r: &Value, l: &Value, a: &Value) -> String {
             a["account"]["provider"],
             a["account"]["host"],
             a["account"]["login"],
-            a["token"],
+            github_token::generation(a),
             r["accountId"],
             r["fullName"],
             r["url"],

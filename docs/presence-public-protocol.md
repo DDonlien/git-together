@@ -40,6 +40,8 @@ POST `v1/control/enroll` 以账号会话作Bearer与 `X-Presence-Account`，body
 | POST claim / finish | 目标重新核验权限后认领并回传结果 |
 | POST cancel / revoke | 取消未认领请求或撤销本人设备 |
 
+工作区可携带`worktreeId`（本机工作目录的64位十六进制SHA256），与协议3的Presence项目标识相同；仅用于匹配对应操作目标，不发送真实目录或扩张权限。旧字段缺席继续接受；客户端对多个同分支目录无法判定时不选取目标。
+
 请求UUID、server、organizationId、scopeVersion、deviceId、repositoryId、workspaceId及preview共同绑定。提交说明逐分支生成并可编辑。跨用户只能由同一纳管组织内严格更高角色操作；同一身份不同设备允许个人控制。目标仍验证保存的Git身份、真实工作目录及文件变化，只有固定有限行为，不接受任意shell、文件正文或Git凭证。Commit后Push失败只重试Push。
 
 ## 远端状态协议3
@@ -47,3 +49,5 @@ POST `v1/control/enroll` 以账号会话作Bearer与 `X-Presence-Account`，body
 `v1/ws`支持账号会话或独立设备Bearer，设备握手deviceId须为服务端登记UUID。版本3支持bridge/observer、welcome/heartbeat/world/snapshot；完整快照含仓库/worktree/branch/HEAD、独立git/editor事实和unpublishedCommits。world的session包含identityId，project包含服务器确定的organizationId；world.organizations包含id/name/role/projects/revision。App不能通过上报organizationId选择自己的权限，服务器重新计算。
 
 同仓库多组织、不同服务器的会话和命令分别隔离；未匹配的仓库只对同一个人身份可见。离线快照保留原范围但标为未知；不能因为另一个服务器在线而将此范围误标在线。版本1/2继续按旧字段回复，编辑器本机协议1及Bridge版本2不变。版本3最多4096个上报工作区、单快照16MiB、单项目10000文件；超限明确失败，不静默截断。
+
+支持此字段的服务器在控制state返回`worktreeIdentity: true`；客户端只向已声明支持的服务器公布worktreeId，连接旧严格Schema服务器时仍使用原announce字段，避免新客户端使旧服务器拒绝登记。

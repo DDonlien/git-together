@@ -7,7 +7,7 @@ export type PresenceFile = {
   sources: { sourceId: string; kind: 'unreal' | 'godot'; alive: boolean; unsaved: PresenceFact; activity: 'idle' | 'viewing' | 'editing' }[];
 };
 export type PresenceProject = { repositoryId: string; worktreeId: string; branch: string | null; head: string | null; gitReady: boolean; unpublishedCommits: number | null; files: PresenceFile[]; organizationId?: string | null };
-export type PresenceSession = { sessionId: string; userId: string; identityId?: string; serverId?: string; displayName: string; avatarUrl: string | null; deviceId: string; alive: boolean; lastSeen: number; projects: PresenceProject[] };
+export type PresenceSession = { sessionId: string; userId: string; identityId?: string; serverId?: string; displayName: string; avatarUrl: string | null; deviceId: string; deviceName?: string | null; alive: boolean; lastSeen: number; projects: PresenceProject[] };
 export type PresenceOrganization = { id: string; name: string; role: 'owner' | 'admin' | 'member'; projects: string[]; revision: number; serverId: string; serverUrl: string; connected: boolean };
 export type PresenceServer = { id: string; url: string; enabled: boolean; connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string };
 export type PresenceStatus = {
@@ -45,9 +45,14 @@ export function presenceProjectSummary(project: PresenceProject, valid: boolean)
 }
 
 export type PresenceWorkState = 'editing' | 'changed' | 'committed';
+export type PresenceBranch = {
+  branch: string | null; state: PresenceWorkState;
+  sources: { serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null }[];
+};
 export type PresencePerson = {
   userId: string; displayName: string; avatarUrl: string | null; state: PresenceWorkState;
-  branches: { branch: string | null; state: PresenceWorkState }[];
+  branches: PresenceBranch[];
+  deviceNames: string[];
   scope?: string;
 };
 export const presenceWorkLabels: Record<PresenceWorkState, string> = { editing: '编辑中', changed: '有未 Commit 更改', committed: '有未 Push 提交' };
@@ -72,13 +77,20 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       const key = `${session.serverId || ''}:${project.organizationId || 'personal'}:${session.identityId || session.userId}`;
       let person = people.get(key);
       if (!person) {
-        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], scope };
+        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceNames: [], scope };
         people.set(key, person);
       }
+      const deviceName = session.deviceName?.trim() || '设备未知';
+      if (!person.deviceNames.includes(deviceName)) person.deviceNames.push(deviceName);
       if (workPriority[state] > workPriority[person.state]) person.state = state;
-      const existing = person.branches.find(value => value.branch === project.branch);
-      if (!existing) person.branches.push({ branch: project.branch, state });
-      else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
+      let existing = person.branches.find(value => value.branch === project.branch);
+      if (!existing) {
+        existing = { branch: project.branch, state, sources: [] };
+        person.branches.push(existing);
+      } else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
+      if (!existing.sources.some(source => source.deviceId === session.deviceId && source.worktreeId === project.worktreeId)) {
+        existing.sources.push({ serverId: session.serverId, userId: session.userId, identityId: session.identityId, deviceId: session.deviceId, worktreeId: project.worktreeId, organizationId: project.organizationId ?? null });
+      }
     }
   }
   return [...people.values()].sort((a, b) => a.userId.localeCompare(b.userId)).map(person => ({ ...person, branches: person.branches.sort((a, b) => (a.branch || '').localeCompare(b.branch || '')) }));

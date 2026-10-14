@@ -19,7 +19,7 @@ export function branchHiddenEntries(repositoryId: string, preferences: BranchBeh
     // Creating a repository also counts as work on its sole branch. Missing
     // creation evidence cannot establish that this branch was never worked on.
     const creationUnknown = remoteTasks.length === 1 && task.hasAccountCreation === undefined;
-    if (task.hasAccountCommits === false && task.hasAccountCreation !== true && !creationUnknown && !task.error && !task.participationError && !localUnknown && !shown.has(key)) hidden.add(key);
+    if (task.hasAccountCommits === false && task.hasAccountPush !== true && task.hasAccountCreation !== true && !creationUnknown && !task.error && !task.participationError && !localUnknown && !shown.has(key)) hidden.add(key);
   }
   return hidden;
 }

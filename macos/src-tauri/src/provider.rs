@@ -7,12 +7,15 @@ use reqwest::{header::HeaderMap, Client};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::Arc,
+    sync::{Arc, Weak},
     time::Duration,
 };
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use url::Url;
+
+#[cfg(test)]
+mod tests;
 
 pub fn client() -> Result<Client> {
     Client::builder()
@@ -105,6 +108,8 @@ pub fn repo_path(repo: &Value) -> Result<String> {
 pub struct Provider {
     pub account: Value,
     token: String,
+    authorization: Option<(Weak<crate::service::Service>, String)>,
+    diagnostics: Option<crate::diagnostics::Diagnostics>,
     client: Client,
     cache: Arc<Mutex<BTreeMap<String, Value>>>,
 }
@@ -113,6 +118,8 @@ impl Provider {
         Self {
             account,
             token,
+            authorization: None,
+            diagnostics: None,
             client,
             cache: Arc::new(Mutex::new(BTreeMap::new())),
         }
@@ -120,8 +127,54 @@ impl Provider {
     pub fn kind(&self) -> &str {
         text(&self.account, "provider")
     }
-    pub fn token(&self) -> &str {
-        &self.token
+    pub fn with_authorization(
+        mut self,
+        service: Weak<crate::service::Service>,
+        generation: String,
+    ) -> Self {
+        if self.kind() == "github" {
+            self.authorization = Some((service, generation));
+        }
+        self
+    }
+    pub fn with_diagnostics(mut self, diagnostics: crate::diagnostics::Diagnostics) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
+    }
+    async fn access_token(
+        &self,
+        rejected: Option<&str>,
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        if cancel.is_cancelled() {
+            return Err("操作已取消。".into());
+        }
+        match &self.authorization {
+            Some((service, generation)) => {
+                service
+                    .upgrade()
+                    .ok_or("账号服务已退出。")?
+                    .github_token(text(&self.account, "id"), generation, rejected, cancel)
+                    .await
+            }
+            None => Ok(self.token.clone()),
+        }
+    }
+    fn http_failure(&self, status: u16, headers: &HeaderMap) {
+        if let Some(diagnostics) = &self.diagnostics {
+            let rate_limited = status == 429
+                || status == 403
+                    && headers
+                        .get("x-ratelimit-remaining")
+                        .is_some_and(|remaining| remaining == "0");
+            let mut record = json!({"event":"provider-read","outcome":"failure","provider":self.kind(),"endpoint":"other","httpStatus":status,"code":if rate_limited{"rate-limit"}else if status==401||status==403{"permission"}else{"connection"},"resource":&util::digest(text(&self.account,"id"))[..24]});
+            if status == 401 && self.kind() == "github" {
+                record["event"] = json!("authorization");
+                record["authorizationStage"] = json!("token-rejected");
+                record["authReason"] = json!("rejected");
+            }
+            diagnostics.record(&record, false);
+        }
     }
     pub fn api(&self) -> String {
         let host = text(&self.account, "host");
@@ -181,89 +234,89 @@ impl Provider {
             url.query_pairs_mut()
                 .append_pair("access_token", &self.token);
         }
-        let mut request = self
-            .client
-            .get(url)
-            .header(
-                "Authorization",
-                format!(
-                    "{} {}",
-                    if self.kind() == "gitea" {
-                        "token"
-                    } else {
-                        "Bearer"
-                    },
-                    self.token
-                ),
-            )
-            .header(
-                "Accept",
-                if format == "text" {
-                    "text/plain"
-                } else if github(self.kind()) {
-                    "application/vnd.github+json"
-                } else {
-                    "application/json"
-                },
-            );
-        if github(self.kind()) {
-            request = request.header("X-GitHub-Api-Version", "2022-11-28");
-        }
         let operation = async {
-            let mut response = request.send().await.map_err(transport_error)?;
-            let status = response.status().as_u16();
-            let headers = response.headers().clone();
-            if github(self.kind())
-                && headers
-                    .get("x-github-sso")
-                    .and_then(|v| v.to_str().ok())
-                    .is_some_and(|v| v.starts_with("required") || v.starts_with("partial-results"))
-            {
-                return Err("企业要求SSO授权，当前仓库范围未完整开放。请先在企业网站完成SSO登录并授权令牌，或重新进行网页授权。".into());
-            }
-            if status == 401 {
-                return Err("令牌无效或已过期，请在设置中重新连接账号。".into());
-            }
-            if status == 429
-                || (status == 403
-                    && headers
-                        .get("x-ratelimit-remaining")
-                        .is_some_and(|v| v == "0"))
-            {
-                return Err(format!(
-                    "远端访问频率受限（HTTP {status}）；保留上次结果，等待下次检查。"
-                ));
-            }
-            if status == 403 {
-                return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
-            }
-            if format == "status" && status == 404 {
-                return Ok((json!(status), headers));
-            }
-            if !response.status().is_success() {
-                return Err(format!(
-                    "账号服务返回 HTTP {status}；请检查服务与令牌权限。"
-                ));
-            }
-            if format == "status" {
-                return Ok((json!(status), headers));
-            }
-            if response.content_length().is_some_and(|n| n > 8_000_000) {
-                return Err("账号服务响应过大。".into());
-            }
-            let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
-                if bytes.len() + chunk.len() > 8_000_000 {
+            let mut token = self.access_token(None, cancel).await?;
+            for attempt in 0..2 {
+                let mut request = self
+                    .client
+                    .get(url.clone())
+                    .header(
+                        "Authorization",
+                        format!(
+                            "{} {}",
+                            if self.kind() == "gitea" { "token" } else { "Bearer" },
+                            token
+                        ),
+                    )
+                    .header(
+                        "Accept",
+                        if format == "text" {
+                            "text/plain"
+                        } else if github(self.kind()) {
+                            "application/vnd.github+json"
+                        } else {
+                            "application/json"
+                        },
+                    );
+                if github(self.kind()) {
+                    request = request.header("X-GitHub-Api-Version", "2022-11-28");
+                }
+                let mut response = request.send().await.map_err(transport_error)?;
+                let status = response.status().as_u16();
+                let headers = response.headers().clone();
+                if !response.status().is_success() {
+                    self.http_failure(status, &headers);
+                }
+                if github(self.kind()) && headers.get("x-github-sso").and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("required") || v.starts_with("partial-results")) {
+                    return Err("企业要求SSO授权，当前仓库范围未完整开放。请先在企业网站完成SSO登录并授权令牌，或重新进行网页授权。".into());
+                }
+                if format == "status" && status == 404 { return Ok((json!(status), headers)); }
+                if status == 401 {
+                    if attempt == 0 && self.authorization.is_some() {
+                        token = self.access_token(Some(&token), cancel).await?;
+                        continue;
+                    }
+                    return Err("令牌已失效或被撤销（HTTP 401），请在设置中重新连接账号。".into());
+                }
+                if status == 429
+                    || (status == 403
+                        && headers
+                            .get("x-ratelimit-remaining")
+                            .is_some_and(|v| v == "0"))
+                {
+                    return Err(format!(
+                        "远端访问频率受限（HTTP {status}）；保留上次结果，等待下次检查。"
+                    ));
+                }
+                if status == 403 {
+                    return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
+                }
+                if !response.status().is_success() {
+                    return Err(format!(
+                        "账号服务返回 HTTP {status}；请检查服务与令牌权限。"
+                    ));
+                }
+                if format == "status" {
+                    return Ok((json!(status), headers));
+                }
+                if response.content_length().is_some_and(|n| n > 8_000_000) {
                     return Err("账号服务响应过大。".into());
                 }
-                bytes.extend_from_slice(&chunk);
+                let mut bytes = Vec::new();
+                while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                    if bytes.len() + chunk.len() > 8_000_000 {
+                        return Err("账号服务响应过大。".into());
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                let value = if format == "text" {
+                    Value::String(String::from_utf8(bytes).map_err(|_| "账号服务返回了无效文本。")?)
+                } else {
+                    serde_json::from_slice(&bytes).map_err(|_| "账号服务返回了无效 JSON 数据。")?
+                };
+                return Ok((value, headers));
             }
-            let value = if format == "text" {
-                Value::String(String::from_utf8(bytes).map_err(|_| "账号服务返回了无效文本。")?)
-            } else {
-                serde_json::from_slice(&bytes).map_err(|_| "账号服务返回了无效 JSON 数据。")?
-            };
-            Ok((value, headers))
+            unreachable!("the bounded HTTP retry returns on its final attempt")
         };
         tokio::select! { result = operation => result, _ = cancel.cancelled() => Err("操作已取消。".into()) }
     }
@@ -715,6 +768,9 @@ impl Provider {
                         .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
                 })
                 .collect::<Result<Vec<_>>>()?;
+            if emails.is_empty() {
+                return Err("当前账号没有可用于匹配的已验证邮箱。".into());
+            }
             self.remember(key.into(), json!({"emails":emails,"checkedAt":util::now()}))
                 .await
         };
@@ -801,12 +857,70 @@ impl Provider {
         }
         Err("仓库创建活动超过读取上限，继续显示唯一分支。".into())
     }
-    async fn account_commits(
+    async fn account_pushed_commits(
+        &self,
+        repo: &Value,
+        commits: &std::collections::BTreeSet<String>,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        let remote_id = repo["remoteId"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or("无效的远端仓库身份。")?;
+        let base = repo_path(repo)?;
+        // Git authors and committers are not the authenticated push actor.
+        // A push counts only when its actor and repo match, and its commit is
+        // in this branch's actual ancestry. Never match names or CompareURL.
+        for page in 1..=10 {
+            let page_s = page.to_string();
+            let (value, headers) = self
+                .get(
+                    &format!("{base}/activities/feeds"),
+                    &[("page", &page_s), ("limit", "50")],
+                    "json",
+                    cancel,
+                )
+                .await?;
+            let rows = value.as_array().ok_or("仓库推送活动格式无效。")?;
+            for activity in rows {
+                if activity["op_type"] != "commit_repo" {
+                    continue;
+                }
+                if activity["repo_id"].as_u64() != Some(remote_id) {
+                    return Err("仓库推送活动与当前仓库身份不一致。".into());
+                }
+                let actor = text(&activity["act_user"], "login");
+                if actor.is_empty() {
+                    return Err("仓库推送者身份无法确认。".into());
+                }
+                if !actor.eq_ignore_ascii_case(text(&self.account, "login")) {
+                    continue;
+                }
+                let content: Value = serde_json::from_str(text(activity, "content"))
+                    .map_err(|_| "仓库推送提交记录格式无效。")?;
+                let pushed = content["Commits"]
+                    .as_array()
+                    .ok_or("仓库推送提交记录格式无效。")?;
+                for commit in pushed.iter().chain(std::iter::once(&content["HeadCommit"])) {
+                    let id = util::sha(text(commit, "Sha1"))?;
+                    if commits.contains(&id) {
+                        return Ok(true);
+                    }
+                }
+            }
+            // Some Gitea servers cap pages at 50 without a Link header.
+            if rows.is_empty() || (!next(&headers) && rows.len() < 50) {
+                return Ok(false);
+            }
+        }
+        Err("仓库推送活动尚未完整读取（最多500条），继续显示该分支。".into())
+    }
+    async fn account_participation(
         &self,
         repo: &Value,
         head: &str,
         cancel: &CancellationToken,
-    ) -> Result<bool> {
+    ) -> Result<Value> {
         let key = format!(
             "participation:{}:{}:{head}",
             text(&self.account, "id"),
@@ -817,9 +931,7 @@ impl Provider {
                 .as_i64()
                 .is_some_and(|time| util::now() - time < 300_000)
             {
-                return value["found"]
-                    .as_bool()
-                    .ok_or("分支参与记录格式无效。".into());
+                return Ok(value["proof"].clone());
             }
         }
         let kind = self.kind();
@@ -852,9 +964,10 @@ impl Provider {
                 return Err("平台未能确认提交作者的账号身份。".into());
             }
             let found = !rows.is_empty();
-            self.remember(key, json!({"found":found,"checkedAt":util::now()}))
+            let proof = json!({"hasAccountCommits":found});
+            self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
                 .await;
-            return Ok(found);
+            return Ok(proof);
         }
         let mut emails = std::collections::BTreeSet::new();
         if kind == "gitlab" {
@@ -923,7 +1036,8 @@ impl Provider {
         let mut seen = std::collections::BTreeSet::new();
         let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
         let mut gitea_emails = None;
-        let mut unresolved_gitea_author = false;
+        let mut incomplete_gitea_identity = false;
+        let mut history_complete = false;
         for page in 1..=10 {
             let page_s = page.to_string();
             let (value, _) = self
@@ -960,21 +1074,26 @@ impl Provider {
                         if gitea_emails.is_none() {
                             gitea_emails = Some(self.gitea_verified_emails(cancel).await);
                         }
+                        let author_email = text(&row["commit"]["author"], "email");
+                        // Imported authors need no local platform account. A negative
+                        // result only stays unknown when the identity data is missing.
+                        incomplete_gitea_identity |= author_email.is_empty()
+                            || gitea_emails.as_ref().unwrap().is_err();
                         let matched = gitea_emails.as_ref().is_some_and(|result| {
                             result.as_ref().is_ok_and(|emails| {
-                                emails.contains(&text(&row["commit"]["author"], "email").to_lowercase())
+                                emails.contains(&author_email.to_lowercase())
                             })
                         });
-                        unresolved_gitea_author |= !matched;
                         matched
                     } else {
                         false
                     }
                 };
                 if found {
-                    self.remember(key, json!({"found":true,"checkedAt":util::now()}))
+                    let proof = json!({"hasAccountCommits":true});
+                    self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
                         .await;
-                    return Ok(true);
+                    return Ok(proof);
                 }
                 let commit = commit_value(row)?;
                 seen.insert(text(&commit, "id").to_owned());
@@ -987,24 +1106,43 @@ impl Provider {
                 );
             }
             if parents.iter().all(|id| seen.contains(id)) {
-                // A complete history is not a complete identity mapping. Null
-                // Gitea authors cannot prove the current account never worked.
-                if unresolved_gitea_author {
-                    let detail = match &gitea_emails {
-                        Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
-                        _ => "部分提交作者未关联平台账号或已验证邮箱。".into(),
-                    };
-                    return Err(format!("Gitea无法确认分支参与记录；{detail}继续显示该分支。"));
-                }
-                self.remember(key, json!({"found":false,"checkedAt":util::now()}))
-                    .await;
-                return Ok(false);
+                history_complete = true;
+                break;
             }
             if rows.is_empty() {
                 break;
             }
         }
-        Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into())
+        let mut proof = json!({});
+        if kind == "gitea" {
+            let pushed = self
+                .account_pushed_commits(repo, &seen, cancel)
+                .await
+                .map_err(|error| format!("当前账号推送记录核对未完成：{error}"))?;
+            proof["hasAccountPush"] = json!(pushed);
+            if pushed {
+                if history_complete && !incomplete_gitea_identity {
+                    proof["hasAccountCommits"] = json!(false);
+                }
+                self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
+                    .await;
+                return Ok(proof);
+            }
+        }
+        if !history_complete {
+            return Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into());
+        }
+        if incomplete_gitea_identity {
+            let detail = match &gitea_emails {
+                Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
+                _ => "部分提交缺少作者邮箱。".into(),
+            };
+            return Err(format!("无法判断是否包含当前账号的提交；{detail}继续显示该分支。"));
+        }
+        proof["hasAccountCommits"] = json!(false);
+        self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
+            .await;
+        Ok(proof)
     }
     pub async fn tree(&self, repo: &Value, id: &str, cancel: &CancellationToken) -> Result<Value> {
         util::sha(id)?;
@@ -1258,13 +1396,16 @@ impl Provider {
                             task["tree"] = json!(tree_paths(&tree));
                             task["treeComplete"] = tree["complete"].clone();
                             if check_participation {
-                                match p.account_commits(&r, &head, &c).await {
-                                    Ok(found) => {
-                                        task["hasAccountCommits"] = json!(found);
-                                        if sole_branch && !found {
+                                match p.account_participation(&r, &head, &c).await {
+                                    Ok(proof) => {
+                                        task.as_object_mut().unwrap().extend(proof.as_object().unwrap().clone());
+                                        if sole_branch && proof["hasAccountCommits"] == false && proof["hasAccountPush"] != true {
                                             match p.account_created_repository(&r, &c).await {
                                                 Ok(created) => task["hasAccountCreation"] = json!(created),
-
+                                                Err(error) => task["participationError"] = json!(error),
+                                            }
+                                        }
+                                    }
                                     Err(error) => task["participationError"] = json!(error),
                                 }
                             }
@@ -1742,6 +1883,7 @@ pub fn transport_error(e: reqwest::Error) -> String {
 pub const CREDENTIAL_HELPER:&str="!f() { test \"$1\" = get || exit 0; protocol=; host=; while IFS=\"=\" read -r key value; do case \"$key\" in protocol) protocol=\"$value\";; host) host=\"$value\";; esac; done; if test \"$protocol://$host\" = \"$GITTOGETHER_DOWNLOAD_ORIGIN\"; then printf \"username=%s\\npassword=%s\\n\" \"$GITTOGETHER_DOWNLOAD_USER\" \"$GITTOGETHER_DOWNLOAD_TOKEN\"; fi; }; f";
 #[derive(Clone)]
 pub struct Network {
+    provider: Provider,
     pub url: String,
     env: Vec<(String, String)>,
     diagnostics: Option<crate::diagnostics::Diagnostics>,
@@ -1764,6 +1906,7 @@ impl Network {
             .origin()
             .ascii_serialization();
         Ok(Self {
+            provider: p.clone(),
             url,
             diagnostics: None,
             resource: util::digest(text(repo, "id").as_bytes())[..24].into(),
@@ -1777,7 +1920,6 @@ impl Network {
                         text(&p.account, "login").into()
                     },
                 ),
-                ("GITTOGETHER_DOWNLOAD_TOKEN".into(), p.token().into()),
                 ("GIT_ASKPASS".into(), "".into()),
                 ("SSH_ASKPASS".into(), "".into()),
             ],
@@ -1810,6 +1952,8 @@ impl Network {
         }
         a.extend_from_slice(args);
         let mut environment = self.env.clone();
+        let authorization_cancel=cancel.clone().unwrap_or_default();
+        environment.push(("GITTOGETHER_DOWNLOAD_TOKEN".into(),self.provider.access_token(None,&authorization_cancel).await?));
         if let Some(proxy) = crate::proxy::environment(root, &self.url).await? {
             environment.push(proxy);
         }

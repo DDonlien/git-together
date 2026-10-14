@@ -18,6 +18,9 @@ if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('
 const sourceEntries = ['src', 'src-tauri', 'public', 'index.html', 'package.json', 'package-lock.json'];
 const identity = process.env.GITTOGETHER_SIGN_IDENTITY || 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)';
 const notaryProfile = process.env.GITTOGETHER_NOTARY_PROFILE || 'gittogether-notary';
+// A file override can exclude an existing profile in the default keychain store.
+const notaryKeychain = process.env.GITTOGETHER_NOTARY_KEYCHAIN;
+const notaryCredentials = ['--keychain-profile', notaryProfile, ...(notaryKeychain ? ['--keychain', notaryKeychain] : [])];
 const signingKey = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
 const cargo = process.env.GITTOGETHER_CARGO || join(homedir(), '.cargo/bin/cargo');
 const execute = promisify(execFile);
@@ -57,7 +60,7 @@ try {
   const keyInfo = await stat(signingKey);
   if (!keyInfo.isFile() || (keyInfo.mode & 0o077)) throw new Error('Tauri 更新签名密钥必须是仅当前用户可读的文件。');
   if ((await readFile(signingKey + '.pub', 'utf8')).trim() !== tauri.plugins.updater.pubkey) throw new Error('Tauri 更新密钥与应用内置公钥不一致，停止发布。');
-  await execute('/usr/bin/xcrun', ['notarytool', 'history', '--keychain-profile', notaryProfile, '--output-format', 'json']);
+  await execute('/usr/bin/xcrun', ['notarytool', 'history', ...notaryCredentials, '--output-format', 'json']);
   await run('npm', ['run', 'check']);
   await run(cargo, ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--locked']);
   const output = await mkdtemp(join(buildRoot, `gittogether-${manifest.version}-macos-arm64-`));
@@ -89,7 +92,7 @@ try {
   const zipPath = join(output, `GitTogether-${manifest.version}-macOS-arm64.zip`);
   await run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', applicationPath, zipPath]);
   console.log('Rust 应用已签名，正在等待 Apple 公证…');
-  const submission = await execute('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, '--keychain-profile', notaryProfile, '--wait', '--output-format', 'json'], { maxBuffer: 1024 * 1024 });
+  const submission = await execute('/usr/bin/xcrun', ['notarytool', 'submit', zipPath, ...notaryCredentials, '--wait', '--output-format', 'json'], { maxBuffer: 1024 * 1024 });
   const notarization = notarizationResult(submission.stdout);
   await writeFile(join(output, 'notarization.json'), JSON.stringify(notarization, null, 2) + '\n');
   await run('/usr/bin/xcrun', ['stapler', 'staple', applicationPath]);

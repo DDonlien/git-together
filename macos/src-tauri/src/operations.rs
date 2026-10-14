@@ -204,6 +204,7 @@ pub async fn submit(
             environment: env.clone(),
             cancel: Some(cancel.clone()),
             write: true,
+            diagnostics: Some(service.diagnostics.clone()),
             ..Default::default()
         },
     )
@@ -226,6 +227,7 @@ pub async fn submit(
             stdin: Some(message.into_bytes()),
             write: true,
             timeout: 120,
+            diagnostics: Some(service.diagnostics.clone()),
             ..Default::default()
         },
     )
