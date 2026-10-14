@@ -271,7 +271,8 @@ async fn run_process(
     if let Some(code) = status.code() {
         details["exitCode"] = json!(code);
     }
-    if !status.success() {
+    // check-ignore uses 1 for a successful read with no ignored paths.
+    if !status.success() && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
         return Err(failure(&error));
     }
     if output.len() > 16_000_000 {

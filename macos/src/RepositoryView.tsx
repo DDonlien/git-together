@@ -28,7 +28,7 @@ import type { FileTreeChange } from './file-tree';
 
 const noChanges: FileTreeChange[] = [];
 
-export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask }: {
+export function RepositoryView({ repository, account, localPath, localState, localLink, hiddenEntries, manualHiddenEntries, onToggleHidden, globalSearch, onSearchChange, searchRef, onConfigure, workspace: suppliedWorkspace, readLocalCommit: suppliedReadLocalCommit, remoteState, readRemoteCommit, submitCommit, pushCommit, applySync, generateCommitMessage, initialCommitTask, onLocalFilesChanged }: {
   repository: RemoteRepository; account: Account; localPath?: string; localState?: LocalRepositoryState;
   localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; manualHiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
   globalSearch: string; onSearchChange?: (value: string) => void; searchRef?: RefObject<HTMLElement | null>;
@@ -37,6 +37,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   readLocalCommit?: ReadLocalCommit;
   applySync?: import('./repository-sync-model').ApplyRepositorySync; submitCommit?: SubmitLocalCommit; pushCommit?: PushLocalCommit; generateCommitMessage?: GenerateCommitMessage;
   initialCommitTask?: string | null;
+  onLocalFilesChanged?: () => void;
 }) {
   const current = localState?.path === localPath ? localState : undefined;
   const snapshot = current?.snapshot;
@@ -131,7 +132,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
         const commitId = selectedCommits[task.id];
         const state = task.remote ? remoteCommits[task.id] : localCommits[task.id];
         const details = commitId && state?.id === commitId ? state.details : null;
-        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree task={task} repository={repository} account={account} changes={task.remote || commitId ? details?.files || noChanges : undefined} selected={contextFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
+        return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree onChanged={onLocalFilesChanged} task={task} repository={repository} account={account} changes={task.remote || commitId ? details?.files || noChanges : undefined} selected={contextFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
       })}{!visibleTreeIds.size && <div className="repository-column-empty" role="status"><Icon name="folder" size={26} /><p>{treeSource === 'local' ? !localPath ? '尚未关联本地目录。' : current?.error || (focus ? '这个分支尚无本地文件树。' : '正在读取本地文件树…') : remoteState?.error || (focus ? '这个分支尚无远端文件树。' : remoteState?.workspace ? '远端仓库尚无文件。' : remoteState?.loading ? '正在读取远端文件树…' : '远端文件树尚未接入。')}</p>{treeSource === 'local' && !localPath && <Button onClick={onConfigure} disabled={!repository.available}>关联本地目录</Button>}</div>}</div></section>
     </RepositoryColumns>
   </main>;

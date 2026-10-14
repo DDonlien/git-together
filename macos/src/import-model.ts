@@ -3,6 +3,7 @@ import type { RepositoryWorkspace } from './repository-model';
 import type { LocalCommitDetails } from './local-commit-model';
 import type { CommitDraft, LocalSubmitInput, LocalSubmitResult, LocalPushInput, LocalPushResult } from './local-submit-model';
 import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
+import type { FileDirectory, FileOperationInput, FileOperationPlan, FileOperationResult } from './file-operation-model';
 
 export type Provider = 'github' | 'gitea';
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
@@ -73,9 +74,17 @@ export type ApiInputs = {
   openRepository: { repositoryId: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
   openDirectory: { repositoryId: string; taskId: string };
+  localDirectory: { repositoryId: string; taskId: string; path: string };
+  prepareFileOperation: FileOperationInput;
+  applyFileOperation: { repositoryId: string; taskId: string; planId: string; operationId: string };
+  discardFileOperation: { repositoryId: string; taskId: string; planId: string };
   openLocalDirectory: { path: string };
 };
 export type ApiOutputs = {
+  localDirectory: FileDirectory;
+  prepareFileOperation: FileOperationPlan;
+  applyFileOperation: FileOperationResult;
+  discardFileOperation: { discarded: true };
   status: ServiceInfo;
   catalog: Catalog; connect: Catalog; updateAccount: Catalog; refresh: Catalog; removeAccount: Catalog;
   githubAuthStart: GitHubAuthorization;

@@ -4,6 +4,7 @@ import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
 import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
+import { isFileDirectory, isFileOperationPlan, isFileOperationResult } from './file-operation-model';
 import { diagnosticFailure } from './diagnostics-model';
 import { isRepositorySyncPlan, isRepositorySyncResult } from './repository-sync-model';
 
@@ -91,7 +92,13 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRepositorySyncResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('操作结果返回格式无效，请重新读取目录。');
   } else if (method === 'fetchRepository') {
     if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt)) throw new Error('后台获取结果返回格式无效。');
-  } else if (method === 'discardSync') {
+  } else if (method === 'localDirectory') {
+    if (!isFileDirectory(value) || !('path' in input) || value.path !== input.path) throw new Error('本地目录返回格式无效。');
+  } else if (method === 'prepareFileOperation') {
+    if (!isFileOperationPlan(value) || !('operation' in input) || value.operation !== input.operation) throw new Error('文件操作预览返回格式无效。');
+  } else if (method === 'applyFileOperation') {
+    if (!isFileOperationResult(value)) throw new Error('文件操作结果无效，请刷新目录确认。');
+  } else if (method === 'discardSync' || method === 'discardFileOperation') {
     if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('预览取消结果返回格式无效。');
   } else if (method === 'generateCommitMessage') {
     if (!isCommitDraft(value)) throw new Error('AI 提交说明返回格式无效。');

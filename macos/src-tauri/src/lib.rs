@@ -3,6 +3,7 @@ pub mod ai;
 pub mod credentials;
 pub mod diagnostics;
 pub mod git;
+pub mod files;
 pub mod github_token;
 pub mod oauth;
 pub mod operations;
@@ -22,7 +23,7 @@ mod instances;
 use serde_json::{json, Value};
 use service::Service;
 use std::{path::PathBuf, sync::Arc};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use updates::Updates;
 pub fn data_root() -> util::Result<PathBuf> {
     instances::data_root()
@@ -210,6 +211,13 @@ pub fn run() {
             }
         })
         .on_window_event(|window,event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, position }) = event {
+                let service = window.state::<Arc<Service>>();
+                match service.file_state.lock().unwrap_or_else(|e| e.into_inner()).drop_files(paths.clone()) {
+                    Ok(drop_id) => { let _ = window.emit("gittogether-file-drop", json!({"dropId":drop_id,"position":{"x":position.x,"y":position.y}})); }
+                    Err(error) => { let _ = window.emit("gittogether-file-drop", json!({"error":error,"position":{"x":position.x,"y":position.y}})); }
+                };
+            }
             if let tauri::WindowEvent::CloseRequested {api,..}=event {
                 if window.state::<Arc<remote_control::RemoteControl>>().enabled() {
                     api.prevent_close();

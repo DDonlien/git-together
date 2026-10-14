@@ -4,6 +4,8 @@ import type { RepositoryTask } from './repository-model';
 import { providerName, type Account, type RemoteRepository } from './import-model';
 import { importAPI } from './import-api';
 import { PresenceAvatars } from './PresenceAvatars';
+import { LocalFileTree } from './LocalFileTree';
+import { FileTypeIcon } from './FileTypeIcon';
 import { repositoryFileURL } from './repository-file-url';
 import { decoratedFileTree, type DecoratedFileTreeNode, type FileTreeChange } from './file-tree';
 
@@ -20,13 +22,13 @@ function TreeNode({ node, depth, selected, onSelect, actions }: { node: Decorate
   </details>;
   const unavailable = actions?.unavailable(node);
   return <div className={`repository-tree-row tree-file ${selected === node.path ? 'selected' : ''}`} data-change={node.change} data-missing={node.missing || undefined}>
-    <button type="button" className="repository-tree-select" title={status ? `${node.path} · ${status.description}${node.missing ? ' · 当前目录中不存在' : ''}` : node.path} aria-label={description} onClick={() => onSelect(node.path)} aria-pressed={selected === node.path}><span className="tree-disclosure" /><Icon name="file" size={15} /><span className="repository-tree-name">{node.name}</span>{status && <code aria-hidden="true">{status.letter}</code>}</button>
+    <button type="button" className="repository-tree-select" title={status ? `${node.path} · ${status.description}${node.missing ? ' · 当前目录中不存在' : ''}` : node.path} aria-label={description} onClick={() => onSelect(node.path)} aria-pressed={selected === node.path}><span className="tree-disclosure" /><FileTypeIcon path={node.path} /><span className="repository-tree-name">{node.name}</span>{status && <code aria-hidden="true">{status.letter}</code>}</button>
     {actions && <IconButton className="repository-tree-open" icon={actions.opening === node.path ? 'spinner' : 'external'} label={unavailable ? `${node.path}：${unavailable}` : actions.label(node.path)} disabled={!!unavailable || actions.opening !== null} aria-busy={actions.opening === node.path || undefined} onClick={() => actions.open(node.path)} />}
   </div>;
 }
 
-export function RepositoryFileTree({ task, selected, onSelect, complete, changes, repository, account }: { task: RepositoryTask; selected?: string; onSelect: (path: string) => void; complete: boolean; changes?: FileTreeChange[]; repository?: RemoteRepository; account?: Account }) {
-  const nodes = useMemo(() => decoratedFileTree(task.tree, changes || task.files), [task.tree, changes, task.files]);
+export function RepositoryFileTree({ task, selected, onSelect, complete, changes, repository, account, onChanged }: { task: RepositoryTask; selected?: string; onSelect: (path: string) => void; complete: boolean; changes?: FileTreeChange[]; repository?: RemoteRepository; account?: Account; onChanged?: () => void }) {
+  const nodes = useMemo(() => task.remote || !repository ? decoratedFileTree(task.tree, changes || task.files) : [], [task.tree, changes, task.files, task.remote, repository]);
   const [opening, setOpening] = useState<string | null>(null);
   const [openingDirectory, setOpeningDirectory] = useState(false);
   const [openError, setOpenError] = useState('');
@@ -57,7 +59,7 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
     },
   } : undefined;
   return <section className="repository-tree-task" aria-label={`文件树：${task.branch}`}>
-    <div className="repository-task-tree">{nodes.length ? nodes.map(node => <TreeNode key={node.path} node={node} depth={0} selected={selected} onSelect={onSelect} actions={actions} />) : <p className="repository-tree-empty">{task.error ? '文件树暂不可用。' : task.remote ? complete ? '所选远端分支没有文件。' : '正在读取远端文件树…' : task.path ? '没有可显示的文件。' : '分支文件树读取等待服务更新。'}</p>}</div>
+    {!task.remote && repository && task.path ? <LocalFileTree key={task.id} task={task} repositoryId={repository.id} enabled={repository.available && !task.error} selected={selected} onSelect={onSelect} changes={changes || task.files} onChanged={onChanged} openFile={path => actions?.open(path)} /> : <div className="repository-task-tree">{nodes.length ? nodes.map(node => <TreeNode key={node.path} node={node} depth={0} selected={selected} onSelect={onSelect} actions={actions} />) : <p className="repository-tree-empty">{task.error ? '文件树暂不可用。' : task.remote ? complete ? '所选远端分支没有文件。' : '正在读取远端文件树…' : task.path ? '没有可显示的文件。' : '分支文件树读取等待服务更新。'}</p>}</div>}
     {openError && <p className="repository-task-error" role="alert">{openError}</p>}
     {!complete && task.path && <p className="repository-data-note">当前仅列出更改文件；完整目录等待服务更新。</p>}
     {task.remote && task.treeComplete === false && task.tree.length > 0 && <p className="repository-data-note">文件树不完整，显示已读取部分。</p>}

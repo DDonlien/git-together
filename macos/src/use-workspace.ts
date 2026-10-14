@@ -247,7 +247,7 @@ export function useWorkspace() {
     }
   }
   return {
-    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

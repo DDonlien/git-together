@@ -529,6 +529,22 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-tree-children { margin-left: 15px; border-left: 1px solid var(--line); padding-left: 3px; }
 .repository-tree-row > svg, .repository-tree-select > svg { color: var(--muted); }
 .repository-tree-row > code, .repository-tree-select > code { color: var(--muted); font-size: 9px; }
+
+/* File operations share the compact tree geometry and Material controls. */
+.local-file-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.file-tree-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px var(--repository-column-inset); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.file-tree-toolbar .material-search-bar { flex: 1; min-width: 0; width: auto; --md-filled-text-field-container-height: 36px; --md-filled-text-field-input-text-size: 11px; }
+.file-tree-toolbar .icon-button { flex-shrink: 0; }
+.local-file-tree .repository-tree-select { user-select: none; }
+.repository-tree-row[data-ignored] { color: color-mix(in srgb,var(--muted) 65%,var(--content)); }
+.repository-tree-row.is-cut { opacity: .55; }
+.local-file-tree .is-drop-target { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--blue-bg); }
+.file-operation-dialog { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.file-operation-preview { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.file-operation-preview li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; font-size: 12px; }
+.file-operation-preview li > span + span { color: var(--muted); font-size: 11px; }
+.file-operation-dialog .notice { margin: 0; }
+.file-operation-dialog .modal-actions { margin-top: 0; }
 .repository-tree-row[data-change="added"] { color: var(--teal); }
 .repository-tree-row[data-change="modified"] { color: var(--warning); }
 .repository-tree-row[data-change="deleted"] { color: var(--danger); }

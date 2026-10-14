@@ -1,5 +1,11 @@
 # Tauri / Rust / React 架构
 
+## 本地文件树与文件操作（R-05-local-file-operations）
+
+`RepositoryFileTree` 对本地任务挂载 `LocalFileTree`，远端树继续使用只读 Git/provider 清单。`localDirectory` 只列当前目录，不跟随符号链接，并从 Git 查询忽略状态；前端按需读取展开目录、保留空目录、用类型图标和浅色状态区分内容，筛选/排序只改变显示顺序。文件操作走有限 Tauri/API 方法：OS拖入路径先兑换成限时 opaque grant；计划绑定服务身份、仓库、worktree、来源/目标及完整目录指纹。确认前列出每个真实目标，执行时拒绝重名覆盖、路径逃逸、符号链接和 `.git`，检测预览过期；删除经系统Trash/回收站，跨卷移动先复制成功再回收原件。工作目录common-dir互斥和operationId幂等保护并发/重复提交，结果刷新本地目录与Git状态；失败结果保留可恢复的来源和部分完成数，不改变HEAD或index。
+
+Git Graph和文件树的行状态底色独立于行几何绘制。Graph固定42px行及连续SVG轨道，底色通过pseudo-element上下内缩3px、左右端点内缩4px；文字列增加横向内距，各列文字始终高于底色层。文件树按钮横向留白不改变点击区、树缩进或省略规则。徽标和计数胶囊使用显式左右padding，避免单字符与多字符内容贴边。
+
 仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
 
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。

@@ -69,6 +69,7 @@ pub struct Service {
     readers: Mutex<BTreeMap<String, Provider>>,
     results: Mutex<VecDeque<(String, String, Value)>>,
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
+    pub file_state: std::sync::Mutex<crate::files::State>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
     foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
@@ -200,6 +201,7 @@ impl Service {
             readers: Mutex::new(BTreeMap::new()),
             results: Mutex::new(VecDeque::new()),
             plans: Mutex::new(BTreeMap::new()),
+            file_state: std::sync::Mutex::new(crate::files::State::default()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
@@ -1070,7 +1072,7 @@ impl Service {
         let foreground = match method {
             "submitCommit" => Some("提交"),
             "pushCommit" => Some("推送"),
-            "applySync" => Some("文件变更"),
+            "applySync" | "applyFileOperation" => Some("文件变更"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
             "link" | "unlink" | "matchAccountRepositories" => Some("保存仓库关联"),
@@ -1436,7 +1438,7 @@ impl Service {
         } else {
             util::field(input, "taskId", 4096)?
         };
-        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync") {
+        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync" | "applyFileOperation") {
             let operation = util::field(input, "operationId", 100)?;
             uuid::Uuid::parse_str(&operation).map_err(|_| "操作标识无效。")?;
             let identity = util::digest(format!("{method}:{input}:{}", context.identity));
@@ -1468,16 +1470,58 @@ impl Service {
                 open(root.to_str().ok_or("目录路径无法读取。")?).await?;
                 Ok(json!({"opened":true}))
             }
+            "localDirectory" => {
+                util::allowed(input, &["repositoryId", "taskId", "path"])?;
+                let result = crate::files::directory(&root, text(input, "path")).await?;
+                self.validate(&context).await?;
+                Ok(result)
+            }
+            "prepareFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "operation", "paths", "sourceTaskId", "dropId", "destination", "name"])?;
+                let source_root = if text(input, "dropId").is_empty() {
+                    Some(self.task_root(&context, if text(input, "sourceTaskId").is_empty() { &task_id } else { text(input, "sourceTaskId") }).await?)
+                } else {
+                    None
+                };
+                let sources = if let Some(source_root) = &source_root {
+                    input["paths"].as_array().ok_or("请选择文件。")?.iter().map(|path| crate::files::relative(source_root, path.as_str().ok_or("来源路径无效。")?, false)).collect::<Result<Vec<_>>>()?
+                } else {
+                    if text(input, "operation") == "delete" { return Err("拖入文件只能复制或移动。".into()); }
+                    self.file_state.lock().unwrap_or_else(|e| e.into_inner()).sources(text(input, "dropId"))?
+                };
+                let operation = text(input, "operation").to_owned();
+                let destination = text(input, "destination").to_owned();
+                let name = text(input, "name").to_owned();
+                let target_root = root.clone();
+                let plan = tokio::task::spawn_blocking(move || crate::files::prepare(&target_root, source_root, sources, &operation, &destination, &name)).await.map_err(|_| "文件操作预览失败。")??;
+                self.validate(&context).await?;
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).save(format!("{}:{task_id}:{}", context.identity, root.display()), plan)
+            }
+            "discardFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId"])?;
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).discard(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()));
+                Ok(json!({"discarded":true}))
+            }
+            "applyFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId", "operationId"])?;
+                let _guard = self.claim(&root, cancel).await?;
+                self.validate(&context).await?;
+                let (operation, identity) = operation.unwrap();
+                if let Some(value) = self.previous(&operation, &identity).await? { return Ok(value); }
+                let plan = self.file_state.lock().unwrap_or_else(|e| e.into_inner()).take(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()))?;
+                // Once confirmed, complete this bounded write independently of a
+                // hidden/cancelled renderer request, just like local Commit.
+                let result = tokio::task::spawn_blocking(move || crate::files::apply(plan)).await.map_err(|_| "文件操作未完成，请重新读取目录。")??;
+                self.remember(operation, identity, result.clone()).await;
+                Ok(result)
+            }
             "openFile" => {
                 util::allowed(input, &["repositoryId", "source", "taskId", "path"])?;
                 if input["source"] != "local" {
                     return Err("无效的文件来源。".into());
                 }
                 let path = util::file_path(text(input, "path"))?;
-                let t = git::task(&root).await?;
-                if !t["tree"].as_array().unwrap().iter().any(|p| p == &path) {
-                    return Err("文件不属于当前工作目录文件清单。".into());
-                }
+                if Path::new(&path).components().any(|part| part.as_os_str().to_string_lossy().eq_ignore_ascii_case(".git")) { return Err("不能打开Git元数据。".into()); }
                 let file =
                     dunce::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
                 if !file.starts_with(&root)
