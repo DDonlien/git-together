@@ -12,8 +12,8 @@ import { useUpdates } from './use-updates';
 import { branchHiddenEntries, type BranchBehaviorPreferences } from './branch-behavior';
 import { linkedTasks } from './branch-links';
 
-type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[] } & BranchBehaviorPreferences;
-const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], unworkedBranchBehavior: 'default' };
+type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[] } & BranchBehaviorPreferences;
+const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
 const writePrefix = (repositoryId: string) => `write:${JSON.stringify(repositoryId)}:`;
 export function repositoryActionBusy(busy: Record<string, boolean>, repositoryId: string): boolean {
@@ -49,6 +49,7 @@ export function useWorkspace() {
       const saved: unknown = JSON.parse(raw);
       if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string') || (saved.hiddenEntries !== undefined && (!Array.isArray(saved.hiddenEntries) || !saved.hiddenEntries.every(entry => typeof entry === 'string')))) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
       if ((saved.unworkedBranchBehavior !== undefined && !['default', 'hide'].includes(String(saved.unworkedBranchBehavior))) || (saved.shownBranches !== undefined && (!Array.isArray(saved.shownBranches) || !saved.shownBranches.every(entry => typeof entry === 'string')))) throw new Error('仓库行为偏好格式无效，已使用默认设置；原记录尚未覆盖。');
+      if (saved.pinnedRepositories !== undefined && (!Array.isArray(saved.pinnedRepositories) || !saved.pinnedRepositories.every(id => typeof id === 'string'))) throw new Error('仓库置顶偏好格式无效，已使用默认设置；原记录尚未覆盖。');
       return { ...defaults, ...saved } as Preferences;
     } catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); queueMicrotask(() => setStorageError(problem instanceof Error ? problem.message : '无法读取外观设置。')); return defaults; }
   });
@@ -196,7 +197,8 @@ export function useWorkspace() {
     try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); setStorageError(''); logDiagnostic({ event: 'ui-action', outcome: 'success', method: 'preferences' }); }
     catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); setStorageError('无法保存设置；当前会话仍可使用。'); }
   }, [preferences]);
-  const updatePreferences = (change: Partial<Preferences>) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...change })); };
+  const updatePreferences = (change: Partial<Preferences> | ((current: Preferences) => Partial<Preferences>)) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...(typeof change === 'function' ? change(current) : change) })); };
+  const toggleRepositoryPin = (repositoryId: string) => updatePreferences(current => ({ pinnedRepositories: current.pinnedRepositories.includes(repositoryId) ? current.pinnedRepositories.filter(id => id !== repositoryId) : [...current.pinnedRepositories, repositoryId] }));
   async function task(key: string, run: () => Promise<Catalog>) {
     const installation = updates.installationRef.current;
     if (running.current.has(key) || [...running.current].some(item => item.startsWith(writePrefix(key)))) throw new Error('该操作正在执行，请稍候。');
@@ -245,7 +247,7 @@ export function useWorkspace() {
     }
   }
   return {
-    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, loading, error, storageError, busy, reload, service, needsReload, updates,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),
