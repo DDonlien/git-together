@@ -1,3 +1,4 @@
+import { isAccountRepositoryAccess } from './repository-auth-model';
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteHistoryPage, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
@@ -77,7 +78,11 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   const validationStarted = performance.now();
   if (!isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '账号服务返回格式无效。');
   const value = envelope.value;
-  if (method === 'graphSources') {
+  if (method === 'accountRepositoryAccess') {
+    if (!isAccountRepositoryAccess(value) || !('accountId' in input) || value.accountId !== input.accountId) throw new Error('仓库授权信息返回格式无效。');
+  } else if (method === 'openAccountAccessSettings') {
+    if (!isRecord(value) || value.opened !== true) throw new Error('授权管理页面没有打开。');
+  } else if (method === 'graphSources') {
     if (!isRecord(value) || !Array.isArray(value.sources) || !value.sources.every(isGraphSource) || typeof value.limited !== 'boolean') throw new Error('来源分支返回格式无效。');
   } else if (method === 'graphPreview') {
     if (!isGraphPreview(value) || !('commitId' in input) || value.commitId !== input.commitId || !('expectedHead' in input) || value.head !== input.expectedHead) throw new Error('提交差异返回格式无效。');

@@ -34,6 +34,14 @@ Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作�
 
 仓库状态排序（IMPORT-13-status-header）：Dashboard通过既有GitSignals和repositoryReadFeedback派生排序级别，读取中或推送中优先于残留错误，同级以仓库身份稳定排序；升序依次为异常、处理中、实际差异、已确认一致、未知。关联仓库继续使用workspace共享读取，未关联读取仍由现有行拥有。行只通过稳定回调报告一个带instanceId/repositoryId键的排序级别，不把新排序变成第二个读取器；相同级别不更新父状态。表头复用原排序状态，折叠/筛选不执行Git或保存账号配置。
 
+## 仓库认证与授权状态（IMPORT-02，2026-10-15）
+
+LocalLink 保存可选 authentication（system / account）；已有记录缺省为 system，首次通过应用下载的分支显式保存 account。系统模式从真实工作目录的 Git remote 及当前分支 remote/pushRemote/pushDefault 选取同仓库连接，保留 SSH 用户、端口、host alias、agent 与 credential helper，不注入应用令牌、不重写已有 Git 配置。应用模式仍使用绑定账号及 HTTPS origin 的独立凭据助手，令牌只在该子进程环境中。SSH -G 仅用于确认 alias 对应的仓库身份，执行 Git 时保留原 URL。Push 的前后引用检查固定同一个实际推送地址；后台 Fetch 使用同一个实际远端及其跟踪引用。快照与新分支存储继承原工作目录必要的本地认证配置，Get Latest 替换目录保留已有 remote/branch 配置；预览状态包含 Git 配置摘要，变化后停止旧计划。
+
+setRepositoryAuthentication 只修改已有 LocalLink；按仓库保存锁及执行任务守卫保护切换，上下文摘要和前端读取资源键包含选择，旧计划/读取不能用于新模式。应用 API 仓库访问失败不阻止系统模式的本地操作；远端 API 浏览仍独立显示其应用账号错误。未知推送数量保持未知，系统模式可显式选择本地提交并由真实 Push 的引用复核确认结果。
+
+repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。安装令牌、细粒度令牌及无法报告令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，每60秒更新且隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录，不发送 Git 写操作。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
+
 ## 当前运行结构
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
@@ -169,6 +177,12 @@ R-05中已选文件退出更改列表时仍保留树选择；本地和远端均�
 GitHub令牌自动续期（0.30.2，IMPORT-11-token-refresh）：网页/设备交换由同一github_token模型读取access_token、expires_in、refresh_token及refresh_token_expires_in。续期令牌、有效期与原授权方式保存在accounts-v2.encrypted的私有githubOAuth项，公有Catalog仅保留原authorizationExpiresAt，不传回任何令牌。网页续期恢复已有加密开发应用配置，设备续期无需client secret；仅请求固定GitHub官方HTTPS端点，不改变scope、权限、主机或TLS策略。
 
 Service按账号及明确授权代次串行续期；API或Git网络操作在到期前120秒获取更新凭据。401最多续期并重试一次只读API，403/限流不触发续期，Git写操作不自动重放。自动轮换保留authorizationId与仓库/任务上下文；重新授权和手工替换凭据生成新代次，旧读取/写计划继续被隔离。账号目录刷新与目录匹配比较授权代次，不把正常轮换误认为账号变更。
+
+0.34.1（IMPORT-02-git-auth-lifecycle）细化 Git 凭据寿命：API 继续使用120秒余量，应用账号的 Git 网络进程改为按进程超时加60秒余量提前续期。Service 为每个账号维护共享读写锁，领取令牌后核对授权代次与当前令牌；读锁持有到 Git 及其 LFS/钩子输出结束，续期交换和加密保存持有写锁，避免轮换撤销仍在使用的令牌。系统 Git/SSH 不领取应用令牌。行为参照 [GitHub Desktop CredentialSessions](https://github.com/desktop/desktop/blob/bebc062caafcf818993b9f53397b976d33484231/app/src/lib/credential-sessions.ts)；[GitHub 官方续期契约](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens)说明交换会同时使旧访问令牌失效。
+
+Git 失败解析同时检查 stdout 和 stderr，读取 push --porcelain 的拒绝理由；只有明确 non-fast-forward/fetch-first/stale-info 才提示远端领先。工作流权限、SSO、仓库写权限、凭据缺失/拒绝、SSH 密钥/主机、远端规则/接收钩子、不可见仓库和限流分别返回固定安全文案。后台 Git 日志仅附加白名单 authentication 与 gitFailureReason，renderer 不能注入这两项；原始 Git 输出、目录、远端 URL、账户名和令牌不写入日志。
+
+系统认证在已关联目录内以验证后的 remote 名称执行 Fetch、Push 与 LFS fetch，保留 remote 专用配置及 pre-push 钩子的名称参数。Push 固定名称和唯一实际推送 URL，每次执行前重新核对；引用预检与回读直接使用固定推送 URL，避免误读不同的 fetch URL。多个推送地址及执行期间配置变化在执行前停止。临时快照不借用源目录的 remote 名称，继续使用验证后的地址。源码对照与现场证据见[Git GUI 对照](reference/git-gui.md)。
 
 续期交换在独立任务中完成；HTTP/IPC调用取消仅停止等待，已经开始的轮换仍尝试原子加密保存。保存失败时保留待保存结果、15秒后可重试保存，不重复使用已被GitHub轮换的旧续期令牌；待保存结果阻止重启安装，移除账号或替换授权后清除旧结果。暂时网络/服务失败按账号退避60秒；缺失或到期续期凭据退避5分钟，并显示明确重新授权原因，保留账号/仓库/本地关联。旧版本登录缺少续期凭据，需升级后正常重新授权一次。
 

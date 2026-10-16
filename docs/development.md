@@ -129,7 +129,7 @@ Electron 设置页使用同一注册应用的正常网页登录与回调。桌�
 
 2026-10-07 0.7.2交付检查：完整脚本/HTTP回归、隔离浏览器阶段/慢提示/成功/失败/中断、亮暗色/减少动态效果及窄窗口检查已通过，全套276/276、strict、4/4静态包装与构建通过。默认入口保持运行，主服务与助手均0.7.2，受保护API HTTP200、configured=true；加密配置原文件0600/115bytes保留，未重填或修改密钥。必要重启前为1账号/38仓库，重启后为0账号/0仓库/0关联，Taobe正常授权表单已恢复。真实新popup与重连仍待用户确认，不据此声称账号已自动恢复、原生包更新或生产发布。
 
-本机开发服务不会重启主账号服务。每次新授权绑定当时的主实例，主服务重启后可直接开始新授权，不需要同时重启授权助手；进行中的旧回调仍会要求重新开始，不能自动重放到新实例。它不是已部署的生产授权服务。0.11.0 已接入本机原生 Electron 的正常浏览器返回，客户端密钥仍不打包。refresh token 不留存、自动续期未实现；浏览器通用账号接口不保存网页 OAuth 的有效期元数据，原生授权接口保留有效期，过期仍需重新授权。2026-10-06 用户已自行启用本机配置并表示保存回调，configured=true 已读回；配置状态本身不等于密钥有效性、GitHub 同意或仓库导入已验收。2026-10-10已从0.11.0签名包实际完成原生回调，GitHub38/Gitea20仓库及原2个关联均读回；本次复用0.11.1本机助手，未单独验收签名包内置助手的独立启动。密钥轮换仍未完成。普通用户只授权共享的应用，正式对外使用的应用发布与安全授权接入仍待完成，不要求用户各自注册或输入应用密钥。
+本机开发服务不会重启主账号服务。每次新授权绑定当时的主实例，主服务重启后可直接开始新授权，不需要同时重启授权助手；进行中的旧回调仍会要求重新开始，不能自动重放到新实例。它不是已部署的生产授权服务。0.11.0 已接入本机原生 Electron 的正常浏览器返回，客户端密钥仍不打包。上述0.11.0原型未保存refresh token，因此历史版本过期后需要重新授权；当前Rust客户端已保存官方返回的续期凭据并自动轮换，旧登录缺失续期凭据时才需正常授权一次。2026-10-06 用户已自行启用本机配置并表示保存回调，configured=true 已读回；配置状态本身不等于密钥有效性、GitHub 同意或仓库导入已验收。2026-10-10已从0.11.0签名包实际完成原生回调，GitHub38/Gitea20仓库及原2个关联均读回；本次复用0.11.1本机助手，未单独验收签名包内置助手的独立启动。密钥轮换仍未完成。普通用户只授权共享的应用，正式对外使用的应用发布与安全授权接入仍待完成，不要求用户各自注册或输入应用密钥。
 
 主页面 CSP 精确允许 `http://127.0.0.1:4174/api/`；缺少它时浏览器会在服务 CORS 正常的情况下阻止请求，显示“无法连接本机网页授权服务”。修改 HTML 后需要新文档生效（Vite 当前已自动刷新），不需要重启两个内存服务。已实测当前按钮可进入等待授权并取消；这是本机连通性验收，不是完成 GitHub 同意后的返回验收。
 
@@ -143,13 +143,15 @@ Electron 设置页使用同一注册应用的正常网页登录与回调。桌�
 
 ## GitHub 设备授权配置（历史桌面入口）
 
-注册 GitTogether 自有 GitHub App，在应用设置启用 Device flow。仓库权限至少为 Metadata read-only，不申请写权限；按需把应用安装在要访问的个人/组织仓库。设备流程不需要 client secret，不能拿 PAT 或其他产品的 Client ID 替代应用身份。配置注册步骤见 [GitHub 文档](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)，协议见 [设备授权文档](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token)。
+此节保留早期设备入口的说明。当前 GitTogether 已支持真实 Git 写操作：使用应用账号推送时，自有 GitHub App 必须具有 Metadata read 与 Contents read/write，并安装到目标仓库；修改 GitHub Actions 工作流还需要 Workflows read/write。用户本身的仓库写权限与应用权限、安装范围共同限制访问，登录成功或 `/repos` 返回用户 push=true 不能单独证明应用令牌可写。调整应用权限后，需要仓库所有者在 GitHub 批准新权限；反复重新登录不会替未获授权的应用增加权限。当前安装的实际权限应在「设置 → 仓库授权与本地认证」检查，不从这份配置说明推断。
+
+设备入口需在自有应用设置启用 Device flow，不需要 client secret；不能拿其他产品的 Client ID 替代应用身份。已有本地目录默认沿用系统 Git/SSH，其权限由实际系统凭据决定，不要求把应用账号配置成该身份。配置注册步骤见 [GitHub 文档](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)，协议见 [设备授权文档](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app#using-the-device-flow-to-generate-a-user-access-token)。
 
 仅对保留的设备授权入口，在本地进程环境配置 `GITTOGETHER_GITHUB_CLIENT_ID=自己的ClientID`。不要加 VITE_ 前缀或放入 token/client secret。修改主服务配置会重启并清空浏览器内存账号，应先取得许可；此配置不等于新的网页回调已接通。账号连接仍可选择备用的访问令牌。
 
 GitHub 授权在官方验证网页输入弹窗中的公开验证码，应用自动检测完成。自动网页弹窗被拦截时点击「打开 GitHub」。浏览器需要重新加载到当前 0.4.0，原生客户端需要重启到重新编译的桥接。用户关闭/取消停止本地导入，不等于撤销 GitHub 网页上的应用授权；撤销授权应在 GitHub 设置完成。
 
-GitHub App 的仓库访问受用户、应用权限与安装范围共同限制；组织可能需要管理员批准或 SSO。访问令牌有有效期时，过期重新授权，当前不实现自动 refresh token 续期。Gitea 网页 OAuth 不属于本轮实现范围。
+GitHub App 的仓库访问受用户、应用权限与安装范围共同限制；组织可能需要管理员批准或 SSO。当前 Rust 客户端已保存网页/设备授权返回的续期凭据并自动续期，具体生命周期见根架构文档；早期登录没有保存续期凭据时仍需正常授权一次。此节历史原型的“过期后重新登录”不再代表当前实现。
 
 ## 0.3.0 验证边界（2026-10-06）
 
