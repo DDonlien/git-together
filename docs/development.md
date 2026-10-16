@@ -181,6 +181,14 @@ GitHub App 的仓库访问受用户、应用权限与安装范围共同限制；
 
 若 npm 安装策略未执行 Electron 的安装脚本，需要先完成官方运行时安装。本次环境的自动 ZIP 解压未完整结束，使用官方缓存 ZIP（校验 SHA-256 与包内清单一致）完成依赖解压，没有修改任何用户应用或真实仓库。
 
+## 自动发布的公证配置
+
+`npm run package:desktop`复用Apple钥匙串中的`gittogether-notary`，首次验证成功后将profile名称与可选存储路径保存到仓库外的`~/.config/gittogether/release/notary.json`（权限600）。此文件不保存Apple账号、密码或API密钥，也不进入安装包。没有文件路径时使用原DataProtection钥匙串；不能把它当作登录钥匙串文件读取。已有环境变量`GITTOGETHER_NOTARY_PROFILE`及`GITTOGETHER_NOTARY_KEYCHAIN`仍用于显式覆盖，单独指定profile不继承其他profile的文件路径。
+
+预检及真实提交仅在工具返回69并明确表示无法读取profile时，每15秒自动重试，最多10分钟。显式文件型钥匙串先通过只读状态检查，锁定时等待，不弹出解锁请求。授权拒绝、网络、上传及公证失败保留实际错误；不删除/重置凭据、不要求用户重填，也不绕过系统的数据保护。超时停止发布，保留已生成包，后续继续复用原配置；不能保证受保护钥匙串不可读时仍能完成公证。
+
+发布记录输出`notary.credentials.ready`、`notary.credentials.unavailable`及`notary.failed`，只包含阶段、profile、存储类别、次数、退出码或读取类别。正式交付仍须Apple Accepted、staple/validate、最终签名包及三平台公共更新源完整回读；不操作已安装GitTogether。
+
 ## 本地诊断日志（0.14.0）
 
 运行中的桌面 App、预览和授权助手写入 `~/Library/Application Support/GitTogether-Standalone-Demo/logs`，设置可打开该目录。小时/组件/会话隔离的 JSONL 记录安全事件、错误代码、HTTP 状态、Git 退出码、耗时与请求/子跨度 ID；同一请求可从 renderer API 追踪到服务/provider/只读 Git 失败。不写原始消息、堆栈、凭据、响应、文件内容和明文身份/路径；不是上传或遥测。24 小时滚动清理在启动、每分钟、状态读取及关闭时进行；空间达到 128 MiB 时删除较早文件并提示，不保证满 24 小时。停止运行时在下一次启动清理。日志不可写不阻断原操作，但设置明确提示记录不完整。

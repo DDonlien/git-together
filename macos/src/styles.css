@@ -429,6 +429,9 @@ button.repository-count-action:disabled { opacity: .7; }
 .submit-file-group-toggle { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .submit-file-group-toggle:hover { background: var(--surface); }
 .submit-file-group-toggle > span { display: flex; gap: 8px; align-items: baseline; }
+.submit-file-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 3px 0; }
+.submit-file-choice { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 28px; padding: 3px 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; color: var(--text); }
+.submit-file-choice:hover:not(:disabled) { background: var(--surface); }
 .submit-file-choice:disabled { cursor: default; }
 .submit-file-path { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .submit-file-mark { display: grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; border: 1px solid currentColor; border-radius: 3px; font-size: 12px; line-height: 1; }
@@ -481,14 +484,16 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-graph-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .repository-graph-table .repository-graph-spacer { cursor: default; }
 .repository-graph-table .repository-graph-spacer td { padding: 0; background: transparent; border-radius: 0; }
-.repository-graph-table td { height: var(--graph-row-height); padding: 0 6px; vertical-align: middle; }
+.repository-graph-table td { height: var(--graph-row-height); padding: 0 8px; vertical-align: middle; }
 .repository-graph-table tr { cursor: pointer; --graph-row-surface: var(--content); }
 .repository-graph-table td { position: relative; background: transparent; }
 /* Inset the state layer, not the rows: SVG lanes and virtual row offsets stay continuous. */
-.repository-graph-table td::before { content: ''; position: absolute; inset: 3px 0; background: var(--graph-row-surface); pointer-events: none; }
+.repository-graph-table td::before { content: ''; position: absolute; z-index: 0; inset: 3px 0; background: var(--graph-row-surface); pointer-events: none; }
+.repository-graph-table td:first-child::before { inset-inline-start: 4px; }
+.repository-graph-table td:last-child::before { inset-inline-end: 4px; }
 .repository-graph-table td:first-child::before { border-radius: 8px 0 0 8px; }
 .repository-graph-table td:last-child::before { border-radius: 0 8px 8px 0; }
-.repository-graph-table td > svg, .repository-graph-table td > button, .repository-graph-byline > span, .repository-graph-byline > time { position: relative; }
+.repository-graph-table td > *, .repository-graph-table td .repository-graph-byline > span, .repository-graph-table td .repository-graph-byline > time { position: relative; z-index: 1; }
 .repository-graph-table .repository-graph-spacer td::before { display: none; }
 .repository-graph-table .repository-graph-lane { padding: 0; overflow: visible; }
 .repository-graph-lane svg { display: block; }
@@ -509,7 +514,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .graph-remote-ref { border-style: dashed; }
 .graph-head-ref { color: var(--teal); flex-shrink: 0; }
 .graph-boundary-label { color: var(--muted); font-size: 10px; }
-.repository-graph-table .repository-graph-byline { padding-right: var(--repository-column-inset); text-align: right; }
+.repository-graph-table .repository-graph-byline { padding-right: max(8px, var(--repository-column-inset)); text-align: right; }
 .repository-graph-byline > span, .repository-graph-byline > time { display: block; color: var(--muted); font-size: 10px; line-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .repository-graph-scroll mark { color: var(--text); background: color-mix(in srgb,var(--warning) 30%,transparent); border-radius: 2px; }
 .graph-line { fill: none; stroke: currentColor; stroke-width: 1.8; }
@@ -554,6 +559,22 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-tree-children { margin-left: 15px; border-left: 1px solid var(--line); padding-left: 3px; }
 .repository-tree-row > svg, .repository-tree-select > svg { color: var(--muted); }
 .repository-tree-row > code, .repository-tree-select > code { color: var(--muted); font-size: 9px; }
+
+/* File operations share the compact tree geometry and Material controls. */
+.local-file-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.file-tree-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px var(--repository-column-inset); border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.file-tree-toolbar .material-search-bar { flex: 1; min-width: 0; width: auto; --md-filled-text-field-container-height: 36px; --md-filled-text-field-input-text-size: 11px; }
+.file-tree-toolbar .icon-button { flex-shrink: 0; }
+.local-file-tree .repository-tree-select { user-select: none; }
+.repository-tree-row[data-ignored] { color: color-mix(in srgb,var(--muted) 65%,var(--content)); }
+.repository-tree-row.is-cut { opacity: .55; }
+.local-file-tree .is-drop-target { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--blue-bg); }
+.file-operation-dialog { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.file-operation-preview { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; }
+.file-operation-preview li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; font-size: 12px; }
+.file-operation-preview li > span + span { color: var(--muted); font-size: 11px; }
+.file-operation-dialog .notice { margin: 0; }
+.file-operation-dialog .modal-actions { margin-top: 0; }
 .repository-tree-row[data-change="added"] { color: var(--teal); }
 .repository-tree-row[data-change="modified"] { color: var(--warning); }
 .repository-tree-row[data-change="deleted"] { color: var(--danger); }

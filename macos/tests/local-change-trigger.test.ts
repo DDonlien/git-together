@@ -37,7 +37,10 @@ test('workspace owns linked checks, preserves failed baselines and supplies shar
   const workspace = readFileSync(new URL('../src/use-workspace.ts', import.meta.url), 'utf8');
   assert.match(workspace, /if \(task.error\) \{ if \(previous !== undefined\) nextChanges.set\(task.path, previous\); continue; \}/);
   assert.match(workspace, /previous !== undefined && previous !== next/);
-  assert.match(workspace, /useRemoteRepositories\(catalog.repositories.filter\(repository => linkedRepositoryIds.has\(repository.id\)\), catalog.instanceId, monitoring, changeVersions\)/);
+  assert.match(workspace, /useRemoteRepositories\(catalog.repositories.filter\(repository => linkedRepositoryIds.has\(repository.id\)\), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched\)/);
+  assert.match(workspace, /refreshLocal: onFetched/);
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /onLocalFilesChanged=\{\(\) => controller.refreshLocal\(repoId\)\}/);
   const hook = readFileSync(new URL('../src/use-remote-repository.ts', import.meta.url), 'utf8');
   assert.match(hook, /changes\[repository.id\] \?\? 0/); assert.match(hook, /if \(taskFailures\) throw new Error/);
   const scheduler = readFileSync(new URL('../src/use-auto-refresh.ts', import.meta.url), 'utf8');

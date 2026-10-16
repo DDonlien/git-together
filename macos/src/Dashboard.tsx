@@ -20,11 +20,11 @@ import { generateCommitMessage } from './import-api';
 import { DashboardActionNames } from './DashboardActionNames';
 import { MultiFilterMenu } from './MultiFilterMenu';
 import { accountOptions, isSelected, matchesRepositoryFilters, matchesRepositoryType, organizationGroups, repositorySources, repositoryTypes, repositoryTypeCoverage, repositoryVisibilities, toggleFilter, type FilterSelection } from './dashboard-filters';
-import { aggregateGitSignals, gitSignals, hiddenEntryKey, linkedTasks, repositoryReadFeedback, type GitSignals } from './branch-links';
+import { aggregateGitSignals, gitSignals, hiddenEntryKey, linkedTasks, repositoryLocalDirectory, repositoryReadFeedback, type GitSignals } from './branch-links';
 import { useAssociationStatus } from './use-association-status';
 import type { RepositoryTask } from './repository-model';
 import type { LocalRepositoryState } from './use-workspace';
-import { chooseLocalDirectory } from './local-directory';
+import { chooseLocalDirectory, displayLocalPath } from './local-directory';
 import { branchHiddenEntries, toggleBranchVisibility } from './branch-behavior';
 import { recordUIRender } from './performance-diagnostics';
 import { NavigationControls } from './NavigationControls';
@@ -115,14 +115,15 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const organizations = organizationGroups(accounts, repositories);
   const organizationOptions = organizations.flatMap(group => group.options);
   const accountsById = new Map(accounts.map(account => [account.id, account]));
-  const mapped = new Map(links.map(link => [link.repositoryId, link.path]));
+  const linksById = new Map(links.map(link => [link.repositoryId, link]));
+  const mapped = new Map(repositories.filter(repo => linksById.has(repo.id)).map(repo => [repo.id, repositoryLocalDirectory(repo.name, linksById.get(repo.id))]));
   // Showing hidden rows is a recovery view; only restoring them changes global stats.
   const countedRepositories = repositories.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
   const countedRepositoryIds = new Set(countedRepositories.map(repo => repo.id));
   const countedLinkedIds = new Set(links.filter(link => countedRepositoryIds.has(link.repositoryId) && linkedTasks(link, controller.localStates[link.repositoryId], hiddenEntries).length > 0).map(link => link.repositoryId));
   const candidates = repositories.filter(repo => {
     const account = accountsById.get(repo.accountId)!;
-    const tasks = [...linkedTasks(links.find(link => link.repositoryId === repo.id), controller.localStates[repo.id], hiddenEntries), ...(controller.remoteStates[repo.id]?.workspace?.tasks || [])];
+    const tasks = [...linkedTasks(linksById.get(repo.id), controller.localStates[repo.id], hiddenEntries), ...(controller.remoteStates[repo.id]?.workspace?.tasks || [])];
     const matchesSearch = repositorySearchText(repo, account).includes(globalSearch.toLowerCase()) || tasks.some(task => taskMatchesSearch(task, globalSearch)) || `${repo.defaultBranch} ${mapped.get(repo.id) || ''}`.toLowerCase().includes(globalSearch.toLowerCase());
     return (showHidden || !hiddenEntries.has(hiddenEntryKey(repo.id))) && isSelected(selectedAccounts, repo.accountId) &&
       matchesSearch && (!presence?.status?.enabled || !managedChoices.length || managedFilter === null || repositoryOrganizations(repo).some(o => managedFilter.has(managedOrganizationKey(o)))) &&
@@ -131,7 +132,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const filtered = candidates.filter(repo => matchesRepositoryType(repo, type));
   const coverage = repositoryTypeCoverage(candidates, type);
   const incompleteClassification = coverage.unknown > 0 || coverage.errors.length > 0;
-  const scopedTasks = (repo: RemoteRepository) => linkedTasks(links.find(link => link.repositoryId === repo.id), controller.localStates[repo.id], hiddenEntries).filter(task => repositorySearchText(repo, accountsById.get(repo.accountId)!).includes(globalSearch.toLowerCase()) || taskMatchesSearch(task, globalSearch));
+  const scopedTasks = (repo: RemoteRepository) => linkedTasks(linksById.get(repo.id), controller.localStates[repo.id], hiddenEntries).filter(task => repositorySearchText(repo, accountsById.get(repo.accountId)!).includes(globalSearch.toLowerCase()) || taskMatchesSearch(task, globalSearch));
   const rowSignals = (repo: RemoteRepository) => gitSignals(scopedTasks(repo), controller.remoteStates[repo.id] || emptyRemoteState, controller.localStates[repo.id], undefined, repo.available);
   const hiddenCount = (repo: RemoteRepository) => showHidden ? [...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).length : 0;
   const actionRepositories = filtered.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
@@ -315,7 +316,7 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
     {!workspace && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">{blocked ? '账号服务尚未就绪。' : loading ? <><Icon name="spinner" className="spin" size={13} />正在读取远端分支…</> : '正在准备远端读取…'}</span></BranchCell></tr>}
     {workspace && !workspace.tasks.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">此仓库暂无远端分支。</span></BranchCell></tr>}
     {branches.length > 0 && !visibleBranches.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">{searchableBranches.length ? '没有符合当前搜索的分支或工作目录。' : '此仓库的分支已隐藏，点击上方「已隐藏」可显示并恢复。'}</span></BranchCell></tr>}
-    {visibleBranches.map(branch => { const tasks = localByBranch.get(branch) || []; const paths = tasks.map(task => task.path!); const key = hiddenEntryKey(repository.id, branch); const hidden = !!hiddenEntries?.has(key); const presenceOnly = !tasks.length && !workspace?.tasks.some(task => task.branch === branch); const push = branchPushState(pushActivity.runs[repository.id], tasks); const branchState = workspace ? { ...state, workspace: { ...workspace, tasks: remoteByBranch.get(branch) || [] } } : state; return <tr className={`dashboard-branch-row${hidden ? ' dashboard-hidden-row' : ''}`} key={branch}>
+    {visibleBranches.map(branch => { const tasks = localByBranch.get(branch) || []; const paths = tasks.map(task => displayLocalPath(task.path!)); const key = hiddenEntryKey(repository.id, branch); const hidden = !!hiddenEntries?.has(key); const presenceOnly = !tasks.length && !workspace?.tasks.some(task => task.branch === branch); const push = branchPushState(pushActivity.runs[repository.id], tasks); const branchState = workspace ? { ...state, workspace: { ...workspace, tasks: remoteByBranch.get(branch) || [] } } : state; return <tr className={`dashboard-branch-row${hidden ? ' dashboard-hidden-row' : ''}`} key={branch}>
       <BranchCell colSpan={3}><div className="dashboard-branch-content"><div className="branch-label" title={branch}>{push ? <PushFeedbackIcon state={push} size={13} /> : <Icon name="branch" size={13} />}<span>{branch}</span><PresenceAvatars repository={repository} branch={branch} /></div>{branch === repository.defaultBranch && <small className="dashboard-default-branch">默认</small>}{presenceOnly && <small className="dashboard-default-branch">仅协作端</small>}</div></BranchCell>
       <BranchCell aria-hidden="true"></BranchCell><BranchCell aria-hidden="true"></BranchCell><BranchCell aria-hidden="true"></BranchCell>
       <BranchCell><button className={`local-path local-path-action ${paths.length ? '' : 'muted'}`} title={paths[0] || '选择该分支的真实工作目录，或包含它的父目录'} aria-label={`配置分支目录：${repository.fullName} · ${branch}`} disabled={blocked || (!repository.available && !paths.length) || !onConfigure} onClick={() => onConfigure?.(repository, branch)}>{paths.length ? `${paths[0]}${paths.length > 1 ? ` +${paths.length - 1}` : ''}` : '关联工作目录'}</button></BranchCell>

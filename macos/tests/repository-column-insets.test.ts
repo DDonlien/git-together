@@ -17,22 +17,31 @@ test('expanded column headings and all three content panes use one horizontal in
   assert.match(rule('.repository-column-heading.is-collapsed'), /padding: 8px;/);
 });
 
-test('file rows and group labels retain inner padding within the shared outer inset', () => {
+test('file rows and graph labels retain inner padding within the shared outer inset', () => {
   assert.match(rule('.readonly-file'), /padding: 9px 8px;/);
   assert.doesNotMatch(css, /\.repository-task-body \.readonly-file \{/);
   assert.match(rule('.repository-graph-table .repository-graph-lane'), /padding: 0;/);
-  assert.match(rule('.repository-graph-table .repository-graph-byline'), /padding-right: var\(--repository-column-inset\);/);
+  assert.match(rule('.repository-graph-table .repository-graph-byline'), /padding-right: max\(8px, var\(--repository-column-inset\)\);/);
   assert.match(rule('.repository-change-group h3'), /padding: 8px;/);
-  assert.match(rule('.repository-tree-row'), /padding: 3px 0;/);
+  assert.match(rule('.repository-tree-row'), /padding: 3px 6px;/);
   assert.match(rule('.repository-tree-row.tree-file'), /padding: 0;/);
-  assert.match(rule('.repository-tree-select'), /padding: 3px 0;/);
+  assert.match(rule('.repository-tree-select'), /padding: 3px 6px;/);
   assert.match(rule('.repository-tree-children'), /margin-left: 15px;[^}]*padding-left: 3px;/);
+});
+
+test('graph state layers add breathing room without changing graph geometry', () => {
+  assert.match(rule('.repository-graph-table td'), /height: var\(--graph-row-height\); padding: 0 8px;/);
+  assert.match(rule('.repository-graph-table td::before'), /inset: 3px 0;/);
+  assert.match(rule('.repository-graph-table td:first-child::before'), /inset-inline-start: 4px;/);
+  assert.match(rule('.repository-graph-table td:last-child::before'), /inset-inline-end: 4px;/);
+  assert.match(rule('.repository-graph-table .repository-graph-spacer td::before'), /display: none;/);
+  assert.match(rule('.repository-graph-description'), /min-height: var\(--graph-row-height\); padding: 6px 0;/);
 });
 
 test('removed graph options leave no dormant density state while keeping branch and context navigation', () => {
   const source = readFileSync(new URL('../src/RepositoryGraph.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /分支图选项|repository-graph-tools|setCompact|is-compact|jumpMatch|IconButton/);
-  assert.match(source, /const rowHeight = 42;/);
+  assert.match(source, /const rowHeight = graphRowHeight;/);
   assert.match(source, /label="分支筛选"/);
   assert.match(source, /onContextMenu=/);
   assert.match(source, /key === 'ContextMenu' \|\| key === 'F10' && event.shiftKey/);

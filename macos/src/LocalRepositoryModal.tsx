@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { RemoteRepository } from './import-model';
 import type { WorkspaceController } from './use-workspace';
-import { chooseLocalDirectory } from './local-directory';
+import { chooseLocalDirectory, displayLocalPath } from './local-directory';
 import { Button, Icon, IconButton, Modal, Notice } from './ui';
 import { linkedTasks } from './branch-links';
 import { importAPI } from './import-api';
@@ -9,7 +9,8 @@ import { importAPI } from './import-api';
 export function LocalDirectoryField({ path, busy, choosing, onChoose, onOpen, opening = false, label = '本地仓库 / 父目录' }: { path: string; busy: boolean; choosing: boolean; onChoose: () => void; onOpen?: () => void; opening?: boolean; label?: string }) {
   const labelId = useId();
   const valueId = useId();
-  return <div className="local-directory-field"><span id={labelId}>{label}</span><div className="local-directory-input"><Button type="button" className={`directory-picker${path ? ' has-path' : ''}`} aria-labelledby={`${labelId} ${valueId}`} title={path || '选择文件夹'} disabled={busy} onClick={onChoose} leadingIcon={<Icon name={choosing ? 'spinner' : 'folder'} className={choosing ? 'spin' : undefined} size={16} />}><span id={valueId} className="directory-picker-path">{choosing ? '正在打开…' : path || '选择文件夹…'}</span></Button>{onOpen && <IconButton className="local-directory-open" icon={opening ? 'spinner' : 'external'} label="打开本地文件夹" title={path ? `用默认文件管理器打开 ${path}` : '请先选择文件夹'} disabled={busy || !path} aria-busy={opening || undefined} onClick={onOpen} />}</div></div>;
+  const displayedPath = displayLocalPath(path);
+  return <div className="local-directory-field"><span id={labelId}>{label}</span><div className="local-directory-input"><Button type="button" className={`directory-picker${path ? ' has-path' : ''}`} aria-labelledby={`${labelId} ${valueId}`} title={displayedPath || '选择文件夹'} disabled={busy} onClick={onChoose} leadingIcon={<Icon name={choosing ? 'spinner' : 'folder'} className={choosing ? 'spin' : undefined} size={16} />}><span id={valueId} className="directory-picker-path">{choosing ? '正在打开…' : displayedPath || '选择文件夹…'}</span></Button>{onOpen && <IconButton className="local-directory-open" icon={opening ? 'spinner' : 'external'} label="打开本地文件夹" title={path ? `用默认文件管理器打开 ${displayedPath}` : '请先选择文件夹'} disabled={busy || !path} aria-busy={opening || undefined} onClick={onOpen} />}</div></div>;
 }
 
 export function LocalRepositoryModal({ repository, branch, controller, onClose }: { repository: RemoteRepository; branch?: string; controller: WorkspaceController; onClose: () => void }) {

@@ -36,8 +36,9 @@ export function LocalFileTree({ task, repositoryId, enabled, selected, onSelect,
   const [dialog, setDialog] = useState<FileOperationInput | null>(null), [context, setContext] = useState<{ path: string; x: number; y: number } | null>(null), [dropTarget, setDropTarget] = useState<string | null>(null);
   const [revision, setRevision] = useState(0), anchor = useRef<string>(''), expandedRef = useRef(expanded);
   expandedRef.current = expanded;
-  const read = useCallback(async (path: string) => {
-    if (pending.current.has(path)) return;
+  const read = useCallback(async (path: string, force = false) => {
+    if (pending.current.has(path) && !force) return;
+    if (force) pending.current.get(path)?.abort();
     if (path && !directoryIsReachable(path, directoriesRef.current)) return;
     const controller = new AbortController(); pending.current.set(path, controller);
     if (!path) setLoading(true);
@@ -70,7 +71,7 @@ export function LocalFileTree({ task, repositoryId, enabled, selected, onSelect,
     }, 5000);
     return () => { clearInterval(timer); for (const controller of pending.current.values()) controller.abort(); pending.current.clear(); };
   }, [read, enabled]);
-  useEffect(() => { if (enabled) { void read(''); for (const path of expandedRef.current) void read(path); } }, [revision, task.changeKey, enabled, read]);
+  useEffect(() => { if (enabled) { void read('', true); for (const path of expandedRef.current) void read(path, true); } }, [revision, task.changeKey, enabled, read]);
   useEffect(() => {
     const changed = () => setClip(clipboard); window.addEventListener(clipboardEvent, changed);
     return () => window.removeEventListener(clipboardEvent, changed);

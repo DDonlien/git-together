@@ -1620,37 +1620,47 @@ impl Service {
             "localDirectory" => {
                 util::allowed(input, &["repositoryId", "taskId", "path"])?;
                 let result = crate::files::directory(&root, text(input, "path")).await?;
-                self.validate(&context).await?; Ok(result)
+                self.validate(&context).await?;
+                Ok(result)
             }
             "prepareFileOperation" => {
                 util::allowed(input, &["repositoryId", "taskId", "operation", "paths", "sourceTaskId", "dropId", "destination", "name"])?;
-                let source_root = if text(input, "dropId").is_empty() { Some(self.task_root(&context, if text(input, "sourceTaskId").is_empty() { &task_id } else { text(input, "sourceTaskId") }).await?) } else { None };
+                let source_root = if text(input, "dropId").is_empty() {
+                    Some(self.task_root(&context, if text(input, "sourceTaskId").is_empty() { &task_id } else { text(input, "sourceTaskId") }).await?)
+                } else {
+                    None
+                };
                 let sources = if let Some(source_root) = &source_root {
-                    input["paths"].as_array().ok_or("请选择文件。")?.iter().map(|path|crate::files::relative(source_root, path.as_str().ok_or("来源路径无效。")?, false)).collect::<Result<Vec<_>>>()?
+                    input["paths"].as_array().ok_or("请选择文件。")?.iter().map(|path| crate::files::relative(source_root, path.as_str().ok_or("来源路径无效。")?, false)).collect::<Result<Vec<_>>>()?
                 } else {
                     if text(input, "operation") == "delete" { return Err("拖入文件只能复制或移动。".into()); }
-                    self.file_state.lock().unwrap_or_else(|e|e.into_inner()).sources(text(input,"dropId"))?
+                    self.file_state.lock().unwrap_or_else(|e| e.into_inner()).sources(text(input, "dropId"))?
                 };
-                let op=text(input,"operation").to_owned();let dest=text(input,"destination").to_owned();let name=text(input,"name").to_owned();let target_root=root.clone();
-                let plan = tokio::task::spawn_blocking(move || crate::files::prepare(&target_root, source_root, sources, &op, &dest, &name)).await.map_err(|_| "文件操作预览失败。")??;
+                let operation = text(input, "operation").to_owned();
+                let destination = text(input, "destination").to_owned();
+                let name = text(input, "name").to_owned();
+                let target_root = root.clone();
+                let plan = tokio::task::spawn_blocking(move || crate::files::prepare(&target_root, source_root, sources, &operation, &destination, &name)).await.map_err(|_| "文件操作预览失败。")??;
                 self.validate(&context).await?;
-                self.file_state.lock().unwrap_or_else(|e|e.into_inner()).save(format!("{}:{task_id}:{}",context.identity,root.display()),plan)
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).save(format!("{}:{task_id}:{}", context.identity, root.display()), plan)
             }
             "discardFileOperation" => {
                 util::allowed(input, &["repositoryId", "taskId", "planId"])?;
-                self.file_state.lock().unwrap_or_else(|e|e.into_inner()).discard(text(input,"planId"), &format!("{}:{task_id}:{}",context.identity,root.display()));
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).discard(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()));
                 Ok(json!({"discarded":true}))
             }
             "applyFileOperation" => {
                 util::allowed(input, &["repositoryId", "taskId", "planId", "operationId"])?;
-                let _guard=self.claim(&root,cancel).await?;self.validate(&context).await?;
-                let (op, identity)=operation.unwrap();
-                if let Some(value)=self.previous(&op,&identity).await? { return Ok(value); }
-                let plan=self.file_state.lock().unwrap_or_else(|e|e.into_inner()).take(text(input,"planId"), &format!("{}:{task_id}:{}",context.identity,root.display()))?;
+                let _guard = self.claim(&root, cancel).await?;
+                self.validate(&context).await?;
+                let (operation, identity) = operation.unwrap();
+                if let Some(value) = self.previous(&operation, &identity).await? { return Ok(value); }
+                let plan = self.file_state.lock().unwrap_or_else(|e| e.into_inner()).take(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()))?;
                 // Once confirmed, complete this bounded write independently of a
                 // hidden/cancelled renderer request, just like local Commit.
-                let result=tokio::task::spawn_blocking(move || crate::files::apply(plan)).await.map_err(|_| "文件操作未完成，请重新读取目录。")??;
-                self.remember(op,identity,result.clone()).await;Ok(result)
+                let result = tokio::task::spawn_blocking(move || crate::files::apply(plan)).await.map_err(|_| "文件操作未完成，请重新读取目录。")??;
+                self.remember(operation, identity, result.clone()).await;
+                Ok(result)
             }
             "openFile" => {
                 util::allowed(input, &["repositoryId", "source", "taskId", "path"])?;
@@ -1658,7 +1668,7 @@ impl Service {
                     return Err("无效的文件来源。".into());
                 }
                 let path = util::file_path(text(input, "path"))?;
-                if Path::new(&path).components().any(|part|part.as_os_str().to_string_lossy().eq_ignore_ascii_case(".git")) { return Err("不能打开Git元数据。".into()); }
+                if Path::new(&path).components().any(|part| part.as_os_str().to_string_lossy().eq_ignore_ascii_case(".git")) { return Err("不能打开Git元数据。".into()); }
                 let file =
                     dunce::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
                 if !file.starts_with(&root)

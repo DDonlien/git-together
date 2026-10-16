@@ -266,7 +266,7 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       await assertTag(true);
       const expected = await releaseFiles(artifact);
       const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
-      await writeFile(notes, `# GitTogether ${version}\n\n同一版本提供 macOS Apple Silicon、Windows x86（32 位）和 Windows x64（64 位）。Windows 两种架构已通过原生构建、系统加密存储、Git 提交范围/暂存保留、进程取消及实际安装包校验；所有平台提供签名更新。macOS 保留 Developer ID 签名、Apple 公证及旧版过渡更新资产。\n\n本版同时包含 Presence 插件与团队协作状态接入，以及此前提交的推送反馈、可选提交范围等功能。\n\nWindows 安装器使用当前用户范围并包含 WebView2 引导程序；Git/Git LFS 与可选的 Codex CLI 沿用本机安装。官方 Codex CLI 的 Windows 二进制支持 x64/ARM64，纯32位系统不能生成 AI 提交说明，普通 Git 操作可用。Windows 安装器当前未配置 Authenticode 代码签名；更新包签名已验证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
+      await writeFile(notes, `# GitTogether ${version}\n\n同一版本提供 macOS Apple Silicon、Windows x86（32 位）和 Windows x64（64 位）。Windows 两种架构已通过原生构建、系统加密存储、Git 提交范围/暂存保留、进程取消及实际安装包校验；所有平台提供签名更新。macOS 保留 Developer ID 签名、Apple 公证及旧版过渡更新资产。\n\n本版新增本地文件树操作：按需读取目录、类型图标、隐藏项弱化、筛选与排序，以及复制、剪切/粘贴、移动、重命名、回收站删除和外部拖入复制/移动。每项操作先预览来源和目标，重名不会覆盖；远端文件树保持只读。Git Graph 选中行增加上下和两端留白，同时保留42px行高与连续提交连线。\n\nPresence 插件与团队协作状态、推送反馈及可选提交范围等能力继续保留。Windows 安装器使用当前用户范围并包含 WebView2 引导程序；Git/Git LFS 与可选的 Codex CLI 沿用本机安装。官方 Codex CLI 的 Windows 二进制支持 x64/ARM64，纯32位系统不能生成 AI 提交说明，普通 Git 操作可用。Windows 安装器当前未配置 Authenticode 代码签名；更新包签名已验证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
       let draft: Release | null = null;
       await reconcileReleaseMutation(
         async () => {

@@ -1,5 +1,11 @@
 # Tauri / Rust / React 架构
 
+## 本地文件树与文件操作（R-05-local-file-operations）
+
+`RepositoryFileTree` 对本地任务挂载 `LocalFileTree`，远端树继续使用只读 Git/provider 清单。`localDirectory` 只列当前目录，不跟随符号链接，并从 Git 查询忽略状态；前端按需读取展开目录、保留空目录、用类型图标和浅色状态区分内容，筛选/排序只改变显示顺序。文件操作走有限 Tauri/API 方法：OS拖入路径先兑换成限时 opaque grant；计划绑定服务身份、仓库、worktree、来源/目标及完整目录指纹。确认前列出每个真实目标，执行时拒绝重名覆盖、路径逃逸、符号链接和 `.git`，检测预览过期；删除经系统Trash/回收站，跨卷移动先复制成功再回收原件。工作目录common-dir互斥和operationId幂等保护并发/重复提交，结果刷新本地目录与Git状态；失败结果保留可恢复的来源和部分完成数，不改变HEAD或index。
+
+Git Graph和文件树的行状态底色独立于行几何绘制。Graph固定42px行及连续SVG轨道，底色通过pseudo-element上下内缩3px、左右端点内缩4px；文字列增加横向内距，各列文字始终高于底色层。文件树按钮横向留白不改变点击区、树缩进或省略规则。徽标和计数胶囊使用显式左右padding，避免单字符与多字符内容贴边。
+
 仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
 
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
@@ -223,6 +229,8 @@ Tauri/Rust读取一致性（2026-10-11，RUN-01-tauri-parity）：旧式单目�
 账号设置中没有仓库路径字段。账号连接后，全部已读取的仓库直接出现在侧栏和 Dashboard；远端内容不依赖 localLink。Dashboard 的仓库/分支目录入口及本地文件树空态复用配置弹窗和可点击的目录选择字段。`local-directory.ts` 验证原生 IPC 返回的绝对目录，取消返回 null 并保留原目录；浏览器尚无原生选择桥接，不接受上传伪路径。选择不自动保存；0.10.0 的 link 可带 branch，保存时调用 local-discovery 按远端身份和真实检出分支匹配。解除关联可只针对一个分支，不移除远端仓库、不删除文件。
 
 `LocalLink.path` 保留用户选择的仓库/父目录，新增可选 worktrees（branch + canonical path）；加密 SavedState v2 与稳定存储位置不变，旧单目录记录仍可读取。Rust `service::discover` 先直接检查.git目录或gitdir文件，所选父目录为第0层，向下最多检查6层；没有标记的第6层支路停止，继续搜索其他同级目录。识别Git后不枚举项目内容，已核对的登记worktree不重复处理。4000安全预算只计算仍需展开的父目录，每个仓库最多64个匹配工作目录，不进入符号链接、Git元数据及常见构建/依赖目录；遇到checkout不扫描它的内容，另核对真实worktree登记中位于选定范围内的目录。远端身份复用 `git-identity.ts`，不按目录名猜分支；候选再次核对其实际remote。取消、限制、错误或持久化失败不部分保存，串行提交前复核原关联未被其他操作替换。仓库三态要求已知完整分支范围和每分支健康目录；范围未知不标完全关联。可见的已关联仓库即使收起，也用原远端心跳读取HEAD和分支范围；未关联仓库仍仅展开时读取。
+
+下载层级及目录显示（IMPORT-14-branch-download-layout、IMPORT-04-directory-display）：downloadBranch请求仍只传repositoryId、branch、parentPath和folderName；Rust operations::download按当前仓库名生成安全项目容器，在parentPath/project-name/folderName创建真实worktree，默认folderName为project-name_branch-name。预览与后端采用相同的非法字符替换及尾部点/空格清理规则，项目层不接受请求中的任意额外路径。实际下载、LFS及目录占用检查仍完成后才保存原v2关联；已有文件、符号链接容器和已占用目标不覆盖。仓库显示由branch-links.repositoryLocalDirectory从完整LocalLink.worktrees推导；缺少worktrees的旧单目录记录用LocalLink.path，空工作目录集合不冒称已识别。默认命名结构的唯一工作目录显示项目容器，其余单目录显示自身，多目录按路径组件计算最小公共父目录；Windows比较不区分大小写并统一分隔符，跨驱动器/UNC share无共同目录时显示各真实路径。默认结构判断只调整已验证关联的显示，不据文件夹名推断Git身份。显示路径用于Dashboard搜索、排序、辅助文字及健康提示；分支仍用实际工作目录。选择范围、缓存mappingKey、关联与Git文件保持原样，搜索或隐藏只影响可见行，不改变目录计算输入。
 
 Dashboard 的 `matchAccountRepositories` 是单账号批量目录关联入口：renderer 只提交 `accountId` 和用户选择的父目录，账号服务从自己的 Catalog 取得该账号全部可访问仓库，目录扫描一次后按规范化远端身份返回命中的仓库 ID，并在一次持久化变更中更新这些关联。未匹配仓库保持原记录；多个账号筛选时客户端逐账号调用，搜索、组织、类型和可见性筛选不参与匹配范围。请求与响应继续通过有限 API DTO/IPC 校验，不向 renderer 传递账号令牌。
 
