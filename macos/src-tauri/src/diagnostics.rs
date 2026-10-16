@@ -277,6 +277,16 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
     let outcome = text(v, "outcome");
     if !["lifecycle","api","provider-read","git-read","git-write","storage","authorization","update","refresh","renderer","ui-action","performance"].contains(&event)||!"start success partial failure cancelled paused resumed retry online offline hidden visible blocked received accepted complete rejected failed current available ready installing".split_whitespace().any(|s|s==outcome)||(renderer&&!["api","refresh","renderer","ui-action","performance"].contains(&event)){return None;}
     let mut clean = json!({"event":event,"outcome":outcome});
+    if !renderer && matches!(event, "git-read" | "git-write") {
+        for (key, allowed) in [
+            ("authentication", "system account"),
+            ("gitFailureReason", "workflow-permission sso-required remote-policy write-permission ssh-key-rejected ssh-host-key credential-rejected credential-unavailable rate-limit repository-unavailable access-denied non-fast-forward remote-rejected"),
+        ] {
+            if allowed.split_whitespace().any(|value| value == text(v, key)) {
+                clean[key] = v[key].clone();
+            }
+        }
+    }
     if !renderer && matches!(event,"authorization"|"storage") {
         for (key,allowed) in [
             ("authorizationStage","token-received token-rejected refresh-start refresh-complete refresh-failed refresh-unavailable storage-load"),

@@ -154,7 +154,7 @@ impl Provider {
                 service
                     .upgrade()
                     .ok_or("账号服务已退出。")?
-                    .github_token(text(&self.account, "id"), generation, rejected, cancel)
+                    .github_token(text(&self.account, "id"), generation, rejected, cancel, 120_000)
                     .await
             }
             None => Ok(self.token.clone()),
@@ -1890,7 +1890,7 @@ pub struct Network {
     resource: String,
     system_auth: bool,
     local_roots: Vec<std::path::PathBuf>,
-    system_url: Option<String>,
+    system_push: Option<(String, String)>,
 }
 impl Network {
     pub fn new(repo: &Value, p: &Provider) -> Result<Self> {
@@ -1914,7 +1914,7 @@ impl Network {
             diagnostics: None,
             system_auth: false,
             local_roots: Vec::new(),
-            system_url: None,
+            system_push: None,
             resource: util::digest(text(repo, "id").as_bytes())[..24].into(),
             env: vec![
                 ("GITTOGETHER_DOWNLOAD_ORIGIN".into(), origin),
@@ -1943,7 +1943,7 @@ impl Network {
     }
     pub async fn for_push(&self, root: &std::path::Path) -> Result<Self> {
         let mut network = self.for_worktree(root);
-        if self.system_auth { network.system_url = Some(system_remote(root, &self.url, true).await?.1); }
+        if self.system_auth { network.system_push = Some(system_remote(root, &self.url, true).await?); }
         Ok(network)
     }
     pub fn for_worktree(&self, root: &std::path::Path) -> Self {
@@ -2003,8 +2003,21 @@ impl Network {
     ) -> Result<String> {
         if self.system_auth {
             let source = self.system_source(root)?;
-            let target = match &self.system_url { Some(url) => url.clone(), None => system_remote(source, &self.url, false).await?.1 };
-            let actual: Vec<&str> = args.iter().map(|arg| if *arg == self.url || source != root && args.first() == Some(&"fetch") && *arg == "origin" { target.as_str() } else { *arg }).collect();
+            let (remote, target) = match &self.system_push {
+                Some(pinned) => {
+                    let current = system_remote(source, &self.url, true).await?;
+                    if &current != pinned { return Err("推送远端配置已变化，请重新检查后再推送。".into()); }
+                    current
+                }
+                None => system_remote(source, &self.url, false).await?,
+            };
+            // A named remote carries proxy, receivepack/uploadpack and LFS
+            // settings, and is also passed to pre-push hooks. ls-remote must
+            // still inspect the pinned push URL when fetch and push differ.
+            let named = source == root && (matches!(args.first().copied(), Some("fetch" | "push"))
+                || args.starts_with(&["lfs", "fetch"]));
+            let transport = if named { remote.as_str() } else { target.as_str() };
+            let actual: Vec<&str> = args.iter().map(|arg| if *arg == self.url || source != root && args.first() == Some(&"fetch") && *arg == "origin" { transport } else { *arg }).collect();
             let mut environment = Vec::new();
             if target.starts_with("https://") || target.starts_with("http://") {
                 if let Some(proxy) = crate::proxy::environment(source, &target).await? { environment.push(proxy); }
@@ -2014,7 +2027,7 @@ impl Network {
             if !hooks { command.extend(["-c", "core.hooksPath=/dev/null"]); }
             command.extend(actual);
             return git::run(root, &command, git::Options { environment, timeout, cancel, write: true,
-                diagnostics: self.diagnostics.clone(), resource: self.resource.clone(), system_authentication: true, ..Default::default() }).await;
+                diagnostics: self.diagnostics.clone(), resource: self.resource.clone(), authentication: Some("system"), ..Default::default() }).await;
         }
         let helper = format!("credential.helper={CREDENTIAL_HELPER}");
         let mut a = vec![
@@ -2031,7 +2044,22 @@ impl Network {
         a.extend_from_slice(args);
         let mut environment = self.env.clone();
         let authorization_cancel=cancel.clone().unwrap_or_default();
-        environment.push(("GITTOGETHER_DOWNLOAD_TOKEN".into(),self.provider.access_token(None,&authorization_cancel).await?));
+        // Include the process timeout and a one-minute margin before handing a
+        // fixed credential to Git. The read guard spans Git, LFS and hooks.
+        let lifetime = if timeout > 0 { timeout } else { 180 };
+        let minimum_validity = (lifetime as i64 + 60) * 1000;
+        let (token, _lease) = match &self.provider.authorization {
+            Some((service, generation)) => {
+                let (token, lease) = service.upgrade().ok_or("账号服务已退出。")?
+                    .lease_github_token(
+                        text(&self.provider.account, "id"), generation,
+                        &authorization_cancel, minimum_validity,
+                    ).await?;
+                (token, Some(lease))
+            }
+            None => (self.provider.access_token(None, &authorization_cancel).await?, None),
+        };
+        environment.push(("GITTOGETHER_DOWNLOAD_TOKEN".into(), token));
         if let Some(proxy) = crate::proxy::environment(root, &self.url).await? {
             environment.push(proxy);
         }
@@ -2048,6 +2076,7 @@ impl Network {
                 write: true,
                 diagnostics: self.diagnostics.clone(),
                 resource: self.resource.clone(),
+                authentication: Some("account"),
                 ..Default::default()
             },
         )
@@ -2187,11 +2216,15 @@ async fn system_remote(root: &std::path::Path, expected: &str, push: bool) -> Re
     names.sort_by_key(|name| (Some(*name) != preferred, *name != "origin", *name));
     for name in names {
         let mut args = vec!["remote", "get-url"];
-        if push { args.push("--push"); }
+        if push { args.extend(["--push", "--all"]); }
         args.push(name);
-        let url = git::read(root, &args).await?;
-        if util::identity(url.trim()) == util::identity(expected) || git::remote_identity(url.trim()).await? == util::identity(expected) {
-            return Ok((name.into(), url.trim().into()));
+        let urls = git::read(root, &args).await?;
+        let url = urls.lines().next().ok_or("本地远端没有可用地址。")?;
+        if util::identity(url) == util::identity(expected) || git::remote_identity(url).await? == util::identity(expected) {
+            if push && urls.lines().count() != 1 {
+                return Err("当前远端配置了多个推送地址，无法确认单一推送目标；请检查本地 Git 远端配置。".into());
+            }
+            return Ok((name.into(), url.into()));
         }
         if push && Some(name) == preferred { return Err("当前分支的推送远端指向其他仓库，请检查本地 Git 配置。".into()); }
     }

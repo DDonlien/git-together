@@ -26,32 +26,91 @@ pub struct Options {
     pub write: bool,
     pub diagnostics: Option<crate::diagnostics::Diagnostics>,
     pub resource: String,
-    pub system_authentication: bool,
+    pub authentication: Option<&'static str>,
 }
-fn failure(output: &[u8], system_authentication: bool) -> String {
-    let out = String::from_utf8_lossy(output).to_lowercase();
+fn rejection_reason(out: &str) -> Option<&'static str> {
+    if out.contains("refusing to allow") && out.contains("workflow")
+        || out.contains("without `workflow` scope")
+        || out.contains("without workflows permission")
+    {
+        Some("workflow-permission")
+    } else if out.contains("saml sso") || out.contains("sso authorization") {
+        Some("sso-required")
+    } else if out.contains("gh006") || out.contains("gh013")
+        || out.contains("protected branch") || out.contains("repository rule violations")
+    {
+        Some("remote-policy")
+    } else if out.contains("write access to repository not granted")
+        || out.contains("permission to ") && out.contains(" denied")
+        || out.contains("not allowed to push code") || out.contains("not allowed to upload code")
+    {
+        Some("write-permission")
+    } else if out.contains("permission denied (publickey") {
+        Some("ssh-key-rejected")
+    } else if out.contains("host key verification failed") {
+        Some("ssh-host-key")
+    } else if out.contains("authentication failed") || out.contains("invalid username or token")
+        || out.contains("bad credentials") || out.contains("http 401")
+        || out.contains("returned error: 401")
+    {
+        Some("credential-rejected")
+    } else if out.contains("could not read username") || out.contains("could not read password") {
+        Some("credential-unavailable")
+    } else if out.contains("rate limit exceeded") || out.contains("too many requests")
+        || out.contains("returned error: 429")
+    {
+        Some("rate-limit")
+    } else if out.contains("repository not found") {
+        Some("repository-unavailable")
+    } else if out.contains("http 403") || out.contains("returned error: 403") || out.contains("access denied") {
+        Some("access-denied")
+    } else if out.contains("non-fast-forward") || out.contains("[rejected] (fetch first)")
+        || out.contains("[rejected] (stale info)")
+    {
+        Some("non-fast-forward")
+    } else if out.contains("pre-receive hook declined") || out.contains("[remote rejected]") {
+        Some("remote-rejected")
+    } else {
+        None
+    }
+}
+fn failure(out: &str, reason: Option<&str>, system_authentication: bool) -> String {
+    let connection = if system_authentication { "系统 Git/SSH" } else { "应用账号" };
+    let rejection = match reason {
+        Some("workflow-permission") => Some(format!("远端拒绝访问：当前{connection}凭据缺少修改 GitHub Actions 工作流的权限；需要 Workflow/Workflows 写权限。")),
+        Some("sso-required") => Some(format!("远端拒绝访问：组织要求为当前{connection}凭据批准 SSO 授权。")),
+        Some("write-permission") => Some(format!("远端拒绝访问：服务器未授予当前{connection}凭据此仓库的写权限；账号登录成功不代表可以推送。")),
+        Some("access-denied") => Some(if system_authentication {
+            "远端拒绝访问，当前使用系统 Git/SSH，请检查凭据助手、SSH 密钥或该账号的仓库权限。".into()
+        } else {
+            "远端拒绝访问，请在设置中检查应用账号的仓库授权和写权限。".into()
+        }),
+        Some("credential-rejected") => Some(if system_authentication {
+            "远端拒绝访问：系统 Git 凭据被拒绝，请更新凭据助手或钥匙串中的登录。".into()
+        } else {
+            "远端拒绝访问：应用账号凭据被服务器拒绝，请在设置中重新授权；本次未自动重放 Git 写操作。".into()
+        }),
+        Some("credential-unavailable") => Some(if system_authentication {
+            "远端拒绝访问：系统 Git 未能取得凭据，请配置凭据助手或 SSH 密钥。".into()
+        } else {
+            "远端拒绝访问：应用账号未能提供匹配此远端的凭据，请检查账号与仓库地址。".into()
+        }),
+        Some("ssh-key-rejected") => Some("远端拒绝访问：SSH 服务器拒绝了本机密钥，请检查 SSH agent、密钥及仓库权限。".into()),
+        Some("ssh-host-key") => Some("SSH 主机身份验证失败，请先核对并信任服务器主机密钥。".into()),
+        Some("remote-policy") => Some("远端规则拒绝推送，请检查分支保护、仓库规则及必需检查；未强制推送。".into()),
+        Some("remote-rejected") => Some("远端拒绝推送，请检查服务器接收钩子或仓库规则；未强制推送。".into()),
+        Some("non-fast-forward") => Some("远端已有新的提交，请先检查远端状态；未强制推送。".into()),
+        Some("repository-unavailable") => Some(format!("远端仓库不存在，或当前{connection}凭据无权访问；请核对仓库地址和授权范围。")),
+        Some("rate-limit") => Some("Git 远端请求被限流，请稍后重试。".into()),
+        _ => None,
+    };
+    if let Some(message) = rejection { return message; }
     if out.contains("no space left")
         || out.contains("not enough space on the disk")
         || out.contains("out of diskspace")
         || out.contains("disk full")
     {
         "磁盘空间不足；操作未完成。"
-    } else if out.contains("authentication failed")
-        || out.contains("could not read username")
-        || out.contains("could not read password")
-        || out.contains("http 401")
-        || out.contains("http 403")
-        || out.contains("returned error: 401")
-        || out.contains("returned error: 403")
-        || out.contains("access denied")
-        || out.contains("permission denied (publickey")
-        || out.contains("permission to ") && out.contains(" denied")
-    {
-        if system_authentication {
-            "远端拒绝访问，当前使用系统 Git/SSH，请检查凭据助手、SSH 密钥或该账号的仓库权限。"
-        } else {
-            "远端拒绝访问，请在设置中检查应用账号的仓库授权和写权限。"
-        }
     } else if out.contains("couldn't find remote ref") || out.contains("could not find remote ref")
     {
         "Git远端分支不存在，请刷新分支列表。"
@@ -68,8 +127,6 @@ fn failure(output: &[u8], system_authentication: bool) -> String {
         || out.contains("empty reply from server")
     {
         "Git远端连接中断，请稍后重试。"
-    } else if out.contains("error: failed to push some refs") || out.contains("non-fast-forward") {
-        "远端已有新的提交，请先检查远端状态；未强制推送。"
     } else if out.contains("author identity unknown")
         || out.contains("unable to auto-detect email address")
     {
@@ -148,6 +205,8 @@ pub fn diagnostic_code(message: &str) -> &'static str {
         "timeout"
     } else if message.contains("证书验证失败") {
         "certificate"
+    } else if message.contains("限流") {
+        "rate-limit"
     } else if message.contains("远端拒绝访问")
         || message.contains("无权")
         || message.contains("检查权限")
@@ -155,7 +214,10 @@ pub fn diagnostic_code(message: &str) -> &'static str {
         "permission"
     } else if message.contains("无法连接") || message.contains("连接中断") {
         "connection"
-    } else if message.contains("Git") {
+    } else if message.contains("Git") || message.starts_with("远端规则拒绝")
+        || message.starts_with("远端拒绝推送") || message.starts_with("远端已有新的提交")
+        || message.starts_with("SSH 主机身份")
+    {
         "git"
     } else {
         "unknown"
@@ -170,6 +232,9 @@ pub async fn run(root: &Path, args: &[&str], options: Options) -> Result<String>
     }
     let verb = args.get(index).copied().unwrap_or("other");
     let mut details = json!({"event":if options.write && verb != "ls-remote" {"git-write"}else{"git-read"},"outcome":"start","verb":verb,"spanId":uuid::Uuid::new_v4().to_string(),"resource":options.resource});
+    if let Some(authentication) = options.authentication {
+        details["authentication"] = json!(authentication);
+    }
     if let Some(log) = &diagnostics {
         log.record(&details, false);
     }
@@ -297,7 +362,12 @@ async fn run_process(
     }
     // check-ignore uses 1 for a successful read with no ignored paths.
     if !status.success() && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
-        return Err(failure(&error, options.system_authentication));
+        // Push --porcelain reports rejection reasons on stdout. Inspect both
+        // streams, retaining only a fixed reason in diagnostics.
+        let output = format!("{}\n{}", String::from_utf8_lossy(&error), String::from_utf8_lossy(&output)).to_lowercase();
+        let reason = rejection_reason(&output);
+        if let Some(reason) = reason { details["gitFailureReason"] = json!(reason); }
+        return Err(failure(&output, reason, options.authentication == Some("system")));
     }
     if output.len() > 16_000_000 {
         return Err("Git输出超过可读取范围；未发布不完整结果。".into());

@@ -38,11 +38,11 @@ export function diagnosticCode(problem: unknown): DiagnosticCode {
   if (text.split('，', 1)[0].replace(/。$/, '').endsWith('已取消')) return 'aborted';
   if (/证书|certificate/i.test(text)) return 'certificate';
   if (/频率|限流/.test(text)) return 'rate-limit';
-  if (/无权|检查.*权限|账号权限|令牌无效|已过期|已失效|被撤销|HTTP 401|续期凭据已到期|拒绝读取/.test(text)) return 'permission';
+  if (/无权|检查.*权限|账号权限|远端拒绝访问|令牌无效|已过期|已失效|被撤销|HTTP 401|续期凭据已到期|拒绝读取/.test(text)) return 'permission';
   if (/版本不一致|版本不匹配/.test(text)) return 'version';
   if (/断开|无法连接|连接中断/.test(text)) return 'connection';
   if (/格式无效|无效.*数据|响应过大/.test(text)) return 'invalid-data';
-  if (/Git\s*(操作|读取|目录|远端)/i.test(text)) return 'git';
+  if (/Git\s*(操作|读取|目录|远端)|远端规则拒绝|远端拒绝推送|远端已有新的提交|SSH 主机身份/i.test(text)) return 'git';
   return 'unknown';
 }
 export function diagnosticFailure(problem: unknown): DiagnosticDetails {

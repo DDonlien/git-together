@@ -18,7 +18,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::{watch, Mutex, OwnedMutexGuard, RwLock};
+use tokio::sync::{watch, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
 struct State {
@@ -63,6 +63,7 @@ pub struct Service {
     pub authorization: Authorization,
     reference: Weak<Service>,
     token_refresh: Mutex<BTreeMap<String, TokenRefreshState>>,
+    token_leases: Mutex<BTreeMap<String, Arc<RwLock<()>>>>,
     state: RwLock<State>,
     locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
     serial: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
@@ -198,6 +199,7 @@ impl Service {
             ),
             reference: weak.clone(),
             token_refresh: Mutex::new(BTreeMap::new()),
+            token_leases: Mutex::new(BTreeMap::new()),
             state: RwLock::new(State {
                 value,
                 revision: 0,
@@ -462,12 +464,40 @@ impl Service {
         }
         self.diagnostics.record(&value, false);
     }
+    async fn github_token_lock(&self, id: &str) -> Arc<RwLock<()>> {
+        self.token_leases.lock().await.entry(id.into()).or_default().clone()
+    }
+    pub(crate) async fn lease_github_token(
+        &self,
+        id: &str,
+        generation: &str,
+        cancel: &CancellationToken,
+        minimum_validity: i64,
+    ) -> Result<(String, OwnedRwLockReadGuard<()>)> {
+        let lock = self.github_token_lock(id).await;
+        loop {
+            let token = self.github_token(id, generation, None, cancel, minimum_validity).await?;
+            let lease = tokio::select! {
+                lease = lock.clone().read_owned() => lease,
+                _ = cancel.cancelled() => return Err("操作已取消。".into()),
+            };
+            let saved = self.saved(id).await?;
+            if github_token::generation(&saved) != generation {
+                return Err("账号凭据已更新，请重新读取。".into());
+            }
+            // A renewal may have completed while this caller waited for its lease.
+            if text(&saved, "token") == token {
+                return Ok((token, lease));
+            }
+        }
+    }
     pub(crate) async fn github_token(
         &self,
         id: &str,
         generation: &str,
         rejected: Option<&str>,
         cancel: &CancellationToken,
+        minimum_validity: i64,
     ) -> Result<String> {
         let saved = self.saved(id).await?;
         if github_token::generation(&saved) != generation {
@@ -486,9 +516,8 @@ impl Service {
             }
         }
         let pending = refresh_state.is_some_and(|state| state.pending.is_some());
-        // Two minutes covers short API/Git requests without changing authorization scope.
         let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
-            .is_some_and(|ms| ms <= 120_000);
+            .is_some_and(|ms| ms <= minimum_validity);
         if !pending
             && rejected.is_none()
             && saved["githubOAuth"].is_null()
@@ -510,7 +539,7 @@ impl Service {
         // A dropped HTTP/IPC caller must not drop a token that GitHub has already rotated.
         let worker = tokio::spawn(async move {
             service
-                .renew_github_token(&id, &generation, rejected.as_deref())
+                .renew_github_token(&id, &generation, rejected.as_deref(), minimum_validity)
                 .await
         });
         tokio::select! {
@@ -523,8 +552,13 @@ impl Service {
         id: &str,
         generation: &str,
         rejected: Option<&str>,
+        minimum_validity: i64,
     ) -> Result<String> {
         let _guard = self.serial(format!("authorization:{id}")).await;
+        // Git and its LFS/hooks reuse one token. Rotation revokes that token,
+        // so wait for every process using it before exchanging the refresh pair.
+        let lock = self.github_token_lock(id).await;
+        let _leases = lock.write().await;
         let saved = self.saved(id).await?;
         if github_token::generation(&saved) != generation {
             return Err("账号凭据已更新，请重新读取。".into());
@@ -541,7 +575,7 @@ impl Service {
             state.clone()
         };
         let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
-            .is_some_and(|ms| ms <= 120_000);
+            .is_some_and(|ms| ms <= minimum_validity);
         if state.pending.is_none()
             && (!due && rejected.is_none()
                 || rejected.is_some_and(|token| token != text(&saved, "token")))
