@@ -23,14 +23,14 @@ export function toggleFilter(selection: FilterSelection, value: string, options:
   return options.length && options.every(option => next.has(option.value)) ? null : next;
 }
 export function organizationKey(repo: RemoteRepository) {
-  return JSON.stringify([repo.accountId, repo.ownerType === 'organization' ? 'organization' : repo.ownerType === 'user' ? 'personal' : 'unknown', repo.ownerType === 'organization' ? repo.fullName.split('/')[0].toLowerCase() : '']);
+  return JSON.stringify([repo.accountId, repo.ownerType === 'organization' ? 'organization' : repo.ownerType === 'user' ? 'personal' : 'unknown', repo.ownerType === 'organization' ? repo.fullName.split('/').slice(0, -1).join('/').toLowerCase() : '']);
 }
 export function organizationGroups(accounts: Account[], repositories: RemoteRepository[]): MultiFilterGroup[] {
   return accounts.map(account => {
     const options = new Map<string, MultiFilterOption>();
     for (const repo of repositories) if (repo.accountId === account.id) {
       const value = organizationKey(repo);
-      options.set(value, { value, label: repo.ownerType === 'organization' ? repo.fullName.split('/')[0] : repo.ownerType === 'user' ? '个人仓库' : '未识别归属' });
+      options.set(value, { value, label: repo.ownerType === 'organization' ? repo.fullName.split('/').slice(0, -1).join('/') : repo.ownerType === 'user' ? '个人仓库' : '未识别归属' });
     }
     return { id: account.id, label: account.name, detail: `${providerName(account.provider)} · ${account.login}@${new URL(account.host).host}`, options: [...options.values()].sort((a, b) => a.label.localeCompare(b.label)) };
   });

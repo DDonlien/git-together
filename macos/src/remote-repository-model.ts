@@ -3,6 +3,7 @@ import { taskCommitHistory, topologicalCommits } from './repository-model';
 
 export type RemoteCommitFile = { path: string; status: string; previousPath?: string; patch: string | null };
 export type RemoteCommitDetails = { commit: RepositoryCommit; files: RemoteCommitFile[]; diff: string; tree: string[]; treeComplete: boolean; warnings: string[] };
+export type RemoteHistoryPage = { head: string; page: number; commits: RepositoryCommit[]; hasMore: boolean };
 export type RemoteFileContent = { text: string; binary: boolean; size: number };
 export type RemoteRepositoryWorkspace = RepositoryWorkspace & { source: 'remote'; checkedAt: number; warnings: string[] };
 export type RemoteRepositoryState = { workspace: RemoteRepositoryWorkspace | null; loading: boolean; error: string };
@@ -34,7 +35,10 @@ export function isRepositoryCommit(value: unknown): value is RepositoryCommit {
 export function isRemoteWorkspace(value: unknown): value is RemoteRepositoryWorkspace {
   return record(value) && value.source === 'remote' && typeof value.checkedAt === 'number' && Number.isFinite(value.checkedAt) && typeof value.complete === 'boolean' && strings(value.warnings) &&
     Array.isArray(value.commits) && value.commits.every(isRepositoryCommit) && Array.isArray(value.tasks) && value.tasks.every(task => record(task) &&
-      ['id', 'branch', 'head', 'error'].every(key => typeof task[key] === 'string') && task.path === null && task.remote === true && typeof task.treeComplete === 'boolean' && strings(task.tree) && Array.isArray(task.files) && task.files.length === 0 && (task.hasAccountCommits === undefined || typeof task.hasAccountCommits === 'boolean') && (task.hasAccountPush === undefined || typeof task.hasAccountPush === 'boolean') && (task.hasAccountCreation === undefined || typeof task.hasAccountCreation === 'boolean') && (task.participationError === undefined || typeof task.participationError === 'string'));
+      ['id', 'branch', 'head', 'error'].every(key => typeof task[key] === 'string') && task.path === null && task.remote === true && typeof task.treeComplete === 'boolean' && strings(task.tree) && Array.isArray(task.files) && task.files.length === 0 && (task.historyHasMore === undefined || typeof task.historyHasMore === 'boolean') && (task.hasAccountCommits === undefined || typeof task.hasAccountCommits === 'boolean') && (task.hasAccountPush === undefined || typeof task.hasAccountPush === 'boolean') && (task.hasAccountCreation === undefined || typeof task.hasAccountCreation === 'boolean') && (task.participationError === undefined || typeof task.participationError === 'string'));
+}
+export function isRemoteHistoryPage(value: unknown): value is RemoteHistoryPage {
+  return record(value) && typeof value.head === 'string' && /^[a-f0-9]{40,64}$/i.test(value.head) && Number.isSafeInteger(value.page) && Number(value.page) >= 2 && typeof value.hasMore === 'boolean' && Array.isArray(value.commits) && value.commits.every(isRepositoryCommit);
 }
 export function isRemoteCommitDetails(value: unknown): value is RemoteCommitDetails {
   return record(value) && isRepositoryCommit(value.commit) && typeof value.diff === 'string' && strings(value.tree) && typeof value.treeComplete === 'boolean' && strings(value.warnings) && Array.isArray(value.files) && value.files.every(file => record(file) &&

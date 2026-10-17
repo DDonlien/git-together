@@ -1,10 +1,15 @@
+import type { RepositoryAuthentication, AccountRepositoryAccess } from './repository-auth-model';
 import type { RemoteCommitDetails, RemoteFileContent, RemoteRepositoryWorkspace } from './remote-repository-model';
 import type { RepositoryWorkspace } from './repository-model';
 import type { LocalCommitDetails } from './local-commit-model';
 import type { CommitDraft, LocalSubmitInput, LocalSubmitResult, LocalPushInput, LocalPushResult } from './local-submit-model';
 import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
+import type { FileDirectory, FileOperationInput, FileOperationPlan, FileOperationResult } from './file-operation-model';
+import type { GraphSnapshot, GraphSourceChoice, GraphSource, GraphPreviewInput, GraphPreview, GraphMergePlan, GraphMergeInput, GraphWriteInput, GraphWriteResult } from './graph-operation-model';
 
-export type Provider = 'github' | 'gitea';
+export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea'] as const;
+export type Provider = typeof providers[number];
+export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '' };
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
 export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
@@ -19,7 +24,7 @@ export type RemoteRepository = {
   permissions?: RepositoryPermissions; metadataError?: string;
 };
 export type LocalWorktreeLink = { branch: string; path: string };
-export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[] };
+export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[]; authentication?: RepositoryAuthentication };
 export type Catalog = {
   instanceId: string;
   revision: number;
@@ -50,6 +55,9 @@ export type ApiInputs = {
   githubAuthPoll: { sessionId: string };
   githubAuthCancel: { sessionId: string };
   refresh: { accountId: string };
+  accountRepositoryAccess: { accountId: string };
+  openAccountAccessSettings: { accountId: string };
+  setRepositoryAuthentication: { repositoryId: string; authentication: RepositoryAuthentication };
   removeAccount: { accountId: string };
   link: { repositoryId: string; path: string; branch?: string };
   downloadBranch: { repositoryId: string; branch: string; parentPath: string; folderName: string };
@@ -66,17 +74,38 @@ export type ApiInputs = {
   discardSync: { repositoryId: string; taskId: string; planId: string };
   generateCommitMessage: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; generationId: string; paths?: string[] };
   cancelCommitGeneration: { repositoryId: string; taskId: string; generationId: string };
+  graphSources: { repositoryId: string; taskId: string };
+  graphPreview: GraphPreviewInput;
+  prepareGraphMerge: GraphSnapshot & { sources: GraphSourceChoice[]; generationId: string };
+  cancelGraphPreparation: { repositoryId: string; taskId: string; generationId: string };
+  discardGraphMerge: { repositoryId: string; taskId: string; planId: string };
+  applyGraphMerge: GraphMergeInput;
+  executeGraph: GraphWriteInput;
+  createGraphWorktree: GraphWriteInput;
+  openCommit: { repositoryId: string; commitId: string };
   diff: { repositoryId: string; path: string; taskId?: string; commitId?: string };
   remoteWorkspace: { repositoryId: string; checkParticipation?: boolean };
+  remoteHistory: { repositoryId: string; head: string; page: number };
   remoteCommit: { repositoryId: string; commitId: string };
   remoteFile: { repositoryId: string; commitId: string; path: string };
   openRepository: { repositoryId: string };
   openFile: { repositoryId: string; path: string } & ({ source: 'remote'; commitId: string } | { source: 'local'; taskId: string });
   openDirectory: { repositoryId: string; taskId: string };
+  localDirectory: { repositoryId: string; taskId: string; path: string };
+  prepareFileOperation: FileOperationInput;
+  applyFileOperation: { repositoryId: string; taskId: string; planId: string; operationId: string };
+  discardFileOperation: { repositoryId: string; taskId: string; planId: string };
   openLocalDirectory: { path: string };
 };
 export type ApiOutputs = {
+  localDirectory: FileDirectory;
+  prepareFileOperation: FileOperationPlan;
+  applyFileOperation: FileOperationResult;
+  discardFileOperation: { discarded: true };
   status: ServiceInfo;
+  accountRepositoryAccess: AccountRepositoryAccess;
+  openAccountAccessSettings: { opened: true };
+  setRepositoryAuthentication: Catalog;
   catalog: Catalog; connect: Catalog; updateAccount: Catalog; refresh: Catalog; removeAccount: Catalog;
   githubAuthStart: GitHubAuthorization;
   githubAuthPoll: GitHubAuthorizationProgress;
@@ -92,7 +121,16 @@ export type ApiOutputs = {
   discardSync: { discarded: boolean };
   generateCommitMessage: CommitDraft;
   cancelCommitGeneration: { cancelled: boolean };
-  remoteWorkspace: RemoteRepositoryWorkspace; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
+  graphSources: { sources: GraphSource[]; limited: boolean };
+  graphPreview: GraphPreview;
+  prepareGraphMerge: GraphMergePlan;
+  cancelGraphPreparation: { cancelled: boolean };
+  discardGraphMerge: { discarded: boolean };
+  applyGraphMerge: GraphWriteResult;
+  executeGraph: GraphWriteResult;
+  createGraphWorktree: GraphWriteResult;
+  openCommit: { opened: true };
+  remoteWorkspace: RemoteRepositoryWorkspace; remoteHistory: import('./remote-repository-model').RemoteHistoryPage; remoteCommit: RemoteCommitDetails; remoteFile: RemoteFileContent;
   openFile: { opened: true };
   openDirectory: { opened: true };
   openLocalDirectory: { opened: true };
@@ -100,7 +138,7 @@ export type ApiOutputs = {
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };
-export const providerName = (provider: Provider) => provider === 'github' ? 'GitHub' : 'Gitea';
+export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea' })[provider];
 export const accountLabel = (account: Account) => `${account.name} · ${account.login}@${new URL(account.host).host}`;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,7 +148,7 @@ export function isCatalog(value: unknown): value is Catalog {
   return isRecord(value) && typeof value.instanceId === 'string' && typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && ['session', 'encrypted'].includes(String(value.credentialStorage)) &&
     Array.isArray(value.accounts) && value.accounts.every(a => isRecord(a) &&
       ['id', 'host', 'login', 'name', 'updatedAt'].every(k => typeof a[k] === 'string') &&
-      ['github', 'gitea'].includes(String(a.provider))) &&
+      providers.some(provider => provider === a.provider)) &&
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
       typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&
@@ -119,7 +157,7 @@ export function isCatalog(value: unknown): value is Catalog {
       (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
       (r.metadataError === undefined || typeof r.metadataError === 'string') &&
       (r.permissions === undefined || (isRecord(r.permissions) && Object.entries(r.permissions).every(([key, flag]) => repositoryPermissionKeys.some(allowed => allowed === key) && typeof flag === 'boolean')))) &&
-    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' &&
+    Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' && (l.authentication === undefined || l.authentication === 'system' || l.authentication === 'account') &&
       (l.worktrees === undefined || Array.isArray(l.worktrees) && l.worktrees.length <= 64 && l.worktrees.every(w => isRecord(w) && typeof w.branch === 'string' && typeof w.path === 'string')));
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    ai, credentials,
+    ai, credentials, graph_operations,
     diagnostics::Diagnostics,
     git, github_token,
     oauth::Authorization,
@@ -18,7 +18,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::{watch, Mutex, OwnedMutexGuard, RwLock};
+use tokio::sync::{watch, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
@@ -66,12 +66,16 @@ pub struct Service {
     pub authorization: Authorization,
     reference: Weak<Service>,
     token_refresh: Mutex<BTreeMap<String, TokenRefreshState>>,
+    token_leases: Mutex<BTreeMap<String, Arc<RwLock<()>>>>,
     state: RwLock<State>,
     locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
     serial: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
     readers: Mutex<BTreeMap<String, Provider>>,
     results: Mutex<VecDeque<(String, String, Value)>>,
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
+    pub file_state: std::sync::Mutex<crate::files::State>,
+    merge_plans: Mutex<BTreeMap<String, (String, Arc<graph_operations::MergePlan>)>>,
+    cancelled_graph_preparations: Mutex<VecDeque<(String, i64)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
     foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
@@ -190,9 +194,15 @@ impl Service {
             persistent,
             client: client.clone(),
             diagnostics,
-            authorization: Authorization::new(weak.clone(), root.clone(), client.clone()),
+            authorization: Authorization::new(
+                weak.clone(),
+                root.clone(),
+                client.clone(),
+                component == "preview",
+            ),
             reference: weak.clone(),
             token_refresh: Mutex::new(BTreeMap::new()),
+            token_leases: Mutex::new(BTreeMap::new()),
             state: RwLock::new(State {
                 value,
                 revision: 0,
@@ -203,6 +213,9 @@ impl Service {
             readers: Mutex::new(BTreeMap::new()),
             results: Mutex::new(VecDeque::new()),
             plans: Mutex::new(BTreeMap::new()),
+            file_state: std::sync::Mutex::new(crate::files::State::default()),
+            merge_plans: Mutex::new(BTreeMap::new()),
+            cancelled_graph_preparations: Mutex::new(VecDeque::new()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
@@ -296,9 +309,6 @@ impl Service {
                 .find(|r| text(r, "id") == id)
                 .cloned()
                 .ok_or("仓库不存在，请重新加载列表。")?;
-            if r["available"] != true {
-                return Err("访问账号目前无法访问这个仓库，请在设置中检查权限。".into());
-            }
             let a = state.value["accounts"]
                 .as_array()
                 .unwrap()
@@ -315,6 +325,7 @@ impl Service {
                 .unwrap_or(Value::Null);
             (r, l, a)
         };
+        if !repository_accessible(&repository, &link) { return Err("应用账号无法访问该仓库，请检查仓库授权；已有本地目录可选系统认证。".into()); }
         let identity = context_identity(&repository, &link, &saved);
         let pkey = format!("{id}:{identity}");
         let mut readers = self.readers.lock().await;
@@ -330,7 +341,8 @@ impl Service {
             readers.insert(pkey, p.clone());
             p
         };
-        let network = Network::new(&repository, &provider)?.with_diagnostics(self.diagnostics.clone());
+        let network =
+            Network::new(&repository, &provider)?.for_link(&link).with_diagnostics(self.diagnostics.clone());
         Ok(Context {
             repository,
             link,
@@ -360,7 +372,7 @@ impl Service {
             .find(|l| l["repositoryId"] == r["id"])
             .cloned()
             .unwrap_or(Value::Null);
-        if r["available"] != true || context_identity(r, &l, a) != context.identity {
+        if !repository_accessible(r, &l) || context_identity(r, &l, a) != context.identity {
             return Err("账号、仓库或目录关联已变化，请重新读取或预览。".into());
         }
         Ok(())
@@ -373,7 +385,7 @@ impl Service {
         let expected = util::identity(text(repo, "url")).ok_or("仓库远端无效。")?;
         for name in names.lines() {
             let url = git::read(&root, &["remote", "get-url", name]).await?;
-            if util::identity(url.trim()).as_ref() == Some(&expected) {
+            if util::identity(url.trim()).as_ref() == Some(&expected) || git::remote_identity(url.trim()).await?.as_ref() == Some(&expected) {
                 return Ok(root);
             }
         }
@@ -455,12 +467,40 @@ impl Service {
         }
         self.diagnostics.record(&value, false);
     }
+    async fn github_token_lock(&self, id: &str) -> Arc<RwLock<()>> {
+        self.token_leases.lock().await.entry(id.into()).or_default().clone()
+    }
+    pub(crate) async fn lease_github_token(
+        &self,
+        id: &str,
+        generation: &str,
+        cancel: &CancellationToken,
+        minimum_validity: i64,
+    ) -> Result<(String, OwnedRwLockReadGuard<()>)> {
+        let lock = self.github_token_lock(id).await;
+        loop {
+            let token = self.github_token(id, generation, None, cancel, minimum_validity).await?;
+            let lease = tokio::select! {
+                lease = lock.clone().read_owned() => lease,
+                _ = cancel.cancelled() => return Err("操作已取消。".into()),
+            };
+            let saved = self.saved(id).await?;
+            if github_token::generation(&saved) != generation {
+                return Err("账号凭据已更新，请重新读取。".into());
+            }
+            // A renewal may have completed while this caller waited for its lease.
+            if text(&saved, "token") == token {
+                return Ok((token, lease));
+            }
+        }
+    }
     pub(crate) async fn github_token(
         &self,
         id: &str,
         generation: &str,
         rejected: Option<&str>,
         cancel: &CancellationToken,
+        minimum_validity: i64,
     ) -> Result<String> {
         let saved = self.saved(id).await?;
         if github_token::generation(&saved) != generation {
@@ -479,9 +519,8 @@ impl Service {
             }
         }
         let pending = refresh_state.is_some_and(|state| state.pending.is_some());
-        // Two minutes covers short API/Git requests without changing authorization scope.
         let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
-            .is_some_and(|ms| ms <= 120_000);
+            .is_some_and(|ms| ms <= minimum_validity);
         if !pending
             && rejected.is_none()
             && saved["githubOAuth"].is_null()
@@ -503,7 +542,7 @@ impl Service {
         // A dropped HTTP/IPC caller must not drop a token that GitHub has already rotated.
         let worker = tokio::spawn(async move {
             service
-                .renew_github_token(&id, &generation, rejected.as_deref())
+                .renew_github_token(&id, &generation, rejected.as_deref(), minimum_validity)
                 .await
         });
         tokio::select! {
@@ -516,8 +555,13 @@ impl Service {
         id: &str,
         generation: &str,
         rejected: Option<&str>,
+        minimum_validity: i64,
     ) -> Result<String> {
         let _guard = self.serial(format!("authorization:{id}")).await;
+        // Git and its LFS/hooks reuse one token. Rotation revokes that token,
+        // so wait for every process using it before exchanging the refresh pair.
+        let lock = self.github_token_lock(id).await;
+        let _leases = lock.write().await;
         let saved = self.saved(id).await?;
         if github_token::generation(&saved) != generation {
             return Err("账号凭据已更新，请重新读取。".into());
@@ -534,7 +578,7 @@ impl Service {
             state.clone()
         };
         let due = github_token::remaining(&saved["account"]["authorizationExpiresAt"])
-            .is_some_and(|ms| ms <= 120_000);
+            .is_some_and(|ms| ms <= minimum_validity);
         if state.pending.is_none()
             && (!due && rejected.is_none()
                 || rejected.is_some_and(|token| token != text(&saved, "token")))
@@ -714,7 +758,7 @@ impl Service {
         reauthorize: bool,
     ) -> Result<Value> {
         util::allowed(input, &["provider", "host", "token", "name"])?;
-        let kind = util::field(input, "provider", 10)?;
+        let kind = util::field(input, "provider", 32)?;
         let host = provider::host(&kind, &util::field(input, "host", 512)?)?;
         let token = util::field(input, "token", 4096)?;
         let name = util::field(input, "name", 120)?;
@@ -726,9 +770,8 @@ impl Service {
             json!({"provider":kind,"host":host}),
             token.clone(),
             self.client.clone(),
-        )
-        .with_diagnostics(self.diagnostics.clone());
-        let (user, _) = provisional.get("/user", &[], "json", &c).await?;
+        ).with_diagnostics(self.diagnostics.clone());
+        let user = provisional.user(&c).await?;
         let login = util::field(&user, "login", 120)?;
         if login.is_empty() || login.contains('/') || login.chars().any(char::is_whitespace) {
             return Err("无法识别账号身份。".into());
@@ -870,7 +913,7 @@ impl Service {
         let mut repos = None;
         if !token.is_empty() {
             let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone()).with_diagnostics(self.diagnostics.clone());
-            let (user, _) = p.get("/user", &[], "json", cancel).await?;
+            let user = p.user(cancel).await?;
             if !text(&user, "login").eq_ignore_ascii_case(text(&saved["account"], "login")) {
                 return Err("新令牌不属于这个账号，请添加另一个账号。".into());
             }
@@ -1054,10 +1097,8 @@ impl Service {
         }
         let writing = matches!(
             method,
-            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage"
-        );
-        let repository_read = matches!(method, "localWorkspace" | "remoteWorkspace" | "fetchRepository");
-        let _target = if writing || repository_read {
+            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "prepareGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree"
+        ) {
             let id = uuid::Uuid::new_v4().to_string();
             let key = format!(
                 "{}:{}",
@@ -1090,10 +1131,12 @@ impl Service {
         let foreground = match method {
             "submitCommit" => Some("提交"),
             "pushCommit" => Some("推送"),
-            "applySync" => Some("文件变更"),
+            "applySync" | "applyFileOperation" => Some("文件变更"),
+            "applyGraphMerge" | "executeGraph" => Some("图谱操作"),
+            "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
-            "link" | "unlink" | "matchAccountRepositories" => Some("保存仓库关联"),
+            "link" | "unlink" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
             _ => None,
         }
         .map(|name| self.foreground(name))
@@ -1114,7 +1157,19 @@ impl Service {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .child_token();
-        let request = self.dispatch(method, &input, &cancel);
+        let request = git::READ_CONTEXT.scope(
+            git::Options {
+                diagnostics: Some(self.diagnostics.clone()),
+                resource: if text(&input, "repositoryId").is_empty() {
+                    String::new()
+                } else {
+                    util::digest(text(&input, "repositoryId").as_bytes())[..24].into()
+                },
+                cancel: Some(cancel.clone()),
+                ..git::Options::default()
+            },
+            self.dispatch(method, &input, &cancel),
+        );
         tokio::pin!(request);
         let result = tokio::select! {
             result = &mut request => result,
@@ -1126,19 +1181,127 @@ impl Service {
                 request.await
             }
         };
-        let failures = result.as_ref().ok().and_then(|value| value["tasks"].as_array())
-            .map(|tasks| tasks.iter().filter(|task| !text(task, "error").is_empty()).count()).unwrap_or(0);
+        let failures = result
+            .as_ref()
+            .ok()
+            .and_then(|value| value["tasks"].as_array())
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|task| !text(task, "error").is_empty())
+                    .count()
+            })
+            .unwrap_or(0);
         let mut details = json!({"event":"api","outcome":match &result {
             Err(error) if cancel.is_cancelled() || git::diagnostic_code(error) == "aborted" => "cancelled",
             Err(_) => "failure", Ok(_) if failures > 0 => "partial", Ok(_) => "success"
         },"method":method,"durationMs":(util::now()-started).max(0)});
-        if let Err(error) = &result { details["code"] = json!(git::diagnostic_code(error)); }
-        if failures > 0 { details["failures"] = json!(failures); }
+        if let Err(error) = &result {
+            details["code"] = json!(git::diagnostic_code(error));
+        }
+        if failures > 0 {
+            details["failures"] = json!(failures);
+        }
+        details["activeRequests"] = json!(self.active.load(Ordering::SeqCst));
+        if let Ok(value) = &result {
+            if let Some(tasks) = value["tasks"].as_array() {
+                details["tasks"] = json!(tasks.len());
+                details["items"] = json!(tasks
+                    .iter()
+                    .map(|task| task["tree"].as_array().map_or(0, Vec::len))
+                    .sum::<usize>());
+            }
+        }
         if !text(&input, "repositoryId").is_empty() {
-            details["resource"] = json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
+            details["resource"] =
+                json!(&util::digest(text(&input, "repositoryId").as_bytes())[..24]);
         }
         self.diagnostics.record(&details, false);
         result
+    }
+    pub(crate) async fn graph_workspace(&self, context: &Context, cancel: &CancellationToken) -> Result<Value> {
+        self.local_workspace(context, cancel).await
+    }
+    async fn graph_dispatch(&self, method: &str, input: &Value, context: &Context, cancel: &CancellationToken) -> Result<Value> {
+        if method == "openCommit" {
+            util::allowed(input, &["repositoryId", "commitId"])?;
+            let sha = util::sha(text(input,"commitId"))?;
+            let commit=context.provider.commit(&context.repository,&sha,cancel).await?;
+            if commit["id"]!=sha{return Err("远端没有返回对应提交，未打开其他页面。".into());}
+            let suffix = match text(&context.provider.account,"provider") {"gitlab"=>format!("/-/commit/{sha}"),"gitea"=>format!("/commit/{sha}"),_=>format!("/commit/{sha}")};
+            self.validate(context).await?;
+            open(&format!("{}{suffix}",text(&context.repository,"url").trim_end_matches('/'))).await?;
+            return Ok(json!({"opened":true}));
+        }
+        let task_id=util::field(input,"taskId",4096)?;
+        if method=="discardGraphMerge" {
+            util::allowed(input,&["repositoryId","taskId","planId"])?;
+            let id=util::field(input,"planId",100)?;let mut plans=self.merge_plans.lock().await;
+            if let Some((identity,plan))=plans.get(&id) {if *identity!=context.identity||plan.public["taskId"]!=task_id{return Err("预览不属于当前工作目录。".into());}}
+            return Ok(json!({"discarded":plans.remove(&id).is_some()}));
+        }
+        let root=self.task_root(context,&task_id).await?;
+        match method {
+            "graphSources"=>{util::allowed(input,&["repositoryId","taskId"])?;graph_operations::sources(self,context,&root,cancel).await},
+            "graphPreview"=>{util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","commitId","action","mainline"])?;graph_operations::preview(&root,input,self,context,cancel).await},
+            "cancelGraphPreparation"=>{
+                util::allowed(input,&["repositoryId","taskId","generationId"])?;
+                uuid::Uuid::parse_str(&util::field(input,"generationId",100)?).map_err(|_|"准备标识无效。")?;
+                let key=util::digest(format!("{}:{}:{}",text(input,"repositoryId"),task_id,text(input,"generationId")));
+                let mut cancelled=self.cancelled_graph_preparations.lock().await;
+                cancelled.retain(|(_,created)|util::now()-created<120_000);
+                if cancelled.len()>=128{cancelled.pop_front();}
+                cancelled.push_back((key,util::now()));drop(cancelled);
+                let jobs=self.generations.lock().await;
+                if let Some((id,token))=jobs.get(&root){if id==text(input,"generationId"){token.cancel();}}
+                Ok(json!({"cancelled":true}))
+            },
+            "prepareGraphMerge"=>{
+                util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","sources","generationId"])?;
+                let generation=util::field(input,"generationId",100)?;uuid::Uuid::parse_str(&generation).map_err(|_|"准备标识无效。")?;
+                let token=cancel.child_token();
+                for attempt in 0..=50 {
+                    let mut jobs=self.generations.lock().await;
+                    if let Some((_,previous))=jobs.get(&root) {
+                        if !previous.is_cancelled()||attempt==50{return Err("此工作目录正在准备 AI 操作，请稍后重试。".into());}
+                        drop(jobs);
+                        tokio::select!{_=tokio::time::sleep(Duration::from_millis(100))=>(),_=token.cancelled()=>return Err("同步准备已取消。".into())}
+                    } else {jobs.insert(root.clone(),(generation.clone(),token.clone()));break;}
+                }
+                let key=util::digest(format!("{}:{}:{}",text(input,"repositoryId"),task_id,text(input,"generationId")));
+                if self.cancelled_graph_preparations.lock().await.iter().any(|(id,created)|*id==key&&util::now()-created<120_000){token.cancel();}
+                let result=graph_operations::prepare(&root,input,self,context,&token).await;
+                self.generations.lock().await.remove(&root);
+                let plan=result?;self.validate(context).await?;
+                if token.is_cancelled(){return Err("同步准备已取消。".into());}
+                let public=plan.public.clone();let mut plans=self.merge_plans.lock().await;
+                plans.retain(|_,(_,plan)|util::now()-plan.created<600_000);
+                if plans.len()>=32{return Err("合并预览已达上限，请关闭旧预览。".into());}
+                plans.insert(text(&public,"id").into(),(context.identity.clone(),Arc::new(plan)));Ok(public)
+            },
+            "applyGraphMerge"|"executeGraph"|"createGraphWorktree"=>{
+                util::allowed(input,if method=="applyGraphMerge" {&["repositoryId","taskId","planId","operationId","summary","description"]}else{&["repositoryId","taskId","expectedHead","changeKey","commitId","action","name","resetMode","mainline","parentPath","folderName","operationId"]})?;
+                let operation=util::field(input,"operationId",100)?;uuid::Uuid::parse_str(&operation).map_err(|_|"操作标识无效。")?;
+                let identity=util::digest(format!("{method}:{input}"));
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let _guard=self.claim(&root,cancel).await?;self.validate(context).await?;
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let result=if method=="applyGraphMerge" {
+                    let id=util::field(input,"planId",100)?;
+                    let plan={let plans=self.merge_plans.lock().await;let (owner,plan)=plans.get(&id).ok_or("预览已过期，请重新准备。")?;if *owner!=context.identity||plan.public["repositoryId"]!=input["repositoryId"]||plan.public["taskId"]!=task_id||util::now()-plan.created>=600_000{return Err("预览已变化或过期，请重新准备。".into());}plan.clone()};
+                    let result=graph_operations::apply(&plan,input,self,context,cancel).await?;
+                    self.merge_plans.lock().await.remove(&id);result
+                } else if method=="createGraphWorktree" {
+                    let previous=self.materialized_link(context,cancel).await?;
+                    let path=graph_operations::worktree(&root,input,self,context,cancel).await?;
+                    let name=text(input,"name");let item=json!({"branch":name,"path":path.to_string_lossy()});
+                    let catalog=self.mutate(|next| {check_context(next,context)?;merge_link(next,text(input,"repositoryId"),text(&context.link,"path"),&previous,vec![item],Some(name))}).await;
+                    let task=git::task(&root).await?;let mut result=json!({"taskId":task["id"],"head":task["head"],"branch":task["branch"],"unchanged":true,"worktreePath":path.to_string_lossy()});
+                    match catalog {Ok(catalog)=>result["catalog"]=catalog,Err(_)=>result["warning"]=json!("工作目录已创建，但关联保存未完成；请手动关联这个目录，不要重复创建。")}result
+                } else {graph_operations::execute(&root,input,self,context,cancel).await?};
+                self.remember(operation,identity,result.clone()).await;Ok(result)
+            },_=>Err("不支持该图谱操作。".into())
+        }
     }
     async fn dispatch(
         self: &Arc<Self>,
@@ -1194,6 +1357,35 @@ impl Service {
                 }
                 open(url.as_str()).await?;
                 return Ok(json!({"opened":true}));
+            }
+            "accountRepositoryAccess" | "openAccountAccessSettings" => {
+                util::allowed(input, &["accountId"])?;
+                let id = util::field(input, "accountId", 100)?;
+                let saved = self.saved(&id).await?;
+                if method == "openAccountAccessSettings" {
+                    if text(&saved["account"], "provider") != "github" { return Err("请到该服务的账号设置管理仓库授权。".into()); }
+                    let target = if crate::repository_access::github_app(&saved) { "https://github.com/settings/installations" } else if text(&saved, "token").starts_with("gho_") { "https://github.com/settings/applications" } else { "https://github.com/settings/tokens" };
+                    open(target).await?;
+                    return Ok(json!({"opened":true}));
+                }
+                let repositories = self.catalog().await?["repositories"].as_array().unwrap().iter()
+                    .filter(|repo| text(repo, "accountId") == id).cloned().collect::<Vec<_>>();
+                let result = crate::repository_access::inspect(&saved, &self.account_provider(&saved), &repositories, cancel).await?;
+                if github_token::generation(&self.saved(&id).await?) != github_token::generation(&saved) { return Err("账号已重新授权，请重新检查。".into()); }
+                return Ok(result);
+            }
+            "setRepositoryAuthentication" => {
+                util::allowed(input, &["repositoryId", "authentication"])?;
+                let id = util::field(input, "repositoryId", 160)?;
+                let mode = util::field(input, "authentication", 16)?;
+                if !matches!(mode.as_str(), "system" | "account") { return Err("认证方式无效。".into()); }
+                let _guard = self.serial(format!("link:{id}")).await;
+                if self.running_targets.lock().unwrap_or_else(|e| e.into_inner()).values().any(|(key, _, _)| key.starts_with(&format!("{id}:"))) { return Err("仓库操作正在执行，完成后可切换认证方式。".into()); }
+                return self.mutate(|next| {
+                    let link = next["links"].as_array_mut().unwrap().iter_mut().find(|link| text(link, "repositoryId") == id).ok_or("请先关联本地目录。")?;
+                    link["authentication"] = json!(mode);
+                    Ok(())
+                }).await;
             }
             "connect" => return self.connect(input, None, None, false).await,
             "updateAccount" => return self.update_account(input, cancel).await,
@@ -1260,6 +1452,9 @@ impl Service {
         }
         let id = util::field(input, "repositoryId", 160)?;
         let context = self.context(&id).await?;
+        if matches!(method, "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
+            return self.graph_dispatch(method, input, &context, cancel).await;
+        }
         match method {
             "link" => {
                 util::allowed(input, &["repositoryId", "path", "branch"])?;
@@ -1368,7 +1563,7 @@ impl Service {
                     cancel,
                 )
                 .await?;
-                let result=async{self.validate_path(&context.repository,path.to_str().ok_or("下载路径无法读取。")?).await?;self.validate(&context).await?;existing.push(json!({"branch":branch,"path":path.to_string_lossy()}));self.mutate(|next|{check_context(next,&context)?;next["links"].as_array_mut().unwrap().retain(|l|text(l,"repositoryId")!=id);next["links"].as_array_mut().unwrap().push(json!({"repositoryId":id,"path":if context.link.is_null(){path.to_string_lossy().to_string()}else{text(&context.link,"path").into()},"worktrees":existing}));Ok(())}).await}.await;
+                let result=async{self.validate_path(&context.repository,path.to_str().ok_or("下载路径无法读取。")?).await?;self.validate(&context).await?;existing.push(json!({"branch":branch,"path":path.to_string_lossy()}));self.mutate(|next|{check_context(next,&context)?;next["links"].as_array_mut().unwrap().retain(|l|text(l,"repositoryId")!=id);next["links"].as_array_mut().unwrap().push(json!({"repositoryId":id,"path":if context.link.is_null(){path.to_string_lossy().to_string()}else{text(&context.link,"path").into()},"worktrees":existing,"authentication":if context.link.is_null() || context.link["authentication"]=="account" {"account"}else{"system"}}));Ok(())}).await}.await;
                 return result
                     .map_err(|e| format!("{e} 下载目录已保留：{}，可重新关联。", path.display()));
             }
@@ -1395,7 +1590,7 @@ impl Service {
                 util::allowed(input, &["repositoryId"])?;
                 return self.fetch(&context, cancel).await;
             }
-            "remoteWorkspace" | "remoteCommit" | "remoteFile" => {
+            "remoteWorkspace" | "remoteHistory" | "remoteCommit" | "remoteFile" => {
                 let result = match method {
                     "remoteWorkspace" => {
                         util::allowed(input, &["repositoryId", "checkParticipation"])?;
@@ -1408,6 +1603,19 @@ impl Service {
                             .provider
                             .workspace(&context.repository, cancel, check_participation)
                             .await?
+                    }
+                    "remoteHistory" => {
+                        util::allowed(input, &["repositoryId", "head", "page"])?;
+                        let head = util::sha(text(input, "head"))?;
+                        let page = input["page"]
+                            .as_u64()
+                            .filter(|page| (2..=9_007_199_254_740_991).contains(page))
+                            .ok_or("提交历史页码超出数值范围。")?;
+                        let value = context
+                            .provider
+                            .history_page(&context.repository, &head, page, cancel)
+                            .await?;
+                        json!({"head":value["head"],"page":value["page"],"commits":value["commits"],"hasMore":value["hasMore"]})
                     }
                     "remoteCommit" => {
                         util::allowed(input, &["repositoryId", "commitId"])?;
@@ -1458,7 +1666,7 @@ impl Service {
         } else {
             util::field(input, "taskId", 4096)?
         };
-        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync") {
+        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync" | "applyFileOperation") {
             let operation = util::field(input, "operationId", 100)?;
             uuid::Uuid::parse_str(&operation).map_err(|_| "操作标识无效。")?;
             let identity = util::digest(format!("{method}:{input}:{}", context.identity));
@@ -1490,16 +1698,58 @@ impl Service {
                 open(root.to_str().ok_or("目录路径无法读取。")?).await?;
                 Ok(json!({"opened":true}))
             }
+            "localDirectory" => {
+                util::allowed(input, &["repositoryId", "taskId", "path"])?;
+                let result = crate::files::directory(&root, text(input, "path")).await?;
+                self.validate(&context).await?;
+                Ok(result)
+            }
+            "prepareFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "operation", "paths", "sourceTaskId", "dropId", "destination", "name"])?;
+                let source_root = if text(input, "dropId").is_empty() {
+                    Some(self.task_root(&context, if text(input, "sourceTaskId").is_empty() { &task_id } else { text(input, "sourceTaskId") }).await?)
+                } else {
+                    None
+                };
+                let sources = if let Some(source_root) = &source_root {
+                    input["paths"].as_array().ok_or("请选择文件。")?.iter().map(|path| crate::files::relative(source_root, path.as_str().ok_or("来源路径无效。")?, false)).collect::<Result<Vec<_>>>()?
+                } else {
+                    if text(input, "operation") == "delete" { return Err("拖入文件只能复制或移动。".into()); }
+                    self.file_state.lock().unwrap_or_else(|e| e.into_inner()).sources(text(input, "dropId"))?
+                };
+                let operation = text(input, "operation").to_owned();
+                let destination = text(input, "destination").to_owned();
+                let name = text(input, "name").to_owned();
+                let target_root = root.clone();
+                let plan = tokio::task::spawn_blocking(move || crate::files::prepare(&target_root, source_root, sources, &operation, &destination, &name)).await.map_err(|_| "文件操作预览失败。")??;
+                self.validate(&context).await?;
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).save(format!("{}:{task_id}:{}", context.identity, root.display()), plan)
+            }
+            "discardFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId"])?;
+                self.file_state.lock().unwrap_or_else(|e| e.into_inner()).discard(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()));
+                Ok(json!({"discarded":true}))
+            }
+            "applyFileOperation" => {
+                util::allowed(input, &["repositoryId", "taskId", "planId", "operationId"])?;
+                let _guard = self.claim(&root, cancel).await?;
+                self.validate(&context).await?;
+                let (operation, identity) = operation.unwrap();
+                if let Some(value) = self.previous(&operation, &identity).await? { return Ok(value); }
+                let plan = self.file_state.lock().unwrap_or_else(|e| e.into_inner()).take(text(input, "planId"), &format!("{}:{task_id}:{}", context.identity, root.display()))?;
+                // Once confirmed, complete this bounded write independently of a
+                // hidden/cancelled renderer request, just like local Commit.
+                let result = tokio::task::spawn_blocking(move || crate::files::apply(plan)).await.map_err(|_| "文件操作未完成，请重新读取目录。")??;
+                self.remember(operation, identity, result.clone()).await;
+                Ok(result)
+            }
             "openFile" => {
                 util::allowed(input, &["repositoryId", "source", "taskId", "path"])?;
                 if input["source"] != "local" {
                     return Err("无效的文件来源。".into());
                 }
                 let path = util::file_path(text(input, "path"))?;
-                let t = git::task(&root).await?;
-                if !t["tree"].as_array().unwrap().iter().any(|p| p == &path) {
-                    return Err("文件不属于当前工作目录文件清单。".into());
-                }
+                if Path::new(&path).components().any(|part| part.as_os_str().to_string_lossy().eq_ignore_ascii_case(".git")) { return Err("不能打开Git元数据。".into()); }
                 let file =
                     dunce::canonicalize(root.join(path)).map_err(|_| "文件不存在或不可读取。")?;
                 if !file.starts_with(&root)
@@ -1622,7 +1872,7 @@ impl Service {
                         operations::submit(&root, input, self, &context, cancel).await?
                     }
                     "pushCommit" => {
-                        if context.repository["permissions"]["push"] == false {
+                        if context.link["authentication"] == "account" && context.repository["permissions"]["push"] == false {
                             return Err("访问账号目前没有此仓库推送权限。".into());
                         }
                         util::sha(text(input, "expectedHead"))?;
@@ -1721,6 +1971,9 @@ impl Service {
             if context.provider.kind() == "gitea" {
                 p.extend(["src", "commit", &id]);
             } else {
+                if context.provider.kind() == "gitlab" {
+                    p.push("-");
+                }
                 p.extend(["blob", &id]);
             }
             p.extend(path.split('/'));
@@ -1805,7 +2058,7 @@ fn valid_state(v: &Value) -> bool {
                     && ["id", "provider", "host", "login", "name", "updatedAt"]
                         .iter()
                         .all(|k| a["account"][k].is_string())
-                    && matches!(text(&a["account"], "provider"), "github" | "gitea")
+                    && provider::supported(text(&a["account"], "provider"))
             })
         })
         && v["repositories"].as_array().is_some_and(|r| {
@@ -1830,6 +2083,7 @@ fn valid_state(v: &Value) -> bool {
             l.iter().all(|l| {
                 l["repositoryId"].is_string()
                     && l["path"].is_string()
+                    && (l["authentication"].is_null() || matches!(text(l,"authentication"), "system" | "account"))
                     && (l["worktrees"].is_null()
                         || l["worktrees"].as_array().is_some_and(|w| {
                             w.len() <= 64
@@ -1847,6 +2101,9 @@ fn roots(link: &Value) -> Result<Vec<Value>> {
         .as_array()
         .cloned()
         .unwrap_or_else(|| vec![json!({"path":link["path"],"branch":""})]))
+}
+fn repository_accessible(repository: &Value, link: &Value) -> bool {
+    repository["available"] == true || !link.is_null() && text(link, "authentication") != "account"
 }
 fn context_identity(r: &Value, l: &Value, a: &Value) -> String {
     util::digest(
@@ -1886,41 +2143,22 @@ fn check_context(next: &Value, c: &Context) -> Result<()> {
         .find(|l| l["repositoryId"] == r["id"])
         .cloned()
         .unwrap_or(Value::Null);
-    if context_identity(r, &l, a) != c.identity || r["available"] != true {
+    if context_identity(r, &l, a) != c.identity || !repository_accessible(r, &l) {
         Err("账号、仓库或关联已经变化，请重新读取。".into())
     } else {
         Ok(())
     }
 }
 fn replace_repositories(next: &mut Value, id: &str, repos: Vec<Value>) {
-    let linked: Vec<_> = next["links"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|l| l["repositoryId"].clone())
-        .collect();
-    let found: Vec<_> = repos.iter().map(|r| r["id"].clone()).collect();
-    let mut unavailable: Vec<_> = next["repositories"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|r| {
-            text(r, "accountId") == id && linked.contains(&r["id"]) && !found.contains(&r["id"])
-        })
-        .cloned()
-        .collect();
-    for r in &mut unavailable {
-        r["available"] = json!(false);
-    }
+    // Only a fully successful paginated listing reaches this function. Its
+    // contents are authoritative, including the removal of deleted repos.
+    // Failed listings never replace the cache; local directory mappings are
+    // retained without keeping an absent remote repository visible.
     next["repositories"]
         .as_array_mut()
         .unwrap()
         .retain(|r| text(r, "accountId") != id);
     next["repositories"].as_array_mut().unwrap().extend(repos);
-    next["repositories"]
-        .as_array_mut()
-        .unwrap()
-        .extend(unavailable);
 }
 fn merge_link(
     next: &mut Value,
@@ -1955,7 +2193,7 @@ fn merge_link(
     next["links"]
         .as_array_mut()
         .unwrap()
-        .push(json!({"repositoryId":id,"path":primary,"worktrees":retained}));
+        .push(json!({"repositoryId":id,"path":primary,"worktrees":retained,"authentication":if previous["authentication"] == "account" {"account"}else{"system"}}));
     Ok(())
 }
 async fn discover(
@@ -1992,9 +2230,9 @@ async fn discover(
             let names = git::read(&path, &["remote"]).await?;
             let mut identities = Vec::new();
             for n in names.lines() {
-                identities.push(util::identity(
+                identities.push(git::remote_identity(
                     git::read(&path, &["remote", "get-url", n]).await?.trim(),
-                ));
+                ).await?);
             }
             let matches: Vec<_> = repos
                 .iter()
@@ -2024,9 +2262,9 @@ async fn discover(
                     }
                     let mut own_identities = Vec::new();
                     for name in git::read(&p, &["remote"]).await?.lines() {
-                        own_identities.push(util::identity(
+                        own_identities.push(git::remote_identity(
                             git::read(&p, &["remote", "get-url", name]).await?.trim(),
-                        ));
+                        ).await?);
                     }
                     for r in &matches {
                         let expected = util::identity(text(r, "url"));

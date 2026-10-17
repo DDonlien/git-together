@@ -1,5 +1,5 @@
 import { isRecord } from './import-model';
-import { githubOAuthOrigin, isGitHubDeviceFallback, isGitHubAuthorizationURL, isGitHubWebSession, isGitHubWebProgress, isGitHubWebCancellation, type GitHubWebAuthorization, type GitHubWebSession, type GitHubWebProgress, type GitHubWebCancellation } from './github-web-model';
+import { authorizationCallback, isGitHubDeviceFallback, isGitHubAuthorizationURL, isGitHubWebSession, isGitHubWebProgress, isGitHubWebCancellation, type WebAuthorizationOptions, type GitHubWebAuthorization, type GitHubWebSession, type GitHubWebProgress, type GitHubWebCancellation } from './github-web-model';
 import { authorizationDelay } from './github-auth-flow';
 
 async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -12,7 +12,7 @@ async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unkno
   }
   let response: Response;
   try {
-    response = await fetch(`${githubOAuthOrigin}/api/${method}`, { method: 'POST', redirect: 'error', credentials: 'omit',
+    response = await fetch(`/api/authorization/${method}`, { method: 'POST', redirect: 'error', credentials: 'omit',
       headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(method === 'cancel' ? 190000 : 15000) });
   } catch {
@@ -24,10 +24,15 @@ async function webAPI(method: 'start' | 'poll' | 'cancel' | 'open', input: unkno
   if (!response.ok || !isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '网页授权失败，请重新开始。');
   return envelope.value;
 }
-export async function startGitHubWebAuthorization(name: string): Promise<GitHubWebAuthorization> {
-  const result = await webAPI('start', { name });
-  if (isGitHubDeviceFallback(result)) return result;
+export async function startGitHubWebAuthorization(name: string, options?: WebAuthorizationOptions): Promise<GitHubWebAuthorization> {
+  const result = await webAPI('start', { name, ...options });
+  if (isGitHubDeviceFallback(result) && (!options || options.provider === 'github')) return result;
   if (!isGitHubWebSession(result)) throw new Error('网页授权信息无效，没有打开其他网站。');
+  if (result.callbackUri && result.callbackUri !== authorizationCallback()) throw new Error('本机授权回调与当前客户端不一致，没有打开其他网站。');
+  if (options) {
+    const expected = new URL(options.host.includes('://') ? options.host : `https://${options.host}`).origin;
+    if (result.provider !== options.provider || result.host !== expected || options.clientId && result.clientId !== options.clientId.trim()) throw new Error('授权平台或域名不一致，没有打开其他网站。');
+  }
   return result;
 }
 export async function pollGitHubWebAuthorization(sessionId: string, signal: AbortSignal): Promise<GitHubWebProgress> {
@@ -45,17 +50,17 @@ export function reserveGitHubWebWindow(): Window | null {
   try { const popup = window.open('about:blank', '_blank', 'popup,width=760,height=820'); if (popup) popup.opener = null; return popup; }
   catch { return null; }
 }
-export function navigateGitHubWebWindow(popup: Window | null, authorizationURL: string): boolean {
-  if (!isGitHubAuthorizationURL(authorizationURL)) throw new Error('授权网址无效，没有打开其他网站。');
+export function navigateGitHubWebWindow(popup: Window | null, authorizationURL: string, target?: GitHubWebSession): boolean {
+  if (!isGitHubAuthorizationURL(authorizationURL, target)) throw new Error('授权网址无效，没有打开其他网站。');
   if (!popup) return false;
   try { popup.location.replace(authorizationURL); return true; } catch { return false; }
 }
-export function reopenGitHubWebWindow(authorizationURL: string): boolean {
-  if (!isGitHubAuthorizationURL(authorizationURL)) throw new Error('授权网址无效，没有打开其他网站。');
-  return navigateGitHubWebWindow(reserveGitHubWebWindow(), authorizationURL);
+export function reopenGitHubWebWindow(authorizationURL: string, target?: GitHubWebSession): boolean {
+  if (!isGitHubAuthorizationURL(authorizationURL, target)) throw new Error('授权网址无效，没有打开其他网站。');
+  return navigateGitHubWebWindow(reserveGitHubWebWindow(), authorizationURL, target);
 }
 export async function openGitHubWebAuthorization(session: GitHubWebSession): Promise<boolean> {
-  if (!window.gittogether) return reopenGitHubWebWindow(session.authorizationURL);
+  if (!window.gittogether) return reopenGitHubWebWindow(session.authorizationURL, session);
   try { return await webAPI('open', { sessionId: session.id }) === true; }
   catch { return false; }
 }

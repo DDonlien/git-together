@@ -4,16 +4,25 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{atomic::{AtomicU64, Ordering}, mpsc::{self, SyncSender}, Arc, Mutex},
+    time::{Duration, Instant},
 };
 const MAX_BYTES: u64 = 128 * 1024 * 1024;
 #[derive(Clone)]
 pub struct Diagnostics {
     pub directory: PathBuf,
+    writer: Arc<LogWriter>,
+    sender: SyncSender<LogMessage>,
+    queued: Arc<AtomicU64>,
+    dropped: Arc<AtomicU64>,
+}
+struct LogWriter {
+    directory: PathBuf,
     component: String,
     session: String,
-    state: Arc<Mutex<LogState>>,
+    state: Mutex<LogState>,
 }
+enum LogMessage { Record(Value, Instant), Barrier(SyncSender<()>) }
 struct LogState {
     limited: bool,
     error: String,
@@ -22,17 +31,78 @@ struct LogState {
 }
 impl Diagnostics {
     pub fn new(directory: PathBuf, component: &str) -> Self {
-        Self {
-            directory,
+        let writer = Arc::new(LogWriter {
+            directory: directory.clone(),
             component: component.into(),
             session: uuid::Uuid::new_v4().to_string(),
-            state: Arc::new(Mutex::new(LogState {
+            state: Mutex::new(LogState {
                 limited: false,
                 error: String::new(),
                 last: 0,
                 written: 0,
-            })),
-        }
+            }),
+        });
+        let (sender, receiver) = mpsc::sync_channel(512);
+        let queued = Arc::new(AtomicU64::new(0));
+        let dropped = Arc::new(AtomicU64::new(0));
+        let worker = writer.clone(); let pending = queued.clone(); let lost = dropped.clone();
+        std::thread::Builder::new().name("gittogether-log-writer".into()).spawn(move || {
+            let mut deferred = None;
+            let mut reported_loss = 0;
+            let mut measured = Instant::now(); let mut writes = 0u64; let mut write_ms = 0u64; let mut queue_ms = 0u64;
+            loop {
+                let message = match deferred.take() { Some(message) => message, None => match receiver.recv_timeout(Duration::from_secs(60)) {
+                    Ok(message) => message, Err(mpsc::RecvTimeoutError::Timeout) => { worker.status(); continue; }, Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }};
+                match message {
+                    LogMessage::Barrier(done) => {
+                        let total = lost.load(Ordering::Relaxed);
+                        if total > reported_loss && worker.write_records(&[worker.decorate(json!({"event":"performance","phase":"log-queue","outcome":"partial","dropped":total-reported_loss}))]) { reported_loss = total; }
+                        let _ = done.send(());
+                    },
+                    LogMessage::Record(value, queued_at) => {
+                        let mut batch = vec![value]; queue_ms = queue_ms.max(queued_at.elapsed().as_millis() as u64);
+                        for _ in 1..64 { match receiver.try_recv() {
+                            Ok(LogMessage::Record(value, queued_at)) => { batch.push(value); queue_ms = queue_ms.max(queued_at.elapsed().as_millis() as u64); },
+                            Ok(barrier) => { deferred = Some(barrier); break; }, Err(_) => break,
+                        }}
+                        pending.fetch_sub(batch.len() as u64, Ordering::Relaxed);
+                        writes += batch.len() as u64;
+                        let started = Instant::now(); if !worker.write_records(&batch) { lost.fetch_add(batch.len() as u64, Ordering::Relaxed); } write_ms += started.elapsed().as_millis() as u64;
+                        if measured.elapsed() >= Duration::from_secs(10) {
+                            let total = lost.load(Ordering::Relaxed);
+                            if worker.write_records(&[worker.decorate(json!({"event":"performance","phase":"log-write","outcome":if queue_ms >= 100 || total > reported_loss {"partial"}else{"success"},"durationMs":measured.elapsed().as_millis() as u64,"items":writes,"writeMs":write_ms,"queueMs":queue_ms,"queued":pending.load(Ordering::Relaxed),"dropped":total-reported_loss}))]) { reported_loss = total; }
+                            measured = Instant::now(); writes = 0; write_ms = 0; queue_ms = 0;
+                        }
+                    },
+                }
+            }
+        }).expect("无法启动本地日志写入线程");
+        Self { directory, writer, sender, queued, dropped }
+    }
+    // true acknowledges a bounded queue, not a synchronous disk write.
+    // All pruning, ACLs and append IO stay on the single background writer.
+    pub fn record(&self, input: &Value, renderer: bool) -> bool {
+        let Some(value) = sanitize(input, renderer) else { return false; };
+        self.queued.fetch_add(1, Ordering::Relaxed);
+        if self.sender.try_send(LogMessage::Record(self.writer.decorate(value), Instant::now())).is_ok() { true }
+        else { self.queued.fetch_sub(1, Ordering::Relaxed); self.dropped.fetch_add(1, Ordering::Relaxed); false }
+    }
+    pub fn status(&self) -> Value {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let flushed = self.sender.send(LogMessage::Barrier(sender)).is_ok() && receiver.recv().is_ok();
+        let mut status = self.writer.status();
+        let dropped = self.dropped.load(Ordering::Relaxed);
+        status["queued"] = json!(self.queued.load(Ordering::Relaxed)); status["dropped"] = json!(dropped);
+        status["capacityLimited"] = status["limited"].clone();
+        if dropped > 0 { status["limited"] = json!(true); }
+        if !flushed { status["error"] = json!("日志写入线程已停止。"); }
+        status
+    }
+}
+impl LogWriter {
+    fn decorate(&self, mut value: Value) -> Value {
+        value["time"] = json!(util::iso()); value["version"] = json!(crate::VERSION); value["component"] = json!(self.component); value["session"] = json!(self.session); value
     }
     fn prepare(&self) -> Result<()> {
         if fs::symlink_metadata(&self.directory).is_ok_and(|m| m.file_type().is_symlink()) {
@@ -105,20 +175,13 @@ impl Diagnostics {
         state.written = 0;
         Ok(())
     }
-    pub fn record(&self, input: &Value, renderer: bool) -> bool {
-        let Some(mut v) = sanitize(input, renderer) else {
-            return false;
-        };
+    fn write_records(&self, values: &[Value]) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let result = (|| {
             if util::now() - state.last > 60_000 || state.written >= 1_048_576 {
                 self.prune(&mut state)?;
             }
             self.prepare()?;
-            v["time"] = json!(util::iso());
-            v["version"] = json!(crate::VERSION);
-            v["component"] = json!(self.component);
-            v["session"] = json!(self.session);
             let path = self.directory.join(format!(
                 "diagnostics-{}-{}-{}.jsonl",
                 util::now() / 3_600_000 * 3_600_000,
@@ -129,7 +192,7 @@ impl Diagnostics {
                 crate::platform::open_regular(&path, OpenOptions::new().create(true).append(true))
                     .map_err(|_| "日志写入失败。")?;
             crate::platform::private_file(&file).map_err(|_| "日志保护失败。")?;
-            let row = format!("{v}\n");
+            let row = values.iter().map(|v| format!("{v}\n")).collect::<String>();
             file.write_all(row.as_bytes())
                 .map_err(|_| "日志写入失败。")?;
             state.written += row.len() as u64;
@@ -153,9 +216,15 @@ impl Diagnostics {
         }
         json!({"directory":self.directory.to_string_lossy(),"retentionHours":24,"maxBytes":MAX_BYTES,"limited":s.limited,"error":s.error})
     }
+}
+impl Diagnostics {
+    async fn inspect(&self) -> Result<Value> {
+        let diagnostics = self.clone();
+        tokio::task::spawn_blocking(move || diagnostics.status()).await.map_err(|_| "日志状态读取未完成。".into())
+    }
     pub async fn command(&self, method: &str, input: &Value) -> Result<Value> {
         match method {
-            "status" => Ok(self.status()),
+            "status" => self.inspect().await,
             "record" => {
                 if self.record(input, true) {
                     Ok(json!(true))
@@ -164,7 +233,7 @@ impl Diagnostics {
                 }
             }
             "open" => {
-                let status = self.status();
+                let status = self.inspect().await?;
                 if status["error"] != "" {
                     return Err(text(&status, "error").into());
                 }
@@ -173,12 +242,9 @@ impl Diagnostics {
                 Ok(json!(true))
             }
             "copy" => {
-                self.status();
-                let files = self
-                    .files()?
-                    .into_iter()
-                    .map(|(p, _, _)| p)
-                    .collect::<Vec<_>>();
+                self.inspect().await?;
+                let writer = self.writer.clone();
+                let files = tokio::task::spawn_blocking(move || writer.files()).await.map_err(|_| "日志文件读取未完成。")??.into_iter().map(|(p, _, _)| p).collect::<Vec<_>>();
                 if files.is_empty() {
                     return Err("暂无可复制的日志文件。".into());
                 }
@@ -209,8 +275,18 @@ fn log_hour(name: &str) -> Option<i64> {
 pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
     let event = text(v, "event");
     let outcome = text(v, "outcome");
-    if !["lifecycle","api","provider-read","git-read","git-write","storage","authorization","update","refresh","renderer","ui-action"].contains(&event)||!"start success partial failure cancelled paused resumed retry online offline hidden visible blocked received accepted complete rejected failed current available ready installing".split_whitespace().any(|s|s==outcome)||(renderer&&!["api","refresh","renderer","ui-action"].contains(&event)){return None;}
+    if !["lifecycle","api","provider-read","git-read","git-write","storage","authorization","update","refresh","renderer","ui-action","performance"].contains(&event)||!"start success partial failure cancelled paused resumed retry online offline hidden visible blocked received accepted complete rejected failed current available ready installing".split_whitespace().any(|s|s==outcome)||(renderer&&!["api","refresh","renderer","ui-action","performance"].contains(&event)){return None;}
     let mut clean = json!({"event":event,"outcome":outcome});
+    if !renderer && matches!(event, "git-read" | "git-write") {
+        for (key, allowed) in [
+            ("authentication", "system account"),
+            ("gitFailureReason", "workflow-permission sso-required remote-policy write-permission ssh-key-rejected ssh-host-key credential-rejected credential-unavailable rate-limit repository-unavailable access-denied non-fast-forward remote-rejected"),
+        ] {
+            if allowed.split_whitespace().any(|value| value == text(v, key)) {
+                clean[key] = v[key].clone();
+            }
+        }
+    }
     if !renderer && matches!(event,"authorization"|"storage") {
         for (key,allowed) in [
             ("authorizationStage","token-received token-rejected refresh-start refresh-complete refresh-failed refresh-unavailable storage-load"),
@@ -222,7 +298,7 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
             if v[key].as_i64().is_some_and(|n|(-31_536_000..=31_536_000).contains(&n)) { clean[key]=v[key].clone(); }
         }
     }
-    let allowed=[("method","fetchRepository prepareSync applySync discardSync submitCommit pushCommit submit generateCommitMessage cancelCommitGeneration status catalog connect updateAccount refresh removeAccount matchAccountRepositories link downloadBranch unlink snapshot localWorkspace localCommit remoteWorkspace remoteCommit remoteFile openFile openDirectory openLocalDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files rev-parse for-each-ref config fetch ls-remote clone push add commit other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing git-lfs-object-missing git-lfs ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED ERR_UPDATER_INVALID_ARCHIVE ERR_UPDATER_VERSION ERR_UPDATER_HTTP ERR_UPDATER_TEMP_DIR ERR_UPDATER_RESTORE EXDEV EROFS EBUSY INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
+    let allowed=[("method","graphSources graphPreview prepareGraphMerge cancelGraphPreparation discardGraphMerge applyGraphMerge executeGraph createGraphWorktree openCommit fetchRepository prepareSync applySync discardSync submitCommit pushCommit submit generateCommitMessage cancelCommitGeneration status catalog connect accountRepositoryAccess openAccountAccessSettings setRepositoryAuthentication updateAccount refresh removeAccount matchAccountRepositories link downloadBranch unlink snapshot localWorkspace localCommit remoteWorkspace remoteHistory remoteCommit remoteFile localDirectory prepareFileOperation applyFileOperation discardFileOperation openFile openDirectory openLocalDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github github-enterprise gitlab gitee gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files check-ignore rev-parse for-each-ref config fetch ls-remote clone push add commit other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing git-lfs-object-missing git-lfs ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED ERR_UPDATER_INVALID_ARCHIVE ERR_UPDATER_VERSION ERR_UPDATER_HTTP ERR_UPDATER_TEMP_DIR ERR_UPDATER_RESTORE EXDEV EROFS EBUSY INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
     for (key, list) in allowed {
         if v[key].is_string() && list.split_whitespace().any(|s| s == text(v, key)) {
             clean[key] = v[key].clone();
@@ -232,7 +308,8 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
         && ["codex-model", "codex-auth", "codex-version", "codex-network", "codex-generation"].contains(&text(v, "code")) {
         clean["code"] = v["code"].clone();
     }
-    for key in ["durationMs", "retryMs", "failures", "tasks"] {
+    if ["ui-window", "dashboard-render", "branch-render", "response-read", "response-validate", "git-queue", "worktree-read", "log-write", "log-queue", "renderer-log-queue"].contains(&text(v, "phase")) { clean["phase"] = v["phase"].clone(); }
+for key in ["durationMs", "retryMs", "failures", "tasks", "frames", "slowFrames", "frameMaxMs", "lagMaxMs", "inputMaxMs", "nextFrameMaxMs", "longTasks", "longTaskSupported", "longTaskMaxMs", "renders", "renderMaxMs", "renderTotalMs", "items", "activeRequests", "peakRequests", "characters", "queueMs", "bytes", "dropped", "queued", "writeMs"] {
         if v[key].as_u64().is_some_and(|n| n <= 1_000_000_000_000) {
             clean[key] = v[key].clone();
         }

@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { importMiddleware } from '../server/http-api';
 import { importAPI } from '../src/import-api';
 import { isCatalog } from '../src/import-model';
-import { isRemoteWorkspace, isRemoteCommitDetails, isRemoteFileContent } from '../src/remote-repository-model';
+import { isRemoteWorkspace, isRemoteHistoryPage, isRemoteCommitDetails, isRemoteFileContent } from '../src/remote-repository-model';
 import { createRemoteServiceFixture } from './remote-service-fixture';
 
 for (const provider of ['github', 'gitea'] as const) test(`${provider}: actual AccountService → HTTP → client DTO reads Git without a local association`, async t => {
@@ -23,6 +23,8 @@ for (const provider of ['github', 'gitea'] as const) test(`${provider}: actual A
   assert.ok(workspace.tasks.every(task => task.path === null && task.remote && task.head && task.tree.length && !task.error));
   assert.equal(workspace.commits.find(commit => commit.summary === 'Merge search task')?.parents.length, 2);
   const main = workspace.tasks.find(task => task.branch === 'main')!;
+  const olderHistory = await importAPI('remoteHistory', { repositoryId, head: main.head, page: 2 });
+  assert.ok(isRemoteHistoryPage(olderHistory)); assert.equal(olderHistory.head, main.head); assert.equal(olderHistory.page, 2); assert.equal(olderHistory.hasMore, false);
   const details = await importAPI('remoteCommit', { repositoryId, commitId: main.head }); assert.ok(isRemoteCommitDetails(details));
   assert.match(details.diff, /export const search = true/); assert.ok(details.files.length > 0); assert.equal(details.commit.id, main.head);
   const file = await importAPI('remoteFile', { repositoryId, commitId: main.head, path: 'src/app.ts' }); assert.ok(isRemoteFileContent(file));
@@ -40,6 +42,8 @@ test('remote reads reject URLs, traversal, unapproved repositories and invalid S
   await assert.rejects(service.handle('remoteWorkspace', { repositoryId, url: 'https://foreign.test/credentials' }), /仅接受/);
   await assert.rejects(service.handle('remoteWorkspace', { repositoryId: 'unknown' }), /仓库不存在/);
   await assert.rejects(service.handle('remoteCommit', { repositoryId, commitId: 'main' }), /对象标识/);
+  await assert.rejects(service.handle('remoteHistory', { repositoryId, head: 'a'.repeat(40), page: 1 }), /数值范围/);
+  await assert.rejects(service.handle('remoteHistory', { repositoryId, head: 'a'.repeat(40), page: Number.MAX_SAFE_INTEGER + 1 }), /数值范围/);
   for (const path of ['../secret', '/etc/passwd', 'folder/../secret', 'bad\0file']) await assert.rejects(service.handle('remoteFile', { repositoryId, commitId: 'a'.repeat(40), path }), /文件路径/);
   assert.equal(fixture.requests.length, before);
 });
@@ -100,6 +104,10 @@ test('production App wires remote workspace and commit reads without the removed
   assert.match(app, /controller.remoteStates\[repoId\]/);
   assert.match(hook, /repository && !sharedState \? \[repository\] : \[\]/);
   assert.doesNotMatch(hook, /localPath|\blink\b|setInterval|importAPI\('remoteFile'/);
+  const dashboard = await readFile(new URL('../src/Dashboard.tsx', import.meta.url), 'utf8');
+  const repositoryView = await readFile(new URL('../src/RepositoryView.tsx', import.meta.url), 'utf8');
+  assert.match(app, /routeHistory/); assert.match(app, /controller\.refresh\(account\.id\)/);
+  assert.match(dashboard, /NavigationControls/); assert.match(repositoryView, /NavigationControls/);
 });
 
 test('disconnecting the protected HTTP read aborts the provider request instead of a normal POST completion', { timeout: 5000 }, async t => {

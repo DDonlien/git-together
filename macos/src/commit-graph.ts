@@ -34,9 +34,13 @@ export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBr
   return [...branches.values()].sort((a, b) => a.branch.localeCompare(b.branch));
 }
 
+export function repositoryGraphAuthors(workspace: RepositoryWorkspace): string[] {
+  return [...new Set(workspace.commits.map(commit => commit.author.trim()))].sort((a, b) => a.localeCompare(b));
+}
+
 // Working changes are view-only nodes. Their stable task identity is never
 // returned as a Git commit or used by the committed-content readers.
-export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches: GraphBranch[], selection: ReadonlySet<string> | null): GraphCommit[] {
+export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches: GraphBranch[], selection: ReadonlySet<string> | null, authors: ReadonlySet<string> | null = null): GraphCommit[] {
   const visible = branches.filter(branch => selection === null || selection.has(branch.branch));
   const reachable = selection === null ? null : reachableCommitIds(workspace.commits, visible.flatMap(branch => [...branch.localHeads, ...branch.remoteHeads]));
   const local = reachableCommitIds(workspace.commits, branches.flatMap(branch => branch.localHeads));
@@ -54,7 +58,7 @@ export function repositoryGraphCommits(workspace: RepositoryWorkspace, branches:
     id: `working:${task.id}`, summary: `未提交更改 · ${task.files.length} 个文件`, author: task.branch, time: '', refs: [],
     parents: task.head && !/^0+$/.test(task.head) ? [task.head] : [], workingTask: task,
   })));
-  return [...working, ...workspace.commits.filter(commit => !reachable || reachable.has(commit.id)).map(commit => ({
+  return [...working, ...workspace.commits.filter(commit => (!reachable || reachable.has(commit.id)) && (authors === null || authors.has(commit.author.trim()))).map(commit => ({
     ...commit, localOnly: local.has(commit.id) && !remote.has(commit.id), unpublished: unpublished.has(commit.id),
   }))];
 }

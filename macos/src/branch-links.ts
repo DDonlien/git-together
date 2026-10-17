@@ -47,14 +47,21 @@ export function linkedTasks(link?: LocalLink, local?: LocalRepositoryState, hidd
   return tasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
 }
 
-export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>, directory = link?.path || '') {
-  if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。' };
-  const tasks = linkedTasks(link, local, hiddenEntries);
+export type AssociationStatus = { label: string; detail: string; verified: boolean };
+
+export function associationStatus(link: LocalLink | undefined, local: LocalRepositoryState | undefined, remote: RemoteRepositoryState, hiddenEntries?: ReadonlySet<string>, directory = link?.path || ''): AssociationStatus {
+  if (!link) return { label: '尚未关联', detail: '选择仓库目录或父目录，自动匹配其内的工作目录。', verified: true };
+  const allTasks = linkedTasks(link, local);
+  const tasks = allTasks.filter(task => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, task.branch)));
+  const observedPaths = new Set(allTasks.map(task => task.path));
+  const mappingRead = (link.worktrees || [{ path: link.path }]).every(item => observedPaths.has(item.path));
   const expected = new Set([...(remote.workspace?.tasks.map(task => task.branch) || []), ...tasks.map(task => task.branch)].filter(branch => !hiddenEntries?.has(hiddenEntryKey(link.repositoryId, branch))));
   const linked = new Set(tasks.filter(task => !task.error).map(task => task.branch));
   const completeBranches = !!remote.workspace && !remote.error && !remote.workspace.warnings.some(warning => warning.startsWith('分支超过'));
-  const complete = completeBranches && expected.size > 0 && [...expected].every(branch => linked.has(branch)) && tasks.every(task => !task.error) && !local?.error;
-  return { label: !tasks.length ? '尚未关联' : complete ? '完全关联' : '部分关联', detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${completeBranches ? '' : '远端分支范围尚未完整读取；'}${local?.error || tasks.filter(task => task.error).map(task => task.error).join('；') || directory}` };
+  const verified = completeBranches && !!local?.workspace && local.path === link.path && mappingRead && allTasks.length > 0 && tasks.every(task => !task.error) && !local.error;
+  const complete = verified && expected.size > 0 && [...expected].every(branch => linked.has(branch));
+  return { label: !verified ? '关联待确认' : !tasks.length ? '已关联' : complete ? '完全关联' : '部分关联', verified,
+    detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${!tasks.length && allTasks.length ? '当前可见范围没有已关联分支，保存的目录关联仍保留；' : ''}${completeBranches ? '' : '远端分支范围尚未完整读取；'}${[local?.error, remote.error, tasks.filter(task => task.error).map(task => task.error).join('；')].filter(Boolean).join('；') || directory}` };
 }
 
 export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };
@@ -80,7 +87,7 @@ export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
   })) as GitSignals;
 }
 
-export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true): GitSignals {
+export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true, systemAuthentication = false): GitSignals {
   const tasks = branch ? local.filter(task => task.branch === branch) : local;
   const remoteTasks = branch ? remote.workspace?.tasks.filter(task => task.branch === branch) : remote.workspace?.tasks;
   const localError = localState?.error || (localState?.workspace ? tasks.find(task => task.error)?.error : '') || '';
@@ -92,8 +99,8 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
   // Read health is independent of the last observed Git count. A transport
   // failure must not become "one file", or invalidate unrelated local changes.
   for (const key of Object.keys(result) as (keyof GitSignals)[]) {
-    const error = key === 'commit' ? localError : key === 'fetch' ? remoteError : [localError, remoteError].filter(Boolean).join('；');
-    const reading = key === 'commit' ? localReading : key === 'fetch' ? remoteReading : localReading || remoteReading;
+    const error = key === 'commit' || systemAuthentication ? localError : key === 'fetch' ? remoteError : [localError, remoteError].filter(Boolean).join('；');
+    const reading = key === 'commit' || systemAuthentication ? localReading : key === 'fetch' ? remoteReading : localReading || remoteReading;
     if (reading || error) Object.assign(result[key], {
       status: reading ? 'reading' : 'error',
       statusDetail: `${reading ? '正在读取，等待实际结果。' : `读取异常：${error}`} ${error && reading ? `上次异常：${error}。` : ''}已有数字保留上次读取结果，不代表本次读取成功。`,

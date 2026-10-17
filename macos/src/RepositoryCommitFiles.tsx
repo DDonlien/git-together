@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import type { LocalFile } from './import-model';
 import { Checkbox, Icon } from './ui';
 import { fileChangeKind } from './file-tree';
+import { RepositoryFileChangeLabel } from './RepositoryFileChangeLabel';
 
 export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange }: {
   files: LocalFile[]; paths: string[]; branch: string; disabled: boolean; onChange: (paths: string[]) => void;
@@ -24,10 +25,10 @@ export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange
         <div className="submit-file-group-heading"><button type="button" className="submit-file-group-toggle" aria-label={`${collapsed[name] ? '展开' : '收起'} ${name}：${branch}`} aria-expanded={!collapsed[name]} aria-controls={`${id}-${name}`} onClick={() => setCollapsed(current => ({ ...current, [name]: !current[name] }))}><Icon name={collapsed[name] ? 'right' : 'down'} size={14} /><span>{name} <small>{group.length}</small></span></button><Checkbox checked={count === group.length} mixed={count > 0 && count < group.length} disabled={disabled} label={`选择${name}：${branch}`} onChange={() => toggle(group)} /></div>
         <div id={`${id}-${name}`} hidden={collapsed[name]}>
         {group.map(file => {
-          const kind = fileChangeKind(file.status) || 'modified', name = kind === 'added' ? '新增' : kind === 'deleted' ? '删除' : '修改';
+          const kind = fileChangeKind(file.status) || 'other', name = kind === 'added' ? '新增' : kind === 'deleted' ? '删除' : kind === 'modified' ? '修改' : '其他更改';
           return <div className={`submit-file-row${selected.has(file.path) ? ' is-included' : ''}`} key={file.path} data-change={kind}>
-            <button type="button" className="submit-file-choice" disabled={disabled} aria-pressed={selected.has(file.path)} aria-label={`${selected.has(file.path) ? '移出' : '加入'}提交范围：${name} ${file.path}`} onClick={() => toggle([file])}>
-              <span className="submit-file-mark" aria-label={name}>{kind === 'added' ? '+' : kind === 'deleted' ? '−' : '•'}</span><span className="submit-file-path" title={file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}>{file.path}</span><code aria-hidden="true">{kind === 'added' ? 'A' : kind === 'deleted' ? 'D' : file.status.includes('R') ? 'R' : 'M'}</code>
+            <button type="button" className="submit-file-choice" disabled={disabled} aria-pressed={selected.has(file.path)} aria-label={`${selected.has(file.path) ? '移出' : '加入'}提交范围：${name} ${file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}（${file.status}）`} onClick={() => toggle([file])}>
+              <RepositoryFileChangeLabel file={file} />
             </button><Checkbox checked={selected.has(file.path)} disabled={disabled} label={`包含文件：${branch} / ${file.path}`} onChange={() => toggle([file])} />
           </div>;
         })}

@@ -26,8 +26,6 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 pub const CLIENT_ID: &str = "Iv23liKMFYSaYtpe3XnL";
-const ORIGIN: &str = "http://127.0.0.1:4174";
-const CALLBACK: &str = "http://127.0.0.1:4174/oauth/github/callback";
 #[derive(Clone)]
 pub struct Authorization {
     service: Weak<Service>,
@@ -38,9 +36,15 @@ pub struct Authorization {
     listener: Arc<Mutex<bool>>,
     shutdown: CancellationToken,
     setup_nonce: String,
+    port: u16,
 }
 struct Session {
     id: String,
+    provider: String,
+    host: String,
+    client_id: String,
+    secret: String,
+    callback_uri: String,
     name: String,
     expires: i64,
     state: String,
@@ -63,7 +67,12 @@ fn random() -> String {
     URL_SAFE_NO_PAD.encode(b)
 }
 impl Authorization {
-    pub fn new(service: Weak<Service>, root: PathBuf, client: reqwest::Client) -> Self {
+    pub fn new(
+        service: Weak<Service>,
+        root: PathBuf,
+        client: reqwest::Client,
+        preview: bool,
+    ) -> Self {
         Self {
             service,
             root,
@@ -73,7 +82,14 @@ impl Authorization {
             listener: Arc::new(Mutex::new(false)),
             shutdown: CancellationToken::new(),
             setup_nonce: random(),
+            port: if preview { 4176 } else { 4174 },
         }
+    }
+    fn origin(&self) -> String {
+        format!("http://127.0.0.1:{}", self.port)
+    }
+    fn callback_uri(&self) -> String {
+        format!("{}/oauth/github/callback", self.origin())
     }
     pub fn busy(&self) -> bool {
         self.pending.load(Ordering::SeqCst) > 0
@@ -81,6 +97,9 @@ impl Authorization {
     fn finish(&self, s: &mut Session) {
         if !s.finished {
             s.finished = true;
+            s.secret.clear();
+            s.verifier.clear();
+            s.state.clear();
             self.pending.fetch_sub(1, Ordering::SeqCst);
         }
     }
@@ -138,7 +157,7 @@ impl Authorization {
             _ => "无法启动监听",
         };
         let code = error.raw_os_error().map(|code| format!("（系统错误 {code}）")).unwrap_or_default();
-        format!("本机授权端口 {}{reason}{code}。", 4174)
+        format!("本机授权端口 {}{reason}{code}。", self.port)
     }
     fn listen(
         &self,
@@ -148,7 +167,7 @@ impl Authorization {
             if *started {
                 return Ok(());
             }
-            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 4174)).await?;
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, self.port)).await?;
             let router = Router::new()
                 .route("/oauth/github/callback", get(callback))
                 .route("/setup", get(setup).post(save_setup))
@@ -166,6 +185,34 @@ impl Authorization {
         })
     }
     pub async fn start(&self, name: &str) -> Result<Value> {
+        self.start_provider(&json!({"name":name,"provider":"github","host":"https://github.com"}))
+            .await
+    }
+    async fn start_provider(&self, input: &Value) -> Result<Value> {
+        util::allowed(
+            input,
+            &["name", "provider", "host", "clientId", "clientSecret"],
+        )?;
+        let kind = if input["provider"].is_null() {
+            "github".to_owned()
+        } else {
+            util::field(input, "provider", 32)?
+        };
+        if !matches!(
+            kind.as_str(),
+            "github" | "github-enterprise" | "gitlab" | "gitee"
+        ) {
+            return Err("该平台尚不支持网页授权。".into());
+        }
+        let host = provider::host(
+            &kind,
+            if input["host"].is_null() {
+                ""
+            } else {
+                text(input, "host")
+            },
+        )?;
+        let name = util::field(input, "name", 120)?;
         if let Err(error) = self.listen().await {
             let problem = self.listener_error(&error);
             if let Some(service) = self.service.upgrade() {
@@ -176,37 +223,114 @@ impl Authorization {
                 };
                 service.diagnostics.record(&json!({"event":"authorization","method":"start","outcome":"failure","code":code,"systemCode":error.raw_os_error()}), false);
             }
-            if matches!(error.kind(), std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied) {
-                let mut session = self.device_start(name).await.map_err(|error| format!("{problem} 备用网页授权未能启动：{error}"))?;
+            if kind == "github" && matches!(error.kind(), std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied) {
+                let mut session = self.device_start(&name).await.map_err(|error| format!("{problem} 备用网页授权未能启动：{error}"))?;
                 session["flow"] = json!("device");
                 return Ok(session);
             }
             return Err(problem);
         }
-        let secret = credentials::oauth_secret(&self.root)?;
-        if secret.is_none() {
-            return Err("GitHub 网页授权应用尚未配置；请先在本机授权配置页完成一次配置。".into());
-        }
+        let (client_id, secret) = if kind == "github" {
+            (
+                CLIENT_ID.to_owned(),
+                credentials::oauth_secret(&self.root)?
+                    .ok_or("GitHub 网页授权应用尚未配置；请先在本机授权配置页完成一次配置。")?,
+            )
+        } else {
+            let file = self.root.join("provider-oauth-v1.encrypted");
+            let mut settings = credentials::load(&file, "GitTogether")?
+                .unwrap_or_else(|| json!({"version":1,"applications":{}}));
+            if settings["version"] != 1 || !settings["applications"].is_object() {
+                return Err("网页授权应用配置无法读取；未覆盖原配置。".into());
+            }
+            let key = format!("{kind}:{host}");
+            let supplied_id = if input["clientId"].is_null() {
+                String::new()
+            } else {
+                util::field(input, "clientId", 512)?
+            };
+            let supplied_secret = if input["clientSecret"].is_null() {
+                String::new()
+            } else {
+                util::field(input, "clientSecret", 4096)?
+            };
+            let saved = &settings["applications"][&key];
+            let client_id = if supplied_id.is_empty() {
+                text(saved, "clientId").to_owned()
+            } else {
+                supplied_id
+            };
+            let secret = if !supplied_secret.is_empty() {
+                supplied_secret
+            } else if text(saved, "clientId") == client_id {
+                text(saved, "secret").to_owned()
+            } else {
+                String::new()
+            };
+            if client_id.is_empty() || client_id.chars().any(char::is_whitespace) {
+                return Err("这个域名尚未配置网页授权应用。请填写该平台登记的Client ID，或使用访问令牌连接。".into());
+            }
+            if kind != "gitlab" && secret.is_empty() {
+                return Err("该域名的网页授权需要Client Secret，请由应用管理员完成一次本机配置；不会使用其他域名的密钥。".into());
+            }
+            settings["applications"][&key] = json!({"clientId":client_id,"secret":secret});
+            credentials::save(&file, &settings)?;
+            (client_id, secret)
+        };
         let id = uuid::Uuid::new_v4().to_string();
         let state = random();
         let verifier = random();
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-        let mut url = url::Url::parse("https://github.com/login/oauth/authorize").unwrap();
+        let callback_uri = self.callback_uri();
+        let pkce = kind == "github"
+            || kind == "gitlab"
+            || kind == "github-enterprise" && host.ends_with(".ghe.com");
+        let mut url = url::Url::parse(&format!(
+            "{host}{}",
+            if matches!(kind.as_str(), "github" | "github-enterprise") {
+                "/login/oauth/authorize"
+            } else {
+                "/oauth/authorize"
+            }
+        ))
+        .map_err(|_| "授权地址无效。")?;
         url.query_pairs_mut().extend_pairs([
-            ("client_id", CLIENT_ID),
-            ("redirect_uri", CALLBACK),
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", callback_uri.as_str()),
             ("state", &state),
-            ("code_challenge", &challenge),
-            ("code_challenge_method", "S256"),
         ]);
+        if pkce {
+            url.query_pairs_mut().extend_pairs([
+                ("code_challenge", challenge.as_str()),
+                ("code_challenge_method", "S256"),
+            ]);
+        }
+        if kind != "github" {
+            url.query_pairs_mut().extend_pairs([
+                ("response_type", "code"),
+                (
+                    "scope",
+                    match kind.as_str() {
+                        "gitlab" => "read_api read_user write_repository",
+                        "gitee" => "user_info projects",
+                        _ => "repo read:user read:org",
+                    },
+                ),
+            ]);
+        }
         let expires = util::now() + 600_000;
-        let public = json!({"id":id,"authorizationURL":url.as_str(),"expiresAt":expires});
+        let public = json!({"id":id,"authorizationURL":url.as_str(),"expiresAt":expires,"provider":kind,"host":host,"clientId":client_id,"callbackUri":callback_uri});
         self.insert(Session {
             id,
-            name: name.into(),
+            provider: kind,
+            host,
+            client_id,
+            secret,
+            callback_uri,
+            name,
             expires,
             state,
-            verifier,
+            verifier: if pkce { verifier } else { String::new() },
             url: url.to_string(),
             device: String::new(),
             interval: 5,
@@ -245,8 +369,27 @@ impl Authorization {
         }
         if let Some(token) = s.token.take() {
             let service = self.service.upgrade().ok_or("账号服务已退出。")?;
-            let refresh=s.refresh.take();
-            match service.connect(&json!({"provider":"github","host":"https://github.com","token":token,"name":s.name}),s.token_expires.clone(),refresh,true).await{Ok(c)=>{s.catalog=Some(c.clone());self.finish(&mut s);return Ok(json!({"status":"complete","catalog":c}));},Err(e)=>{s.error=e.clone();self.finish(&mut s);return Err(e);}}
+            let refresh = s.refresh.take();
+            match service
+                .connect(
+                    &json!({"provider":s.provider,"host":s.host,"token":token,"name":s.name}),
+                    s.token_expires.clone(),
+                    refresh,
+                    true,
+                )
+                .await
+            {
+                Ok(c) => {
+                    s.catalog = Some(c.clone());
+                    self.finish(&mut s);
+                    return Ok(json!({"status":"complete","catalog":c}));
+                }
+                Err(e) => {
+                    s.error = e.clone();
+                    self.finish(&mut s);
+                    return Err(e);
+                }
+            }
         }
         Ok(json!({"status":"pending"}))
     }
@@ -290,6 +433,11 @@ impl Authorization {
         let expires = util::now() + seconds * 1000;
         self.insert(Session {
             id: id.clone(),
+            provider: "github".into(),
+            host: "https://github.com".into(),
+            client_id: CLIENT_ID.into(),
+            secret: String::new(),
+            callback_uri: String::new(),
             name: name.into(),
             expires,
             state: String::new(),
@@ -372,10 +520,6 @@ impl Authorization {
             .get("state")
             .filter(|s| s.len() == 43)
             .ok_or("授权校验失败，请重新开始。")?;
-        let code = query
-            .get("code")
-            .filter(|c| !c.is_empty() && c.len() <= 512 && !c.chars().any(char::is_whitespace))
-            .ok_or("GitHub 授权未完成，请重新开始。")?;
         self.prune().await;
         let all = self
             .sessions
@@ -395,27 +539,78 @@ impl Authorization {
         }
         let item = selected.ok_or("授权校验失败或已过期。")?;
         let mut s = item.lock().await;
+        if query.contains_key("error") {
+            s.error = "网页授权已拒绝或取消；请完成企业SSO及应用批准后重新开始。".into();
+            self.finish(&mut s);
+            return Err(s.error.clone());
+        }
+        let code = query
+            .get("code")
+            .filter(|code| {
+                !code.is_empty() && code.len() <= 512 && !code.chars().any(char::is_whitespace)
+            })
+            .ok_or("网页授权未完成，请重新开始。")?;
         if s.token.is_some() || s.catalog.is_some() {
             return Ok(());
         }
-        let secret = credentials::oauth_secret(&self.root)?.ok_or("本机应用配置不可用。")?;
-        let value = post_json(
-            &self.client,
-            "https://github.com/login/oauth/access_token",
-            &[
-                ("client_id", CLIENT_ID),
-                ("client_secret", &secret),
-                ("code", code),
-                ("redirect_uri", CALLBACK),
-                ("code_verifier", &s.verifier),
-            ],
-        )
-        .await?;
-        let grant=match github_token::grant(&value,Flow::Web) { Ok(grant)=>grant, Err(error)=>{s.error=error.clone();self.finish(&mut s);return Err(error);} };
-        s.token = Some(grant.token);
+        // Consume state before exchange so failed/replayed callbacks cannot
+        // submit the one-use code again or attach to another host's session.
         s.state.clear();
-        s.token_expires = grant.expires_at;
-        s.refresh = grant.refresh;
+        let endpoint = format!(
+            "{}{}",
+            s.host,
+            if matches!(s.provider.as_str(), "github" | "github-enterprise") {
+                "/login/oauth/access_token"
+            } else {
+                "/oauth/token"
+            }
+        );
+        let mut body = vec![
+            ("client_id", s.client_id.as_str()),
+            ("code", code.as_str()),
+            ("redirect_uri", s.callback_uri.as_str()),
+        ];
+        if !s.secret.is_empty() {
+            body.push(("client_secret", &s.secret));
+        }
+        if !s.verifier.is_empty() {
+            body.push(("code_verifier", &s.verifier));
+        }
+        if matches!(s.provider.as_str(), "gitlab" | "gitee") {
+            body.push(("grant_type", "authorization_code"));
+        }
+        let value = match post_json(&self.client, &endpoint, &body).await {
+            Ok(v) => v,
+            Err(e) => {
+                s.error = e.clone();
+                self.finish(&mut s);
+                return Err(e);
+            }
+        };
+        if s.provider == "github" {
+            let grant = match github_token::grant(&value, Flow::Web) {
+                Ok(grant) => grant,
+                Err(error) => { s.error = error.clone(); self.finish(&mut s); return Err(error); }
+            };
+            s.token = Some(grant.token);
+            s.token_expires = grant.expires_at;
+            s.refresh = grant.refresh;
+        } else {
+        let token = text(&value, "access_token");
+        if token.is_empty() || token.len() > 4096 || token.chars().any(char::is_whitespace) {
+            s.error = "平台没有返回有效授权，请检查应用配置与SSO批准后重新开始。".into();
+            self.finish(&mut s);
+            return Err(s.error.clone());
+        }
+        s.token = Some(token.into());
+        s.secret.clear();
+        s.token_expires = value["expires_in"]
+            .as_i64()
+            .filter(|n| *n > 0)
+            .and_then(|n| chrono::DateTime::from_timestamp_millis(util::now() + n * 1000))
+            .map(|d| d.to_rfc3339());
+        }
+        s.secret.clear();
         Ok(())
     }
     pub async fn web(&self, method: &str, input: Value) -> Result<Value> {
@@ -427,10 +622,7 @@ impl Authorization {
             return Err("正在安装更新，请稍后重试。".into());
         }
         match method {
-            "start" => {
-                util::allowed(&input, &["name"])?;
-                self.start(&util::field(&input, "name", 120)?).await
-            }
+            "start" => self.start_provider(&input).await,
             "poll" | "cancel" | "open" => {
                 util::allowed(&input, &["sessionId"])?;
                 let id = util::field(&input, "sessionId", 100)?;
@@ -478,11 +670,12 @@ async fn post_json(client: &reqwest::Client, url: &str, body: &[(&str, &str)]) -
     }
     serde_json::from_slice(&bytes).map_err(|_| "网页授权服务返回格式无效。".into())
 }
-fn trusted(h: &HeaderMap) -> bool {
-    h.get("host").and_then(|v| v.to_str().ok()) == Some("127.0.0.1:4174")
+fn trusted(h: &HeaderMap, auth: &Authorization) -> bool {
+    let origin = auth.origin();
+    h.get("host").and_then(|v| v.to_str().ok()) == Some(format!("127.0.0.1:{}", auth.port).as_str())
         && h.get("origin")
             .and_then(|v| v.to_str().ok())
-            .is_some_and(|v| matches!(v, "http://127.0.0.1:4173" | ORIGIN))
+            .is_some_and(|v| v == "http://127.0.0.1:4173" || v == origin)
         && h.get("x-gittogether-client").and_then(|v| v.to_str().ok()) == Some("1")
 }
 fn envelope(r: Result<Value>) -> Value {
@@ -497,7 +690,7 @@ async fn api(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if !trusted(&headers) {
+    if !trusted(&headers, &auth) {
         return (
             StatusCode::FORBIDDEN,
             axum::Json(envelope(Err("仅允许本机应用的授权请求。".into()))),
@@ -522,8 +715,9 @@ async fn api(
         .insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     response
 }
-async fn preflight(headers: HeaderMap) -> Response {
-    if headers.get("host").and_then(|v| v.to_str().ok()) != Some("127.0.0.1:4174")
+async fn preflight(State(auth): State<Authorization>, headers: HeaderMap) -> Response {
+    if headers.get("host").and_then(|v| v.to_str().ok())
+        != Some(format!("127.0.0.1:{}", auth.port).as_str())
         || headers.get("origin").and_then(|v| v.to_str().ok()) != Some("http://127.0.0.1:4173")
     {
         return StatusCode::FORBIDDEN.into_response();
@@ -556,7 +750,9 @@ async fn callback(
     headers: HeaderMap,
     Query(query): Query<BTreeMap<String, String>>,
 ) -> Response {
-    if headers.get("host").and_then(|v| v.to_str().ok()) != Some("127.0.0.1:4174") {
+    if headers.get("host").and_then(|v| v.to_str().ok())
+        != Some(format!("127.0.0.1:{}", auth.port).as_str())
+    {
         return StatusCode::FORBIDDEN.into_response();
     }
     match auth.callback(&query).await {
@@ -567,7 +763,9 @@ async fn callback(
     }
 }
 async fn setup(State(auth): State<Authorization>, headers: HeaderMap) -> Response {
-    if headers.get("host").and_then(|v| v.to_str().ok()) != Some("127.0.0.1:4174") {
+    if headers.get("host").and_then(|v| v.to_str().ok())
+        != Some(format!("127.0.0.1:{}", auth.port).as_str())
+    {
         return StatusCode::FORBIDDEN.into_response();
     }
     page(&format!("<h1>GitHub 授权配置</h1><p>仅在这台电脑上配置一次。应用密钥会加密保存到系统用户目录。</p><form method=\"post\" action=\"/setup\"><input type=\"hidden\" name=\"nonce\" value=\"{}\"><label>Client ID<input readonly name=\"clientId\" value=\"{CLIENT_ID}\"></label><label>Client Secret<input type=\"password\" name=\"secret\" autocomplete=\"off\" required maxlength=\"4096\"></label><button>保存配置</button></form>",auth.setup_nonce))
@@ -577,8 +775,9 @@ async fn save_setup(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if headers.get("host").and_then(|v| v.to_str().ok()) != Some("127.0.0.1:4174")
-        || headers.get("origin").and_then(|v| v.to_str().ok()) != Some(ORIGIN)
+    if headers.get("host").and_then(|v| v.to_str().ok())
+        != Some(format!("127.0.0.1:{}", auth.port).as_str())
+        || headers.get("origin").and_then(|v| v.to_str().ok()) != Some(auth.origin().as_str())
     {
         return StatusCode::FORBIDDEN.into_response();
     }

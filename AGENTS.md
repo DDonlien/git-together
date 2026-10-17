@@ -77,11 +77,14 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
   Worktree 工作目录模式
 
-  1. 对于使用 Git worktree 的项目，推荐采用"项目容器目录不直接开发，`main` 有独立工作区，其他分支与 `main` 平级"的结构：
-  2. 代码片段：
+  1. 默认在 `main/`（或项目明确定义的默认分支工作区）处理任务；除非用户要求，不创建持久 worktree。
+  2. 为隔离确有必要的任务，Agent 可以创建临时 branch 和 worktree。选择不会覆盖现有目录的名称，并让工作形成可追溯的 Git 提交记录。
+  3. 每次新任务开始时，检查上次留下的临时 branch 和 worktree；对干净且属于当前仓库的临时分支，尝试 merge 到默认分支（优先 `main`，或项目明确定义的默认分支）。确认合并成功后，删除对应本地 worktree。存在未提交改动、冲突、无共同历史或其他安全障碍时，保留现场并向用户说明，不丢弃内容。
+  4. 对于确实需要 Git worktree 的项目，采用"项目容器目录不直接开发，`main` 有独立工作区，临时分支工作区与 `main` 平级"的结构：
+      代码片段：
       ```text
       <project-name>/              ← 项目容器目录，只收纳工作区，不作为任何分支的开发工作区
-      ├── <project-name_branch-name-1>/
+      ├── main/
       │   ├── .git/                ← Git 元数据
       │   ├── AGENTS.md
       │   ├── README.md
@@ -89,22 +92,21 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
       │   ├── DESIGN.md
       │   └── <deliverable-dir>/   ← 项目交付物目录
       │
-      ├── <project-name_branch-name-2>/  ← 其他分支工作区
-      ├── <project-name_branch-name-3>/
+      ├── <temporary-branch-worktree>/  ← 按需创建；合并后清理
       └── _builds/                 ← 本地打包产物，不进 Git
       ```
-  3. `<project-name>/` 是项目容器目录，只负责收纳 `main/` 和其他 branch worktree，不直接作为任何分支的开发工作区。
-  4. `main/` 默认对应仓库默认主分支工作区；GitHub Desktop、Codex、其他 AI Agent 和 IDE 应优先打开 `main/` 目录，以便识别 repo、读取根文档，并发现同层其他 branch worktree。
-  5. 其他 branch worktree 与 `main/` 平级，目录名应由用户或项目约定决定；当项目没有更具体规则时，推荐与 branch 名称保持一致。
-  6. branch 名称中的 `/` 等不适合作为目录名的字符，在本地 worktree 目录名中替换为 `-` 或项目约定的安全分隔符。
-  7. branch/worktree 名称推荐保持 `a/b` 的两段式格式；如果 `b` 暂不明确，使用 `main`，例如 `sub/main`，以保留后续扩展性。
-  8. 仓库默认主分支 `main` 是特殊稳定分支，默认对应 `main/` 工作区。
-  9. 每个 worktree 应对应一个明确的 Git branch；除非用户或项目规则另有说明，不在多个 worktree 中复用同一个 branch 作为长期开发工作区。
-  10. 如果 branch 名称发生变更，关联的 worktree 本地目录名也应同步调整；如果 worktree 本地目录名发生变更，关联 branch 名称也应同步调整，以保持检索、定位和文档记录的一致性。
-  11. 上述示例强调的是目录组织方式；`<project-name>`、`<branch-worktree-name>` 和 `_builds/` 只是占位符，不是强制命名规范。
-  12. 如果用户已经明确指定 feature、branch 或 worktree，且当前目录不匹配，Agent 可以按项目规则优先进入已有 worktree；如确需创建对应 branch/worktree，应确保不会覆盖现有路径，并在执行前说明将要创建的 branch/worktree。
-  13. 如果用户没有明确指定目标分支或 feature，Agent 不得自行猜测并切换分支、创建分支或创建 worktree；应在当前分支继续，或停止并询问用户。
-  14. 禁止在未获得用户明确授权的情况下执行 `git worktree remove`、`git worktree move` 等会破坏或重定位 worktree 的命令。
+  5. `<project-name>/` 是项目容器目录，只负责收纳 `main/` 和按需创建的临时 worktree，不直接作为任何分支的开发工作区。
+  6. `main/` 默认对应仓库默认主分支工作区；GitHub Desktop、Codex、其他 AI Agent 和 IDE 应优先打开 `main/` 目录，以便识别 repo 并读取根文档。
+  7. 临时 branch worktree 与 `main/` 平级，目录名应由用户或项目约定决定；没有更具体规则时，推荐与 branch 名称保持一致。
+  8. branch 名称中的 `/` 等不适合作为目录名的字符，在本地 worktree 目录名中替换为 `-` 或项目约定的安全分隔符。
+  9. branch/worktree 名称推荐保持 `a/b` 的两段式格式；如果 `b` 暂不明确，使用 `main`，例如 `sub/main`，以保留后续扩展性。
+  10. 仓库默认主分支 `main` 是特殊稳定分支，默认对应 `main/` 工作区。
+  11. 每个 worktree 应对应一个明确的 Git branch；除非项目明确要求，不在多个 worktree 中复用同一个 branch 作为长期工作区。
+  12. 如果 branch 名称发生变更，关联的 worktree 本地目录名也应同步调整；如果 worktree 本地目录名发生变更，关联 branch 名称也应同步调整，以保持检索、定位和文档记录的一致性。
+  13. 上述示例强调的是目录组织方式；`<project-name>`、`<temporary-branch-worktree>` 和 `_builds/` 只是占位符，不是强制命名规范。
+  14. 如果用户已经明确指定 feature、branch 或 worktree，且当前目录不匹配，Agent 可以优先进入已有 worktree；如确需创建临时 branch/worktree，应确保不会覆盖现有路径。
+  15. 没有明确目标分支或 feature 时，默认继续在 `main/` 或项目定义的默认分支工作区；只有确有隔离需要时才创建临时 branch/worktree，不自行切换到猜测的分支。
+  16. 按本节规则，临时 worktree 在成功合并到默认分支后可以移除；其他 worktree 的删除或移动仍须用户授权。
 
 ## Agent Template 更新规则
 
@@ -116,11 +118,11 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 ## 每次任务开始前
 
   1. 确认当前工作目录、分支和 worktree 是否符合用户本次明确指定的工作目标。
-  2. 如果用户已经明确指定 feature、branch 或 worktree，且当前目录不匹配，Agent 可以按项目规则为用户进入已有 worktree，或创建对应 branch/worktree 后再执行任务。
-  3. 如果用户没有明确指定目标分支或 feature，Agent 不得自行猜测并切换分支、创建分支或创建 worktree；应在当前分支继续，或停止并询问用户。
+  2. 如果用户已经明确指定 feature、branch 或 worktree，且当前目录不匹配，Agent 可以进入已有 worktree；如确有隔离需要，也可以创建临时 branch/worktree 后再执行任务。
+  3. 如果用户没有明确指定目标分支或 feature，默认在 `main/` 或项目定义的默认分支工作区继续；只有确有隔离需要时才创建临时 branch/worktree，不猜测目标分支。
   4. 如果当前工作区存在未提交改动，Agent 不得切换分支、移动 worktree 或创建会覆盖现有路径的 worktree；必须先告知用户当前状态。
-  5. 在 Git worktree 模式下，优先通过"进入已有 worktree"或"创建新的 worktree"来切换工作上下文，而不是在已有 worktree 内执行 `git checkout` / `git switch`。
-  6. Agent 严禁在未获得用户明确授权的情况下执行 `git reset --hard`、`git clean`、`git branch -D`、`git worktree remove`、`git worktree move` 等破坏性命令。
+  5. 默认留在 `main/` 或项目定义的默认分支工作区；需要隔离时，优先使用临时 worktree，而不是在已有 worktree 内执行 `git checkout` / `git switch`。
+  6. Agent 严禁在未获得用户明确授权的情况下执行 `git reset --hard`、`git clean`、`git branch -D`、移动任何 worktree 或删除非临时 worktree。临时 worktree 仅可在按本节规则成功合并后移除。
   7. Git 同步预检规则：
       1. `git fetch --prune`、`git merge --ff-only` 等同步操作需要直接访问远端仓库，**不应在断网或沙箱环境中静默执行**；如果当前执行环境默认禁止联网，应提示用户切换到允许网络访问的模式，否则无法完成同步预检。
       2. 如果当前目录属于 Git 仓库，任务开始前先执行 `git fetch --prune`，只更新远端追踪信息，不直接修改本地工作区。
@@ -132,7 +134,8 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
               1. 如果没有重叠，可以执行 `git merge --ff-only @{u}`。
               2. 如果存在重叠，停止执行并告知用户哪些文件同时被本地和远端修改。
           4. 如果当前分支同时 ahead 和 behind，不自动 merge、不自动 rebase，停止执行并告知用户需要人工决定同步方式。
-      5. Agent 不主动执行普通 `git pull`，因为普通 `git pull` 可能隐式 merge 或 rebase，导致超出用户预期的历史变化。
+      5. 上述 ahead / behind 规则只约束当前分支与 upstream 的同步；上一任务遗留的临时分支按“Worktree 工作目录模式”单独尝试合并到本地默认分支。
+      6. Agent 不主动执行普通 `git pull`，因为普通 `git pull` 可能隐式 merge 或 rebase，导致超出用户预期的历史变化。
   8. 如果发现当前分支、worktree、目录位置或任务基准不符合用户本次明确指定的工作目标，必须按上述规则处理，不得自行猜测目标上下文。
   9. 阅读用户本次原始 prompt。
   10. 读取当前适用的 `AGENTS.md`（若缺失，先按“仓库结构管理”创建）及其 `source` 元数据，检查 source 指向的模板文件是否有更新；检查和同步必须遵循 Agent Template 更新规则。
@@ -378,7 +381,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 ## 项目概况
 
 - 项目名称：GitTogether Standalone。
-- 当前工作区：`codex-standalone-ts/`；分支：`main`，跟踪`origin/main`。2026-10-10用户指定main为后续开发和更新包来源；本次保留历史工作区目录作为命名例外，不覆盖`main/`中旧`git-together/main`工作区。后续从main继续，不退回旧分支。
+- 当前工作区：`codex-standalone-ts/`；分支：`main`，跟踪`origin/main`。2026-10-10用户指定main为后续开发和更新包来源；2026-10-12按用户要求清理本地及origin的非main分支。历史目录名仍作为命名例外保留，`main/`与`desktop-overview-split/`保存旧实现的原提交及文件，现为detached HEAD。后续从真实main工作区继续，不将旧快照目录当作最新源码。
 - 以用户提供的 Wireframes v0.1 为产品范围。用户 2026-10-02 明确要求从头实现，不继承 GitButler 代码、组件、工作流或产品限制。
 - 此版已接入真实账号、远端和关联worktree只读浏览，并支持用户明确请求的未关联分支下载。Commit 已按用户 2026-10-10 请求接通当前关联工作目录的真实本地提交，AI 说明使用本机已登录 Codex CLI；其余六项行尾Git动作与在线协作仍未接入执行；不能将模拟成功显示为真实Git、Push、AI服务或Presence结果。
 - 用户要求 TS 与 macOS Liquid Glass。视觉参照 Apple 当前材料规范；本机 macOS 26.6.2，不能将本地运行称为已验证 macOS 27。
@@ -389,7 +392,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - `macos/` 是同一客户端的开发与浏览器预览入口；界面状态在 `macos/src/`；桌面桥在 `macos/src/native-bridge.ts`，后台在 `macos/src-tauri/src/`。
 - `npm run dev` 启动React与Rust预览；`npm run desktop` 启动Tauri开发窗口；两者择一，不能同时占用4173。`npm run check`、`npm run check:rust`、`npm run build` 分别检查当前类型、Rust编译与构建。旧后台测试只作历史参考，本轮不运行。
 - 页面应有真实的内部状态变化，失败保留输入，可取消异步动作，各 worktree 状态与表单隔离，刷新后本地保存可恢复。
-- 2026-10-10最新交付授权：检查最近需求，补齐Pull / Get Latest / Clean及后台实际Git fetch后推送main、签名、公证并发布更新。后台只fetch引用/对象，不合并或改工作文件；写动作固定用户打开时的筛选/任务范围，具体覆盖/删除/历史整理必须先预览并由应用内确认。Commit仅本地提交，Submit确认后Commit再Push；AI沿用本机CLI模型和登录，只生成可编辑说明。保护未推送提交、其他分支、共享worktree和当前LFS，Get Latest回收须有真实磁盘证据，失败不删除原目录。Presence不属于此次范围。
+- 2026-10-10交付授权（2026-10-15更新AI说明规则）：检查最近需求，补齐Pull / Get Latest / Clean及后台实际Git fetch后推送main、签名、公证并发布更新。后台只fetch引用/对象，不合并或改工作文件；写动作固定用户打开时的筛选/任务范围，具体覆盖/删除/历史整理必须先预览并由应用内确认。Commit仅本地提交，Submit确认后Commit再Push；AI沿用本机CLI登录，在可用模型中优先选择最新Luna并使用最低推理档位low（无Luna时回退CLI推荐模型），只生成可编辑说明。说明生成须覆盖全部选中文件清单，聚焦明示的改动对象和内容；可用限量且相关的agent-log、issues和memory书面记录补充上下文，不推测未修改文件的影响或作冗长效果分析。保护未推送提交、其他分支、共享worktree和当前LFS，Get Latest回收须有真实磁盘证据，失败不删除原目录。Presence不属于此次范围。
 - 没有明确提交/推送请求时，不执行代码commit或push。当前稳定分支为main，不再按初始orphan/unborn状态操作。
 
 ## 文档入口与范围

@@ -331,10 +331,10 @@ export class AccountService {
       if (!duplicate) { next.accounts.push({ account, token }); next.repositories.push(...repositories); return; }
       duplicate.account = account; duplicate.token = token;
       if (account.error) return; // Keep the previous repository list on a failed reload.
-      const linked = new Set(next.links.map(link => link.repositoryId));
-      const found = new Set(repositories.map(repository => repository.id));
-      const unavailable = next.repositories.filter(repository => repository.accountId === account.id && linked.has(repository.id) && !found.has(repository.id)).map(repository => ({ ...repository, available: false }));
-      next.repositories = [...next.repositories.filter(repository => repository.accountId !== account.id), ...repositories, ...unavailable];
+      // A successful, complete account listing is authoritative. Keep orphaned
+      // local mappings harmlessly in storage, but do not keep a deleted remote
+      // repository visible as a permanent HTTP 403 row.
+      next.repositories = [...next.repositories.filter(repository => repository.accountId !== account.id), ...repositories];
     });
   }
   private async updateAccount(input: Record<string, unknown>): Promise<Catalog> {
@@ -362,10 +362,7 @@ export class AccountService {
       if (!token || !repositories) return; // A rename does not contact the provider or replace credentials.
       current.token = token; current.account.updatedAt = new Date().toISOString();
       delete current.account.error; delete current.account.authorizationExpiresAt;
-      const linked = new Set(next.links.map(link => link.repositoryId));
-      const found = new Set(repositories.map(repository => repository.id));
-      const unavailable = next.repositories.filter(repository => repository.accountId === accountId && linked.has(repository.id) && !found.has(repository.id)).map(repository => ({ ...repository, available: false }));
-      next.repositories = [...next.repositories.filter(repository => repository.accountId !== accountId), ...repositories, ...unavailable];
+      next.repositories = [...next.repositories.filter(repository => repository.accountId !== accountId), ...repositories];
     });
   }
   private refresh(accountId: string): Promise<Catalog> {
@@ -379,10 +376,7 @@ export class AccountService {
       return this.mutate(next => {
         const current = next.accounts.find(a => a.account.id === accountId); if (!current || current.token !== saved.token) return;
         current.account.updatedAt = new Date().toISOString(); delete current.account.error;
-        const linked = new Set(next.links.map(l => l.repositoryId));
-        const found = new Set(repositories.map(r => r.id));
-        const unavailable = next.repositories.filter(r => r.accountId === accountId && linked.has(r.id) && !found.has(r.id)).map(r => ({ ...r, available: false }));
-        next.repositories = [...next.repositories.filter(r => r.accountId !== accountId), ...repositories, ...unavailable];
+        next.repositories = [...next.repositories.filter(r => r.accountId !== accountId), ...repositories];
       });
     })().finally(() => { this.refreshes.delete(accountId); });
     this.refreshes.set(accountId, task); return task;
@@ -428,13 +422,19 @@ export class AccountService {
     }
     return entry;
   }
-  private async remoteRead(method: 'remoteWorkspace' | 'remoteCommit' | 'remoteFile', input: Record<string, unknown>, signal?: AbortSignal) {
-    const allowed = method === 'remoteWorkspace' ? ['repositoryId'] : method === 'remoteCommit' ? ['repositoryId', 'commitId'] : ['repositoryId', 'commitId', 'path'];
+  private async remoteRead(method: 'remoteWorkspace' | 'remoteHistory' | 'remoteCommit' | 'remoteFile', input: Record<string, unknown>, signal?: AbortSignal) {
+    const allowed = method === 'remoteWorkspace' ? ['repositoryId'] : method === 'remoteHistory' ? ['repositoryId', 'head', 'page'] : method === 'remoteCommit' ? ['repositoryId', 'commitId'] : ['repositoryId', 'commitId', 'path'];
     if (Object.keys(input).some(key => !allowed.includes(key))) throw new Error('远端读取仅接受仓库、提交和文件身份。');
     const entry = this.remoteReader(field(input, 'repositoryId', 160));
     signal?.throwIfAborted();
     let result: unknown;
     if (method === 'remoteWorkspace') result = await entry.reader.workspace(signal);
+    else if (method === 'remoteHistory') {
+      const head = field(input, 'head', 64);
+      if (!/^[a-f0-9]{40,64}$/i.test(head)) throw new Error('无效的提交标识。');
+      if (!Number.isSafeInteger(input.page) || Number(input.page) < 2) throw new Error('提交历史页码超出数值范围。');
+      result = await entry.reader.historyPage(head, Number(input.page), signal);
+    }
     else {
       const commitId = field(input, 'commitId', 64);
       if (method === 'remoteCommit') result = await entry.reader.commit(commitId, signal);
@@ -856,7 +856,7 @@ export class AccountService {
         if (this.state.links.find(item => item.repositoryId === id) !== link || !this.repository(id).available) throw new Error('仓库关联或访问账号已更新，请重试。');
         return details;
       }
-      case 'remoteWorkspace': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
+      case 'remoteWorkspace': case 'remoteHistory': case 'remoteCommit': case 'remoteFile': return this.remoteRead(method, value, signal);
       case 'openDirectory': {
         if (Object.keys(value).some(key => !['repositoryId', 'taskId'].includes(key))) throw new Error('打开目录仅接受仓库和已关联任务身份。');
         const id = field(value, 'repositoryId', 160); const repository = this.repository(id);

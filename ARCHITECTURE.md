@@ -1,10 +1,22 @@
 # Tauri / Rust / React 架构
 
+## 本地文件树与文件操作（R-05-local-file-operations）
+
+`RepositoryFileTree` 对本地任务挂载 `LocalFileTree`，远端树继续使用只读 Git/provider 清单。`localDirectory` 只列当前目录，不跟随符号链接，并从 Git 查询忽略状态；前端按需读取展开目录、保留空目录、用类型图标和浅色状态区分内容，筛选/排序只改变显示顺序。文件操作走有限 Tauri/API 方法：OS拖入路径先兑换成限时 opaque grant；计划绑定服务身份、仓库、worktree、来源/目标及完整目录指纹。确认前列出每个真实目标，执行时拒绝重名覆盖、路径逃逸、符号链接和 `.git`，检测预览过期；删除经系统Trash/回收站，跨卷移动先复制成功再回收原件。工作目录common-dir互斥和operationId幂等保护并发/重复提交，结果刷新本地目录与Git状态；失败结果保留可恢复的来源和部分完成数，不改变HEAD或index。
+
+Git Graph和文件树的行状态底色独立于行几何绘制。Graph固定42px行及连续SVG轨道，底色通过pseudo-element上下内缩3px、左右端点内缩4px；文字列增加横向内距，各列文字始终高于底色层。文件树按钮横向留白不改变点击区、树缩进或省略规则。徽标和计数胶囊使用显式左右padding，避免单字符与多字符内容贴边。
+
 仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
 
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
 
 选择目录的系统打开（IMPORT-04-open-folder）：LocalRepositoryModal通过有限openLocalDirectory(path)打开当前展示的本地目录，可来自已保存关联或本次系统选择，不依赖远端账号权限。Rust校验请求只含path、限长且无控制字符，在阻塞线程规范化绝对路径并确认是现存目录，再复用既有系统open。此接口只返回opened，不读取文件内容、修改关联或执行Git；原openDirectory(repositoryId,taskId)仍用于工作台已关联任务。目录路径不进入诊断日志，浏览器沿用受保护的本机HTTP边界，桌面沿用有限Tauri Import命令。
+
+性能记录（IMPORT-14-performance）：performance-diagnostics独立于React状态，以被动输入/滚动监听、交互期间rAF、可见页面1秒心跳及受支持Long Tasks接口按10秒聚合；组件layout effect记录提交观测，业务请求计数不包含日志请求。响应接收/解码与同步校验分开，不为记录大小再序列化大DTO。记录仍通过有限白名单；接口不支持时显式标识，而非把0当证明。前端日志队列128且单请求；Diagnostics以512容量通道交给单独线程，每批64条，记录接受与实际持久化分开。后台写入/清理的IO不进入异步服务执行线程，检查/打开/复制以写入屏障及spawn_blocking完成，队列拒绝和落盘失败均累计丢失并在日志/设置反馈。Git_READ_CONTEXT在Service请求范围传递匿名日志身份和取消令牌；只读4许可、fetch2许可，异步等待记录queueMs，实际写命令不占后台许可。大分支表移除高度动画并一次构建分支Map，不减少数据；首次完整DOM挂载的剩余成本与真实安装版根因仍需后续确认。完整字段/边界见docs/performance-logs.md。
+
+2026-10-12托管平台扩展：Provider统一支持github、github-enterprise、gitlab、gitee、gitea。企业服务器按域名读取/api/v3，ghe.com企业云读取api子域。GitLab使用/api/v4/projects数字ID和完整namespace，分页读取branch/history/tree/commit/diff/blob。Gitee使用/api/v5，access_token只在Rust请求中使用，不进入DTO、跳转或日志。Git网络继续通过匹配origin的辅助器提供凭据，GitLab使用oauth2用户名，完整嵌套路径保留。
+
+OAuth应用按平台+origin保存在provider-oauth-v1.encrypted；更换Client ID不继承旧Secret，配置不进入Catalog。GitLab使用PKCE，GHES/Gitee使用授权码+Secret，公共GitHub保留既有App及PKCE。state只用一次，拒绝/取消/过期/失败终止等待并清除会话密钥，令牌获取后重新验证身份。GitHub SSO required/partial-results作为范围未完整开放处理。桌面回调用4174，浏览器开发用4176；开发页通过同源/api/authorization有限代理调用自己的Rust服务，避免占用安装版端口。端口由服务固定决定，renderer不能指定任意redirect_uri。
 
 分支默认行为（IMPORT-12-branch-behavior）：v2本机偏好增加可选unworkedBranchBehavior（default/hide，缺省default）和shownBranches字符串数组。branch-behavior基于登录账号绑定的hasAccountCommits和hasAccountPush结果派生有效隐藏键，手动hiddenEntries优先隐藏，shownBranches显式恢复优先于默认隐藏；派生结果不写回隐藏记录，不改变账号、目录或Git状态。linkedTasks、关联判断及统计复用有效键；未关联仓库行只报告自己已读取的隐藏键用于现有恢复入口，保持原按需读取范围。图默认排除隐藏分支，完整分支选单仍允许显式多选，原文件树与草稿保持。
 
@@ -20,9 +32,17 @@ Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作�
 
 读取与动作错误归属（2026-10-11，IMPORT-14-read-health-scope）：GitSignals继续只表达真实数量与本地/远端读取健康，不把读取失败转为功能错误。repositoryReadFeedback从独立本地Commit和远端Fetch读取信号汇总仓库状态，Dashboard把加载/访问问题放到左侧文件夹的RepositoryReadBadge；保留最后可用数量。RepositoryRowActions把实际reading并入原生disabled，缺少目标的包装入口也撤销焦点及按下响应；共享提示边界在行状态变化时关闭已有提示。具体动作异常通过独立actionErrors按动作键提供，RepositoryActions只在该按钮上显示可聚焦/悬停的描述角标，同组共享计数不共享功能错误。没有新增后台API或持久化状态，也不为暂无实际错误来源的动作制造异常。
 
-Presence人员摘要（PRESENCE-05-compact-roster）：前端从有效会话快照为PresenceBranch派生changedFileCount，按设备/worktree来源去重累加；gitReady为false或存在pending/unknown文件时保留null。显示计数不改变editing/changed/committed的圆环优先级，不新增服务端协议字段。当前设备标签复用ControlStatus.devices按服务器提供的isCurrent标记，与人员的服务器、设备、账号及身份精确匹配；来源匹配函数与既有远端操作共用。同一物理设备在不同服务器登记的ID可不同，不能只比较聚合状态的一个deviceId。来源变化也进入既有Popover测量身份，远端操作继续按原组织和工作目录授权。
+仓库状态排序（IMPORT-13-status-header）：Dashboard通过既有GitSignals和repositoryReadFeedback派生排序级别，读取中或推送中优先于残留错误，同级以仓库身份稳定排序；升序依次为异常、处理中、实际差异、已确认一致、未知。关联仓库继续使用workspace共享读取，未关联读取仍由现有行拥有。行只通过稳定回调报告一个带instanceId/repositoryId键的排序级别，不把新排序变成第二个读取器；相同级别不更新父状态。表头复用原排序状态，折叠/筛选不执行Git或保存账号配置。
 
-## 当前运行结构（0.25.0）
+## 仓库认证与授权状态（IMPORT-02，2026-10-15）
+
+LocalLink 保存可选 authentication（system / account）；已有记录缺省为 system，首次通过应用下载的分支显式保存 account。系统模式从真实工作目录的 Git remote 及当前分支 remote/pushRemote/pushDefault 选取同仓库连接，保留 SSH 用户、端口、host alias、agent 与 credential helper，不注入应用令牌、不重写已有 Git 配置。应用模式仍使用绑定账号及 HTTPS origin 的独立凭据助手，令牌只在该子进程环境中。SSH -G 仅用于确认 alias 对应的仓库身份，执行 Git 时保留原 URL。Push 的前后引用检查固定同一个实际推送地址；后台 Fetch 使用同一个实际远端及其跟踪引用。快照与新分支存储继承原工作目录必要的本地认证配置，Get Latest 替换目录保留已有 remote/branch 配置；预览状态包含 Git 配置摘要，变化后停止旧计划。
+
+setRepositoryAuthentication 只修改已有 LocalLink；按仓库保存锁及执行任务守卫保护切换，上下文摘要和前端读取资源键包含选择，旧计划/读取不能用于新模式。应用 API 仓库访问失败不阻止系统模式的本地操作；远端 API 浏览仍独立显示其应用账号错误。未知推送数量保持未知，系统模式可显式选择本地提交并由真实 Push 的引用复核确认结果。
+
+repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。安装令牌、细粒度令牌及无法报告令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，每60秒更新且隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录，不发送 Git 写操作。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
+
+## 当前运行结构
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
@@ -158,6 +178,12 @@ GitHub令牌自动续期（0.30.2，IMPORT-11-token-refresh）：网页/设备�
 
 Service按账号及明确授权代次串行续期；API或Git网络操作在到期前120秒获取更新凭据。401最多续期并重试一次只读API，403/限流不触发续期，Git写操作不自动重放。自动轮换保留authorizationId与仓库/任务上下文；重新授权和手工替换凭据生成新代次，旧读取/写计划继续被隔离。账号目录刷新与目录匹配比较授权代次，不把正常轮换误认为账号变更。
 
+0.34.1（IMPORT-02-git-auth-lifecycle）细化 Git 凭据寿命：API 继续使用120秒余量，应用账号的 Git 网络进程改为按进程超时加60秒余量提前续期。Service 为每个账号维护共享读写锁，领取令牌后核对授权代次与当前令牌；读锁持有到 Git 及其 LFS/钩子输出结束，续期交换和加密保存持有写锁，避免轮换撤销仍在使用的令牌。系统 Git/SSH 不领取应用令牌。行为参照 [GitHub Desktop CredentialSessions](https://github.com/desktop/desktop/blob/bebc062caafcf818993b9f53397b976d33484231/app/src/lib/credential-sessions.ts)；[GitHub 官方续期契约](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens)说明交换会同时使旧访问令牌失效。
+
+Git 失败解析同时检查 stdout 和 stderr，读取 push --porcelain 的拒绝理由；只有明确 non-fast-forward/fetch-first/stale-info 才提示远端领先。工作流权限、SSO、仓库写权限、凭据缺失/拒绝、SSH 密钥/主机、远端规则/接收钩子、不可见仓库和限流分别返回固定安全文案。后台 Git 日志仅附加白名单 authentication 与 gitFailureReason，renderer 不能注入这两项；原始 Git 输出、目录、远端 URL、账户名和令牌不写入日志。
+
+系统认证在已关联目录内以验证后的 remote 名称执行 Fetch、Push 与 LFS fetch，保留 remote 专用配置及 pre-push 钩子的名称参数。Push 固定名称和唯一实际推送 URL，每次执行前重新核对；引用预检与回读直接使用固定推送 URL，避免误读不同的 fetch URL。多个推送地址及执行期间配置变化在执行前停止。临时快照不借用源目录的 remote 名称，继续使用验证后的地址。源码对照与现场证据见[Git GUI 对照](reference/git-gui.md)。
+
 续期交换在独立任务中完成；HTTP/IPC调用取消仅停止等待，已经开始的轮换仍尝试原子加密保存。保存失败时保留待保存结果、15秒后可重试保存，不重复使用已被GitHub轮换的旧续期令牌；待保存结果阻止重启安装，移除账号或替换授权后清除旧结果。暂时网络/服务失败按账号退避60秒；缺失或到期续期凭据退避5分钟，并显示明确重新授权原因，保留账号/仓库/本地关联。旧版本登录缺少续期凭据，需升级后正常重新授权一次。
 
 授权诊断只记录有限阶段、原因、HTTP状态、相对有效期及账号哈希。阶段包括token-received、token-rejected、refresh-start、refresh-complete、refresh-failed、refresh-unavailable和storage-load；区分expiring/expired、缺少/到期/失效续期凭据、配置、网络、保存和授权竞争。原始OAuth响应、URL参数、access_token、refresh_token、secret和账号名称均不入日志；Renderer不能写入这些后台专用字段。
@@ -250,11 +276,15 @@ R-05-change-context由`RepositoryChangesColumn.tsx`承担中栏稳定边界，�
 
 ## 无本地关联的远端内容（R-05-remote，0.5.0 正式接入）
 
+R-05-history-pagination 的首个remoteWorkspace只取每个远端分支的50条提交；RepositoryGraph滚动接近历史底部时，通过`remoteHistory(repositoryId, head, page)`以稳定HEAD读取后续页。浏览器/Rust读取器均以页缓存，客户端最多并行取4个选中分支的下一页，再将真实提交合并拓扑排序；没有总提交数上限，只有每页50条的响应边界。空后续页表示结束，Link/页大小提示下一页；分支图以未读取父节点作为边界，不制造提交关系。该历史读取不改变branch/head/tree基准，也不执行Git写操作。
+
 `server/remote-repository-reader.ts` 只接收 provider、已验证的仓库标识和服务端 transport。0.5.0 的 AccountService 提供固定 API base、账号凭据、8MB 有界 JSON/文本响应和有限远端方法 `remoteWorkspace` / `remoteCommit` / `remoteFile`；renderer 只能传入仓库 ID、合法 SHA 与字面路径，不能传入 URL、host、token 或任意 blob。生产 App 调用专用 hook 并向 RepositoryView 传递远端状态与有限提交读取函数，未关联本地也自动加载。服务缓存最多 16 个读取器，凭据/仓库变更或移除后失效；每次请求前后及返回前复核身份，旧凭据结果不能重新发布。HTTP/IPC 共用 AccountService 的有限分发，客户端再验证无凭据 DTO；不新增任意网络或目录入口。
 
 GitHub 使用 branches、commits、git/trees、git/blobs；Gitea 区分 branches 的 commit.id、提交列表、git/commits/{sha} 与原始 .diff，再读取树和 blob。参考 [GitHub Branches](https://docs.github.com/en/rest/branches/branches?apiVersion=2022-11-28)、[Commits](https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28)、[Trees](https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28)，以及 [Gitea 单提交](https://docs.gitea.com/api/1.24/operations/repo-get-single-commit/)、[提交 Diff](https://docs.gitea.com/api/1.24/operations/repo-download-commit-diff-or-patch/)、[Tree](https://docs.gitea.com/api/operations/get-tree/)。不克隆、不 fetch，不读写用户 HEAD/index。
 
-分支最多 1000 个，每个 head 最近 50 条提交，最多 4 个分支并发。树与 head 历史按不可变 SHA 缓存，各最多 64 份；真实父节点去重并拓扑排序，不用作者日期或相邻行捏造 ancestry。GitHub recursive 树截断时回退逐目录读取，Gitea 按 total_count/truncated/Link 本机分页；最多 20000 个树条目（Gitea 200 页、GitHub 400 个子树请求），到限明确提示不完整。GitHub 提交文件最多 3000 个，缺少 patch 时明确二进制/未提供差异，不伪造。逐分支失败保留成功部分；取消传播，失败和空仓库分开。
+分支最多 1000 个，每分支首屏读取50条提交，滚动时继续分页，提交总数不设上限；最多4个分支并发。树与head历史按不可变SHA缓存，各最多64份；真实父节点去重并拓扑排序，不用作者日期或相邻行捏造ancestry。GitHub recursive树截断时回退逐目录读取，Gitea按total_count/truncated/Link本机分页；最多20000个树条目（Gitea 200页、GitHub 400个子树请求），到限明确提示不完整。GitHub提交文件最多3000个，缺少patch时明确二进制/未提供差异，不伪造。逐分支失败保留成功部分；取消传播，失败和空仓库分开。
+
+App维护应用内Dashboard/仓库/设置页面历史及重做游标；仓库列表与详情页共用返回、重做、刷新图标按钮，刷新按账号逐个调用完整目录接口。后端仅以成功的完整账号仓库快照替换该账号目录，删除目录项时保留本地link数据，不再显示不存在的远端仓库；目录读取失败保留原Catalog。单独远端workspace读取403保持权限错误语义，不据此删除仓库。刷新命中当前详情仓库删除时，App将该访问位置替换为Dashboard。
 
 `remote-repository-model.ts` 定义独立、无凭据的响应验证。远端任务 path=null、files=[]、remote=true，树属于已提交对象，不是本地更改。`combineRepositoryWorkspaces` 同时保留 remote/local 任务身份，按真实提交父节点合并；同名origin引用以共享远端快照的HEAD为准，不把过期本地跟踪标签叠加到另一个位置，本地解除不应擦除远端内容。Provider保留已验证的HEAD历史，即使对应文件树失败；仅本次HEAD历史缺失时才保留旧分支快照。Pull/Push数量只使用同一份提交父图中已证明的领先、落后或分叉关系，历史未知不产生数量。后台Fetch成功触发既有共享本地读取器更新引用和对象，不改变工作文件，也不把引用变化当作本地保存再次触发Fetch。文件读取只接受合法 SHA 与字面仓库路径，并先查该提交的树定位 blob；不跟随 submodule 或接受任意 blob。超过 500KB、含 NUL 或非 UTF-8 返回明确不可文本预览。
 
@@ -329,6 +359,19 @@ Presence组织独立维护，Web绑定需组织和Git仓库两重ownership；同
 ## 本机授权监听错误与备用流程
 
 IMPORT-11-windows-oauth-port：Rust 保留 socket bind 的 ErrorKind 和 raw_os_error，只将 AddrInUse 报为占用，将 PermissionDenied 报为系统拒绝。后台授权日志仅保留受控类别和数值系统错误码；不记录凭据、授权网址或验证码。GitHub 的这两类监听失败返回带 flow=device 的有限公开设备会话，设置页复用现有设备授权、轮询、取消与账号导入接口。原正常网页流程及其他 provider 不改变。设备授权无需本机端口或应用密钥，但须开发者在自有 GitHub App 开启；公开配置状态及真实 Windows 用户同意分别验收。
+
+## 关联标签与读取健康分离（IMPORT-04-association-refresh）
+
+branch-links.associationStatus区分保存的关联与筛选后可见工作目录，内部verified只表示本地目录和完整远端分支范围已经可靠核对。useAssociationStatus为Dashboard行保留同一服务实例、仓库、目录/分支映射和用户隐藏设置下的最后成功结果；路径/映射排序后比较，避免仅登记顺序不同清空显示。缓存仅在本地和远端读取均完成且核对有效时更新；自动隐藏和读取中间态不作为新的验证结果。解绑或身份/用户筛选变更立即排除旧缓存，提示保留当前失败和上次结果时效。linkedTasks的隐藏排除、统计和真实Git操作范围不变；不修改Catalog持久化、服务/HTTP契约或后台fetch。
+## 图谱有限操作与AI合并（R-05-graph-actions/R-05-ai-sync，0.33.0源码）
+
+新增graphSources、graphPreview、prepareGraphMerge、cancelGraphPreparation、discardGraphMerge、applyGraphMerge、executeGraph、createGraphWorktree、openCommit有限方法；Rust Service仍从当前Git账号、仓库和已验证关联解析目标，不接受调用者命令。写操作复用common-dir队列、前台更新屏障、结果幂等与任务级控制；标准命令保留实际钩子/签名和未完成Git状态。创建worktree后原子保存关联，保存失败保留已创建目录并报告，禁止伪成功或重复创建。
+
+graph_operations使用目标HEAD与changeKey冻结本地状态，私有index保存当前工作内容，临时共享clone逐来源合并。远端分支在临时仓库fetch；浅仓库只在临时目录补齐历史。AI复用受限本机Codex执行器，常规文本仅返回diff3冲突片段替换，不改非冲突内容；修改/删除等无标记冲突采用完整文本约束。各次最多96KB冲突证据，二进制/LFS/链接/子模块及过大片段明确停止。模型无Shell/MCP/apps/plugins/hooks权限，仓库内容视为不可信数据。
+
+预览最多32份且有效10分钟，绑定服务身份、映射、目标快照和来源HEAD；确认复核本地和所有来源，并刷新真实远端追踪引用。LFS在临时目录复用本地缓存、下载并校验后才准备文件发布；具体文件先准备到同卷私有目录，原文件逐项备份。提交失败回退原文件并保留原index；若钩子或外部编辑改变了发布文件，停止覆盖并保留备份路径。确认使用真实Git commit、私有index和MERGE_HEAD，父提交保留原HEAD与实际合入的来源；成功后发布index，不隐式Push。恢复引用使用应用命名空间，历史读取排除这些内部快照。准备取消绑定generationId，提前取消也登记，旧取消不能命中新请求。
+
+RepositoryOperationProvider扩展图谱任务，按仓库、目标目录、动作和所选提交区分；收起/路由切换不卸载，另一目录仍可操作。来源选择按账号内仓库ID、目标路径/分支保存；目标或来源改变立即禁用旧预览，迟到响应不能覆盖手工说明。失败重读目标后重新准备。源码类型/编译与真实Git、Codex、跨平台及安装包验收分别记录。
 
 ## Presence设备名称（PRESENCE-05-device-name，0.30.11）
 

@@ -1,3 +1,27 @@
+# Dashboard性能记录 QA（2026-10-12）
+
+final result: source passed；真实安装版卡顿定位及验收pending。
+
+- 在原布局中增加不可见采样，未新增常驻仪表：passive输入/滚动、交互期间rAF、可见时1秒心跳及支持时Long Tasks，每10秒聚合；不支持的接口以longTaskSupported=0明示。提交观测使用layout effect，生产不依赖开发版React Profiler。源方法/时间与当前请求ID关联，记录数值/固定枚举，不读取按键文字、文件内容、路径或原始响应；响应接收/解码并非纯CPU解析，rAF并非实际屏幕FPS。
+- 600合成分支的生产Dashboard组件全部展开，large类生效且td transition为0s，内部scrollTop实际720px；保留原卡片、名称、动作、加载与隐藏。分支Map减少逐行全表扫描，取消大列表高度动画及动画前强制布局。首次挂载仍观测52–136ms，不声称虚拟化或卡顿根治。
+- 隔离按钮制造约250ms主线程停顿，记录出现longTask约251–288ms、frameMax约234–299ms、心跳延迟最高351ms及partial。20个定时等待由active/peakRequests记录，结束后回到0；这不是真实网络/IO复现。模拟前端慢传输时128条队列有界，记录dropped=171（最终另有1条传输损失），不静默丢弃。新页面最终console error为空，Lit开发模式警告保持。
+- Rust同一生产Diagnostics/Git通过临时目录手动程序验证5000条日志60–64ms入队/屏障后写入、12个真实Git status最多并行4且queueMs最大35–45ms、输出bytes、敏感路径/token/message剔除、旧文件清理。人为让日志目录成为普通文件，写失败计数1且状态报错；恢复目录后状态恢复。无账号、网络或用户Git写入；临时数据已清理。5000条基准未发生后台拒绝，不冒称模拟了真实磁盘饱和。
+- 单独写线程512队列、64批次减少文件/权限调用，状态/复制有写入屏障并移出异步工作线程；写失败及拒绝都有累计丢失和反馈，前端单传输/128队列。设置状态轮询只允许一次在途，避免IO慢时堆积检查；开发热更新与pagehide清理采样/监听。强杀进程可能丢失最后未落盘部分，详情文档明示。
+- 当前全项目类型/Cargo检查及285模块构建通过，Vite大分块建议保留；早期远端控制任务的独立类型错误在对方修正后消失，本轮未改它。旧后台/项目测试套件未新增或运行，忽略目录内的手动压力程序与页面不进入生产；临时src-tauri/bin包装已移除。
+- 起始0.24.0，同期平台任务递增0.25.0后本轮新增记录能力minor递增0.26.0；同期分支行为又递增0.27.0，保持最新版本。必要恢复由旧UI-only转统一dev，实际status/catalog/logs HTTP200、version0.27.0、githubWebAuth=true、0账号/0仓库/0关联、retention24/queued0/dropped0/error空。开发授权4176与安装版4174分开；未关闭或修改安装版、未重放凭据，未提交/推送/打包。所有隔离验证标签已关闭。
+- 证据：会话visualizations目录performance-recording.png及performance-sample.jsonl为隔离样本，不是安装版日志。真实根因仍待IMPORT-14-performance-runtime。
+
+# 仓库列表状态表头 QA（2026-10-12）
+
+final result: passed（局部源码与隔离真实Dashboard组件；用户后台恢复受端口占用限制，非安装版验收）
+
+- 保持原首列21%、36.34375px图标、10px图文间隔、七列表格与原有Presence改动。状态文字与图标中心、仓库表头与名称左边缘的实际差值均0px。末仓库隐藏分支tbody仍存在时，最后一行底边0px，其他仓库1px；单仓库展开保留仓库到分支的1px边，最后分支0px。
+- 1280×720隔离页面使用5个合成仓库状态，不使用旧Node账号后台或用户凭据。点击状态升序为异常→读取中→更改→同步→未知；Enter反向，读取恢复后按新事实重新排，同级按名称。实际键盘搜索A-得到一个仓库，展开main成功；鼠标表头不打开业务操作。亮暗材料、原行高及滚动保留。截图为合成示例，不冒称真实账号数据。
+- React技能复查稳定回调与原始事实归属；仅汇报行拥有的排序级别，相同级别不更新父状态，键带实例和仓库身份，不创建第二读取器。状态、排序和展开不写账号、关联或Git。源码新排序能力minor递增0.23.0→0.24.0，package-lock与Cargo镜像同步，Tauri仍从package.json读取。
+- 类型检查、Cargo --locked和277模块生产构建通过，保留当前Presence/service死代码警告及Vite大分块建议；未新增或运行旧测试套件。隔离页热更新曾造成manual fixture重复createRoot告警，补dispose后新页面复核零error；Lit开发模式警告不算生产失败。官方shadow input的fill未触发Lit事件，改用实际键盘输入后筛选通过，不更改生产输入。
+- 4173/4175起初无服务；统一dev编译成功但Rust授权监听被4174阻挡。只读核对端口归属/Applications/GitTogether.app，遵守不操作安装版约定，没有关闭其PID7774。统一启动已退出，保留4173 UI-only预览；账号/授权后台不就绪，未声称测试环境完整可用。所有隔离验证页已关闭，不提交、推送、打包或操作真实仓库。
+- 证据：[亮色状态表头与末行](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/dashboard-status-header.png)、[暗色](/Users/taobe/.codex/visualizations/2026/10/08/01a11a3f-e8aa-70e2-b5e4-984d6eabe999/dashboard-status-dark.png)。手动隔离入口在忽略目录macos/artifacts/dashboard-status，不进入生产构建。
+
 # 三栏10%步进比例 QA（2026-10-10）
 
 final result: passed（真实组件的局部源码与隔离浏览器验证，非用户账号或原生包验收）

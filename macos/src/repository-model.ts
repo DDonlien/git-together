@@ -1,7 +1,7 @@
 import type { LocalFile, LocalSnapshot } from './import-model';
 
 export type RepositoryCommit = LocalSnapshot['commits'][number] & { parents: string[]; refs: string[] };
-export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean; changeKey?: string; hasAccountCommits?: boolean; hasAccountPush?: boolean; hasAccountCreation?: boolean; participationError?: string };
+export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; remote?: boolean; treeComplete?: boolean; historyHasMore?: boolean; changeKey?: string; hasAccountCommits?: boolean; hasAccountPush?: boolean; hasAccountCreation?: boolean; participationError?: string };
 export type RepositoryWorkspace = { tasks: RepositoryTask[]; commits: RepositoryCommit[]; complete: boolean; source?: 'local' | 'remote' | 'mixed' };
 
 export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {

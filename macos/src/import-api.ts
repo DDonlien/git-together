@@ -1,11 +1,15 @@
+import { isAccountRepositoryAccess } from './repository-auth-model';
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
-import { isRemoteCommitDetails, isRemoteFileContent, isRemoteWorkspace } from './remote-repository-model';
+import { isRemoteCommitDetails, isRemoteFileContent, isRemoteHistoryPage, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
 import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
+import { isFileDirectory, isFileOperationPlan, isFileOperationResult } from './file-operation-model';
 import { diagnosticFailure } from './diagnostics-model';
+import { performanceRequestStarted, performanceRequestFinished } from './performance-diagnostics';
 import { isRepositorySyncPlan, isRepositorySyncResult } from './repository-sync-model';
+import { isGraphMergePlan, isGraphPreview, isGraphSource, isGraphWriteResult } from './graph-operation-model';
 
 export class LocalServiceError extends Error {
   constructor(readonly code: 'connection' | 'timeout' | 'unsupported' | 'server' | 'version' | 'session', message: string, readonly status?: number) { super(message); this.name = 'LocalServiceError'; }
@@ -29,6 +33,7 @@ export const generateCommitMessage: GenerateCommitMessage = async (input, signal
 };
 export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal): Promise<ApiOutputs[M]> {
   const requestId = crypto.randomUUID(); const started = performance.now();
+  performanceRequestStarted();
   logDiagnostic({ event: 'api', outcome: 'start', method, requestId });
   try {
     const value = await readImportAPI(method, input, signal, requestId);
@@ -37,7 +42,7 @@ export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs
   } catch (problem) {
     logDiagnostic({ event: 'api', outcome: signal?.aborted ? 'cancelled' : 'failure', method, requestId, ...diagnosticFailure(problem), durationMs: Math.round(performance.now() - started) });
     throw problem;
-  }
+  } finally { performanceRequestFinished(); }
 }
 async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal, requestId?: string): Promise<ApiOutputs[M]> {
   let envelope: unknown;
@@ -47,7 +52,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : ['downloadBranch', 'prepareSync', 'applySync'].includes(method) ? 30 * 60_000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : ['downloadBranch', 'prepareSync', 'applySync', 'prepareGraphMerge', 'applyGraphMerge'].includes(method) ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -55,7 +60,14 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
       throw new LocalServiceError('connection', '无法连接本地账号服务。请点击「重新连接」检查；输入仍保留。');
     }
     if (response.status >= 500) throw new LocalServiceError('server', `本地账号服务返回 HTTP ${response.status}，请重新连接后重试。`, response.status);
-    try { envelope = await response.json(); }
+    try {
+      const started = performance.now();
+      envelope = await response.json();
+      const durationMs = Math.round(performance.now() - started);
+      const bytes = Number(response.headers.get('content-length'));
+      // Includes body transfer and decoding, not a claim of pure parse CPU time.
+      if (durationMs >= 8 || method === 'remoteWorkspace' || method === 'localWorkspace') logDiagnostic({ event: 'performance', phase: 'response-read', outcome: 'success', method, requestId, durationMs, ...(Number.isSafeInteger(bytes) && bytes > 0 ? { bytes } : {}) });
+    }
     catch {
       if (signal?.aborted) throw signal.reason;
       if (timeout.aborted) throw new LocalServiceError('timeout', '本地账号服务响应超时。请重新连接检查；输入仍保留，不会自动重复提交。');
@@ -63,9 +75,28 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     }
     if (!response.ok && isRecord(envelope) && envelope.ok === true) throw new Error('账号服务返回格式无效。');
   }
+  const validationStarted = performance.now();
   if (!isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '账号服务返回格式无效。');
   const value = envelope.value;
-  if (method === 'status') {
+  if (method === 'accountRepositoryAccess') {
+    if (!isAccountRepositoryAccess(value) || !('accountId' in input) || value.accountId !== input.accountId) throw new Error('仓库授权信息返回格式无效。');
+  } else if (method === 'openAccountAccessSettings') {
+    if (!isRecord(value) || value.opened !== true) throw new Error('授权管理页面没有打开。');
+  } else if (method === 'graphSources') {
+    if (!isRecord(value) || !Array.isArray(value.sources) || !value.sources.every(isGraphSource) || typeof value.limited !== 'boolean') throw new Error('来源分支返回格式无效。');
+  } else if (method === 'graphPreview') {
+    if (!isGraphPreview(value) || !('commitId' in input) || value.commitId !== input.commitId || !('expectedHead' in input) || value.head !== input.expectedHead) throw new Error('提交差异返回格式无效。');
+  } else if (method === 'prepareGraphMerge') {
+    if (!isGraphMergePlan(value) || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('taskId' in input) || value.taskId !== input.taskId || !('expectedHead' in input) || value.head !== input.expectedHead) throw new Error('合并预览返回格式无效。');
+  } else if (method === 'applyGraphMerge' || method === 'executeGraph' || method === 'createGraphWorktree') {
+    if (!isGraphWriteResult(value) || value.catalog !== undefined && !isCatalog(value.catalog)) throw new Error('图谱操作结果无效，请检查实际 Git 状态。');
+  } else if (method === 'cancelGraphPreparation') {
+    if (!isRecord(value) || typeof value.cancelled !== 'boolean') throw new Error('取消准备结果无效。');
+  } else if (method === 'discardGraphMerge') {
+    if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('合并预览清理结果无效。');
+  } else if (method === 'openCommit') {
+    if (!isRecord(value) || value.opened !== true) throw new Error('远端提交没有打开。');
+  } else if (method === 'status') {
     if (!isRecord(value) || typeof value.instanceId !== 'string' || !value.instanceId || typeof value.version !== 'string' || typeof value.githubWebAuth !== 'boolean') throw new Error('账号连接信息返回格式无效。');
   } else if (method === 'githubAuthStart') {
     if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.userCode !== 'string' || !/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(value.userCode) || value.verificationURL !== githubVerificationURL || typeof value.expiresAt !== 'number' || !Number.isSafeInteger(value.expiresAt) || typeof value.interval !== 'number' || !Number.isSafeInteger(value.interval) || value.interval < 5 || value.interval > 900) throw new Error('网页授权信息返回格式无效。');
@@ -91,7 +122,13 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRepositorySyncResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('操作结果返回格式无效，请重新读取目录。');
   } else if (method === 'fetchRepository') {
     if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt)) throw new Error('后台获取结果返回格式无效。');
-  } else if (method === 'discardSync') {
+  } else if (method === 'localDirectory') {
+    if (!isFileDirectory(value) || !('path' in input) || value.path !== input.path) throw new Error('本地目录返回格式无效。');
+  } else if (method === 'prepareFileOperation') {
+    if (!isFileOperationPlan(value) || !('operation' in input) || value.operation !== input.operation) throw new Error('文件操作预览返回格式无效。');
+  } else if (method === 'applyFileOperation') {
+    if (!isFileOperationResult(value)) throw new Error('文件操作结果无效，请刷新目录确认。');
+  } else if (method === 'discardSync' || method === 'discardFileOperation') {
     if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('预览取消结果返回格式无效。');
   } else if (method === 'generateCommitMessage') {
     if (!isCommitDraft(value)) throw new Error('AI 提交说明返回格式无效。');
@@ -105,6 +142,8 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || value.opened !== true) throw new Error('仓库页面打开结果无效。');
   } else if (method === 'remoteWorkspace') {
     if (!isRemoteWorkspace(value)) throw new Error('远端工作台返回格式无效。');
+  } else if (method === 'remoteHistory') {
+    if (!isRemoteHistoryPage(value) || !('head' in input) || value.head !== input.head || !('page' in input) || value.page !== input.page) throw new Error('远端历史分页返回格式无效。');
   } else if (method === 'remoteCommit') {
     if (!isRemoteCommitDetails(value)) throw new Error('远端提交返回格式无效。');
   } else if (method === 'remoteFile') {
@@ -113,5 +152,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRecord(value) || !isCatalog(value.catalog) || !Array.isArray(value.matchedRepositoryIds) || !value.matchedRepositoryIds.every(id => typeof id === 'string')) throw new Error('仓库批量匹配结果返回格式无效。');
   } else if (!isCatalog(value)) throw new Error('账号列表返回格式无效。');
   // The finite method above determines the validated result shape.
+  const durationMs = Math.round(performance.now() - validationStarted);
+if (durationMs >= 8 || method === 'remoteWorkspace' || method === 'localWorkspace') logDiagnostic({ event: 'performance', phase: 'response-validate', outcome: durationMs >= 50 ? 'partial' : 'success', method, requestId, durationMs, tasks: isRecord(value) && 'tasks' in value && Array.isArray(value.tasks) ? value.tasks.length : 0 });
   return value as ApiOutputs[M];
 }
