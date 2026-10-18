@@ -1,5 +1,13 @@
 # GitTogether
 
+0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。服务器仍需提供有效证书。
+
+当前 `github-desktop-based` 分支采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+
+在macOS执行 `npm run package:mac` 可构建能直接打开的开发测试版 `.app`，输出到 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。测试版使用独立开发身份及数据目录，不替换已安装应用；正式分发的签名、公证和更新发布另行处理。
+
+以下为迁移前稳定版功能记录；涉及独立 Rust 后台、平台 OAuth 和发布包的说明不代表本分支运行方式。
+
 <img src="assets/brand/gittogether-app.png" width="96" height="96" alt="GitTogether 图标" />
 
 把仓库当作项目，把分支当作任务。

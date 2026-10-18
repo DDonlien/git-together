@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { DesktopSettingsView } from './DesktopSettingsView';
 import { accountLabel, githubVerificationURL, providerHosts, providerName, providers, type Account, type Catalog, type GitHubAuthorization, type Provider } from './import-model';
 import type { WorkspaceController } from './use-workspace';
 import { Button, Icon, Modal, Notice, Select, TextField } from './ui';
@@ -14,7 +15,7 @@ import { DiagnosticsSettings } from './DiagnosticsSettings';
 import { PresenceSettings } from './PresenceSettings';
 import { AccountRepositoryAccess } from './AccountRepositoryAccess';
 
-export function SettingsView({ controller, onDashboard }: { controller: WorkspaceController; onDashboard: () => void }) {
+function LegacySettingsView({ controller, onDashboard }: { controller: WorkspaceController; onDashboard: () => void }) {
   const [adding, setAdding] = useState(false);
   const [accessRefresh, setAccessRefresh] = useState(0);
   const [provider, setProvider] = useState<Provider>('github');
@@ -94,4 +95,8 @@ export function SettingsView({ controller, onDashboard }: { controller: Workspac
     {browserAuthorization && <GitHubBrowserAuthorizationModal key={browserAuthorization.session.id} {...browserAuthorization} onComplete={catalog => { void controller.reload(); connected(catalog); }} onClose={() => setBrowserAuthorization(null)} onRestart={() => { setBrowserAuthorization(null); void authorizeGithub(); }} />}
     {deviceAuthorization && <GitHubAuthorizationModal key={deviceAuthorization.session.id} {...deviceAuthorization} callbackUnavailable controller={controller} onComplete={catalog => { void controller.reload(); connected(catalog); }} onClose={() => setDeviceAuthorization(null)} onRestart={() => { setDeviceAuthorization(null); void authorizeGithub(); }} />}
   </main>;
+}
+
+export function SettingsView(props: { controller: WorkspaceController; onDashboard: () => void }) {
+  return window.gittogether?.backend === 'github-desktop' ? <DesktopSettingsView {...props} /> : <LegacySettingsView {...props} />;
 }

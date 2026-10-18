@@ -7,7 +7,7 @@ import type { ApplyRepositorySync, RepositorySyncMode, RepositorySyncPlan, Repos
 import { Button, Icon, Modal, Notice } from './ui';
 
 const isSync = (mode: RepositoryActionMode): mode is RepositorySyncMode => mode === 'pull' || mode === 'latest' || mode === 'clean';
-const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clean' };
+const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clear' };
 const discard = (plan: RepositorySyncPlan) => importAPI('discardSync', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(() => { console.warn('操作预览清理未完成，服务将在预览到期后再次清理。'); });
 export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
   mode: RepositoryActionMode; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onPush: PushLocalCommit;

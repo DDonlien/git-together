@@ -1,0 +1,25 @@
+name: GitHub Desktop based validation
+on:
+  push:
+    branches: [github-desktop-based]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm run setup
+      - run: npm run check
+      - run: npm test
+      - run: npm run build

@@ -1,0 +1,256 @@
+/* GitTogether's presentation. No GitHub Desktop theme or visual stylesheet. */
+@import './fonts.scss';
+@import '../../../node_modules/@xterm/xterm/css/xterm.css';
+@import '../../../node_modules/react-virtualized/styles.css';
+@import '../../../node_modules/codemirror/lib/codemirror.css';
+@import '../../../../../macos/src/material-tokens.css';
+@import '../../../../../macos/src/account-settings.css';
+
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+* { box-sizing: border-box; scrollbar-width: none; }
+::-webkit-scrollbar { display: none; }
+body { background: var(--window-background); color: var(--text); font: 13px/1.5 Roboto, -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; -webkit-app-region: no-drag; }
+button, a { -webkit-app-region: no-drag; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+a { color: var(--blue); cursor: pointer; text-decoration: none; }
+a:hover { text-decoration: underline; }
+p { margin: 0 0 12px; }
+h1, h2, h3 { font-weight: 500; line-height: 1.35; margin: 0; }
+h2 { font-size: 16px; margin: 16px 0 12px; }
+h3 { font-size: 14px; margin: 12px 0 8px; }
+.gt-icon { flex: 0 0 auto; vertical-align: middle; }
+.gt-spin { animation: gt-spin 1s linear infinite; }
+@keyframes gt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+.visually-hidden, .sr-only, .aria-live-container { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
+#gittogether-presentation { pointer-events: none; position: fixed; inset: 0; z-index: 20; }
+.gt-window-bar { height: 36px; position: absolute; inset: 0 0 auto; pointer-events: auto; -webkit-app-region: drag; display: flex; align-items: center; justify-content: space-between; background: var(--window-background); }
+.platform-darwin .gt-window-bar { width: calc(100% - 96px); left: 96px; background: transparent; }
+.gt-window-bar button { -webkit-app-region: no-drag; background: transparent; border: 0; display: inline-flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); }
+.gt-window-menu { padding: 8px 12px; font-weight: 500; }
+.gt-window-controls { display: flex; height: 100%; margin-left: auto; }
+.gt-window-controls button { width: 44px; }
+.gt-window-controls button:hover { background: var(--surface-hover); }
+.gt-window-controls button:last-child:hover { color: var(--on-primary); background: var(--danger); }
+.gt-status-stack { position: absolute; top: 48px; right: 24px; width: min(600px, calc(100vw - 48px)); display: grid; gap: 8px; pointer-events: auto; }
+.gt-notice { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--menu-surface); border: 1px solid var(--line); box-shadow: var(--menu-shadow); }
+.gt-notice > div { flex: 1; min-width: 0; }
+.gt-notice span { display: block; overflow-wrap: anywhere; color: var(--muted); }
+.gt-notice button { border: 0; border-radius: 20px; background: var(--blue-bg); color: var(--blue); padding: 8px 14px; flex-shrink: 0; }
+.gt-notice.gt-tone-flow { border-color: var(--warning); }
+
+dialog.gt-dialog { pointer-events: auto; padding: 0; border: 0; border-radius: 28px; color: var(--text); background: var(--menu-surface); width: min(520px, calc(100vw - 40px)); max-width: none; min-width: 0; max-height: calc(100dvh - 64px); margin: auto; box-shadow: 0 12px 48px rgb(0 0 0 / 22%); overflow: hidden; }
+dialog.gt-dialog[open] { display: flex; flex-direction: column; }
+dialog.gt-dialog::backdrop { background: rgb(20 19 30 / 40%); }
+dialog.gt-dialog-wide { width: min(860px, calc(100vw - 40px)); }
+.gt-dialog-header { display: flex; align-items: center; gap: 16px; padding: 24px; flex: 0 0 auto; }
+.gt-dialog-symbol { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 16px; color: var(--blue); background: var(--blue-bg); }
+.gt-dialog-symbol.gt-tone-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--menu-surface)); }
+.gt-dialog-heading { flex: 1; min-width: 0; }
+.gt-dialog-heading h1 { font-size: 22px; overflow-wrap: anywhere; }
+.gt-dialog-context { margin-top: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.gt-dialog-header .close, .gt-icon-button { display: inline-flex; justify-content: center; align-items: center; width: 32px; height: 32px; border-radius: 50%; border: 0; background: transparent; color: var(--muted); padding: 0; flex: 0 0 32px; }
+.gt-dialog-header .close:hover, .gt-icon-button:hover { background: var(--surface-hover); }
+.gt-dialog-form { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.gt-dialog-form > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+.gt-dialog-content { padding: 0 24px 12px; min-height: 0; overflow: auto; flex: 1 1 auto; overflow-wrap: anywhere; }
+.gt-dialog-content > :last-child { margin-bottom: 0; }
+.gt-dialog-content p { color: var(--muted); }
+.gt-dialog-content strong { color: var(--text); }
+.gt-dialog-content ul, .gt-dialog-content ol { padding-left: 24px; }
+.gt-dialog-content li { margin: 4px 0; }
+.gt-dialog-footer { display: flex; gap: 12px; align-items: center; justify-content: flex-end; flex: 0 0 auto; padding: 16px 24px 24px; flex-wrap: wrap; }
+.gt-dialog-footer > .button-group { margin-left: auto; }
+.gt-dialog-footer .checkbox-component { margin-right: auto; }
+.gt-dialog .button-group { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.gt-button, .gt-menu-list button, .gt-choice { border: 0; border-radius: 999px; padding: 9px 18px; min-height: 36px; background: var(--surface); color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; line-height: 18px; }
+.gt-button:hover { background: var(--surface-hover); }
+.gt-button:not(:disabled):active { transform: translateY(1px); }
+.gt-dialog .button-group:not(.destructive) .gt-button[type=submit], .gt-dialog-footer > .gt-button[type=submit] { color: var(--on-primary); background: var(--blue); }
+.gt-dialog .button-group.destructive .gt-button[type=button], .gt-button.danger { color: var(--on-primary); background: var(--danger); }
+.gt-dialog .button-group.destructive .gt-button[type=submit] { background: var(--surface); color: var(--text); }
+.gt-button:disabled, .gt-dialog button:disabled, .gt-dialog a[aria-disabled=true] { opacity: .38; }
+.gt-dialog .link-button-component { display: inline-flex; align-items: center; gap: 5px; }
+.gt-dialog .row-component { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; min-width: 0; }
+.gt-dialog .row-component > .gt-field, .gt-dialog .row-component > .select-component { flex: 1; min-width: 180px; }
+.gt-field, .select-component, .textarea-component, .gt-filter-field { position: relative; margin: 12px 0; width: 100%; }
+.gt-field > label, .select-component > label, .textarea-component > label, .gt-filter-field { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+.gt-field > label { position: absolute; top: -8px; left: 10px; padding: 0 5px; background: var(--menu-surface); z-index: 1; }
+.gt-dialog input:not([type=checkbox]):not([type=radio]), .gt-dialog select, .gt-dialog textarea { width: 100%; min-height: 48px; border: 1px solid var(--strong-line); border-radius: 8px; padding: 12px 14px; background: transparent; outline-offset: 0; }
+.gt-dialog select { margin-top: 6px; }
+.gt-dialog input::placeholder, .gt-dialog textarea::placeholder { color: var(--muted); opacity: .75; }
+.gt-dialog input:focus, .gt-dialog textarea:focus, .gt-dialog select:focus { outline: 2px solid var(--blue); border-color: transparent; }
+.gt-dialog input:disabled, .gt-dialog textarea:disabled, .gt-dialog select:disabled { opacity: .55; }
+.gt-dialog textarea { min-height: 100px; resize: vertical; }
+.gt-dialog input[type=checkbox], .gt-dialog input[type=radio] { accent-color: var(--blue); width: 18px; height: 18px; flex: 0 0 auto; margin: 2px 0; }
+.gt-dialog .checkbox-component, .gt-dialog .radio-button-component { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+.gt-dialog .checkbox-component > label, .gt-dialog .radio-button-component > label { flex: 1; }
+.gt-dialog .checkbox-component label p, .gt-dialog .radio-button-component label p { margin: 4px 0 0; }
+.gt-dialog .display-clear-button input { padding-right: 38px; }
+.gt-dialog .clear-button { position: absolute; right: 6px; top: 9px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; }
+.gt-dialog .display-prefixed-icon input { padding-left: 40px; }
+.gt-dialog .prefixed-icon { position: absolute; left: 12px; top: 15px; color: var(--muted); }
+.gt-dialog .dialog-banner { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; margin: 0 24px 16px; border-radius: 12px; color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, var(--menu-surface)); overflow-wrap: anywhere; }
+.gt-dialog .dialog-success { color: var(--teal); background: color-mix(in srgb, var(--teal) 10%, var(--menu-surface)); }
+.gt-dialog .dialog-banner p:last-child { margin: 0; }
+.gt-dialog .ref-component, .gt-dialog code { font: 12px/1.5 SFMono-Regular, Menlo, monospace; background: var(--surface); padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+.gt-dialog pre { font: 12px/1.6 SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; background: var(--surface); border-radius: 12px; padding: 16px; }
+.gt-dialog progress { width: 100%; accent-color: var(--blue); height: 4px; border-radius: 4px; }
+.gt-dialog .progress { min-height: 4px; border-radius: 4px; background: var(--surface); overflow: hidden; }
+.gt-dialog .progress .value { background: var(--blue); height: 4px; }
+.gt-dialog hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+.gt-dialog kbd { color: var(--muted); background: var(--surface); padding: 2px 5px; border-radius: 4px; font-size: 11px; }
+
+/* Every controller family uses the same Material layout, including nested flows. */
+.gt-dialog .preferences-container, .gt-dialog .tab-container { display: flex; gap: 24px; padding: 0 24px; min-height: 240px; min-width: 0; overflow: auto; }
+.gt-dialog .preferences-container > .dialog-content { padding: 0; flex: 1; }
+.gt-dialog .tab-container > .active-tab { flex: 1; min-width: 0; }
+.gt-dialog .tab-bar { display: flex; gap: 4px; margin: 0 0 16px; overflow: auto; flex-shrink: 0; padding: 4px; background: var(--surface); border-radius: 20px; }
+.gt-dialog .tab-bar.vertical { flex-direction: column; min-width: 160px; max-width: 180px; background: transparent; padding: 0; align-self: stretch; }
+.gt-dialog .tab-bar-item { padding: 10px 14px; border: 0; border-radius: 24px; background: transparent; color: var(--muted); min-height: 40px; flex-shrink: 0; text-align: left; }
+.gt-dialog .tab-bar-item > span { display: flex; align-items: center; gap: 10px; }
+.gt-dialog .tab-bar-item.selected { color: var(--blue); background: var(--blue-bg); font-weight: 500; }
+.gt-dialog .tab-bar-item:hover { background: var(--surface-hover); }
+.gt-dialog .filter-list { display: flex; flex-direction: column; height: min(320px, 44dvh); min-height: 180px; min-width: 0; }
+.gt-dialog .filter-field-row { flex: 0 0 auto; }
+.gt-dialog .filter-list-container { display: flex; flex: 1; min-height: 0; }
+.gt-dialog .list { flex: 1; height: 100%; min-width: 0; overflow: hidden; }
+.gt-dialog .list-focus-container { height: 100%; }
+.gt-dialog .list-item { display: flex; align-items: center; width: 100%; height: 100%; }
+.gt-dialog .ReactVirtualized__List, .gt-dialog [role=listbox] { border-radius: 12px; border: 1px solid var(--line); background: var(--content); min-height: 0; }
+.gt-dialog [role=option], .gt-dialog [role=row] { padding: 8px 12px; }
+.gt-dialog [role=option][aria-selected=true], .gt-dialog [role=row][aria-selected=true] { color: var(--blue); background: var(--selection); }
+.gt-dialog .filter-list .text-box-component { margin-top: 0; }
+.gt-dialog .branches-list-item, .gt-dialog .repository-list-item, .gt-dialog .commit-list-item, .gt-dialog .conflicted-file-list-item { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.gt-dialog .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.gt-dialog .description, .gt-dialog .path, .gt-dialog .secondary-text, .gt-dialog small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.gt-dialog .subtitle { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+.gt-dialog .summary, .gt-dialog .commit-summary { font-weight: 500; overflow-wrap: anywhere; }
+.gt-dialog .clone-repository-content { min-height: 280px; }
+.gt-dialog .multi-commit-operation-content, .gt-dialog .conflicts-list { min-height: 200px; }
+.gt-dialog .CodeMirror { min-height: 120px; max-height: 360px; height: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--content); color: var(--text); font: 12px/1.6 SFMono-Regular, Menlo, monospace; }
+.gt-dialog .CodeMirror-scroll { max-height: 360px; }
+.gt-dialog .terms-and-license-container { display: grid; gap: 12px; margin-top: 16px; }
+.gt-dialog .about-brand { display: flex; align-items: center; gap: 16px; margin: 0 0 20px; }
+.gt-dialog .about-brand > .gt-icon { width: 48px; height: 48px; padding: 10px; border-radius: 16px; background: var(--blue-bg); color: var(--blue); }
+.gt-dialog .about-brand h2 { margin: 0 0 3px; font-size: 20px; }
+.gt-choices { display: grid; gap: 4px; max-height: 50dvh; overflow: auto; }
+.gt-choice { border-radius: 12px; min-height: 48px; justify-content: flex-start; text-align: left; background: transparent; width: 100%; padding: 10px 12px; }
+.gt-choice:hover { background: var(--surface-hover); }
+.gt-choice span { flex: 1; min-width: 0; }
+.gt-choice strong, .gt-choice small { display: block; overflow-wrap: anywhere; }
+.gt-menu-list { display: grid; gap: 3px; }
+.gt-menu-list button { border-radius: 10px; justify-content: space-between; background: transparent; min-height: 40px; text-align: left; padding: 8px 12px; }
+.gt-menu-list button:hover { background: var(--surface-hover); }
+.gt-menu-list button span { display: inline-flex; align-items: center; gap: 8px; }
+.gt-menu-list hr { margin: 6px 0; }
+.tooltip { position: fixed; background: var(--text); color: var(--content); border-radius: 8px; padding: 6px 10px; font-size: 12px; max-width: 300px; pointer-events: none; z-index: 100; }
+#desktop-crash-container { height: 100%; }
+.gt-crash-page { width: 100%; height: 100%; overflow: auto; padding: 48px 24px 24px; }
+.gt-crash-card { width: min(640px, 100%); margin: 0 auto; padding: 28px; border-radius: 28px; background: var(--menu-surface); box-shadow: var(--menu-shadow); }
+.gt-crash-card header { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
+.gt-crash-card h1 { font-size: 22px; }
+.gt-crash-card .error-icon { color: var(--danger); width: 32px; height: 32px; }
+.gt-crash-card .footer { display: flex; justify-content: flex-end; margin-top: 24px; }
+.gt-crash-card pre { background: var(--surface); border-radius: 12px; padding: 16px; max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 SFMono-Regular, Menlo, monospace; }
+@media (max-width: 640px) { .gt-dialog .preferences-container, .gt-dialog .tab-container { flex-direction: column; gap: 12px; } .gt-dialog .tab-bar.vertical { flex-direction: row; width: 100%; max-width: none; } .gt-dialog-header { padding: 20px; gap: 12px; } .gt-dialog-heading h1 { font-size: 20px; } .gt-dialog-content { padding: 0 20px 12px; } .gt-dialog-footer { padding: 16px 20px 20px; } }
+
+.gt-dialog .xterm { border-radius: 12px; padding: 12px; background: var(--surface); overflow: auto; }
+.gt-dialog .xterm .xterm-viewport { background: var(--surface) !important; }
+.gt-dialog .theme-value-label { display: block; margin-top: 8px; text-align: center; }
+.gt-dialog .theme-selector { display: flex; flex-wrap: wrap; gap: 12px; }
+.gt-dialog .theme-selector img { max-width: 144px; max-height: 90px; }
+.gt-dialog .system-theme-swatch { display: inline-flex; width: 144px; overflow: hidden; }
+.gt-dialog .system-theme-swatch img { width: 72px; object-fit: cover; }
+.gt-dialog .system-theme-swatch img:first-child { width: 0; }
+.gt-missing-state { pointer-events: auto; border-radius: 20px; padding: 24px; background: var(--menu-surface); box-shadow: var(--menu-shadow); border: 1px solid var(--line); }
+.gt-missing-state .title { font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+.gt-missing-state .row-component { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.gt-window-bar .window-controls { display: flex; margin-left: auto; }
+.gt-window-bar .window-control { border-radius: 0; height: 32px; width: 44px; }
+
+.gt-settings-layout { display: grid; grid-template-columns: 174px minmax(0, 1fr); gap: 24px; padding: 0 24px; min-height: 300px; min-width: 0; overflow: auto; }
+.gt-settings-tabs { display: flex; flex-direction: column; gap: 4px; align-self: start; }
+.gt-settings-tabs button { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 0; border-radius: 22px; min-height: 44px; color: var(--muted); background: transparent; text-align: left; }
+.gt-settings-tabs button[aria-selected=true] { background: var(--blue-bg); color: var(--blue); font-weight: 500; }
+.gt-settings-tabs button:hover { background: var(--surface-hover); }
+.gt-settings-panel { min-width: 0; overflow: auto; max-height: 58dvh; }
+.gt-settings-panel > .gt-dialog-content { padding: 0; }
+.gt-accounts { display: grid; gap: 16px; }
+.gt-account-list { border: 1px solid var(--line); border-radius: 16px; padding: 0 16px; min-width: 0; }
+.gt-account-list .account-setting { display: flex; align-items: center; gap: 12px; padding-block: 16px; border-bottom: 1px solid var(--line); }
+.gt-account-list .account-setting:last-child { border-bottom: 0; }
+.gt-account-list .account-setting > div { flex: 1; min-width: 0; }
+.gt-account-list .account-setting small { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 640px) { .gt-settings-layout { grid-template-columns: minmax(0, 1fr); } .gt-settings-tabs { flex-direction: row; overflow: auto; } .gt-settings-tabs button { flex-shrink: 0; } }
+
+/* Shared field and list geometry, independent of upstream visual CSS. */
+.gt-dialog .row-component > .password-text-box { flex: 1; width: 100%; min-width: 0; position: relative; }
+.gt-dialog .password-text-box > .gt-field { width: 100%; }
+.gt-dialog .password-text-box > .gt-button { position: absolute; right: 8px; top: 20px; width: 32px; height: 32px; min-height: 32px; border-radius: 50%; padding: 0; background: transparent; color: var(--muted); }
+.gt-dialog .password-text-box .gt-field input { padding-right: 48px; }
+.gt-dialog .gt-field.display-prefixed-icon input { padding-left: 40px; }
+.gt-dialog .gt-field.display-clear-button input { padding-right: 42px; }
+.gt-dialog .list { min-height: 0; }
+.gt-dialog [role=option], .gt-dialog [role=row] { padding: 4px 12px; }
+.gt-dialog [role=listbox] [role=listbox] { border: 0; background: transparent; }
+.gt-dialog .filter-list-group-header { padding: 0 12px; color: var(--muted); font-size: 12px; line-height: 20px; font-weight: 500; }
+.gt-dialog .theme-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.gt-dialog .theme-selector .radio-button-component { margin: 0; display: block; min-width: 0; }
+.gt-dialog .theme-selector .radio-button-component > label { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); cursor: pointer; width: 100%; }
+.gt-dialog .theme-selector label:has(input:checked) { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+.gt-dialog .theme-selector label > span { flex: 1; min-width: 0; }
+.gt-dialog .theme-selector img { width: 100%; height: auto; max-width: none; max-height: none; display: block; aspect-ratio: 5 / 3; object-fit: cover; border-radius: 6px; }
+.gt-dialog .theme-selector .system-theme-swatch { width: 100%; display: block; position: relative; aspect-ratio: 5 / 3; }
+.gt-dialog .theme-selector .system-theme-swatch img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.gt-dialog .theme-selector .system-theme-swatch img:first-child { clip-path: inset(0 50% 0 0); }
+.gt-dialog .theme-selector .system-theme-swatch img:last-child { clip-path: inset(0 0 0 50%); }
+.gt-dialog .dropdown-button-wrappers { display: flex; }
+.gt-dialog .dropdown-button-wrappers .invoke-button { border-radius: 22px 0 0 22px; background: var(--blue); color: var(--on-primary); }
+.gt-dialog .dropdown-button-wrappers .dropdown-button { border-radius: 0 22px 22px 0; border-left: 1px solid var(--line); padding: 8px 10px; background: var(--blue); color: var(--on-primary); }
+.gt-floating-menu { position: fixed; margin: 0; inset: auto; min-width: 260px; max-width: min(420px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 12px; background: var(--menu-surface); color: var(--text); padding: 6px; overflow: auto; box-shadow: var(--menu-shadow); }
+.gt-floating-menu .menu-pane { min-width: 0; }
+.menu-pane .menu-item { display: flex; align-items: center; gap: 10px; border-radius: 8px; padding: 10px 12px; min-height: 40px; cursor: pointer; }
+.menu-pane .menu-item.selected, .menu-pane .menu-item:hover { background: var(--surface-hover); }
+.menu-pane .menu-item.disabled { opacity: .38; cursor: default; }
+.menu-pane .menu-item .label { flex: 1; min-width: 0; }
+.menu-pane .menu-item .accelerator, .menu-pane .option-description { color: var(--muted); font-size: 12px; }
+.menu-pane .option-title { font-weight: 500; }
+.menu-pane hr { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
+.spin { animation: gt-spin 1s linear infinite; }
+
+.gt-dialog .password-text-box { position: relative; width: 100%; min-width: 0; }
+.gt-auth-fields { display: grid; gap: 8px; margin: 20px 0; }
+.gt-facts { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; margin: 20px 0 4px; }
+.gt-facts dt { color: var(--muted); }
+.gt-facts dd { margin: 0; overflow-wrap: anywhere; }
+.gt-path-list { padding: 0 !important; list-style: none; }
+.gt-path-list li { padding: 12px; border-radius: 12px; background: var(--surface); }
+.gt-path-list strong, .gt-path-list small { display: block; overflow-wrap: anywhere; }
+
+:where(.gt-dialog) :where(button) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px; min-height: 32px; border: 0; border-radius: 999px; background: var(--surface); }
+.gt-dialog table { width: 100%; border-collapse: collapse; font: inherit; }
+.gt-dialog th, .gt-dialog td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+.gt-dialog th { color: var(--muted); font-size: 12px; font-weight: 500; }
+.gt-dialog .xterm-helper-textarea, .gt-dialog .CodeMirror textarea { min-height: 0; padding: 0; border: 0; outline: 0; resize: none; }
+
+/* Conflict files are Material two-line lists, retaining every original action. */
+.gt-dialog .unmerged-file-statuses { padding: 0; margin: 16px 0; list-style: none; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--content); }
+.gt-dialog .unmerged-file-statuses > li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin: 0; min-height: 64px; border-bottom: 1px solid var(--line); }
+.gt-dialog .unmerged-file-statuses > li:last-child { border-bottom: 0; }
+.gt-dialog .unmerged-file-statuses .file-octicon { color: var(--blue); }
+.gt-dialog .unmerged-file-statuses .column-left { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
+.gt-dialog .file-conflicts-status { color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 3px; }
+.gt-dialog .unmerged-file-statuses .action-buttons { display: flex; align-items: center; flex: 0 0 auto; }
+.gt-dialog .action-buttons .button-group-item:first-child { border-radius: 20px 0 0 20px; }
+.gt-dialog .action-buttons .button-group-item:last-child { border-radius: 0 20px 20px 0; padding: 8px 10px; border-left: 1px solid var(--line); }
+.gt-dialog .green-circle, .gt-dialog .all-conflicts-resolved { color: var(--teal); }
+.gt-dialog .all-conflicts-resolved { display: flex; gap: 10px; align-items: center; padding: 12px; }
+@media (max-width: 640px) { .gt-dialog .unmerged-file-statuses > li { flex-wrap: wrap; } .gt-dialog .unmerged-file-statuses .action-buttons { margin-left: 30px; } }
+
+.gt-crash-card .gt-button[type=submit] { background: var(--blue); color: var(--on-primary); }
+
+.gt-dialog .xterm:focus-within, .gt-dialog .CodeMirror-focused { outline: 2px solid var(--blue); outline-offset: 2px; }

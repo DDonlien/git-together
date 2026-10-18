@@ -1,5 +1,21 @@
 # GitTogether 独立实现需求
 
+## GitHub Desktop 执行基础替换（2026-10-18）
+
+- [x] \[DESKTOP-01] 在用户指定 `github-desktop-based` 分支，以固定版本的 GitHub Desktop 原始执行代码替换独立 Git、授权及后台实现；保留现有 UI，仅扩展 Submit、Clear、Get Latest 和 Presence。0.35.0开发源码及隔离验证完成，未提交、推送、合并或发布。
+  - [x] \[DESKTOP-01-engine] 原版 Git/授权/凭据/Store/Dispatcher/后台任务直接用于实际运行，提供可校验的上游来源与变更边界；旧 Rust/Node Git 服务退出运行入口。固定release-3.6.7，3895个上游文件及允许的展示/元数据差异已校验。
+  - [x] \[DESKTOP-01-ui] 保留 Material 界面、Dashboard、图谱和工作区；数据适配不得再实现第二套 Git、授权或后台调度。原版不支持的能力明确提示。
+    - [x] \[DESKTOP-01-ui-complete] 按2026-10-18补充要求，停用全部 GitHub Desktop 展示外壳，逐项替换为 GitTogether Material 设计：主窗口/空状态、全部 PopupType 弹窗、授权/SSH/凭据、LFS、安全确认、错误/钩子输出、冲突/多提交流程、仓库/应用设置、关于/许可/更新、菜单/横幅及崩溃恢复。保留原版控制器、回调及执行语义；不得以遮住旧窗口或隐藏旧弹窗作为替换。93种弹窗、9种提交/冲突步骤、15种横幅及6种选择器有穷尽展示目录；60个界面文件的非渲染控制器摘要与原版一致。实际原生交互通过，保留34张截图；真实账号/服务器限定流程未逐项联网验收。
+  - [x] \[DESKTOP-01-actions] Submit 串联原版 Commit → Push；Clear/Get Latest 保留现有用户语义、预览与确认，并使用原版 Git 执行与凭据边界。隔离bare远端验证Commit/Push、重复保护、Clear的HEAD/index保持、深度1替换、LFS及钩子保留、改名远端与过期预览拒绝。
+  - [x] \[DESKTOP-01-presence] Presence 保留账号、服务器、协作状态与远端控制；Git 读取和执行转交原版，不能旁路回旧 Git 实现。隔离进程通信及远端丢弃/恢复已验证文件与index；真实多设备、组织及多服务器授权仍按COLLAB-03-runtime单独验收。
+  - [x] \[DESKTOP-01-validation] 完成源码完整性、类型、构建及隔离真实 Git 运行验证；真实用户 OAuth、安装包与已安装应用验收分别记录。界面替换验收构建摘要eaf9ee614ec0e21badd0c9b678b1a2a5ba9c9746fd9ba09e7bf49f3f0fafe469；7项边界检查及两套原生烟雾验证通过。未运行Windows、真实OAuth/服务器凭据或多设备Presence，未生成正式安装包，未操作已安装应用。界面证据见artifacts/github-desktop-material/delivery.json及review.html；后续本地测试.app另见下一项。
+  - [x] \[DESKTOP-01-macos-test-app] 按2026-10-18后续要求，将当前分支打包为可直接双击打开的macOS Apple Silicon测试版.app，使用GitTogether品牌图标及独立测试数据目录。0.35.0位于artifacts/macos/0.35.0/GitTogether-dev-darwin-arm64/GitTogether-dev.app，构建源码摘要2ef74ede28da08c0fb16dc15505698d01149db311b23535b3f51b6b9d7b8086b。本地ad-hoc签名、arm64、图标、Git2.53.0/LFS3.7.1及包内Presence已检查；包内12项真实Git/界面检查和不带测试钩子的macOS LaunchServices启动均通过。没有替换已安装版、Developer ID公证或正式更新发布；包旁validation.json记录证据。
+  - [x] \[DESKTOP-01-account-entries] 按2026-10-18账号界面反馈，无账号时只保留标题与添加按钮，不预置服务空行或登录表单；点击添加后新增一条草稿，在条目内用GitHub、GitHub Enterprise、Gitea标签切换类型。GitHub及企业版沿用已经接入的原版登录。Gitea复用main的服务器地址、访问令牌、身份验证及分页目录契约；这是本次明确增加的平台适配范围，令牌使用原版安全存储及通用Git凭据，标准Git、SSH、凭据助手和后台调度继续保持原版，不恢复旧Git服务。取消移除草稿，连接失败保留输入，成功后才显示账号；支持同一服务器的不同账号、刷新及退出。两处账号入口保持一致，完成隔离界面与Gitea接口/原版Git验证，并提供更新的macOS测试.app。
+    - [x] \[DESKTOP-01-account-entries-validation] 0.36.0源码摘要fc9f85f0e10564a17dedee8e2f01ca38b823f36baff34feae9b47f7fe867c369；类型/Cargo、7项来源边界、账号包内检查及12项原有Git/Presence烟雾检查通过。包含同服务器双账号、令牌不外泄、拒绝重定向、分页/失败保留、非法名称、重启、私有HTTP克隆/推送、退出保留本地文件，以及系统/亮色/暗色和800px配色一致性。10张截图见artifacts/account-entries/0.36.0/review.html；更新.app和validation.json见artifacts/macos/0.36.0/GitTogether-dev-darwin-arm64/。真实OAuth/Gitea服务器、Windows及正式发布未验收，main及安装版未改动。
+
+    - [x] \[DESKTOP-01-account-entries-tls] 修正2026-10-19截图反馈中的Gitea客户端证书处理：账号API使用与原版相同的Chromium请求及证书控制器，保留超时、响应体上限和拒绝重定向；连接失败显示中文说明并保留输入及已知目录，证书弹窗沿用原版查看/取消行为和Material设计。0.36.1源码摘要b3882fa75f6ea8c4d1e28a3b985446efb0bc56f001aa7a1548b1ff46d5bb225f；类型/Cargo、7项来源边界、账号及12项Git/Presence包内回归通过。隔离HTTPS证明证书被拒绝且没有HTTP请求或令牌发送，未修改系统信任；11张截图见artifacts/account-entries/0.36.1/。更新的本地测试.app及validation.json见artifacts/macos/0.36.1/GitTogether-dev-darwin-arm64/。
+      - [ ] \[DESKTOP-01-account-entries-tls-server] 从当前电脑访问git.freshli4.com时仍返回fnOS自签名证书，最终测试包报告ERR_CERT_AUTHORITY_INVALID；同进程访问GitHub公开API得到HTTP200。真实Gitea账号连接待服务器证书/反向代理配置正常后验收，本轮未修改服务器、系统代理或系统证书信任，也未读取或发送用户令牌。
+
 ## Presence账号与商业边界（2026-10-12）
 
 - [ ] \[COLLAB-03-automatic-management] 按用户2026-10-12八点纠正，Presence为一个实例维护一个个人身份；接入GitTogether且当前Git账号可访问的仓库自动纳入个人管理，不提供个人仓库勾选列表。用户所属组织在Web端由组织owner配置，并对Git仓库验证ownership；完整仓库地址匹配且用户为成员时自动使用组织范围。一个仓库可以分别归入多个组织，各组织/服务器的状态及操作记录隔离，不限制或合并。

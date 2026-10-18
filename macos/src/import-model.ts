@@ -7,9 +7,9 @@ import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } fro
 import type { FileDirectory, FileOperationInput, FileOperationPlan, FileOperationResult } from './file-operation-model';
 import type { GraphSnapshot, GraphSourceChoice, GraphSource, GraphPreviewInput, GraphPreview, GraphMergePlan, GraphMergeInput, GraphWriteInput, GraphWriteResult } from './graph-operation-model';
 
-export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea'] as const;
+export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea', 'local'] as const;
 export type Provider = typeof providers[number];
-export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '' };
+export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '', local: 'file:///' };
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
 export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
@@ -138,8 +138,8 @@ export type ApiOutputs = {
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };
-export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea' })[provider];
-export const accountLabel = (account: Account) => `${account.name} · ${account.login}@${new URL(account.host).host}`;
+export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea', local: '本地 Git' })[provider];
+export const accountLabel = (account: Account) => account.provider === 'local' ? account.name : `${account.name} · ${account.login}@${new URL(account.host).host}`;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

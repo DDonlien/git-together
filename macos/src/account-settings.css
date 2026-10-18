@@ -1,0 +1,17 @@
+.account-entry-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.account-entry-heading h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.account-entry-form { display: grid; gap: 18px; padding-block: 18px; min-width: 0; }
+.account-provider-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.account-provider-tabs > button { flex: 0 0 auto; min-height: 44px; padding: 10px 16px; border: 0; border-radius: 12px 12px 0 0; color: var(--muted); background: transparent; position: relative; white-space: nowrap; }
+.account-provider-tabs > button:hover { background: var(--surface-hover); }
+.account-provider-tabs > button[aria-selected=true] { color: var(--blue); background: var(--blue-bg); font-weight: 500; }
+.account-provider-tabs > button[aria-selected=true]::after { content: ''; position: absolute; bottom: 0; height: 3px; left: 16px; right: 16px; background: var(--blue); border-radius: 3px 3px 0 0; }
+.account-entry-fields { display: grid; gap: 16px; max-width: 560px; min-width: 0; }
+.account-entry-help { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.account-entry-actions { display: flex; flex: 0 1 auto !important; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; }
+.account-entry-fields .account-form-actions { display: flex; justify-content: flex-start; }
+@media (max-width: 800px) {
+  .desktop-accounts .account-setting { flex-wrap: wrap; }
+  .account-entry-actions { width: 100%; justify-content: flex-start; }
+  .account-provider-tabs > button { padding-inline: 12px; font-size: 12px; }
+}

@@ -109,7 +109,7 @@ export function useWorkspace() {
     },
     onError: (_resource, problem) => { if (!updates.installingRef.current) setError(problem instanceof Error ? problem.message : '自动检查本地连接失败，正在重试。'); },
   });
-  useAutoRefresh({ resources: monitoring ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.remote, initialDelayMs: syncIntervals.remote,
+  useAutoRefresh({ resources: monitoring && window.gittogether?.backend !== 'github-desktop' ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.remote, initialDelayMs: syncIntervals.remote,
     run: async (resource, signal) => {
       const [instanceId, accountId] = JSON.parse(resource) as [string, string];
       if (instanceId !== catalogRef.current.instanceId || running.current.has(accountId)) return;

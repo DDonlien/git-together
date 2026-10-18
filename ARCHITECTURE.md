@@ -1,3 +1,21 @@
+# GitHub Desktop / GitTogether UI / Presence 架构
+
+2026-10-18 起，`github-desktop-based` 分支以固定版本的 GitHub Desktop 为执行基础。Git、认证、凭据、Store、`ui/dispatcher`、trampoline、hooks、LFS 与后台任务保持上游字节一致。`docs/github-desktop-upstream.json` 锁定来源、子模块和明确的展示/产品身份差异；原版界面控制器的非渲染方法另外摘要验证。主进程仅有菜单名称及系统错误文案的展示差异。
+
+`desktop/app/src/ui/gittogether/` 将原版状态映射到已有界面协议，标准写操作直接调用原版 Dispatcher。`macos/src/` 在本地 frame 中运行；`GitTogetherApp` 继承原版初始化与后台订阅，只覆盖展示入口，原版主界面从不挂载。全部弹窗类型通过穷尽目录进入 Material 外壳；原版对话框生命周期继续负责焦点、堆栈、安全默认项和执行回调。设置、关于、菜单、横幅、缺失仓库、崩溃恢复、内置插画、图标和终端配色均由我们的展示层承担，不加载原版样式。两层共用同一 Material 色彩 token，主题选择双向同步。完整分类见 [界面替换清单](docs/github-desktop-ui-surfaces.md)。
+
+私有 MessagePort 仅发给确切的本地 frame；不开放任意命令、可执行路径或 Git 凭据。界面的自动检查不创建第二套网络调度。
+
+0.36.0按用户2026-10-18后续要求补充Gitea账号/仓库目录适配。这是明确恢复的main平台能力：独立模块只进行同源Gitea API GET和账号元数据持久化，没有Git执行器或定时工作器；令牌使用原版TokenStore及generic-git-auth。GitHub/企业版认证、标准Git、SSH、credential helper和后台调度仍保持上游。两个React展示层共享三标签类型目录和样式；原版Preferences只替换Accounts视图导入，原事件回调保持摘要校验。
+
+同次原生账号截图发现系统主题下两层界面可能明暗不同，现由原版Store同时提供已选主题与实际主题。私有桥在初始环境读取和后续主题变化时同步给主界面，界面不再独立猜测iframe的系统配色，也不在渲染期间读取旧DOM主题值。原版主题持久化、系统主题监听及执行回调不变。
+
+0.36.1将Gitea API从Node http/https.request改为与原版lib/http.ts相同的renderer fetch，由Chromium及原版certificate-error控制器处理代理和证书。保留15秒请求/响应体超时、16MiB响应上限和拒绝全部重定向；分页URL仍仅由本地构造，令牌不进入其他来源。网络失败显示中文说明，不更改系统信任、不关闭TLS校验；真实服务器证书无效时仍拒绝连接。
+
+自定义 Git 语义仅包含 Submit、Clear、Get Latest。Presence 独立 Rust 进程只提供协作协议、账号、组织、Bridge 和控制；其 catalog、状态和执行请求通过私有 stdio 转交原版。原来的 Git/provider/OAuth/Rust Service 不编入该进程。详情见 [执行基础说明](docs/github-desktop-based.md)。
+
+以下保留迁移前设计作为历史来源，当前分支以上述新边界为准。
+
 # Tauri / Rust / React 架构
 
 ## 本地文件树与文件操作（R-05-local-file-operations）

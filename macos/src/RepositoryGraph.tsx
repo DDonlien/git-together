@@ -28,7 +28,7 @@ function CommitActions({ commit, onCopy, onLocateParent, onAction, onOpenCommit,
     <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.summary)}><Icon name="copy" size={14} />复制提交说明</MenuItem>
     <MenuItem disabled={!committed || !commit?.parents.length} onClick={() => commit && onLocateParent(commit)}><Icon name="branch" size={14} />定位父提交</MenuItem>
     <div className="graph-menu-group-label">AI 操作</div>
-    <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>
+    {window.gittogether?.backend !== 'github-desktop' && <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>}
   </>;
 }
 

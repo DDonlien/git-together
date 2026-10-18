@@ -17,7 +17,7 @@ const groups: { key: keyof GitSignals; label: string; actions: Action[] }[] = [
     { key: 'submit', label: 'Submit', icon: 'upload', description: '填写或 AI 生成说明，确认文件清单后创建本地提交并推送。' },
   ] },
   { key: 'push', label: '本地内容', actions: [{ key: 'push', label: 'Push', icon: 'arrowUp', description: '推送所选范围内已有的本地提交。' }] },
-  { key: 'clear', label: '清理', actions: [{ key: 'clear', label: 'Clean', icon: 'clear', description: '以远端为准清理或恢复本地文件。' }] },
+  { key: 'clear', label: '清理', actions: [{ key: 'clear', label: 'Clear', icon: 'clear', description: '以远端为准清理或恢复本地文件。' }] },
 ];
 
 type ActionCallbacks = { allowUnknownPush?: boolean; onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };

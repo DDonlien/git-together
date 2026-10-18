@@ -1,0 +1,43 @@
+:root {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  font-size: 13px; line-height: 1.45; font-synthesis: none; -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+  --text: #1b1b20; --muted: #5e5d66; --content: #fffbff; --surface: #eeedf4;
+  --md-sys-color-primary: var(--blue); --md-sys-color-on-primary: var(--on-primary);
+  --md-sys-color-on-surface: var(--text); --md-sys-color-on-surface-variant: var(--muted);
+  --md-sys-color-surface: var(--content); --md-sys-color-surface-container-high: var(--menu-surface);
+  --md-sys-color-surface-container-highest: var(--surface); --md-sys-color-outline: var(--strong-line);
+  --md-sys-color-outline-variant: var(--line); --md-sys-color-error: var(--danger);
+  --md-sys-typescale-body-large-font: 'Roboto', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+  --md-sys-typescale-body-large-size: 16px; --md-sys-typescale-body-large-line-height: 24px;
+  --md-sys-typescale-body-small-font: var(--md-sys-typescale-body-large-font);
+  --md-sys-typescale-body-small-size: 12px; --md-sys-typescale-body-small-line-height: 16px;
+  --surface-hover: #e9e7ef; --line: #e1dfe7; --strong-line: #797780;
+  --blue: #4559a8; --on-primary: #fff; --blue-bg: #e3e6fa; --selection: #e3e6fa;
+  --teal: #006b60; --purple: #745574; --danger: #b3261e; --warning: #805600;
+  --window-background: #f6f5fa; --chrome: #f6f5fa;
+  --card-edge: #e1dfe780; --card-shadow: none;
+  --menu-surface: #f3f1f7; --menu-shadow: 0 4px 16px rgb(35 35 55 / 14%);
+  --window-inset: 8px; --workspace-gap: 16px; --workspace-top-inset: 12px;
+  --control-height: 32px; --compact-height: 28px; --icon-size: 17px; --icon-label-gap: 10px;
+  --search-height: 36px; --search-width: 300px;
+  --button-padding-inline: 13px; --compact-button-padding-inline: 12px;
+  --sidebar-icon-size: 19px; --sidebar-row-inset: 10px; --sidebar-level-indent: 0px;
+  --repository-action-button-size: 28px; --repository-action-group-padding: 3px;
+  --repository-action-pair-gap: 2px; --repository-action-group-gap: 8px;
+  --repository-action-pair-width: calc(var(--repository-action-button-size) + var(--repository-action-button-size) + var(--repository-action-pair-gap) + var(--repository-action-group-padding) + var(--repository-action-group-padding));
+  --repository-action-single-width: calc(var(--repository-action-button-size) + var(--repository-action-group-padding) + var(--repository-action-group-padding));
+  --radius-control: 12px; --radius-panel: 20px;
+  background: var(--window-background); color: var(--text);
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --text: #e5e1e9; --muted: #c7c5d0; --content: #211f26; --surface: #2b2930;
+  --surface-hover: #35333b; --line: #46464f; --strong-line: #93919b;
+  --blue: #b8c4ff; --on-primary: #132978; --blue-bg: #2f407e; --selection: #35436b;
+  --teal: #80d5c5; --purple: #e1badd; --danger: #ffb4ab; --warning: #f5bf58;
+  --window-background: #131318; --chrome: #131318;
+  --card-edge: #46464f60; --card-shadow: none;
+  --menu-surface: #302d37; --menu-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+  background: var(--window-background);
+}
