@@ -94,7 +94,7 @@ impl Presence {
             credentials::save(
                 &self.root.join("presence-v1.encrypted"),
                 &serde_json::to_value(&config).map_err(|_| "账号配置无法编码。")?,
-            )?;
+            ).await?;
         }
         let mut state = self.state.write().await;
         let generation = state.generation + 1;

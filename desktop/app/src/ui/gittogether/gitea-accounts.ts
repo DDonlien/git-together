@@ -206,5 +206,45 @@ export class GiteaAccounts {
     url.username = entry.account.login
     return url.href
   }
+  public async graphHistoryPage(repositoryId: string, head: string, page: number): Promise<{ value: unknown; hasMore: boolean }> {
+    await this.initialize()
+    if (!/^[a-f0-9]{40,64}$/i.test(head) || !Number.isSafeInteger(page) || page < 1) throw new Error('远端提交分页参数无效。')
+    const entry = this.entries.find(item => item.repositories.some(repo => repo.id === repositoryId))
+    const repo = entry?.repositories.find(item => item.id === repositoryId)
+    if (!entry || !repo) throw new Error('Gitea 仓库不在当前账号目录中。')
+    const token = await TokenStore.getItem(this.credentialKey, entry.account.id)
+    if (!token) throw new Error('Gitea 访问令牌不可用，请重新连接账号。')
+    const parts = repo.fullName.split('/')
+    const pageSize = 100
+    const response = await getJSON(entry.account.host, token, `/repos/${parts.map(encodeURIComponent).join('/')}/commits?sha=${encodeURIComponent(head)}&limit=${pageSize}&page=${page}&stat=false`)
+    if (!Array.isArray(response.value)) throw new Error('Gitea 提交历史返回格式无效。')
+    return { value: response.value, hasMore: response.next || response.total > page * pageSize || response.value.length >= pageSize }
+  }
+  public async graphCommit(repositoryId: string, commitId: string): Promise<unknown> {
+    await this.initialize()
+    if (!/^[a-f0-9]{40,64}$/i.test(commitId)) throw new Error('远端提交编号无效。')
+    const entry = this.entries.find(item => item.repositories.some(repo => repo.id === repositoryId))
+    const repo = entry?.repositories.find(item => item.id === repositoryId)
+    if (!entry || !repo) throw new Error('Gitea 仓库不在当前账号目录中。')
+    const token = await TokenStore.getItem(this.credentialKey, entry.account.id)
+    if (!token) throw new Error('Gitea 访问令牌不可用，请重新连接账号。')
+    const parts = repo.fullName.split('/')
+    const response = await getJSON(entry.account.host, token, `/repos/${parts.map(encodeURIComponent).join('/')}/git/commits/${commitId.toLowerCase()}?files=true&per_page=100&page=1`)
+    return response.value
+  }
+  public async graphTreePage(repositoryId: string, treeId: string, page: number): Promise<{ value: unknown; hasMore: boolean }> {
+    await this.initialize()
+    if (!/^[a-f0-9]{40,64}$/i.test(treeId) || !Number.isSafeInteger(page) || page < 1) throw new Error('远端文件树分页参数无效。')
+    const entry = this.entries.find(item => item.repositories.some(repo => repo.id === repositoryId))
+    const repo = entry?.repositories.find(item => item.id === repositoryId)
+    if (!entry || !repo) throw new Error('Gitea 仓库不在当前账号目录中。')
+    const token = await TokenStore.getItem(this.credentialKey, entry.account.id)
+    if (!token) throw new Error('Gitea 访问令牌不可用，请重新连接账号。')
+    const parts = repo.fullName.split('/')
+    const pageSize = 100
+    const response = await getJSON(entry.account.host, token, `/repos/${parts.map(encodeURIComponent).join('/')}/git/trees/${treeId.toLowerCase()}?recursive=true&per_page=${pageSize}&page=${page}`)
+    if (!record(response.value) || !Array.isArray(response.value.tree)) throw new Error('Gitea 文件树返回格式无效。')
+    return { value: response.value, hasMore: response.next || Number(response.value.total_count) > page * pageSize || response.value.truncated === true }
+  }
 }
 export const giteaAccounts = new GiteaAccounts()

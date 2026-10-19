@@ -1,5 +1,6 @@
 import { AppStore } from '../../lib/stores'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
+import { CopilotStore } from '../../lib/stores/copilot-store'
 import { Dispatcher } from '../dispatcher'
 import { DesktopAdapter, productVersion } from './adapter'
 import { PresenceHost } from './presence-host'
@@ -10,8 +11,8 @@ import { PopupType } from '../../models/popup'
 import { ApplicationTheme } from '../lib/application-theme'
 import type { ApiInputs, ApiMethod } from '../../../../../macos/src/import-model'
 
-export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cache: RepositoryStateCache) {
-  const adapter = new DesktopAdapter(store, dispatcher, cache)
+export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cache: RepositoryStateCache, copilot: CopilotStore) {
+  const adapter = new DesktopAdapter(store, dispatcher, cache, copilot)
   if (process.env.GITTOGETHER_SMOKE === '1') Object.assign(window, { __gittogetherAdapter: adapter })
   const presence = new PresenceHost(adapter)
   if (process.env.GITTOGETHER_SMOKE === '1') Object.assign(window, { __gittogetherPresence: presence })

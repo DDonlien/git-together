@@ -418,7 +418,7 @@ ipcRenderer.on('cli-action', (_, action) =>
   })
 })(Grid.defaultProps, Grid.propTypes)
 
-installGitTogether(appStore, dispatcher, repositoryStateManager)
+installGitTogether(appStore, dispatcher, repositoryStateManager, copilotStore)
 
 ReactDOM.render(
   <App

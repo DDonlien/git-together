@@ -3901,11 +3901,11 @@
   },
   "patches": {
     "app/src/ui/index.tsx": {
-      "sha256": "368aa3fc2026245a957348252cca72b351d0fef01b3b618d5a9e5c2aed931643",
+      "sha256": "16ba949097d3495ec702027b6e1fc9ac9a8d5bae362713474238bbb05e0a0ff6",
       "reason": "Mount the existing GitTogether UI; keep original initialization and App mounted."
     },
     "app/package.json": {
-      "sha256": "112cade31acd48d8d1391c46273428957a6f83fae86d64959581e86cf6994deb",
+      "sha256": "5707641190dae7a4e8f3aa4e804c7b76d8a9df95349cd559130e23f9b59eab90",
       "reason": "Product identity, version, and isolated app data identity."
     },
     "tsconfig.json": {
@@ -3917,7 +3917,7 @@
       "reason": "Keep two pinned license-submodule source files visible when importing a Git subtree."
     },
     "app/src/crash/crash-app.tsx": {
-      "sha256": "e0a5edf98fb067a4e57a2772125ca5a4ddf152240ad6e986fe1c42bc26f54104",
+      "sha256": "bcd5fcf4639ac7afa8247ddc6db152b2ffaf2093f3149bc2be7db33c8f6609f6",
       "reason": "GitTogether Material presentation only; original controller callbacks and execution are retained."
     },
     "app/src/crash/index.tsx": {

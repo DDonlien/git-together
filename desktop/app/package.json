@@ -3,7 +3,7 @@
   "productName": "GitTogether",
   "bundleID": "com.gittogether.standalone",
   "companyName": "GitTogether",
-  "version": "0.36.1",
+  "version": "0.36.4",
   "main": "./main.js",
   "repository": {
     "type": "git",

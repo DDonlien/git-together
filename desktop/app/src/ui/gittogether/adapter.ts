@@ -4,6 +4,8 @@ import * as Path from 'path'
 import { pathToFileURL } from 'url'
 import { AppStore } from '../../lib/stores'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
+import { CopilotStore } from '../../lib/stores/copilot-store'
+import { findDefaultRemote } from '../../lib/stores/helpers/find-default-remote'
 import { Dispatcher } from '../dispatcher'
 import { Repository } from '../../models/repository'
 import { Account } from '../../models/account'
@@ -16,13 +18,18 @@ import { Branch } from '../../models/branch'
 import { DiffType, IDiff } from '../../models/diff'
 import { getBlobContents } from '../../lib/git/show'
 import { getCommitDiff, getWorkingDirectoryDiff } from '../../lib/git/diff'
-import { git, getStatus, getBranches, getCommits, getCommit, getChangedFiles, listWorktrees } from '../../lib/git'
+import { git, getStatus, getBranches, getCommits, getCommit, getChangedFiles, getRemotes, getRepositoryType, listWorktrees } from '../../lib/git'
+import type { IRemote } from '../../models/remote'
 import { shell } from '../../lib/app-shell'
 import { getHTMLURL } from '../../lib/api'
+import { getUserAgent } from '../../lib/http'
 import type { ApiInputs, ApiMethod, Catalog, LocalFile, RemoteRepository } from '../../../../../macos/src/import-model'
-import type { RepositoryWorkspace, RepositoryTask } from '../../../../../macos/src/repository-model'
+import type { RepositoryCommit, RepositoryWorkspace, RepositoryTask } from '../../../../../macos/src/repository-model'
+import type { RemoteCommitDetails } from '../../../../../macos/src/remote-repository-model'
 import { CustomActions } from './custom-actions'
 import { giteaAccounts } from './gitea-accounts'
+import { discoverRepositories, repositoryIdentity, repositoryURL } from './repository-discovery'
+import { CommitMessageGenerator } from './commit-message-generator'
 
 export const instanceId = randomUUID()
 import { version as productVersion } from '../../../../../package.json'
@@ -37,31 +44,88 @@ export const fileStatus = (file: { status: { kind: AppFileStatusKind; oldPath?: 
 })
 export const commitDTO = (c: Commit, refs: string[] = []) => ({ id: c.sha, summary: c.summary, author: c.author.name, time: c.author.date.toISOString(), parents: [...c.parentSHAs], refs })
 
+function providerCommit(value: unknown): RepositoryCommit {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('远端提交记录格式无效。')
+  const raw = value as Record<string, unknown>
+  const commit = raw.commit && typeof raw.commit === 'object' && !Array.isArray(raw.commit) ? raw.commit as Record<string, unknown> : null
+  const author = commit?.author && typeof commit.author === 'object' && !Array.isArray(commit.author) ? commit.author as Record<string, unknown> : null
+  const parents = raw.parents
+  const id = typeof raw.sha === 'string' ? raw.sha.toLowerCase() : ''
+  const message = typeof commit?.message === 'string' ? commit.message : null
+  const name = typeof author?.name === 'string' ? author.name : ''
+  const time = typeof author?.date === 'string' ? author.date : ''
+  if (!/^[a-f0-9]{40,64}$/.test(id) || message === null || !name || !Number.isFinite(Date.parse(time)) || !Array.isArray(parents)) throw new Error('远端提交记录字段无效。')
+  const parentIds = parents.map(parent => {
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent) || typeof (parent as Record<string, unknown>).sha !== 'string' || !/^[a-f0-9]{40,64}$/i.test((parent as Record<string, unknown>).sha as string)) throw new Error('远端父提交记录无效。')
+    return ((parent as Record<string, unknown>).sha as string).toLowerCase()
+  })
+  return { id, summary: message.split(/\r?\n/, 1)[0], author: name, time, parents: parentIds, refs: [] }
+}
+
+function providerCommits(value: unknown): RepositoryCommit[] {
+  if (!Array.isArray(value)) throw new Error('远端提交历史返回格式无效。')
+  return value.map(providerCommit)
+}
+
+async function githubJSON(url: URL, token: string): Promise<{ value: unknown; headers: Headers }> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+  try {
+    const response = await window.fetch(url.href, {
+      method: 'GET', headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': getUserAgent() },
+      credentials: 'omit', cache: 'no-store', redirect: 'manual', signal: controller.signal,
+    })
+    if (response.type === 'opaqueredirect' || response.status >= 300 && response.status < 400) throw new Error('GitHub API 发生重定向，已停止读取远端内容。')
+    if (response.status !== 200) throw new Error(`GitHub 远端内容读取失败（HTTP ${response.status}）；请检查账号仓库权限或稍后重试。`)
+    if (!response.body) throw new Error('GitHub API 返回了空响应。')
+    const reader = response.body.getReader(), chunks: Uint8Array[] = []
+    let size = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.length
+      if (size > 16 * 1024 * 1024) throw new Error('GitHub API 响应过大。')
+      chunks.push(value)
+    }
+    let value: unknown
+    try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')) }
+    catch { throw new Error('GitHub API 返回了无效 JSON。') }
+    return { value, headers: response.headers }
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('GitHub API 响应超时，请稍后重试。')
+    if (error instanceof TypeError) throw new Error('无法连接 GitHub API，请检查网络和系统代理。')
+    throw error
+  } finally { clearTimeout(timeout); controller.abort() }
+}
+
 /** Presentation translation only. Standard writes always enter Desktop's Dispatcher. */
 export class DesktopAdapter {
   private revision = 0
   private epoch = 0
-  private readonly local = new Map<string, Repository[]>()
+  private local = new Map<string, Repository[]>()
+  private readonly remoteURLs = new Map<string, { remote: IRemote | null; urls: string[] }>()
   private readonly workspaceCache = new Map<string, { states: unknown[]; value: RepositoryWorkspace }>()
   private readonly remoteCache = new Map<string, { state: unknown; epoch: number; value: Awaited<ReturnType<DesktopAdapter['readRemoteWorkspace']>> }>()
   private readonly reads = new Map<string, Promise<RepositoryWorkspace>>()
   private readonly results = new Map<string, { fingerprint: string; result: Promise<unknown> }>()
   public readonly actions: CustomActions
+  public readonly commitMessages: CommitMessageGenerator
   public readonly gitea = giteaAccounts
-  public constructor(public readonly store: AppStore, public readonly dispatcher: Dispatcher, public readonly cache: RepositoryStateCache) {
+  public constructor(public readonly store: AppStore, public readonly dispatcher: Dispatcher, public readonly cache: RepositoryStateCache, copilot: CopilotStore) {
     this.actions = new CustomActions(this)
+    this.commitMessages = new CommitMessageGenerator(this, copilot)
     store.onDidUpdate(() => { this.revision++ })
     this.gitea.onDidChange(() => { this.revision++; this.epoch++; this.workspaceCache.clear(); this.remoteCache.clear() })
   }
   public repositories(): Repository[] { return this.store.getState().repositories.filter((r): r is Repository => r instanceof Repository) }
   public async catalog(): Promise<Catalog> {
     const state = this.store.getState()
-    const accounts: Catalog['accounts'] = state.accounts.map(a => ({ id: accountId(a), provider: a.endpoint === 'https://api.github.com' ? 'github' : 'github-enterprise', host: getHTMLURL(a.endpoint), login: a.login, name: a.name || a.login, updatedAt: new Date().toISOString() }))
+    const accounts: Catalog['accounts'] = state.accounts.map(a => ({ id: accountId(a), provider: a.endpoint === 'https://api.github.com' ? 'github' : 'github-enterprise', host: getHTMLURL(a.endpoint), login: a.login, name: a.name || a.login, updatedAt: new Date().toISOString(), ...(a.avatarURL ? { avatarUrl: a.avatarURL } : {}) }))
     const repositories = new Map<string, RemoteRepository>()
     const gitea = await this.gitea.snapshot()
     accounts.push(...gitea.accounts)
     for (const repo of gitea.repositories) repositories.set(repo.id, repo)
-    this.local.clear()
+    const local = new Map<string, Repository[]>()
     for (const [account, value] of state.apiRepositories) {
       for (const r of value.repositories) {
         const id = `${accountId(account)}:${r.owner.login}/${r.name}`
@@ -71,21 +135,60 @@ export class DesktopAdapter {
     for (const repo of this.repositories()) {
       const gh = repo.gitHubRepository
       const saved = this.cache.get(repo)
-      const remote = gh?.htmlURL || saved.remote?.url
-      let url = remote ? browserURL(remote) : pathToFileURL(repo.path).href
+      let known = this.remoteURLs.get(repo.path)
+      if (!known || known.remote !== saved.remote) {
+        const readable = !repo.missing && (await getRepositoryType(repo.path)).kind === 'regular'
+        const remotes = readable ? await getRemotes(repo) : []
+        const primary = findDefaultRemote(remotes)
+        known = { remote: saved.remote, urls: readable ? (primary ? [primary, ...remotes.filter(remote => remote !== primary)] : []).map(remote => remote.url) : known?.urls || [] }
+        this.remoteURLs.set(repo.path, known)
+      }
+      const remote = gh?.htmlURL || saved.remote?.url || known.urls[0]
+      let url = remote && repositoryURL(remote) || pathToFileURL(repo.path).href
       const account = gh ? state.accounts.find(a => a.endpoint === gh.endpoint) : undefined
       let aid = account ? accountId(account) : 'local'
       const fullName = gh ? `${gh.owner.login}/${gh.name}` : new URL(url).protocol === 'file:' ? repo.name : new URL(url).pathname.slice(1)
       let id = `${aid}:${fullName}`
-      const candidates = [...repositories.values()].filter(r => r.url.toLowerCase().replace(/\.git$/, '') === url.toLowerCase().replace(/\.git$/, '') && (r.accountId === aid || !account && r.accountId.startsWith('gitea:')))
+      const identities = [url, ...known.urls].map(repositoryIdentity).filter(identity => identity !== null)
+      const allCandidates = [...repositories.values()].filter(r => {
+        const identity = repositoryIdentity(r.url)
+        return identity !== null && identities.includes(identity) && (r.accountId === aid || !account && r.accountId.startsWith('gitea:'))
+      })
+      const primaryCandidates = allCandidates.filter(repo => repositoryIdentity(repo.url) === repositoryIdentity(url))
+      const candidates = primaryCandidates.length ? primaryCandidates : allCandidates
       const remoteLogin = remote && /^https?:\/\//.test(remote) ? new URL(remote).username : ''
       const match = candidates.find(r => !remoteLogin || encodeURIComponent(accounts.find(a => a.id === r.accountId)?.login || '') === remoteLogin) || candidates[0]
       if (match) { id = match.id; url = match.url; aid = match.accountId }
       if (!accounts.some(a => a.id === aid)) accounts.push({ id: aid, provider: 'local', host: 'file:///', login: '', name: '本地仓库', updatedAt: new Date().toISOString() })
       repositories.set(id, { ...match, id, accountId: aid, remoteId: match?.remoteId || repo.id, name: match?.name || repo.name, fullName: match?.fullName || fullName, description: match?.description || '', defaultBranch: saved.branchesState.defaultBranch?.name || match?.defaultBranch || 'main', private: match?.private ?? gh?.isPrivate ?? false, url, available: !repo.missing })
-      this.local.set(id, [...(this.local.get(id) || []), repo])
+      local.set(id, [...(local.get(id) || []), repo])
     }
-    return { instanceId, revision: this.revision, accounts, repositories: [...repositories.values()], links: [...this.local].map(([repositoryId, repos]) => ({ repositoryId, path: repos[0].path, worktrees: repos.map(r => ({ path: r.path, branch: this.branch(r) })) })), credentialStorage: 'encrypted' }
+    this.local = local
+    return { instanceId, revision: this.revision, accounts, repositories: [...repositories.values()], links: [...local].map(([repositoryId, repos]) => ({ repositoryId, path: repos[0].path, worktrees: repos.map(r => ({ path: r.path, branch: this.branch(r) })) })), credentialStorage: 'encrypted' }
+  }
+  private async addDiscoveredRepositories(found: Map<string, string[]>): Promise<void> {
+    if (!found.size) return
+    const combined = new Map<string, Set<string>>()
+    for (const [path, ids] of found) {
+      for (const id of ids) {
+        const paths = combined.get(id) || new Set(this.local.get(id)?.map(repo => repo.path))
+        paths.add(path); combined.set(id, paths)
+        if (paths.size > 64) throw new Error('此仓库的已关联及新匹配工作目录超过64个，请缩小范围；原关联未改变。')
+      }
+    }
+    const existing = new Set(this.repositories().map(repo => repo.id))
+    try {
+      const repos = await this.dispatcher.addRepositories([...found.keys()])
+      if (repos.length !== found.size) throw new Error('部分匹配目录已变化，未完成添加；请重新匹配。')
+      for (const repo of repos) await this.dispatcher.refreshRepository(repo)
+      if (!this.store.getState().selectedState) await this.dispatcher.selectRepository(repos[0])
+      this.epoch++; this.workspaceCache.clear(); this.remoteCache.clear()
+    } catch (error) {
+      for (const repo of this.repositories()) {
+        if (found.has(repo.path) && !existing.has(repo.id)) await this.dispatcher.removeRepository(repo, false)
+      }
+      throw error
+    }
   }
   public branch(repo: Repository): string {
     const tip = this.cache.get(repo).branchesState.tip
@@ -102,6 +205,111 @@ export class DesktopAdapter {
     const repo = (await this.catalog()).repositories.find(r => r.id === id)
     if (!repo) throw new Error("仓库不在当前 目录中。")
     return repo
+  }
+  private async providerHistoryPage(repositoryId: string, head: string, page: number): Promise<{ commits: RepositoryCommit[]; hasMore: boolean }> {
+    const repository = await this.remote(repositoryId)
+    const accountInfo = (await this.catalog()).accounts.find(account => account.id === repository.accountId)
+    if (accountInfo?.provider === 'gitea') {
+      const result = await this.gitea.graphHistoryPage(repositoryId, head, page)
+      return { commits: providerCommits(result.value), hasMore: result.hasMore }
+    }
+    if (accountInfo?.provider !== 'github' && accountInfo?.provider !== 'github-enterprise') {
+      const repo = await this.repository(repositoryId)
+      const local = await getCommits(repo, head, 100, (page - 1) * 100)
+      return { commits: local.map(commit => commitDTO(commit)), hasMore: local.length === 100 }
+    }
+    const account = this.store.getState().accounts.find(item => accountId(item) === repository.accountId)
+    if (!account?.token) throw new Error('GitHub 账号令牌不可用，请重新连接账号。')
+    if (!/^[a-f0-9]{40,64}$/i.test(head) || !Number.isSafeInteger(page) || page < 1) throw new Error('远端提交分页参数无效。')
+    const parts = repository.fullName.split('/')
+    if (parts.length !== 2 || parts.some(part => !part || part === '.' || part === '..')) throw new Error('GitHub 仓库身份无效。')
+    const apiRoot = account.endpoint.endsWith('/') ? account.endpoint : account.endpoint + '/'
+    const url = new URL(`repos/${parts.map(encodeURIComponent).join('/')}/commits`, apiRoot)
+    url.searchParams.set('sha', head)
+    url.searchParams.set('per_page', '100')
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('stat', 'false')
+    const result = await githubJSON(url, account.token)
+    const commits = providerCommits(result.value)
+    return { commits, hasMore: /rel="?next"?/i.test(result.headers.get('link') || '') || commits.length >= 100 }
+  }
+  private async providerCommitDetails(repositoryId: string, commitId: string): Promise<RemoteCommitDetails> {
+    if (!/^[a-f0-9]{40,64}$/i.test(commitId)) throw new Error('远端提交编号无效。')
+    const repository = await this.remote(repositoryId)
+    const accountInfo = (await this.catalog()).accounts.find(account => account.id === repository.accountId)
+    let value: unknown
+    if (accountInfo?.provider === 'gitea') value = await this.gitea.graphCommit(repositoryId, commitId)
+    else {
+      if (accountInfo?.provider !== 'github' && accountInfo?.provider !== 'github-enterprise') throw new Error('此平台的远端历史提交不在本地对象库中，当前无法读取提交详情。')
+      const account = this.store.getState().accounts.find(item => accountId(item) === repository.accountId)
+      if (!account?.token) throw new Error('GitHub 账号令牌不可用，请重新连接账号。')
+      const parts = repository.fullName.split('/')
+      if (parts.length !== 2 || parts.some(part => !part || part === '.' || part === '..')) throw new Error('GitHub 仓库身份无效。')
+      const apiRoot = account.endpoint.endsWith('/') ? account.endpoint : account.endpoint + '/'
+      const url = new URL(`repos/${parts.map(encodeURIComponent).join('/')}/commits/${commitId.toLowerCase()}`, apiRoot)
+      url.searchParams.set('per_page', '100'); url.searchParams.set('page', '1'); url.searchParams.set('stat', 'false')
+      value = (await githubJSON(url, account.token)).value
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('远端提交详情返回格式无效。')
+    const raw = value as Record<string, unknown>
+    const commit = providerCommit(raw)
+    if (commit.id !== commitId.toLowerCase()) throw new Error('远端提交详情与所选编号不一致。')
+    const rows = Array.isArray(raw.files) ? raw.files : []
+    const files = rows.map(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('远端提交文件记录无效。')
+      const file = item as Record<string, unknown>
+      if (typeof file.filename !== 'string' || typeof file.status !== 'string') throw new Error('远端提交文件记录无效。')
+      return { path: file.filename, status: file.status, ...(typeof file.previous_filename === 'string' ? { previousPath: file.previous_filename } : {}), patch: typeof file.patch === 'string' ? file.patch : null }
+    })
+    const diff = files.map(file => file.patch === null ? `# ${file.path}: 平台未返回文本补丁` : `--- a/${file.previousPath || file.path}\n+++ b/${file.path}\n${file.patch}`).join('\n')
+    const commitData = raw.commit && typeof raw.commit === 'object' && !Array.isArray(raw.commit) ? raw.commit as Record<string, unknown> : null
+    const treeData = commitData?.tree && typeof commitData.tree === 'object' && !Array.isArray(commitData.tree) ? commitData.tree as Record<string, unknown> : null
+    const treeId = typeof treeData?.sha === 'string' ? treeData.sha : ''
+    let tree = { paths: [] as string[], complete: false }, warning = ''
+    try { if (treeId) tree = await this.providerTree(repositoryId, treeId) }
+    catch (error) { warning = error instanceof Error ? `提交文件树读取失败：${error.message}` : '提交文件树读取失败。' }
+    if (!tree.complete && !warning) warning = '所选提交的完整文件树暂未读取，右侧保留当前远端分支文件树。'
+    return { commit, files, diff, tree: tree.paths, treeComplete: tree.complete, warnings: warning ? [warning] : [] }
+  }
+  private async providerTree(repositoryId: string, treeId: string): Promise<{ paths: string[]; complete: boolean }> {
+    if (!/^[a-f0-9]{40,64}$/i.test(treeId)) return { paths: [], complete: false }
+    const repository = await this.remote(repositoryId)
+    const accountInfo = (await this.catalog()).accounts.find(account => account.id === repository.accountId)
+    const paths = new Set<string>()
+    let complete = true
+    const add = (value: unknown) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('远端文件树条目无效。')
+      const item = value as Record<string, unknown>
+      if (item.type !== 'blob' && item.type !== 'commit') return
+      if (typeof item.path !== 'string' || !item.path || item.path.startsWith('/') || item.path.includes('\\') || item.path.split('/').some(part => !part || part === '.' || part === '..' || /[\0-\x1f]/.test(part))) throw new Error('远端文件树路径无效。')
+      if (paths.has(item.path)) return
+      if (paths.size >= 20_000) { complete = false; return }
+      paths.add(item.path)
+    }
+    if (accountInfo?.provider === 'gitea') {
+      for (let page = 1; page <= 200; page++) {
+        const result = await this.gitea.graphTreePage(repositoryId, treeId, page)
+        const body = result.value as Record<string, unknown>
+        for (const item of body.tree as unknown[]) add(item)
+        if (body.truncated === true) complete = false
+        if (!result.hasMore || !complete) break
+        if (page === 200) complete = false
+      }
+    } else {
+      const account = this.store.getState().accounts.find(item => accountId(item) === repository.accountId)
+      if (!account?.token) throw new Error('GitHub 账号令牌不可用，请重新连接账号。')
+      const parts = repository.fullName.split('/')
+      if (parts.length !== 2 || parts.some(part => !part || part === '.' || part === '..')) throw new Error('GitHub 仓库身份无效。')
+      const apiRoot = account.endpoint.endsWith('/') ? account.endpoint : account.endpoint + '/'
+      const url = new URL(`repos/${parts.map(encodeURIComponent).join('/')}/git/trees/${treeId.toLowerCase()}`, apiRoot)
+      url.searchParams.set('recursive', '1')
+      const response = await githubJSON(url, account.token)
+      if (!response.value || typeof response.value !== 'object' || Array.isArray(response.value) || !Array.isArray((response.value as Record<string, unknown>).tree)) throw new Error('GitHub 文件树返回格式无效。')
+      const body = response.value as Record<string, unknown>
+      for (const item of body.tree as unknown[]) add(item)
+      complete = body.truncated !== true && complete
+    }
+    return { paths: [...paths], complete }
   }
   public async checked(input: { repositoryId: string; taskId: string; expectedHead: string; changeKey?: string }): Promise<Repository> {
     const repo = await this.repository(input.repositoryId, input.taskId)
@@ -183,16 +391,49 @@ export class DesktopAdapter {
   private async readRemoteWorkspace(id: string) {
     const repo = await this.repository(id)
     const branches = await getBranches(repo, 'refs/remotes')
-    const tasks: RepositoryTask[] = []
-    const commits = new Map<string, ReturnType<typeof commitDTO>>()
-    for (const b of branches) {
-      if (b.type !== BranchType.Remote) continue
-      const history = await getCommits(repo, b.ref, 100)
-      for (const c of history) commits.set(c.sha, commitDTO(c, branches.filter(r => r.tip.sha === c.sha).map(r => r.nameWithoutRemote)))
-      const tree = await git(['ls-tree', '-r', '--name-only', '-z', b.tip.sha], repo.path, 'getTree')
-      tasks.push({ id: `remote:${b.name}`, branch: b.nameWithoutRemote, head: b.tip.sha, path: null, files: [], tree: tree.stdout.split('\0').filter(Boolean), error: '', remote: true, treeComplete: true, historyHasMore: history.length === 100 })
+    const remoteBranches = branches.filter(branch => branch.type === BranchType.Remote)
+    const histories = new Map<string, { commits: RepositoryCommit[]; hasMore: boolean; error: string }>()
+    const heads = [...new Set(remoteBranches.map(branch => branch.tip.sha).filter(Boolean))]
+    let cursor = 0
+    await Promise.all(Array.from({ length: Math.min(4, heads.length) }, async () => {
+      while (cursor < heads.length) {
+        const head = heads[cursor++]
+        try {
+          const page = await this.providerHistoryPage(id, head, 1)
+          if (!page.commits.length || page.commits[0].id !== head.toLowerCase()) throw new Error('远端分支没有返回与本地追踪 HEAD 一致的提交。')
+          histories.set(head, { ...page, error: '' })
+        } catch (error) {
+          histories.set(head, { commits: [], hasMore: false, error: error instanceof Error ? error.message : '读取远端提交历史失败。' })
+        }
+      }
+    }))
+    const refsByHead = new Map<string, string[]>()
+    for (const branch of remoteBranches) {
+      const refs = refsByHead.get(branch.tip.sha) || []
+      refs.push(`refs/remotes/${branch.remoteName}/${branch.nameWithoutRemote}`)
+      refsByHead.set(branch.tip.sha, refs)
     }
-    return { tasks, commits: [...commits.values()], complete: true, source: 'remote' as const, checkedAt: Date.now(), warnings: [] }
+    const commits = new Map<string, RepositoryCommit>()
+    for (const history of histories.values()) for (const commit of history.commits) {
+      const refs = refsByHead.get(commit.id) || []
+      const previous = commits.get(commit.id)
+      commits.set(commit.id, previous ? { ...previous, refs: [...new Set([...previous.refs, ...refs])] } : { ...commit, refs })
+    }
+    const tasks = await Promise.all(remoteBranches.map(async branch => {
+      const history = histories.get(branch.tip.sha)
+      let tree: string[] = [], treeComplete = true, error = history?.error || ''
+      try {
+        const result = await git(['ls-tree', '-r', '--name-only', '-z', branch.tip.sha], repo.path, 'getTree')
+        tree = result.stdout.split('\0').filter(Boolean)
+      } catch (problem) {
+        treeComplete = false
+        const treeError = problem instanceof Error ? problem.message : '读取远端文件树失败。'
+        error = error ? `${error} 文件树读取失败：${treeError}` : `文件树读取失败：${treeError}`
+      }
+      return { id: `remote:${branch.name}`, branch: branch.nameWithoutRemote, head: branch.tip.sha, path: null, files: [], tree, error, remote: true, treeComplete, historyHasMore: history?.hasMore || false }
+    }))
+    const warnings = tasks.filter(task => task.error).map(task => `${task.branch}：${task.error}`)
+    return { tasks, commits: [...commits.values()], complete: tasks.every(task => !task.error), source: 'remote' as const, checkedAt: Date.now(), warnings }
   }
   private async waitForNativeOperation(repo: Repository): Promise<void> {
     const busy = () => this.store.getState().currentPopup !== null || this.cache.get(repo).isPushPullFetchInProgress || this.cache.get(repo).isCommitting
@@ -292,17 +533,17 @@ export class DesktopAdapter {
       case 'updateAccount': throw new Error("请退出账号后重新登录。")
       case 'link': {
         const path = String(v.path || '')
-        const before = new Set(this.repositories().map(r => r.id))
+        if (id) {
+          const found = await discoverRepositories(path, [await this.remote(id)], typeof v.branch === 'string' ? v.branch : undefined)
+          if (!found.size) throw new Error('所选文件夹及子文件夹中未找到此远端仓库的匹配工作目录，原关联未改变。')
+          await this.addDiscoveredRepositories(found)
+          return this.catalog()
+        }
         const [repo] = await this.dispatcher.addRepositories([path])
         if (!repo) throw new Error("无法添加此目录。")
         await this.dispatcher.selectRepository(repo)
         await this.dispatcher.refreshRepository(repo)
-        const next = await this.catalog()
-        if (id && !next.links.some(l => l.repositoryId === id && (l.path === repo.path || l.worktrees?.some(w => w.path === repo.path)))) {
-          if (!before.has(repo.id)) await this.dispatcher.removeRepository(repo, false)
-          throw new Error('所选目录不属于此远端仓库，未保存关联。')
-        }
-        return next
+        return this.catalog()
       }
       case 'unlink': {
         await this.catalog()
@@ -326,11 +567,14 @@ export class DesktopAdapter {
         return this.catalog()
       }
       case 'matchAccountRepositories': {
-        const [repo] = await this.dispatcher.addRepositories([String(v.path)])
-        if (!repo) throw new Error('请选择一个实际 Git 仓库目录。')
-        await this.dispatcher.selectRepository(repo)
+        const before = await this.catalog()
+        if (!before.accounts.some(account => account.id === v.accountId)) throw new Error('账号已不在当前目录中，请刷新后重试。')
+        const targets = before.repositories.filter(repo => repo.accountId === v.accountId && repo.available)
+        const found = targets.length ? await discoverRepositories(String(v.path || ''), targets) : new Map<string, string[]>()
+        await this.addDiscoveredRepositories(found)
         const catalog = await this.catalog()
-        return { catalog, matchedRepositoryIds: catalog.links.filter(l => l.path === repo.path).map(l => l.repositoryId) }
+        const matched = new Set([...found.values()].flat())
+        return { catalog, matchedRepositoryIds: catalog.links.filter(link => matched.has(link.repositoryId)).map(link => link.repositoryId) }
       }
       case 'snapshot': {
         const ws = await this.workspace(id); const task = ws.tasks[0]
@@ -350,6 +594,7 @@ export class DesktopAdapter {
       case 'remoteCommit': {
         const repo = await this.repository(id, tid)
         const c = await getCommit(repo, String(v.commitId))
+        if (!c && method === 'remoteCommit') return this.providerCommitDetails(id, String(v.commitId))
         if (!c) throw new Error('提交不在已下载的历史中。')
         const changed = await getChangedFiles(repo, c.sha)
         const files = changed.files.map(fileStatus)
@@ -359,10 +604,9 @@ export class DesktopAdapter {
         return { commit: commitDTO(c), files: files.map(f => ({ ...f, patch: null })), diff: diffs.map(diffText).join('\n'), tree: tree.stdout.split('\0').filter(Boolean), treeComplete: true, warnings: [] }
       }
       case 'remoteHistory': {
-        const repo = await this.repository(id)
         const page = Number(v.page)
-        const commits = await getCommits(repo, String(v.head), 100, (page - 1) * 100)
-        return { head: String(v.head), page, commits: commits.map(c => commitDTO(c)), hasMore: commits.length === 100 }
+        const result = await this.providerHistoryPage(id, String(v.head), page)
+        return { head: String(v.head), page, commits: result.commits, hasMore: result.hasMore }
       }
       case 'remoteFile': {
         const repo = await this.repository(id)
@@ -386,17 +630,8 @@ export class DesktopAdapter {
       }
       case 'submitCommit': return this.commit(input as ApiInputs['submitCommit'])
       case 'pushCommit': return this.push(input as ApiInputs['pushCommit'])
-      case 'generateCommitMessage': {
-        const repo = await this.checked(input as ApiInputs['generateCommitMessage'])
-        const files = this.cache.get(repo).changesState.workingDirectory.files.filter(f => !Array.isArray(v.paths) || v.paths.includes(f.path))
-        if (!await this.dispatcher.generateCommitMessage(repo, files)) throw new Error("提交说明生成尚未完成；请查看提示，或手工填写说明。")
-        const message = this.cache.get(repo).changesState.commitMessage
-        return { summary: message.summary, description: message.description || '' }
-      }
-      case 'cancelCommitGeneration': {
-        this.dispatcher.cancelGenerateCommitMessage(await this.repository(id, tid))
-        return { cancelled: true }
-      }
+      case 'generateCommitMessage': return this.commitMessages.generate(input as ApiInputs['generateCommitMessage'])
+      case 'cancelCommitGeneration': return this.commitMessages.cancel(input as ApiInputs['cancelCommitGeneration'])
       case 'graphSources': {
         const repo = await this.repository(id, tid)
         const branches = await getBranches(repo)
@@ -489,16 +724,6 @@ export async function checkedParents(root: string, target: string) {
   const realTarget = await fs.realpath(target)
   if (realTarget !== realRoot && !realTarget.startsWith(realRoot + Path.sep)) throw new Error('文件链接指向仓库外部。')
 }
-function browserURL(remote: string): string {
-  const ssh = remote.match(/^(?:[^@]+@)?([^:/]+):(.+)$/)
-  if (remote.startsWith('file:')) return remote
-  if (Path.isAbsolute(remote)) return pathToFileURL(remote).href
-  const url = new URL(remote.includes('://') ? remote : ssh ? `https://${ssh[1]}/${ssh[2]}` : remote)
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') url.protocol = 'https:'
-  url.username = ''; url.password = ''; url.pathname = url.pathname.replace(/\.git$/, '')
-  return url.toString().replace(/\/$/, '')
-}
-
 function diffText(diff: IDiff): string {
   if (diff.kind === DiffType.Text) return diff.text
   if (diff.kind === DiffType.Binary || diff.kind === DiffType.Image) return 'Binary files differ\n'

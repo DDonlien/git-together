@@ -192,12 +192,12 @@ export class CrashApp extends React.Component<ICrashAppProps, ICrashAppState> {
     return (
       <div className="gt-crash-page" data-gittogether-surface="CrashRecovery">
         <div className="gt-window-bar"><WindowControls /></div>
-        <main className="gt-crash-card">
+        <main className="gt-crash-content" tabIndex={0}>
           {this.renderTitle()}
           {this.renderDescription()}
           {this.renderErrorDetails()}
-          {this.renderFooter()}
         </main>
+        {this.renderFooter()}
       </div>
     )
   }

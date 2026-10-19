@@ -6,6 +6,10 @@
 
 私有 MessagePort 仅发给确切的本地 frame；不开放任意命令、可执行路径或 Git 凭据。界面的自动检查不创建第二套网络调度。
 
+提交说明生成（0.36.3）由展示桥提供纯模型接口。使用原版账号资格选择、同一 CopilotStore/模型偏好及首次/30天免责声明；无法使用或调用失败时，以本机登录的 Codex CLI 替换模型传输。原版提示词构造、随机数据边界、仓库规则清理和JSON解析直接导入。通过原版Git入口在私有index中构造选中patch，避免原版getFilesDiffText暂存/清空真实index的副作用。CLI在临时目录执行只读、无工具、无MCP的短会话，优先最新可用Luna/low，否则CLI推荐模型；generationId、取消信号、工作目录/HEAD/内容复查限制结果回填，不读取仓库规则文件或附加历史上下文，不执行提交或推送。旧Rust/Node服务仍不进入运行链。
+
+父目录匹配由展示适配层进行有限的文件系统发现，先检查 .git 文件/目录，最多向下六层，仅对还需展开的父目录计算4000个预算，不跟随符号链接、不扫描仓库内容。真实工作目录、远端和登记 worktree 通过原版 getRepositoryType/getRemotes/listWorktrees 核对，完整发现后才调用 Dispatcher.addRepositories/refreshRepository；批量匹配保持已有活动仓库，空活动仓库时选择首个结果启动原版生命周期。Catalog 从原版已保存仓库和只读远端缓存恢复账号归属，缓存随原版 remote 更新失效；不新增关联持久化或后台扫描器。SSH/HTTP端口只在展示身份比较中归一，原版执行始终保留实际远端、凭据和配置。
+
 0.36.0按用户2026-10-18后续要求补充Gitea账号/仓库目录适配。这是明确恢复的main平台能力：独立模块只进行同源Gitea API GET和账号元数据持久化，没有Git执行器或定时工作器；令牌使用原版TokenStore及generic-git-auth。GitHub/企业版认证、标准Git、SSH、credential helper和后台调度仍保持上游。两个React展示层共享三标签类型目录和样式；原版Preferences只替换Accounts视图导入，原事件回调保持摘要校验。
 
 同次原生账号截图发现系统主题下两层界面可能明暗不同，现由原版Store同时提供已选主题与实际主题。私有桥在初始环境读取和后续主题变化时同步给主界面，界面不再独立猜测iframe的系统配色，也不在渲染期间读取旧DOM主题值。原版主题持久化、系统主题监听及执行回调不变。
@@ -13,6 +17,10 @@
 0.36.1将Gitea API从Node http/https.request改为与原版lib/http.ts相同的renderer fetch，由Chromium及原版certificate-error控制器处理代理和证书。保留15秒请求/响应体超时、16MiB响应上限和拒绝全部重定向；分页URL仍仅由本地构造，令牌不进入其他来源。网络失败显示中文说明，不更改系统信任、不关闭TLS校验；真实服务器证书无效时仍拒绝连接。
 
 自定义 Git 语义仅包含 Submit、Clear、Get Latest。Presence 独立 Rust 进程只提供协作协议、账号、组织、Bridge 和控制；其 catalog、状态和执行请求通过私有 stdio 转交原版。原来的 Git/provider/OAuth/Rust Service 不编入该进程。详情见 [执行基础说明](docs/github-desktop-based.md)。
+
+Git Graph（R-05-gitlens-graph-shallow）以原版已读取的远端追踪引用确定远端分支及其 HEAD，再用当前 GitHub、GitHub Enterprise 或 Gitea 账号的只读提交接口分页读取这些 HEAD 的历史；本地工作区继续读取 Desktop Git 对象。两边提交按完整 SHA 去重并保留平台返回的真实 parents，浅克隆不再限制远端历史。远端引用显示为虚线标签，本地独有提交显示空心节点与虚线轨道；只有本地 HEAD 的已读取祖先明确包含远端 HEAD 时才标记「未推送」。被选中的历史提交不在本地对象库时，提交文件与树仍从当前平台读取；不完整结果保留可见提示。该读取沿用 Desktop 账号令牌或加密保存的 Gitea 令牌，不执行 fetch、改写 refs 或访问未关联仓库。
+
+Presence系统存储（0.36.2）：非Windows密钥通过私有stdio交由宿主调用原版TokenStore，使用独立服务名并按实际Presence数据目录隔离；独立程序不再直接访问或禁用钥匙串交互。新文件采用GTP1/AES-GCM，旧GTT1/v10仍以原密钥只读解密，成功保存时才转为新格式；已有文件无法读取或认证时禁止覆盖。启动读取与stdio响应并行，避免加载凭据期间等待自身输入造成阻塞。Windows保持GTTW1/DPAPI格式，Git平台凭据及上游执行逻辑不变。
 
 以下保留迁移前设计作为历史来源，当前分支以上述新边界为准。
 

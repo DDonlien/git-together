@@ -74,5 +74,6 @@ if (mode === 'setup') {
     child.on('exit', code => process.exit(code || 0));
   }
 } else if (mode === 'test') {
-  run(node, ['--test', 'scripts/upstream-boundary.test.mjs']);
+  run('cargo', ['build', '--locked', '--manifest-path', 'desktop/gittogether-presence/Cargo.toml']);
+  run(node, ['--test', 'scripts/upstream-boundary.test.mjs', 'scripts/presence-storage.test.mjs', 'scripts/commit-model.test.mjs']);
 } else throw new Error(`Unknown mode: ${mode}`);

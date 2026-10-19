@@ -8,12 +8,14 @@ import { getPath } from '../main-process-proxy'
 import { getStatus, git } from '../../lib/git'
 import { shell } from '../../lib/app-shell'
 import type { ApiInputs } from '../../../../../macos/src/import-model'
+import { PresenceStorage } from './presence-storage'
 
 type Input = Record<string, unknown>
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void }
 export class PresenceHost {
   private child: ChildProcessWithoutNullStreams | undefined
   private starting: Promise<void> | undefined
+  private storage: PresenceStorage | undefined
   private readonly pending = new Map<string, Pending>()
   private readonly previews = new Map<string, { input: ApiInputs['submitCommit']; expires: number; action: string; scope: string }>()
   private readonly committed = new Map<string, { input: ApiInputs['submitCommit']; commitId: string }>()
@@ -23,6 +25,7 @@ export class PresenceHost {
     if (this.starting) return this.starting
     this.starting = (async () => {
       const root = Path.join(await getPath('userData'), 'presence')
+      this.storage = new PresenceStorage(root)
       const executable = Path.join(__dirname, process.platform === 'win32' ? 'gittogether-presence.exe' : 'gittogether-presence')
       const child = spawn(executable, [root], { stdio: 'pipe', windowsHide: true, env: { ...process.env, ...(process.env.GITTOGETHER_SMOKE === '1' ? { GITTOGETHER_PRESENCE_CONFIG_DIR: Path.join(root, 'isolated-editor-config') } : {}) } })
       this.child = child
@@ -79,6 +82,9 @@ export class PresenceHost {
         const url = new URL(String(input.url))
         if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Presence 网页地址无效。')
         value = await shell.openExternal(url.toString())
+      } else if (message.method === 'storageKey') {
+        if (typeof input.legacy !== 'boolean' || typeof input.create !== 'boolean') throw new Error('Presence 安全存储请求无效。')
+        value = await this.storage!.key(input.legacy, input.create)
       } else if (message.method === 'execute') value = await this.execute(input)
       else throw new Error("Presence 请求的操作不可用。")
       this.child?.stdin.write(JSON.stringify({ callbackId: message.callbackId, ok: true, value }) + '\n')

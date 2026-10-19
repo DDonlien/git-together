@@ -1,8 +1,12 @@
 # GitTogether
 
-0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。服务器仍需提供有效证书。
+0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
 当前 `github-desktop-based` 分支采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+
+选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。匹配结果由 GitHub Desktop 原版保存与刷新，重新打开后保留账号关联。
+
+Submit 生成提交说明时优先使用原版 Copilot；账号没有对应权限或请求失败时，使用本机已登录的 Codex CLI。两者复用 GitHub Desktop 的提示词，只读取选中文件的差异，生成后仍可编辑，不自动提交或推送。生成过程保留现有暂存内容。
 
 在macOS执行 `npm run package:mac` 可构建能直接打开的开发测试版 `.app`，输出到 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。测试版使用独立开发身份及数据目录，不替换已安装应用；正式分发的签名、公证和更新发布另行处理。
 

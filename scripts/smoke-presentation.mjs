@@ -162,13 +162,35 @@ try {
     return window.id;
   }, join(root, 'desktop/out/crash.html'));
   const crash = await crashPageReady;
-  await crash.waitForSelector('.gt-crash-card');
+  await crash.waitForSelector('.gt-crash-content');
   await app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id).webContents.send('error', { type: 'launch', error: { name: 'FixtureError', message: 'Isolated presentation fixture', stack: 'FixtureError: Isolated presentation fixture' } }), crashId);
   await crash.waitForFunction(() => document.body.innerText.includes('Isolated presentation fixture'));
   assert.equal(await crash.locator('.background-graphic-bottom, #crash-app').count(), 0);
   await crash.screenshot({ path: join(output, 'crash-recovery.png') }); report.screenshots.push('crash-recovery.png');
+  const longStack = 'Error: kill EPERM\n' + Array.from({ length: 45 }, (_, i) => `    at fixture${i} (app/src/ui/gittogether/${'long-path-'.repeat(12)}codex-commit-message.ts:54:23)`).join('\n');
+  await app.evaluate(({ BrowserWindow }, { id, stack }) => BrowserWindow.fromId(id).webContents.send('error', { type: 'generic', error: { name: 'Error', message: 'kill EPERM', stack } }), { id: crashId, stack: longStack });
+  await crash.waitForFunction(() => document.querySelector('pre')?.textContent.includes('fixture44'));
+  for (const [theme, width, height] of [['light', 900, 680], ['dark', 600, 500], ['light', 420, 420]]) {
+    await app.evaluate(({ BrowserWindow }, { id, width, height }) => BrowserWindow.fromId(id).setContentSize(width, height), { id: crashId, width, height });
+    await crash.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await crash.waitForFunction(width => innerWidth === width, width);
+    const layout = await crash.evaluate(() => {
+      const content = document.querySelector('.gt-crash-content'), pre = document.querySelector('pre'), footer = document.querySelector('.gt-crash-page > .footer');
+      const scrolls = [...document.querySelectorAll('.gt-crash-page, .gt-crash-page *')].filter(el => /auto|scroll/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1);
+      content.scrollTop = content.scrollHeight;
+      return { cardCount: document.querySelectorAll('.gt-crash-card').length, scrolls: scrolls.map(el => el.className), shadow: getComputedStyle(content).boxShadow, radius: getComputedStyle(content).borderRadius, preOverflow: getComputedStyle(pre).overflowY, horizontalOverflow: content.scrollWidth > content.clientWidth + 1, footerBottom: footer.getBoundingClientRect().bottom, footerTop: footer.getBoundingClientRect().top, contentBottom: content.getBoundingClientRect().bottom, viewport: innerHeight, bottomReached: content.scrollTop + content.clientHeight >= content.scrollHeight - 1, finalLine: pre.textContent.includes('fixture44'), version: pre.textContent.includes('Version:') };
+    });
+    assert.equal(layout.cardCount, 0); assert.deepEqual(layout.scrolls, ['gt-crash-content']); assert.equal(layout.shadow, 'none'); assert.equal(layout.radius, '0px'); assert.equal(layout.preOverflow, 'visible'); assert.equal(layout.horizontalOverflow, false);
+    assert.ok(layout.footerBottom <= layout.viewport && layout.footerTop >= layout.contentBottom); assert.equal(layout.bottomReached, true); assert.equal(layout.finalLine, true); assert.equal(layout.version, true);
+    const filename = `crash-single-scroll-${theme}-${width}.png`; await crash.screenshot({ path: join(output, filename) }); report.screenshots.push(filename);
+    await crash.locator('.gt-crash-content').focus(); await crash.keyboard.press('Home');
+    await crash.waitForFunction(() => document.querySelector('.gt-crash-content').scrollTop === 0);
+    await crash.getByRole('button', { name: '退出', exact: true }).focus(); assert.equal(await crash.getByRole('button', { name: '退出', exact: true }).evaluate(el => el === document.activeElement), true);
+  }
+  const quit = app.evaluate(({ ipcMain }) => new Promise(resolve => ipcMain.once('crash-quit', () => resolve(true))));
+  await crash.getByRole('button', { name: '退出', exact: true }).click(); assert.equal(await quit, true);
   await app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id).destroy(), crashId);
-  report.checks.push('Crash recovery has a Material view, verified with an isolated presentation window without triggering a real crash');
+  report.checks.push('Crash recovery has no nested card or detail scroller: long stacks wrap in one keyboard-scrollable content region, footer and original quit callback remain usable in light/dark and 900/600/420px windows.');
   assert.deepEqual(errors, []);
   report.ok = true;
 } catch (error) {

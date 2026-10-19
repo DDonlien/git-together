@@ -3,9 +3,14 @@ import type { WorkspaceController } from './use-workspace';
 import type { Account } from './import-model';
 import { providerName } from './import-model';
 import { desktopAccountProviders, type DesktopAccountProvider } from './desktop-account-providers';
-import { Button, Icon, TextField, Notice } from './ui';
+import { Button, Icon, TextField, Notice, Modal } from './ui';
 import { importAPI } from './import-api';
 import './account-settings.css';
+
+function DesktopAccountAvatar({ account }: { account: Account }) {
+  const [failed, setFailed] = useState(false);
+  return <span className={'provider-mark ' + account.provider}>{account.avatarUrl && !failed ? <img className="account-settings-avatar" src={account.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <Icon name="branch" size={17} />}</span>;
+}
 
 export function DesktopAccounts({ controller }: { controller: WorkspaceController }) {
   const [adding, setAdding] = useState(false);
@@ -15,6 +20,9 @@ export function DesktopAccounts({ controller }: { controller: WorkspaceControlle
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [editError, setEditError] = useState('');
   const accounts = controller.catalog.accounts.filter(account => account.provider !== 'local');
   const run = async (action: () => Promise<unknown>) => {
     setBusy(true); setError('');
@@ -28,6 +36,13 @@ export function DesktopAccounts({ controller }: { controller: WorkspaceControlle
     setProvider(account?.provider === 'gitea' ? 'gitea' : 'github');
     setHost(account?.host || ''); setName(account?.name || ''); setToken(''); setError(''); setAdding(true);
   };
+  const editName = (account: Account) => { setEditing(account); setDisplayName(account.name); setEditError(''); };
+  const saveName = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    try { controller.setAccountDisplayName(editing.id, displayName); setEditing(null); }
+    catch (problem) { setEditError(problem instanceof Error ? problem.message : '名称保存失败，请重试。'); }
+  };
   const connect = async () => {
     if (await run(() => controller.connect({ provider, host: provider === 'github' ? 'https://github.com' : host, name, token }))) reset();
   };
@@ -35,9 +50,10 @@ export function DesktopAccounts({ controller }: { controller: WorkspaceControlle
     <div className="section-title"><h2>账号</h2><Button leadingIcon={<Icon name="plus" size={15} />} disabled={adding || busy} onClick={() => add()}>添加账号</Button></div>
     {(accounts.length > 0 || adding) && <div className="settings-group account-settings-list" role="group" aria-label="账号列表">
       {accounts.map(account => <div className="account-settings-entry" key={account.id}><div className="account-setting">
-        <span className={'provider-mark ' + account.provider}><Icon name="branch" size={17} /></span>
+        <DesktopAccountAvatar account={account} />
         <div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login} · {new URL(account.host).host}</small>{account.error && <span className="account-warning" role="status">{account.error}</span>}</div>
         <div className="account-entry-actions">
+          {(account.provider === 'github' || account.provider === 'github-enterprise') && <Button variant="quiet" disabled={busy || adding} onClick={() => editName(account)}>编辑名称</Button>}
           {account.provider === 'gitea' && <Button variant="quiet" disabled={busy || adding} onClick={() => add(account)}>重新连接</Button>}
           <Button variant="quiet" disabled={busy} onClick={() => void run(() => controller.refresh(account.id))}>刷新</Button>
           <Button variant="quiet" disabled={busy} onClick={() => void run(() => importAPI('openAccountAccessSettings', { accountId: account.id }))}>授权管理</Button>
@@ -64,5 +80,11 @@ export function DesktopAccounts({ controller }: { controller: WorkspaceControlle
       </form>}
     </div>}
     {error && <Notice kind="error">{error}</Notice>}
+    {editing && <Modal title="编辑账号名称" onClose={() => setEditing(null)}><form className="account-name-edit-form" onSubmit={saveName} aria-label="编辑账号名称">
+      <TextField label="GitTogether 显示名称" value={displayName} onChange={event => setDisplayName(event.target.value)} required maxLength={120} autoComplete="off" autoFocus />
+      <p className="account-entry-help">此名称保存在 GitTogether 中，仅用于应用内显示。</p>
+      {editError && <Notice kind="error">{editError}</Notice>}
+      <div className="modal-actions"><Button type="button" disabled={busy} onClick={() => setEditing(null)}>取消</Button><Button variant="primary" type="submit" disabled={busy || !displayName.trim() || displayName.trim() === editing.name}>保存名称</Button></div>
+    </form></Modal>}
   </section>;
 }

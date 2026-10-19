@@ -10,6 +10,8 @@
 .account-entry-help { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .account-entry-actions { display: flex; flex: 0 1 auto !important; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px; }
 .account-entry-fields .account-form-actions { display: flex; justify-content: flex-start; }
+.account-settings-avatar { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.account-name-edit-form { display: grid; gap: 16px; min-width: min(420px, 72vw); padding-top: 8px; }
 @media (max-width: 800px) {
   .desktop-accounts .account-setting { flex-wrap: wrap; }
   .account-entry-actions { width: 100%; justify-content: flex-start; }

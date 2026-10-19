@@ -59,14 +59,14 @@ pub struct RemoteControl {
     journal_file: std::path::PathBuf,
 }
 impl RemoteControl {
-    pub fn new(
+    pub async fn new(
         service: Arc<Service>,
         presence: Arc<Presence>,
         persistent: bool,
     ) -> Result<Arc<Self>> {
-        Self::new_scope(service, presence, persistent, None)
+        Self::new_scope(service, presence, persistent, None).await
     }
-    fn new_scope(
+    async fn new_scope(
         service: Arc<Service>,
         presence: Arc<Presence>,
         persistent: bool,
@@ -79,9 +79,9 @@ impl RemoteControl {
             .unwrap_or_default();
         let config_file = root.join(format!("remote-control-v1{suffix}.encrypted"));
         let journal_file = root.join(format!("remote-control-journal-v1{suffix}.encrypted"));
-        let loaded = (|| -> Result<(Configuration, BTreeMap<String, Record>)> {
+        let loaded: Result<(Configuration, BTreeMap<String, Record>)> = async {
             let config = if persistent {
-                credentials::load(&config_file, "GitTogether")?
+                credentials::load(&config_file).await?
             } else {
                 None
             };
@@ -91,7 +91,7 @@ impl RemoteControl {
                 .map_err(|_| "远端控制配置无效；原文件已保留。")?
                 .unwrap_or_default();
             let records = if persistent {
-                credentials::load(&journal_file, "GitTogether")?
+                credentials::load(&journal_file).await?
                     .map(serde_json::from_value)
                     .transpose()
                     .map_err(|_| "远端执行记录无效；请保留原文件并检查。")?
@@ -100,7 +100,7 @@ impl RemoteControl {
                 BTreeMap::new()
             };
             Ok((config, records))
-        })();
+        }.await;
         let (config, records, storage_error) = match loaded {
             Ok((c, r)) => (c, r, String::new()),
             Err(e) => (Configuration::default(), BTreeMap::new(), e),
@@ -175,23 +175,26 @@ impl RemoteControl {
         });
         Ok(control)
     }
-    async fn reconcile_servers(&self) -> Result<()> {
-        let home = self.presence.home_server();
-        let selected = self.presence.control_servers();
-        let mut children = self.children.write().await;
-        children.retain(|url, _| selected.contains(url) && url != &home);
-        for url in selected.into_iter().filter(|u| u != &home) {
-            if !children.contains_key(&url) {
-                let child = Self::new_scope(
-                    self.service.clone(),
-                    self.presence.clone(),
-                    self.persistent,
-                    Some(url.clone()),
-                )?;
-                children.insert(url, child);
+    fn reconcile_servers(&self) -> futures_util::future::BoxFuture<'_, Result<()>> {
+        // A scope's worker can create other scopes; boxing breaks the recursive future type.
+        Box::pin(async move {
+            let home = self.presence.home_server();
+            let selected = self.presence.control_servers();
+            let mut children = self.children.write().await;
+            children.retain(|url, _| selected.contains(url) && url != &home);
+            for url in selected.into_iter().filter(|u| u != &home) {
+                if !children.contains_key(&url) {
+                    let child = Self::new_scope(
+                        self.service.clone(),
+                        self.presence.clone(),
+                        self.persistent,
+                        Some(url.clone()),
+                    ).await?;
+                    children.insert(url, child);
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
     async fn ensure_enrolled(self: &Arc<Self>, url: &str) -> Result<()> {
         if !self.storage_error.is_empty() {
@@ -446,7 +449,7 @@ impl RemoteControl {
             credentials::save(
                 &self.config_file,
                 &serde_json::to_value(&c).map_err(|_| "设备配置无法编码。")?,
-            )?;
+            ).await?;
         }
         self.config.send_replace(c);
         Ok(())
@@ -470,7 +473,7 @@ impl RemoteControl {
             credentials::save(
                 &self.journal_file,
                 &serde_json::to_value(&next).map_err(|_| "执行记录无法编码。")?,
-            )?;
+            ).await?;
         }
         *records = next;
         Ok(())

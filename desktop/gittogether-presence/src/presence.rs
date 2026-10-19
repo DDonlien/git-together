@@ -224,15 +224,15 @@ pub struct Presence {
     native_projects: Mutex<servers::NativeProjects>,
 }
 impl Presence {
-    pub fn new(
+    pub async fn new(
         root: PathBuf,
         persistent: bool,
         service: Arc<crate::service::Service>,
     ) -> Result<Arc<Self>> {
         let directory = std::env::var_os("GITTOGETHER_PRESENCE_CONFIG_DIR").map(PathBuf::from).unwrap_or(crate::platform::home()?.join(".config/git-presence"));
-        let loaded = (|| -> Result<Configuration> {
+        let loaded: Result<Configuration> = async {
             let saved = if persistent {
-                credentials::load(&root.join("presence-v1.encrypted"), "GitTogether")?
+                credentials::load(&root.join("presence-v1.encrypted")).await?
             } else {
                 None
             };
@@ -248,7 +248,7 @@ impl Presence {
                 .map_err(|_| "Presence 配置格式无效；原文件已保留。")?;
             validate_configuration(&config)?;
             Ok(config)
-        })();
+        }.await;
         let (mut config, error) = match loaded {
             Ok(c) => (c, String::new()),
             Err(e) => (Configuration::default(), e),
@@ -322,7 +322,7 @@ impl Presence {
                     credentials::save(
                         &self.root.join("presence-v1.encrypted"),
                         &serde_json::to_value(&config).map_err(|_| "Presence 设置无法编码。")?,
-                    )?;
+                    ).await?;
                 }
                 let mut state = self.state.write().await;
                 let generation = state.generation + 1;

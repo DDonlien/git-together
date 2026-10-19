@@ -196,7 +196,7 @@ impl Presence {
             credentials::save(
                 &self.root.join("presence-v1.encrypted"),
                 &serde_json::to_value(&c).map_err(|_| "Presence配置编码失败。")?,
-            )?;
+            ).await?;
         }
         // Catalog and role metadata must not restart every healthy WebSocket.
         self.config.send_if_modified(|current| {
