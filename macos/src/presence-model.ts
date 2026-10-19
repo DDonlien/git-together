@@ -45,17 +45,17 @@ export function presenceProjectSummary(project: PresenceProject, valid: boolean)
 }
 
 export type PresenceWorkState = 'editing' | 'changed' | 'committed';
+export type PresenceWorkCounts = { editingFiles: number; changedFiles: number; unpublishedCommits: number };
+const emptyWorkCounts = (): PresenceWorkCounts => ({ editingFiles: 0, changedFiles: 0, unpublishedCommits: 0 });
 export type PresenceBranch = {
-  branch: string | null; state: PresenceWorkState;
-  sources: { serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null }[];
+  branch: string | null; counts: PresenceWorkCounts;
+  sources: ({ serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null } & PresenceWorkCounts)[];
 };
 export type PresencePerson = {
   userId: string; displayName: string; avatarUrl: string | null; state: PresenceWorkState;
   branches: PresenceBranch[];
   deviceName: string;
-  scope?: string;
 };
-export const presenceWorkLabels: Record<PresenceWorkState, string> = { editing: '编辑中', changed: '有未 Commit 更改', committed: '有未 Push 提交' };
 const workPriority: Record<PresenceWorkState, number> = { editing: 3, changed: 2, committed: 1 };
 
 function projectWorkState(project: PresenceProject): PresenceWorkState | null {
@@ -73,21 +73,28 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       if (project.repositoryId.toLowerCase() !== repositoryId || (branch !== undefined && project.branch !== branch)) continue;
       const state = projectWorkState(project);
       if (!state) continue;
-      const scope = project.organizationId ? (status.organizations || []).find(o => o.serverId === session.serverId && o.id === project.organizationId)?.name || '托管组织' : '个人';
       const key = JSON.stringify([session.serverId || '', project.organizationId || null, session.identityId || session.userId, session.deviceId]);
       let person = people.get(key);
       if (!person) {
-        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceName: session.deviceName?.trim() || '设备未知', scope };
+        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceName: session.deviceName?.trim() || '设备未知' };
         people.set(key, person);
       }
       if (workPriority[state] > workPriority[person.state]) person.state = state;
       let existing = person.branches.find(value => value.branch === project.branch);
       if (!existing) {
-        existing = { branch: project.branch, state, sources: [] };
+        existing = { branch: project.branch, counts: emptyWorkCounts(), sources: [] };
         person.branches.push(existing);
-      } else if (workPriority[state] > workPriority[existing.state]) existing.state = state;
+      }
       if (!existing.sources.some(source => source.deviceId === session.deviceId && source.worktreeId === project.worktreeId)) {
-        existing.sources.push({ serverId: session.serverId, userId: session.userId, identityId: session.identityId, deviceId: session.deviceId, worktreeId: project.worktreeId, organizationId: project.organizationId ?? null });
+        const counts: PresenceWorkCounts = {
+          editingFiles: project.files.filter(file => file.activity === 'editing').length,
+          changedFiles: project.gitReady ? project.files.filter(file => file.git === 'dirty' && !file.pending).length : 0,
+          unpublishedCommits: project.gitReady && project.unpublishedCommits !== null ? Math.max(0, project.unpublishedCommits) : 0,
+        };
+        existing.sources.push({ serverId: session.serverId, userId: session.userId, identityId: session.identityId, deviceId: session.deviceId, worktreeId: project.worktreeId, organizationId: project.organizationId ?? null, ...counts });
+        existing.counts.editingFiles += counts.editingFiles;
+        existing.counts.changedFiles += counts.changedFiles;
+        existing.counts.unpublishedCommits += counts.unpublishedCommits;
       }
     }
   }
