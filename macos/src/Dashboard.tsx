@@ -2,7 +2,6 @@ import { usesSystemAuthentication } from './repository-auth-model';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject, type TdHTMLAttributes } from 'react';
 import { accountLabel, providerName, type Account, type LocalLink, type RemoteRepository } from './import-model';
 import { repositoryActionBusy, type WorkspaceController } from './use-workspace';
-import { useRemoteRepository } from './use-remote-repository';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import { Button, Icon, IconButton, Notice } from './ui';
 import { SearchBar } from './material-inputs';
@@ -94,8 +93,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   };
   const [expandedRepositories, setExpandedRepositories] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<DashboardSort>({ key: 'repository', direction: 'asc' });
-  // Unlinked reads are row-owned. Report only their sort order so the header
-  // follows the same live icon state without starting another remote reader.
+  // Rows and repository views consume the same workspace-owned remote reader.
   const [repositoryStatuses, setRepositoryStatuses] = useState<Record<string, number>>({});
   const reportStatus = useCallback((key: string, order: number) => setRepositoryStatuses(current => current[key] === order ? current : { ...current, [key]: order }), []);
   const [matchingPhase, setMatchingPhase] = useState<'choosing' | 'matching' | null>(null);
@@ -223,7 +221,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
         <DashboardActionNames>
         <div className="remote-table-scroll"><table className="remote-repo-table has-managed-column has-repository-pins"><thead><tr><DashboardSortHeader label="仓库" column="repository" sort={sort} onSort={changeSort} /><DashboardSortHeader label="组织 / 用户" column="owner" sort={sort} onSort={changeSort} /><DashboardSortHeader label="账号" column="account" sort={sort} onSort={changeSort} /><DashboardSortHeader label="托管组织" column="managedOrganization" sort={sort} onSort={changeSort} /><DashboardSortHeader label="更新日期" column="updatedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="修改日期" column="modifiedAt" sort={sort} onSort={changeSort} /><DashboardSortHeader label="本地目录" column="localPath" sort={sort} onSort={changeSort} /><th scope="col" className="repository-action-cell"><div className="dashboard-signal-sort">{([{ key: 'pull', label: '远端内容' }, { key: 'commit', label: '待提交' }, { key: 'push', label: '本地内容' }, { key: 'hidden', label: '隐藏' }] as const).map(item => { const count = item.key === 'hidden' ? filtered.reduce((sum, repo) => sum + hiddenCount(repo), 0) : batchSignals[item.key].count || 0; return <button type="button" key={item.key} data-signal={item.key} aria-pressed={sort.key === item.key} aria-label={`${item.label}，按数量排序${sort.key === item.key ? sort.direction === 'asc' ? '，升序' : '，降序' : ''}`} onClick={() => changeSort(item.key)}><span className="dashboard-sort-label">{item.label}{sort.key === item.key && <span className="repository-sort-indicator" aria-hidden="true">{sort.direction === 'asc' ? '↑' : '↓'}</span>}{count > 0 && <span className="dashboard-sort-count">{count}</span>}</span></button>; })}</div></th></tr></thead>{rows.map(({ repo, account, localPath, modifiedAt }) => {
           const key = JSON.stringify([controller.catalog.instanceId, repo.id]);
-          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} onOpen={onOpen} onConfigure={onConfigure} onDownload={onDownload} showHidden={showHidden} onToggleHidden={toggleHidden} taskSearch={repositorySearchText(repo, account).includes(globalSearch.toLowerCase()) ? '' : globalSearch} onAction={openAction} onStatus={reportStatus} onHiddenBranches={reportHiddenBranches} />;
+          return <DashboardRepositoryRows key={key} repository={repo} account={account} controller={controller} localPath={localPath} modifiedAt={modifiedAt} expanded={expandedRepositories.has(key)} onToggle={() => { if (!expandedRepositories.has(key)) controller.markRepositoryUsed(repo.id); setExpandedRepositories(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }); }} onOpen={onOpen} onConfigure={onConfigure} onDownload={onDownload} showHidden={showHidden} onToggleHidden={toggleHidden} taskSearch={repositorySearchText(repo, account).includes(globalSearch.toLowerCase()) ? '' : globalSearch} onAction={openAction} onStatus={reportStatus} onHiddenBranches={reportHiddenBranches} />;
         })}</table></div>
         </DashboardActionNames>
         {!filtered.length && <div className="account-repos-empty">{incompleteClassification ? '所选分类尚未读取完整，暂时没有已确认的匹配项。' : !visibleAccounts.length || repositories.some(repo => isSelected(selectedAccounts, repo.accountId)) ? '没有符合搜索或筛选条件的仓库。' : visibleAccounts.some(account => account.error) ? '仓库读取未完成，正在自动重试；请检查账号权限。' : '当前账号没有可访问的仓库。'}</div>}
@@ -244,7 +242,7 @@ function DashboardRepositoryRows({ repository: repo, account, controller, localP
   const [branchesSettled, setBranchesSettled] = useState(false);
   const ready = !controller.loading && !controller.needsReload;
   const link = controller.catalog.links.find(link => link.repositoryId === repo.id);
-  const { state } = useRemoteRepository(repo, controller.catalog.instanceId, (expanded || !!link) && ready, controller.remoteStates[repo.id], controller.preferences.unworkedBranchBehavior === 'hide');
+  const state = controller.remoteStates[repo.id] || emptyRemoteState;
   const largeBranches = Math.max(state.workspace?.tasks.length || 0, controller.localStates[repo.id]?.workspace?.tasks.length || 0) > 40;
   useLayoutEffect(() => {
     setBranchesSettled(false);
@@ -313,7 +311,7 @@ export function RepositoryBranchRows({ repository, state, blocked = false, link,
   const visibleBranches = searchableBranches.filter(branch => taskMatchesSearch({ branch, path: null }, taskSearch) || localByBranch.get(branch)?.some(task => taskMatchesSearch(task, taskSearch)));
   useLayoutEffect(() => recordUIRender('branch-render', renderStarted, visibleBranches.length));
   return <>
-    {error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><Notice kind="error">{error}{workspace ? ' 已保留上次读取的分支。' : ''} 收起后重新展开可重试。</Notice></BranchCell></tr>}
+    {error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><Notice kind="error">{error}{workspace ? ' 已保留上次读取的分支。' : ''} 正在等待下次自动检查。</Notice></BranchCell></tr>}
     {!workspace && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">{blocked ? '账号服务尚未就绪。' : loading ? <><Icon name="spinner" className="spin" size={13} />正在读取远端分支…</> : '正在准备远端读取…'}</span></BranchCell></tr>}
     {workspace && !workspace.tasks.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">此仓库暂无远端分支。</span></BranchCell></tr>}
     {branches.length > 0 && !visibleBranches.length && !error && <tr className="dashboard-branch-message"><BranchCell colSpan={8}><span role="status">{searchableBranches.length ? '没有符合当前搜索的分支或工作目录。' : '此仓库的分支已隐藏，点击上方「已隐藏」可显示并恢复。'}</span></BranchCell></tr>}

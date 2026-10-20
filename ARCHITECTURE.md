@@ -1,12 +1,20 @@
 # Tauri / Rust / React 架构
 
+## 分级刷新与账号请求预算（IMPORT-16）
+
+`useWorkspace`在本机v2偏好中保存`repositoryLastUsed`，打开/展开仓库及新本地Git变化更新使用时间；已关联、置顶和曾使用仓库由同一个workspace读取器维护。当前仓库每5分钟检查，一小时/一天/一周内使用分别为10分钟/30分钟/2小时，其余6小时，置顶最长30分钟；目录每30分钟检查。本地5秒扫描独立保留，连续变化触发的远端检查最短间隔2分钟。资源计时器动态调整周期而不重建成功结果或退避；首次后台错峰，最多一个后台工作台并为当前工作台保留并行位置，排队资源按最新使用优先级调度。Dashboard与工作台不另建同仓库读取器。
+
+`Service`持有共享`ReadState`，所有Provider与目录刷新复用。每个API服务和已验证账号共用128项以内的等待队列，实际HTTP读取串行；按响应剩余额度与重置时间调速，至少间隔250ms并预留约20%预算。403权限、主配额耗尽、次级限流与429分开判断；Retry-After与耗尽时的reset取较晚截止，缺少时间时从1分钟起有界指数退避。冷却期间拒绝出站请求并提供`retryAt`，Tauri和预览HTTP共用响应封装；部分工作台先发布可用分支，再让计时器遵守同一截止。新资源、手动刷新、焦点恢复和重新授权不能清除同账号冷却；不同账号与平台独立，本地扫描和Git事务不进入REST队列。
+
+纯本地context不再创建/逐出16项远端读取器。SHA历史、树、提交缓存与条件GET响应使用服务级LRU，合计最多512项、32MiB序列化内容及头字段，按账号、服务和凭据代际隔离，账号移除时清理。可变GET在同一认证范围发送ETag或Last-Modified，304合并新响应头并复用原分页信息；无验证器的响应不额外缓存。凭据不进入缓存键明文、响应DTO或诊断日志，已有账号/目录context复核与旧结果保留规则继续有效。
+
 ## 本地文件树与文件操作（R-05-local-file-operations）
 
 `RepositoryFileTree` 对本地任务挂载 `LocalFileTree`，远端树继续使用只读 Git/provider 清单。`localDirectory` 只列当前目录，不跟随符号链接，并从 Git 查询忽略状态；前端按需读取展开目录、保留空目录、用类型图标和浅色状态区分内容，筛选/排序只改变显示顺序。文件操作走有限 Tauri/API 方法：OS拖入路径先兑换成限时 opaque grant；计划绑定服务身份、仓库、worktree、来源/目标及完整目录指纹。确认前列出每个真实目标，执行时拒绝重名覆盖、路径逃逸、符号链接和 `.git`，检测预览过期；删除经系统Trash/回收站，跨卷移动先复制成功再回收原件。工作目录common-dir互斥和operationId幂等保护并发/重复提交，结果刷新本地目录与Git状态；失败结果保留可恢复的来源和部分完成数，不改变HEAD或index。
 
 Git Graph和文件树的行状态底色独立于行几何绘制。Graph固定42px行及连续SVG轨道，底色通过pseudo-element上下内缩3px、左右端点内缩4px；文字列增加横向内距，各列文字始终高于底色层。文件树按钮横向留白不改变点击区、树缩进或省略规则。徽标和计数胶囊使用显式左右padding，避免单字符与多字符内容贴边。
 
-仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、读取、关联或Git目标。
+仓库置顶（IMPORT-13-repository-pin）：沿用gittogether.preferences.v2，增加pinnedRepositories仓库ID数组，旧记录缺省为空并在读取边界校验。useWorkspace唯一维护和保存状态，toggleRepositoryPin使用当前偏好的函数更新；AccountSidebar与Dashboard共享该控制器，不向服务或Presence同步。侧栏按账号内稳定置顶优先，Dashboard在当前筛选结果内先比较置顶，再沿用当前字段和方向排序；置顶不改变隐藏、筛选、关联或Git目标；读取周期按IMPORT-16的置顶上限执行。
 
 Git Graph可见范围渲染（R-05-gitlens-graph-scroll）：完整提交关系和搜索索引仍由现有commit-graph计算；RepositoryGraph以42px固定行高、视口上下各8行缓冲及首尾占位行保留全部滚动高度，scroll被动监听按requestAnimationFrame合并，ResizeObserver覆盖栏高变化。键盘、搜索及父提交跳转先定位全局行，再挂载和聚焦。分支筛选不随滚动重绘，日期格式器复用当前语言和时区；远端专有分支不再重复遍历空的本地祖先集合。RepositoryView合并历史仅依赖内容和必要的空态错误，不依赖读取状态整体；底部动画绑定现有远端loading及当前路径的本地loading，不新增后台API或数据分页。
 
@@ -43,6 +51,8 @@ setRepositoryAuthentication 只修改已有 LocalLink；按仓库保存锁及执
 repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。安装令牌、细粒度令牌及无法报告令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，每60秒更新且隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录，不发送 Git 写操作。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
 
 ## 当前运行结构
+
+失效目录关联（IMPORT-04-stale-worktrees，0.34.3）：显式 Catalog 读取及 Fetch 前在阻塞工作线程检查已保存目录，仅将绝对路径的 NotFound 作为移除依据；现有符号链接、权限及其他访问错误保留记录。清理通过既有 mutate/加密原子保存更新，复核原关联仍与扫描快照一致，并在保存前重新确认候选目录仍然缺失；取消或保存失败不发布新状态，全部工作目录已删除时移除该仓库 LocalLink。既有 Catalog 轮询将最新关联交给前端，失效任务及旧目录选择随既有映射失效机制清理。Fetch 按目录收集验证失败，并继续其他 Git 对象库的获取；结果沿用 branches/checkedAt 并增加可选 errors 字符串数组。前端在部分获取成功后唤醒本地读取，同时显示失败原因并保持重试退避；日志将含 errors 的成功响应标记 partial，不记录路径或原始错误正文。清理只修改应用关联，不删除真实目录或 Git 工作区记录；Fetch 继续只更新引用与对象，不改变 HEAD、index、工作文件或账号身份。
 
 Git网络与读取日志（RUN-01-tauri-git-network）：Network在启动Git/Git LFS之前，先保留目标URL匹配的显式http.proxy及现有代理环境；无显式配置时，通过CFNetwork按目标URL读取macOS静态HTTP/HTTPS/SOCKS代理和绕过决定，仅注入该子进程。代理变化在下次操作重新读取，不保存或改写Git/系统配置。当前PAC条目不替换为其他静态代理。Git日志仅记录有限操作、匿名仓库资源、span、真实退出码、耗时和安全错误类别，不记录stderr、地址、目录或凭据；Service把取消和包含失败任务的成功响应分别记录为cancelled/partial。通用Git失败不再以说明中的“目录权限”推断为账号权限故障。
 
@@ -146,7 +156,7 @@ Dashboard 的仓库名称直接读取 `RemoteRepository.name`；「组织 / 用�
 
 ## 自动检查与缓存
 
-`auto-refresh.ts` 是可注入时钟的单资源调度器，只有一个在途请求；请求结束后才安排下一次检查。`use-auto-refresh.ts` 根据稳定的资源 ID 保留计时器，监听 visibilitychange / focus / online / offline，隐藏或离线时取消/暂停；恢复后检查。重复激活合并，最短间隔 1 秒，失败指数退避至 5 分钟，激活不能绕过退避。每个账号/本地关联有独立调度器，删除一个资源不停止其他资源。
+`auto-refresh.ts` 是可注入时钟的单资源调度器，只有一个在途请求；请求结束后才安排下一次检查。`use-auto-refresh.ts` 根据稳定的资源 ID 保留计时器，监听 visibilitychange / focus / online / offline，隐藏或离线时取消/暂停；恢复后检查。重复激活合并，本地扫描保留原5分钟退避上限；远端变化触发最短间隔2分钟，普通失败指数退避最多30分钟，并继续遵守更晚的提供方retryAt。资源优先级和周期变化保留退避及在途身份，删除一个资源不停止其他资源；远端排队和分级周期见本文IMPORT-16。
 
 Workspace 每约 10 秒检查服务 instance/version 与 Catalog；每个账号正常约 60 秒调用已有只读仓库 refresh；每个关联仓库正常约 5 秒读取 localWorkspace 中的真实工作目录。远端目录沿用服务分页/错误保留/原子 revision；新会话旧响应、已解绑或换路径的迟到响应不能覆盖当前数据。服务失联保留缓存并显示错误，不重放 connect、token 或授权。版本不一致停止检查，保留原刷新页面交接。
 

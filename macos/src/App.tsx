@@ -22,9 +22,9 @@ type AppLocation = { page: AppPage; repoId: string; commitTask: string | null; g
 const sameLocation = (left: AppLocation, right: AppLocation) => left.page === right.page && left.repoId === right.repoId && left.commitTask === right.commitTask && left.globalSearch === right.globalSearch;
 
 export function App() {
-  const controller = useWorkspace();
   const [page, setPage] = useState<AppPage>('dashboard');
   const [repoId, setRepoId] = useState('');
+  const controller = useWorkspace(page === 'repo' ? repoId : '');
   const [commitTask, setCommitTask] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
   const routeHistory = useRef<AppLocation[]>([{ page: 'dashboard', repoId: '', commitTask: null, globalSearch: '' }]);

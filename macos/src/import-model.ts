@@ -14,7 +14,7 @@ export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 
 export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
   id: string; provider: Provider; host: string; login: string; name: string;
-  updatedAt: string; error?: string; authorizationExpiresAt?: string;
+  updatedAt: string; error?: string; authorizationExpiresAt?: string; retryAt?: number;
 };
 export type RemoteRepository = {
   id: string; remoteId: number; accountId: string; name: string; fullName: string;
@@ -115,7 +115,7 @@ export type ApiOutputs = {
   localCommit: LocalCommitDetails;
   submitCommit: LocalSubmitResult;
   pushCommit: LocalPushResult;
-  fetchRepository: { branches: number; checkedAt: number };
+  fetchRepository: { branches: number; checkedAt: number; errors?: string[] };
   prepareSync: RepositorySyncPlan;
   applySync: RepositorySyncResult;
   discardSync: { discarded: boolean };
@@ -148,7 +148,7 @@ export function isCatalog(value: unknown): value is Catalog {
   return isRecord(value) && typeof value.instanceId === 'string' && typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && ['session', 'encrypted'].includes(String(value.credentialStorage)) &&
     Array.isArray(value.accounts) && value.accounts.every(a => isRecord(a) &&
       ['id', 'host', 'login', 'name', 'updatedAt'].every(k => typeof a[k] === 'string') &&
-      providers.some(provider => provider === a.provider)) &&
+      providers.some(provider => provider === a.provider) && (a.retryAt === undefined || typeof a.retryAt === 'number' && Number.isSafeInteger(a.retryAt) && a.retryAt > 0)) &&
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
       typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&

@@ -636,6 +636,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .dashboard-repository-row:is(:hover, :focus-within) .repository-pin-button,
 .repository-pin-button.is-pinned { opacity: 1; pointer-events: auto; }
 .repository-pin-button.is-pinned.icon-button.ogui-control--small { color: var(--blue); background: var(--blue-bg); }
+.sidebar-repository-entry > .repository-pin-button.is-pinned.icon-button.ogui-control--small:not(:hover):not(:focus-visible) { color: var(--muted); background: transparent; opacity: .72; }
 .repository-pin-button.icon-button.ogui-control--small:hover { background: var(--surface-hover); }
 .icon-button:hover:not(:disabled) { color: var(--text); }
 .icon-button.ogui-icon-button, [role="button"].git-action-anchor { cursor: pointer; }
