@@ -48,7 +48,13 @@ if (mode === 'setup') {
     const scripts = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')).scripts || {};
     if (scripts.install) yarnRun(['run', 'install'], path);
   }
-  run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], ui);
+  const npmArgs = ['ci', '--ignore-scripts', '--no-audit', '--no-fund'];
+  if (process.platform === 'win32') {
+    // Node cannot execute a .cmd file directly. Use npm's JS entrypoint.
+    const npmCli = process.env.npm_execpath?.endsWith('npm-cli.js')
+      ? process.env.npm_execpath : join(dirname(node), 'node_modules/npm/bin/npm-cli.js');
+    run(node, [npmCli, ...npmArgs], ui);
+  } else run('npm', npmArgs, ui);
   verify();
 } else if (mode === 'check') {
   verify();
