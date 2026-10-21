@@ -33,7 +33,7 @@ jobs:
           architecture: ${{ matrix.arch }}
       - uses: dtolnay/rust-toolchain@stable
       - if: matrix.arch == 'x86'
-        run: rustup default stable-i686-pc-windows-msvc
+        run: rustup default stable-i686-pc-windows-msvc --force-non-host
       - run: npm run verify:upstream
       - run: npm run setup
       - run: npm run check

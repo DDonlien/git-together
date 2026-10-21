@@ -22,8 +22,22 @@ assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
 assert.equal(capture('git', ['branch', '--show-current']), 'main');
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Commit the intended changes before release.');
-const commit = capture('git', ['rev-parse', 'HEAD']);
-assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], commit, 'Push main before release.');
+const head = capture('git', ['rev-parse', 'HEAD']);
+assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head, 'Push main before release.');
+let commit = head;
+const macReport = join(destination, 'package-darwin-arm64.json');
+if (existsSync(macReport)) {
+  const previous = json(macReport);
+  if (previous.version === version && previous.build.sourceSha256 === sourceState(root) && !previous.build.sourceDirty) {
+    const changed = capture('git', ['diff', '--name-only', previous.build.sourceCommit, head]).split('\n').filter(Boolean);
+    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs'].includes(path));
+    if (metadataOnly) {
+      run('git', ['merge-base', '--is-ancestor', previous.build.sourceCommit, head]);
+      commit = previous.build.sourceCommit;
+      console.log(`Reusing identical application source ${commit}; pipeline/main is ${head}.`);
+    }
+  }
+}
 const latest = JSON.parse(gh(['release', 'view', '--json', 'tagName']));
 assert.notEqual(latest.tagName, tag, 'Never replace an already published version.');
 const key = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
@@ -54,7 +68,7 @@ if (!runId) {
   for (let attempt = 0; attempt < 12 && !runId; attempt++) {
     await pause(5000);
     const runs = JSON.parse(gh(['run', 'list', '--workflow', 'desktop-release-windows.yml', '--event', 'workflow_dispatch', '--limit', '8', '--json', 'databaseId,headSha,createdAt']));
-    runId = runs.find(item => item.headSha === commit && Date.parse(item.createdAt) >= started - 5000)?.databaseId;
+    runId = runs.find(item => item.headSha === head && Date.parse(item.createdAt) >= started - 5000)?.databaseId;
   }
   assert.ok(runId, 'Could not locate the dispatched Windows release build.');
   writeFileSync(runFile, JSON.stringify({ commit, id: runId }) + '\n');
@@ -99,7 +113,7 @@ writeFileSync(join(destination, 'latest-mac.yml'), JSON.stringify({ version, fil
 writeFileSync(join(destination, 'changelog.json'), JSON.stringify([{ name: `GitTogether ${version}`, version, pub_date: new Date().toISOString(), notes: ['[New] 使用 GitHub Desktop 原版执行基础和 Material 界面。', '[Fixed] 恢复正式签名、公证发布以及旧版和新版自动更新。'] }], null, 2) + '\n');
 const assets = [...mac.assets.map(item => item.name), ...['ia32', 'x64'].flatMap(arch => json(join(destination, `package-win32-${arch}.json`)).assets.map(item => item.name)), ...legacyAssets.map(([, name]) => name + '.sig'), 'latest.json', 'latest-mac.yml', 'changelog.json'];
 const integrity = assets.map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }));
-writeFileSync(join(destination, 'release-integrity.json'), JSON.stringify({ version, commit, notarization: mac.notarization, windowsRun: runId, assets: integrity }, null, 2) + '\n');
+writeFileSync(join(destination, 'release-integrity.json'), JSON.stringify({ version, commit, pipelineCommit: head, notarization: mac.notarization, windowsRun: runId, assets: integrity }, null, 2) + '\n');
 writeFileSync(join(destination, 'SHA256SUMS'), integrity.map(item => `${item.sha256}  ${item.name}`).join('\n') + '\n');
 const notes = join(destination, 'release-notes.md');
 writeFileSync(notes, `GitTogether ${version} 采用 GitHub Desktop 原版 Git、授权、凭据和后台执行基础，保留 GitTogether Material 界面、Submit、Clear、Get Latest 和 Presence。\n\n0.33.0 可在设置中检查、下载并升级；保留旧加密配置，首次启动通过原版存储导入支持的账号和存在的本地目录。无法读取时显示错误并保留原配置。新版继续使用原版自动更新器。\n\nmacOS Apple Silicon 已由 Developer ID 签名、Apple 公证并附加凭证。Windows 提供 x86/x64，旧版升级安装器提供更新签名；Windows 未配置 Authenticode 证书。32 位 Windows 的 Git 可用，供应商未提供该架构的 Copilot/Codex AI 运行时。\n\n源码 main：${commit}。\n`);
@@ -111,12 +125,15 @@ else gh(['release', 'create', tag, '--target', commit, '--title', `GitTogether $
 gh(['release', 'upload', tag, ...[...assets, 'release-integrity.json', 'SHA256SUMS'].map(name => join(destination, name)), '--clobber']);
 const remoteAssets = JSON.parse(gh(['release', 'view', tag, '--json', 'assets'])).assets;
 for (const item of integrity) assert.ok(remoteAssets.some(asset => asset.name === item.name && asset.size === item.size), 'Draft asset missing or incomplete: ' + item.name);
+assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
+assert.equal(capture('git', ['rev-parse', 'HEAD']), head);
+assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head);
 gh(['release', 'edit', tag, '--draft=false', '--latest']);
 // Squirrel.Windows requires one architecture per RELEASES feed. Keep these
 // tiny public feeds on main; payloads and tag still reference the release source.
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
-assert.equal(capture('git', ['rev-parse', 'HEAD']), commit);
-assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], commit);
+assert.equal(capture('git', ['rev-parse', 'HEAD']), head);
+assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head);
 const feeds = [];
 for (const arch of ['ia32', 'x64']) {
   const name = `GitTogether-${version}-win32-${arch}-full.nupkg`;

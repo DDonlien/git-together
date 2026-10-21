@@ -19,6 +19,7 @@
 - 17:08—17:13：确认0.33.0的Mac归档校验要求GitTogether.app/Contents/MacOS/gittogether，Windows要求NSIS；新运行时需兼容两者，不能直接上传开发ZIP作为更新。新版本后续更新继续使用原版Squirrel执行器，产品更新源由编译配置指定。
 - 17:13—17:35：实现0.37.0正式构建、签名公证、同源Windows双架构工作流及旧tar/NSIS兼容；新UI调用原版UpdateStore，更新说明换为产品源且独立失败不会破坏更新检查。新增稳定数据目录启动器、只读解密旧配置并经原版账号Store/Dispatcher导入；旧加密文件不覆盖。Developer ID、公证profile及仓库外更新私钥均可读取，公证history预检通过。类型/Cargo及30项回归通过；独立0.33.0更新器夹具编译通过，源自旧版的归档接受规则逐字节保留，不编译旧Git或授权后台。实际签名包、隔离升级和公开发布仍待执行。
 - 17:32—17:40：首版代码4dea74a364已推送。首次手工Windows派发误传10位缩写，checkout把它当作分支名而失败，尚未进入构建；自动入口使用完整SHA。核对Electron公共服务当前源码，确认其Windows逻辑只读取一个RELEASES，不能把两种架构混用；改为main上的两个架构专用轻量清单，仍使用原版Squirrel。补充Windows实际NSIS安装后启动、系统凭据往返及原版Commit/Push验证。macOS首次production构建通过，上游Sass/许可校验完成；为统一最终来源，在公证提交前停止本任务旧签名流程，未公开任何新Release或更新清单。
+- 17:41—17:49：完整来源dc38e1fe84已推送并构建production；macOS严格Developer ID签名通过，已送公证。Windows39578897785的x64进入setup，x86在Rustup选择非宿主工具链时要求--force-non-host；仅修正CI标志。旧0.33.0公开tar及签名通过新验证工具，篡改载荷及声称错误版本均被拒绝。发布入口允许在仅CI/日志/文档变化、来源摘要完全相同且为main祖先时复用已验收Mac成品；三平台和tag仍固定为同一应用源码提交，单独记录发布脚本提交，避免无源码变化的重复公证。公开前再次核对main状态，拒绝覆盖并行工作。
 
 ## 验证与剩余工作
 
