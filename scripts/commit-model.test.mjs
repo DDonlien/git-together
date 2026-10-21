@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
@@ -12,11 +12,21 @@ const root = resolve(import.meta.dirname, '..');
 const require = createRequire(join(root, 'desktop/package.json'));
 const fixture = mkdtempSync(join(tmpdir(), 'gittogether-model-transport-'));
 const mode = join(fixture, 'mode'), log = join(fixture, 'calls.jsonl');
-writeFakeCodex(join(fixture, 'bin')); writeFileSync(mode, 'success');
+const fixtureScript = writeFakeCodex(join(fixture, 'bin')); writeFileSync(mode, 'success');
 const savedEnv = { PATH: process.env.PATH, GITTOGETHER_MODEL_MODE: process.env.GITTOGETHER_MODEL_MODE, GITTOGETHER_MODEL_LOG: process.env.GITTOGETHER_MODEL_LOG };
 Object.assign(process.env, { PATH: join(fixture, 'bin') + delimiter + process.env.PATH, GITTOGETHER_MODEL_MODE: mode, GITTOGETHER_MODEL_LOG: log });
 require('esbuild').buildSync({ entryPoints: [join(root, 'desktop/app/src/ui/gittogether/codex-commit-message.ts')], outfile: join(fixture, 'transport.cjs'), bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
 const { generateWithCodex } = require(join(fixture, 'transport.cjs'));
+const windows = process.platform === 'win32';
+if (windows) {
+  // Windows does not execute the fixture's shebang. Keep native CLI discovery
+  // intact, then launch this test-only script with Node at the process boundary.
+  const binary = join(fixture, 'bin/codex.exe'); writeFileSync(binary, 'fixture');
+  const processes = require('child_process'), spawn = processes.spawn;
+  mock.method(processes, 'spawn', (command, args, options) => command === binary
+    ? spawn(process.execPath, [fixtureScript, ...args], options)
+    : spawn(command, args, options));
+}
 const calls = () => existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
 const savedLog = globalThis.log, warnings = [];
 globalThis.log = { warn: message => warnings.push(message) };
@@ -71,7 +81,7 @@ test('successful settings reads close stdin without signalling a process group',
   assert.equal((await generateWithCodex('system', 'diff', new AbortController().signal)).title, '生成测试提交说明');
   assert.deepEqual(warnings, []);
 });
-test('cancellation recovers from EPERM by terminating the owned child', async t => {
+test('cancellation recovers from EPERM by terminating the owned child', { skip: windows && 'POSIX process-group signal fallback; Windows uses taskkill.' }, async t => {
   denyGroupSignals(t); writeFileSync(mode, 'hang');
   const count = calls().length, controller = new AbortController();
   const rejected = assert.rejects(generateWithCodex('system', 'diff', controller.signal), error => error.name === 'AbortError');
@@ -82,8 +92,8 @@ test('cancellation recovers from EPERM by terminating the owned child', async t 
   assert.throws(() => process.kill(call.pid, 0), /ESRCH/);
   assert.ok(warnings.some(message => /group.*denied/.test(message)));
 });
-test('settings and generation timeouts remain request failures when group signals are denied', async t => {
-  denyGroupSignals(t);
+test('settings and generation timeouts reject and terminate the owned process', async t => {
+  if (!windows) denyGroupSignals(t);
   const timeout = globalThis.setTimeout;
   t.mock.method(globalThis, 'setTimeout', (callback, ms, ...args) => timeout(callback, ms === 20_000 || ms === 150_000 ? 300 : ms, ...args));
   for (const value of ['settings-hang', 'hang']) {
@@ -93,9 +103,9 @@ test('settings and generation timeouts remain request failures when group signal
   const call = calls().at(-1);
   assert.equal(existsSync(call.cwd), false);
   assert.throws(() => process.kill(call.pid, 0), /ESRCH/);
-  assert.equal(warnings.filter(message => /group.*denied/.test(message)).length, 2);
+  assert.equal(warnings.filter(message => /group.*denied/.test(message)).length, windows ? 0 : 2);
 });
-for (const kind of ['throw', 'error-event']) test(`a child termination ${kind} rejects the request without an uncaught exception`, async t => {
+for (const kind of ['throw', 'error-event']) test(`a child termination ${kind} rejects the request without an uncaught exception`, { skip: windows && 'POSIX direct-child fallback fault injection; Windows uses taskkill.' }, async t => {
   const kill = denyGroupSignals(t);
   t.mock.method(ChildProcess.prototype, 'kill', function() {
     const error = Object.assign(new Error('fixture child signal denied'), { code: 'EPERM' });
@@ -114,6 +124,7 @@ for (const kind of ['throw', 'error-event']) test(`a child termination ${kind} r
   assert.ok(warnings.some(message => /unable to stop.*EPERM/.test(message)));
 });
 test.after(() => {
+  mock.restoreAll();
   if (savedLog === undefined) delete globalThis.log; else globalThis.log = savedLog;
   for (const [key, value] of Object.entries(savedEnv)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
   rmSync(fixture, { recursive: true, force: true });

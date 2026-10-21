@@ -30,6 +30,7 @@ main在origin可回读，包含刚批准的Desktop合并历史；从已推送且
 - 14:50—14:51：成品12项Git/Presence、8项模型生成（含注入EPERM取消）和11项目录发现全部通过，没有应用或扩展异常。ZIP为481608683字节；解压后严格深度签名及来源验证通过，SHA256为508473e09525bea00c64f238e1464af7ebc53ccd7e65c27e1d88b670899d2062。
 - 14:52—14:54：发现首次main云端macOS类型检查缺少desktop-notifications生成声明，本机已有依赖掩盖了该首次安装缺口。确认固定原版post-install本就使用app install --force；根setup之前先ignore-scripts再普通install被Yarn判为已完成，没有执行该原生依赖的构建。仅在根setup补齐原版--force行为，不修改原版执行代码、产品UI或包内源码；因此保持0.36.4。另行读取Windows任务失败日志并继续验收。
 - 14:54：Windows同一次干净安装在Node直接启动npm.cmd时抛出EINVAL；改用当前npm的JS入口交给Node执行，保留原有npm ci参数，避免shell包装。构建引导改动不进入应用包，产品源码摘要不变。
+- 14:55：本机重新setup、类型/Rust及25项测试通过。检查Windows验收夹具时发现其仅提供POSIX shebang；仅在单元测试进程边界把虚构codex.exe映射为Node夹具，保留产品原生CLI发现/调用不变。共同传输、取消和超时仍在Windows运行，三个POSIX进程组故障注入仅由macOS验收；不把这三项标成Windows已通过。
 
 ## 验证与交付
 
