@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 import { sourceState } from './source-state.mjs';
+import { downloadWindowsArtifacts, downloadPublicAssets } from './release-downloads.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const repository = 'DDonlien/git-together';
@@ -18,6 +19,7 @@ const capture = (cmd, args) => run(cmd, args, { stdio: ['ignore', 'pipe', 'inher
 const gh = args => capture('gh', [...args, '--repo', repository]);
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+run(process.execPath, ['--test', 'scripts/notarization.test.mjs']);
 assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
 assert.equal(capture('git', ['branch', '--show-current']), 'main');
@@ -30,7 +32,7 @@ const outBuild = join(root, 'desktop/out/build-info.json');
 for (const previous of [existsSync(macReport) ? json(macReport).build : undefined, existsSync(outBuild) ? json(outBuild) : undefined]) {
   if (previous?.version === version && previous.channel === 'production' && previous.sourceSha256 === sourceState(root) && !previous.sourceDirty) {
     const changed = capture('git', ['diff', '--name-only', previous.sourceCommit, head]).split('\n').filter(Boolean);
-    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/package-desktop.mjs', 'scripts/release-updates.test.mjs'].includes(path));
+    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/package-desktop.mjs', 'scripts/release-updates.test.mjs', 'scripts/notarization.mjs', 'scripts/notarization.test.mjs', 'scripts/release-downloads.mjs'].includes(path));
     if (metadataOnly) {
       run('git', ['merge-base', '--is-ancestor', previous.sourceCommit, head]);
       commit = previous.sourceCommit;
@@ -89,10 +91,7 @@ for (let attempt = 0; ; attempt++) {
   assert.ok(attempt < 180, 'Windows release packaging timed out.');
   await pause(15000);
 }
-const downloaded = join(destination, 'windows-download');
-mkdirSync(downloaded, { recursive: true });
-gh(['run', 'download', String(runId), '--pattern', 'desktop-release-*', '--dir', downloaded]);
-for (const directory of readdirSync(downloaded)) for (const name of readdirSync(join(downloaded, directory))) copyFileSync(join(downloaded, directory, name), join(destination, name));
+await downloadWindowsArtifacts(runId, destination);
 for (const arch of ['ia32', 'x64']) {
   assert.ok(reportValid(join(destination, `package-win32-${arch}.json`)), `Invalid Windows ${arch} provenance or package.`);
   const smoke = json(join(destination, `windows-smoke-${arch}.json`));
@@ -169,9 +168,9 @@ for (const relative of feeds) {
 assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag);
 const temporary = mkdtempSync(join(tmpdir(), 'gittogether-public-release-'));
 try {
+  await downloadPublicAssets(integrity, version, temporary);
   for (const item of integrity) {
     const path = join(temporary, item.name);
-    run('curl', ['--fail', '--location', '--silent', '--show-error', '--retry', '2', '--output', path, `https://github.com/${repository}/releases/download/${tag}/${item.name}`]);
     assert.equal(statSync(path).size, item.size); assert.equal(hash(path), item.sha256);
   }
   for (const name of ['latest.json', 'latest-mac.yml']) {

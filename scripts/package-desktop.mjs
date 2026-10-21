@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, openSync, readSync, closeSync, mkdtempSync, rmSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { setTimeout as pause } from 'node:timers/promises';
+import { prepareNotarization } from './notarization.mjs';
 import { sourceState } from './source-state.mjs';
 
 const root = resolve(process.env.GITTOGETHER_SOURCE_ROOT || resolve(import.meta.dirname, '..'));
@@ -57,7 +57,16 @@ if (mac) {
     protocols: [{ name: 'com.gittogether.standalone', schemes: ['x-github-desktop-auth', 'x-github-desktop-dev-auth', 'x-github-client', 'github-mac'] }],
   });
 }
-const [directory] = await packager(options);
+const checkpointPath = join(destination, 'notary-submission.json');
+const digest = path => createHash('sha256').update(readFileSync(path)).digest('hex');
+const expectedDirectory = join(destination, 'GitTogether-darwin-arm64');
+const saved = mac && existsSync(checkpointPath) ? JSON.parse(readFileSync(checkpointPath, 'utf8')) : undefined;
+const savedApp = join(expectedDirectory, 'GitTogether.app');
+const reusable = saved && saved.sourceCommit === build.sourceCommit && saved.sourceSha256 === build.sourceSha256 && saved.version === pkg.version
+  && typeof saved.inputName === 'string' && saved.inputName === basename(saved.inputName) && existsSync(join(destination, saved.inputName)) && digest(join(destination, saved.inputName)) === saved.archiveSha256
+  && existsSync(join(savedApp, 'Contents/_CodeSignature/CodeResources')) && digest(join(savedApp, 'Contents/_CodeSignature/CodeResources')) === saved.resourcesSha256
+  && digest(join(savedApp, 'Contents/MacOS/gittogether')) === saved.executableSha256;
+const directory = reusable ? expectedDirectory : (await packager(options))[0];
 const appResources = mac ? join(directory, 'GitTogether.app/Contents/Resources/app') : join(directory, 'resources/app');
 const updateURL = mac ? `https://update.electronjs.org/DDonlien/git-together/darwin-arm64/${pkg.version}` : `https://raw.githubusercontent.com/DDonlien/git-together/main/updates/win32-${targetArch}`;
 assert.ok(readFileSync(join(appResources, 'renderer.js'), 'utf8').includes(updateURL), 'Packaged updater feed does not match the target.');
@@ -72,30 +81,24 @@ if (mac) {
   assert.ok(signingInfo.stderr.includes('TeamIdentifier=86J7X3KZ5Z'));
   assert.ok(signingInfo.stderr.includes('Identifier=com.gittogether.standalone'));
   writeFileSync(join(destination, 'codesign-info.txt'), signingInfo.stderr);
-  const configPath = join(homedir(), '.config/gittogether/release/notary.json');
-  const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : { profile: 'gittogether-notary' };
-  const credentials = ['--keychain-profile', config.profile, ...(config.keychain ? ['--keychain', config.keychain] : [])];
-  async function notary(phase, args) {
-    const deadline = Date.now() + 600000;
-    for (let attempt = 1; ; attempt++) {
-      const result = spawnSync('xcrun', ['notarytool', phase, ...args, ...credentials, '--output-format', 'json'], { encoding: 'utf8', timeout: 1800000 });
-      if (result.error) throw result.error;
-      if (result.status === 0) return result.stdout;
-      // Retry only the known failure before credentials were loaded. An upload,
-      // rejected submission or invalid credential must retain its real error.
-      if (result.status !== 69 || !/No Keychain password item found for profile:/.test(result.stderr)) throw new Error(`Apple ${phase} failed (${result.status}): ${result.stderr}`);
-      console.warn(JSON.stringify({ phase, attempt, profile: config.profile, reason: 'saved-keychain-item-temporarily-unavailable' }));
-      if (Date.now() >= deadline) throw new Error('既有Apple公证配置暂不可读取，自动重试已超时；配置保留，未发布安装包。');
-      await pause(15000);
-    }
-  }
   const output = join(destination, `GitTogether-${pkg.version}-mac-arm64.zip`);
   const createZip = () => run('ditto', ['-c', '-k', '--keepParent', app, output]);
-  createZip();
-  await notary('history', []);
-  const result = await notary('submit', [output, '--wait']);
-  notarization = JSON.parse(result);
-  writeFileSync(join(destination, 'notarization.json'), result);
+  const inputName = reusable ? saved.inputName : `notary-input-${build.sourceCommit}.zip`;
+  const input = join(destination, inputName);
+  if (!reusable) run('ditto', ['-c', '-k', '--keepParent', app, input]);
+  const identityRecord = { version: pkg.version, sourceCommit: build.sourceCommit, sourceSha256: build.sourceSha256, inputName,
+    archiveSha256: digest(input), resourcesSha256: digest(join(app, 'Contents/_CodeSignature/CodeResources')), executableSha256: digest(join(app, 'Contents/MacOS/gittogether')) };
+  // Preserve the signed candidate even when the profile preflight is unavailable.
+  if (!reusable) {
+    writeFileSync(checkpointPath + '.tmp', JSON.stringify({ ...identityRecord, uploaded: false }, null, 2) + '\n', { mode: 0o600 });
+    renameSync(checkpointPath + '.tmp', checkpointPath);
+  }
+  if (reusable && saved.status === 'Accepted' && saved.uploaded) notarization = { id: saved.id, status: saved.status };
+  else {
+    const client = await prepareNotarization();
+    notarization = await client.submit(input, checkpointPath, identityRecord);
+  }
+  writeFileSync(join(destination, 'notarization.json'), JSON.stringify(notarization, null, 2) + '\n');
   assert.equal(notarization.status, 'Accepted', 'Apple did not accept this package.');
   run('xcrun', ['stapler', 'staple', app]);
   run('xcrun', ['stapler', 'validate', app]);
