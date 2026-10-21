@@ -3,7 +3,7 @@
 - 用户原始 prompt：`推送打包`
 - 模型：GPT-6；运行环境仅公开此家族标识，无法可靠取得更具体版本。
 - 启动分支/提交：main / 1e2aa333cfe83aad4c8d15f22134689ec47e6f7f。
-- 产品版本：0.36.4，根package.json为权威来源；本次没有功能改动，不递增版本。
+- 启动产品版本：0.36.4，根package.json为权威来源；初期构建引导改动不递增，后续Windows源码兼容修补按patch递增为0.36.5，原因见15:15—15:17时间线。
 - 开始时间：2026-10-21 14:46:53 Asia/Shanghai。
 - 结束时间：执行中，交付前补充并按完成时间重命名。
 - 是否提交：执行中，计划提交本次交付记录，并推送origin/main。
@@ -11,7 +11,7 @@
 
 ## 成功标准
 
-main在origin可回读，包含刚批准的Desktop合并历史；从已推送且干净的来源构建0.36.4独立macOS Apple Silicon.app，校验版本、源码摘要、资源、arm64架构、内置Git/LFS/Presence和严格开发签名；对成品运行现有隔离Git/Presence、模型生成及多层目录发现检查。报告实际开发签名及未公证状态，区分源码推送、本地成品和正式更新发布。
+main在origin可回读，包含刚批准的Desktop合并历史；从已推送且干净的来源构建与根产品版本一致的独立macOS Apple Silicon.app，校验版本、源码摘要、资源、arm64架构、内置Git/LFS/Presence和严格开发签名；对成品运行现有隔离Git/Presence、模型生成及多层目录发现检查。报告实际开发签名及未公证状态，区分源码推送、本地成品和正式更新发布。
 
 ## 已阅读上下文与决策
 
@@ -35,6 +35,7 @@ main在origin可回读，包含刚批准的Desktop合并历史；从已推送且
 - 14:59：最新main云端验证为39558552749；macOS已通过修正后的首次setup并进入检查，Windows仍在首次setup。取消本任务中两个已被后续修正取代的旧CI运行以释放资源，没有取消其他用户任务。
 - 15:01：Windows首次setup已完成依赖构建，随后来源校验发现大量上游文本字节不一致；日志表明Git检出自动转换了换行。仅给checkout步骤设置core.autocrlf=false，保留来源文件的原始字节和既有SHA256锁，不放宽来源校验或改写原版文件。macOS此前已进入最终构建，本地包及产品源码不受此CI配置改动影响。
 - 15:07—15:08：macOS云端完整验证已通过。Windows复跑后一般源码校验恢复，仅剩自带text=auto属性的choosealicense资源受core.eol=native影响；补齐checkout的core.eol=lf，并将无依赖的来源检查提前到安装依赖前。本地隔离Git夹具真实复现CRLF默认加text=auto的转换，验证两项checkout配置能恢复逐字节LF；不修改任何来源锁。此次仍仅CI配置改动，已验证macOS包及产品源码摘要不变。
+- 15:15—15:17：Windows首次setup及两层TypeScript检查通过，Rust检查暴露Presence的Windows配置保护仍调用未移植的super::is_link。对照既有平台保护实现，直接使用Windows MetadataExt的FILE_ATTRIBUTE_REPARSE_POINT属性判断，保留拒绝链接/junction的保护，不改原版执行代码。该项已涉及平台源码兼容修复，按版本纪律将有效产品patch从0.36.4递增到0.36.5；同步根/UI/Desktop/Presence及其锁文件，来源锁仅更新允许的产品package.json元数据摘要。已验证的0.36.4包保留，计划交付重新验收后的0.36.5最终包。
 
 ## 验证与交付
 

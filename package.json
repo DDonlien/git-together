@@ -1,6 +1,6 @@
 {
   "name": "git-together",
-  "version": "0.36.4",
+  "version": "0.36.5",
   "private": true,
   "type": "module",
   "description": "GitTogether UI and collaboration extensions on GitHub Desktop",

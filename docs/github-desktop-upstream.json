@@ -3905,7 +3905,7 @@
       "reason": "Mount the existing GitTogether UI; keep original initialization and App mounted."
     },
     "app/package.json": {
-      "sha256": "5707641190dae7a4e8f3aa4e804c7b76d8a9df95349cd559130e23f9b59eab90",
+      "sha256": "fe2131a8413cf0865793456d93f0c9f116ca9c1f8e711eefe4925e83f8eb8b3a",
       "reason": "Product identity, version, and isolated app data identity."
     },
     "tsconfig.json": {

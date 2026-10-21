@@ -1,8 +1,10 @@
 # GitHub Desktop 执行基础
 
-2026-10-21 用户明确要求将当前认可版本合并并提交为 main。现已采用普通合并并保留双亲历史，不再将 main 视为旧运行链；github-desktop-based 工作树仍保留。有效命令及原版执行边界保持下述约定，当前产品版本保持0.36.4；这次合并不包含推送、正式打包或启用自动更新。
+2026-10-21 用户明确要求将当前认可版本合并并提交为 main。现已采用普通合并并保留双亲历史，不再将 main 视为旧运行链；github-desktop-based 工作树仍保留。有效命令及原版执行边界保持下述约定，合并时产品版本为0.36.4；这次合并不包含推送、正式打包或启用自动更新。
 
-同日后续「推送打包」已将main推送到GitHub，并从干净的已推送提交`96f41a7516c2ab9b61e78c552dd5e9de18f9f62a`重新构建0.36.4 Apple Silicon开发.app及ZIP。包内源码摘要`e631bf1929680f42c2c5bd9ad97969702ee347b9b590bb170280a58d4cca6c70`与当前产品源码一致；12项Git/Presence、8项模型生成和11项目录发现检查通过，ZIP解压后严格深度签名校验通过。输出及报告在`artifacts/macos/0.36.4/`，正式签名公证、Windows安装包及更新源仍按迁移需求单独交付。
+同日后续「推送打包」已将main推送到GitHub，并从干净的已推送提交`96f41a7516c2ab9b61e78c552dd5e9de18f9f62a`重新构建0.36.4 Apple Silicon开发.app及ZIP。包内源码摘要`e631bf1929680f42c2c5bd9ad97969702ee347b9b590bb170280a58d4cca6c70`与当时产品源码一致；12项Git/Presence、8项模型生成和11项目录发现检查通过，ZIP解压后严格深度签名校验通过。输出及报告在`artifacts/macos/0.36.4/`，正式签名公证、Windows安装包及更新源仍按迁移需求单独交付。
+
+同次交付的首次Windows原生检查发现Presence平台配置保护缺少链接属性判断；按既有保护语义补齐后，当前产品patch递增为0.36.5，旧0.36.4本地包保留。根setup同时补齐原版依赖强制构建、Windows的npm JS启动入口；CI固定检出换行并提前校验来源。0.36.5重新打包和两平台复验单独记录，未更改原版Git/授权实现。
 
 本分支使用 GitHub Desktop `release-3.6.7`，上游提交为 `dbc92f973994da7fccc494d0e5a2ae0ffbd1434e`（准确值以 `github-desktop-upstream.json` 为准）。`desktop/` 保留原始源码、锁文件、许可证和固定版本的子模块资源。原版的 Git、认证、凭据、Store、Dispatcher、后台 Fetch、错误与冲突处理不重新实现。
 

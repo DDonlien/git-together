@@ -2,7 +2,7 @@
 
 0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
-当前 `main` 已合并用户认可的 `github-desktop-based` 0.36.4，采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+当前 `main` 为0.36.5，包含用户认可的 `github-desktop-based` 0.36.4及首次Windows构建兼容修补，采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
 
 选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。匹配结果由 GitHub Desktop 原版保存与刷新，重新打开后保留账号关联。
 

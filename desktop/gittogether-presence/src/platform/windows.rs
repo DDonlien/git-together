@@ -4,7 +4,7 @@ use std::{
     mem::{size_of, zeroed},
     os::windows::{
         ffi::OsStrExt,
-        fs::OpenOptionsExt,
+        fs::{MetadataExt, OpenOptionsExt},
         io::{AsRawHandle, FromRawHandle, OwnedHandle},
     },
     path::{Path, PathBuf},
@@ -130,7 +130,7 @@ pub fn protect_path(path: &Path) -> io::Result<()> {
         .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
-    if super::is_link(&file.metadata()?) {
+    if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
         return Err(io::Error::other("配置目录不能是链接"));
     }
     protect_handle(file.as_raw_handle())
