@@ -28,9 +28,9 @@
     - [x] \[DESKTOP-01-account-entries-tls] 修正2026-10-19截图反馈中的Gitea客户端证书处理：账号API使用与原版相同的Chromium请求及证书控制器，保留超时、响应体上限和拒绝重定向；连接失败显示中文说明并保留输入及已知目录，证书弹窗沿用原版查看/取消行为和Material设计。0.36.1源码摘要b3882fa75f6ea8c4d1e28a3b985446efb0bc56f001aa7a1548b1ff46d5bb225f；类型/Cargo、7项来源边界、账号及12项Git/Presence包内回归通过。隔离HTTPS证明证书被拒绝且没有HTTP请求或令牌发送，未修改系统信任；11张截图见artifacts/account-entries/0.36.1/。更新的本地测试.app及validation.json见artifacts/macos/0.36.1/GitTogether-dev-darwin-arm64/。
       - [ ] \[DESKTOP-01-account-entries-tls-server] 2026-10-19后续排查澄清：实际Gitea入口为https://git.freshli4.com:10443，IPv4/IPv6均通过证书校验，返回Gitea接口HTTP200，证书由Let's Encrypt YE1签发且覆盖该域名；最终0.36.1包内无认证读取亦成功。未带端口的默认443存在双栈差异：IPv4正常，IPv6返回fnOS默认自签名证书，触发此前提示。用户应填写完整10443入口；真实用户令牌登录仍待本人验收。若要默认443访问，需另外统一IPv6入口配置；本轮未修改服务器、系统代理或证书信任，未读取用户令牌。
 
-  - [ ] \[DESKTOP-01-updates] 按2026-10-21用户明确要求，补齐当前main正式发布及自动更新，让0.33.0能检查、下载并升级至当前Desktop版本；沿用正式bundle身份、Developer ID和既有公证/更新签名配置，保留用户配置及本地文件，隔离验证旧版升级和新版后续更新。macOS Apple Silicon与Windows x86/x64使用同源同版本发布，资产齐全且通过验证后才公开更新源，不操作用户安装版。
-    - 2026-10-21：0.37.0应用来源固定8d9a13f243，三平台来源摘要一致。来源/两层类型/Rust及31项回归通过，macOS严格Developer ID签名及31项实际成品检查通过；Windows39587719512两种架构完整构建、NSIS安装、原生凭据往返、原版Commit/Push、文件/index保留与production更新桥均通过。旧已公证快照完成真实0.33.0更新器与Squirrel双升级预演，不代替最终成品验收。现有公证profile两轮10分钟重试仍返回69/No Keychain password item found；最终包无Accepted，正式Release、最终更新签名及公共完整下载/实际升级验收未完成，公开latest仍为0.33.0。保留待完成状态，不操作安装版或重新配置凭据。
-    - [ ] \[DESKTOP-01-updates-pipeline] 根“推送打包”入口自动完成干净且已推送main来源、版本、原版执行边界、平台成品、签名、公证、旧版与新版更新清单、GitHub正式Release及公共下载回读；任何阶段失败明确停止，不能把开发包或单纯CI通过记为发布完成。
+  - [x] \[DESKTOP-01-updates] 按2026-10-21用户明确要求，补齐当前main正式发布及自动更新，让0.33.0能检查、下载并升级至当前Desktop版本；沿用正式bundle身份、Developer ID和既有公证/更新签名配置，保留用户配置及本地文件，隔离验证旧版升级和新版后续更新。macOS Apple Silicon与Windows x86/x64使用同源同版本发布，资产齐全且通过验证后才公开更新源，不操作用户安装版。
+    - 2026-10-21：0.37.0已正式发布为stable/latest，tag及三平台应用来源固定8d9a13f243，源码摘要一致。来源/两层类型/Rust及31项回归、macOS严格Developer ID签名及31项成品检查通过；Windows39587719512双架构完整构建、NSIS安装、原生凭据往返、原版Commit/Push、文件/index保留与production更新桥通过。最终Mac任务2a764857-7295-4b45-8569-34f7a8e99ae3获得Accepted，staple/validate及归档解压验签通过。18项公开资产全部完整下载、大小/摘要及三平台旧更新签名核对通过；公开latest、Atom、旧版清单、Windows分架构清单及Electron原始公共地址均回读正确。隔离的0.33.0更新器通过公共源实际检查、下载并安装至0.37.0，启动后更新桥及配置/本地文件保留通过；新版Squirrel替换/重启另经签名隔离副本验证。未操作用户安装版。
+    - [x] \[DESKTOP-01-updates-pipeline] 根“推送打包”入口自动完成干净且已推送main来源、版本、原版执行边界、平台成品、签名、公证、旧版与新版更新清单、GitHub正式Release及公共下载回读；任何阶段失败明确停止，不能把开发包或单纯CI通过记为发布完成。已查明公证NoItem的实际错误为数据保护钥匙串锁定/-25308，原profile及配置未丢失；增加准确诊断、有限重试、签名候选与任务续办、草稿完整摘要校验后续传及公共分段下载。复用原配置和私钥，不改系统安全策略；本次完整正式发布与公开0.33.0隔离升级通过。
 
 ## Presence账号与商业边界（2026-10-12）
 

@@ -3,7 +3,7 @@
 - 用户原始prompt：之前公证不是一直能用吗？把现有配置读取失败的问题查清楚并修好，继续完成正式发布，让 0.33.0 能检查到并升级。
 - 模型：GPT-6；环境仅公开家族标识。
 - 开始时间：2026-10-21 20:45:53 Asia/Shanghai。
-- 结束时间：执行中。
+- 结束时间：2026-10-21 22:08:03 Asia/Shanghai。
 - 起始分支/main提交：main / 58d63b856f57e9cd430d84fedd8cff3730c29341。
 - 产品版本：沿用尚未公开的0.37.0，应用来源8d9a13f243，当前只修复发布工具/公证定位，不改应用或递增未发布候选版本。
 - 需求：DESKTOP-01-updates、DESKTOP-01-updates-pipeline。
@@ -21,7 +21,19 @@
 - 21:32：最终三平台旧更新签名及独立验证通过；实际0.33.0更新器完成检查、下载、验证旧归档规则并安装到0.37.0，最终签名/公证有效；Squirrel隔离签名副本完成替换/重启，production更新桥与合成配置/本地文件保留通过。native-upgrade-validation.json已生成，未操作用户安装版。
 - 创建v0.37.0草稿，target固定应用来源8d9a13f243。GitHub当前代理上传五连接合计约0.5MB/s，尚无完整资产；停止本任务的上传连接后测试本进程直接连接，不改变系统代理。草稿恢复只跳过GitHub服务端标记uploaded且大小与完整SHA-256均匹配的资产，仍要求全部公共完整下载验证；不放宽公开版本不可覆盖的限制。
 - 直连已完成236835807字节Windows x64 nupkg上传，GitHub状态uploaded、服务端SHA256 cfbc3dd32565dfe46c62688d2d80ecb958eba939a6dc5d637908a7390e2ca140与本地产物一致。继续以该方式完成剩余相同正式资产，再由标准流程恢复；公共验收仍使用正常网络环境。
+- 21:48：18项资产中仅x86 Squirrel安装器的旧连接持续约0.2MB/s，停止该任务连接并仅重传175954432字节载荷；新连接随后完成。标准流程按服务端完整SHA-256跳过其余已上传文件，重新执行最终隔离升级、三平台签名及来源核对，通过后于21:51:16公开v0.37.0/stable/latest。main的085743277a发布两份架构独立Windows清单。
+- 21:54：16项公开载荷/更新元数据全部完整下载，大小及SHA-256与本地一致，旧更新签名/版本/归档规则三平台均通过。另完整回读release-integrity.json及SHA256SUMS，分别2962字节/5a71d0129b8934017113ece40ff0498ec9b6af56d17f646b133d8cd8ebf34a7d、1566字节/41425112759602e8fd7fbe6719b8587dcd97a95d005c4366f22b6be244ff0d47；后续标准入口也将这两项纳入完整下载循环。
+- 21:55：实际0.33.0更新器通过公共latest.json检查、下载、签名及旧版归档验证，安装到隔离副本0.37.0，启动后production更新桥正常；原合成配置与本地文件保留。public-upgrade-validation.json通过；未操作用户安装版。
+- Electron官方更新服务原始DDonlien路径仍缓存0.33.0；等价小写owner的未缓存请求已返回正确0.37.0 ZIP，确认资产命名和新更新格式有效。官方服务实现按owner/repo缓存、默认15分钟；保持应用原始地址，等待该地址刷新，不用变更URL绕过正式验收。
+- 22:06:05：原始https://update.electronjs.org/DDonlien/git-together/darwin-arm64/0.33.0已返回0.37.0正式ZIP，标准流程退出0并写入public-validation.json，随后相同无查询参数URL再次回读成功。官方缓存已自然刷新，未修改应用更新地址。
+- 18项服务器状态/完整摘要再次与本地逐一核对通过，补充public-all-assets-validation.json。原notary.json仍为权限600、修改时间2026-10-15 00:01:46，未重写配置或重建凭据。发布后仅补齐公共元数据下载检查与文档，应用摘要保持67a84afd805c25f83045f49d4774a92ee704b8bf0f74c88ec74f093345b32a79，不更改已经公开的0.37.0包或版本。
 
-## 验证与待完成
+## 验证与交付
 
-执行中：查清存储可见性并可靠定位现有凭据；最终Accepted/staple、三平台更新签名、正式发布、全部公共下载及0.33.0实际隔离升级回读仍必须完成。
+- 完成：既有凭据读取失败的根因诊断、错误分类和候选/任务续办；3项公证及6项更新/迁移回归通过，修改脚本语法及差异检查通过。
+- 完成：三平台同源0.37.0正式Release、Mac Developer ID/Accepted公证/staple、Windows x86/x64原生安装和Git验收、三平台旧更新签名及独立结构/版本验证。
+- 完成：16项载荷/更新元数据及额外2项完整性元数据全部公开完整下载和大小/摘要核对；latest/Atom、Windows独立清单及Electron原始公共地址正确。
+- 完成：最终0.33.0更新器通过公共源检查、下载、验签和安装至0.37.0；启动后production更新桥、合成配置和本地文件保留。新版Squirrel下载替换与重启在独立签名副本验证。没有操作用户已安装应用，没有替用户选择安装与重启。
+- 范围边界：Windows凭据和Git验证使用原生CI及合成数据；Mac公共0.33.0升级为隔离副本，不能据此声称用户真实账号已在安装版登录。Windows未配置Authenticode，旧升级资产使用既有更新签名；未降低安全保护或改写已发布资产。
+- 证据：artifacts/releases/0.37.0/中的notarization.json、package-*.json、mac-native-validation.json、windows-smoke-*.json、native-upgrade-validation.json、public-upgrade-validation.json、public-validation.json、public-all-assets-validation.json、public-metadata/validation.json和release-publish.log。
+- 正式地址：https://github.com/DDonlien/git-together/releases/tag/v0.37.0；tag远端实查指向8d9a13f243b3912d06cdc0ae28aabacd5b1cef46。DESKTOP-01-updates及DESKTOP-01-updates-pipeline已按实际证据完成。
