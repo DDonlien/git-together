@@ -172,10 +172,11 @@ for (const relative of feeds) {
   }
 }
 assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag);
+const publicFiles = [...integrity, ...['release-integrity.json', 'SHA256SUMS'].map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }))];
 const temporary = mkdtempSync(join(tmpdir(), 'gittogether-public-release-'));
 try {
-  await downloadPublicAssets(integrity, version, temporary);
-  for (const item of integrity) {
+  await downloadPublicAssets(publicFiles, version, temporary);
+  for (const item of publicFiles) {
     const path = join(temporary, item.name);
     assert.equal(statSync(path).size, item.size); assert.equal(hash(path), item.sha256);
   }
@@ -196,5 +197,5 @@ for (let attempt = 0; ; attempt++) {
   assert.ok(attempt < 60, 'Electron public update feed has not reached the released package.');
   await pause(15000);
 }
-writeFileSync(join(destination, 'public-validation.json'), JSON.stringify({ version, commit, verifiedAt: new Date().toISOString(), assets: integrity.length, latest: true, atom: true, signatures: true, completeDownloads: true }, null, 2) + '\n');
+writeFileSync(join(destination, 'public-validation.json'), JSON.stringify({ version, commit, verifiedAt: new Date().toISOString(), assets: publicFiles.length, latest: true, atom: true, signatures: true, completeDownloads: true }, null, 2) + '\n');
 console.log(`Published and verified https://github.com/${repository}/releases/tag/${tag}`);
