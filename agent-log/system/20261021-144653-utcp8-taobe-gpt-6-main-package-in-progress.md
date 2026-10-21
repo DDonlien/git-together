@@ -25,6 +25,10 @@ main在origin可回读，包含刚批准的Desktop合并历史；从已推送且
 - 14:46：回应将核对、推送main，再使用同一源码打包。工作树干净，main领先origin/main四个提交。
 - 14:47：fetch origin后确认远端main仍为dfe04f0525cf178284c4bfeb26238fe5f1b656c7，可正常快进推送，不需要重写历史。
 - 14:47：说明当前有效打包入口提供macOS Apple Silicon开发版；登记本次交付目标。复用安装的Node22.23.2及现有依赖。
+- 14:48：提交交付范围131d2c4e8493d36e0c820b0034b01c3b1aacd7e8，并正常推送origin/main；远端回读一致，未重写历史。
+- 14:49：根package:mac同源完整构建及开发签名通过；包内版本0.36.4、源码摘要e631bf1929680f42c2c5bd9ad97969702ee347b9b590bb170280a58d4cca6c70、sourceDirty=false，来源为已推送131d2c4e84。
+- 14:50—14:51：成品12项Git/Presence、8项模型生成（含注入EPERM取消）和11项目录发现全部通过，没有应用或扩展异常。ZIP为481608683字节；解压后严格深度签名及来源验证通过，SHA256为508473e09525bea00c64f238e1464af7ebc53ccd7e65c27e1d88b670899d2062。
+- 14:52—14:54：发现首次main云端macOS类型检查缺少desktop-notifications生成声明，本机已有依赖掩盖了该首次安装缺口。确认固定原版post-install本就使用app install --force；根setup之前先ignore-scripts再普通install被Yarn判为已完成，没有执行该原生依赖的构建。仅在根setup补齐原版--force行为，不修改原版执行代码、产品UI或包内源码；因此保持0.36.4。另行读取Windows任务失败日志并继续验收。
 
 ## 验证与交付
 

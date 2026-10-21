@@ -38,7 +38,9 @@ if (mode === 'setup') {
   yarnRun(['install', '--frozen-lockfile', '--ignore-scripts', '--non-interactive']);
   yarnRun(['install', '--frozen-lockfile', '--ignore-scripts', '--non-interactive'], join(desktop, 'app'));
   run(node, ['scripts/download-runtime.mjs']);
-  yarnRun(['install', '--frozen-lockfile', '--non-interactive'], join(desktop, 'app'));
+  // Match upstream post-install: the earlier ignore-scripts pass otherwise
+  // leaves local native dependencies and notification declarations unbuilt.
+  yarnRun(['install', '--frozen-lockfile', '--non-interactive', '--force'], join(desktop, 'app'));
   // The upstream root postinstall also initializes git submodules. Their exact
   // pinned sources are already vendored here; run only its dependency builds.
   for (const name of ['printenvz', 'process-proxy']) {
