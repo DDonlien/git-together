@@ -229,6 +229,15 @@ button.repository-count-action:disabled { opacity: .7; }
 .local-path-action { max-width: 100%; min-height: var(--compact-height); text-align: left; }
 .local-path-action small { display: block; max-width: 100%; font-size: 10px; line-height: 1.5; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .local-path-action:hover:not(:disabled) { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.local-path-with-issue { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.local-path-with-issue > .local-path-action, .local-path-with-issue > span:first-child { min-width: 0; }
+.local-path-issue { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.local-path-with-issue > .local-path-issue { order: -1; }
+.local-path-issue > .local-path-warning.icon-button.ogui-control--small { color: var(--danger); width: 24px; min-width: 24px; min-height: 24px; height: 24px; padding: 0; }
+.branch-issue-error { display: block; font-size: 11px; color: var(--danger); white-space: normal; }
+.local-path-issue .branch-issue-error { max-width: 220px; }
+.repository-task-path > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.repository-tree-identity > .local-path-with-issue { flex: 1 1 0; overflow: hidden; }
 .repository-actions { display: inline-flex; align-items: center; gap: var(--repository-action-group-gap); text-align: left; }
 .repository-icon-anchor { position: relative; display: inline-flex; flex-shrink: 0; }
 .repository-read-badge { position: absolute; bottom: -3px; right: -3px; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 999px; outline: 1px solid var(--content); background: var(--content); color: var(--blue); font-size: 10px; font-weight: 700; line-height: 1; }

@@ -21,6 +21,8 @@ use std::{
 use tokio::sync::{watch, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
+mod branch_issues;
+
 struct State {
     value: Value,
     revision: u64,
@@ -75,6 +77,7 @@ pub struct Service {
     cancelled_graph_preparations: Mutex<VecDeque<(String, i64)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
+    local_branches: Mutex<BTreeMap<String, (String, BTreeMap<String, String>)>>,
     foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
     background: std::sync::Mutex<CancellationToken>,
     pub active: AtomicUsize,
@@ -215,6 +218,7 @@ impl Service {
             cancelled_graph_preparations: Mutex::new(VecDeque::new()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
+            local_branches: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
             installing: AtomicBool::new(false),
             running_targets: std::sync::Mutex::new(BTreeMap::new()),
@@ -230,7 +234,7 @@ impl Service {
         Ok(service)
     }
     fn catalog_value(&self, state: &State) -> Value {
-        json!({"instanceId":self.instance,"revision":state.revision,"accounts":state.value["accounts"].as_array().unwrap().iter().map(|a|a["account"].clone()).collect::<Vec<_>>(),"repositories":state.value["repositories"],"links":state.value["links"],"credentialStorage":if self.persistent{"encrypted"}else{"session"}})
+        json!({"instanceId":self.instance,"revision":state.revision,"accounts":state.value["accounts"].as_array().unwrap().iter().map(|a|a["account"].clone()).collect::<Vec<_>>(),"repositories":state.value["repositories"],"links":state.value["links"],"credentialStorage":if self.persistent{"encrypted"}else{"session"},"branchIssues":state.value["branchIssues"].as_array().cloned().unwrap_or_default()})
     }
     pub async fn catalog(&self) -> Result<Value> {
         let state = self.state.read().await;
@@ -238,74 +242,6 @@ impl Service {
             return Err(state.error.clone());
         }
         Ok(self.catalog_value(&state))
-    }
-    async fn prune_missing_worktrees(
-        &self,
-        repository_id: Option<&str>,
-        cancel: &CancellationToken,
-    ) -> Result<()> {
-        let links: Vec<_> = self.catalog().await?["links"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|link| repository_id.is_none_or(|id| text(link, "repositoryId") == id))
-            .cloned()
-            .collect();
-        let changes = tokio::task::spawn_blocking(move || -> Result<Vec<(Value, Vec<Value>)>> {
-            let mut changes = Vec::new();
-            for link in links {
-                let directories = roots(&link)?;
-                let retained: Vec<_> = directories
-                    .iter()
-                    .filter(|item| !missing_directory(text(item, "path")))
-                    .cloned()
-                    .collect();
-                if retained.len() != directories.len() {
-                    changes.push((link, retained));
-                }
-            }
-            Ok(changes)
-        })
-        .await
-        .map_err(|_| "旧工作目录关联检查未完成。".to_string())??;
-        if cancel.is_cancelled() {
-            return Err("目录关联检查已取消。".into());
-        }
-        if changes.is_empty() {
-            return Ok(());
-        }
-        self.mutate(|next| {
-            if cancel.is_cancelled() {
-                return Err("目录关联检查已取消。".into());
-            }
-            let links = next["links"].as_array_mut().unwrap();
-            for (previous, retained) in changes {
-                // A scan must not overwrite a mapping edited while it was reading disk.
-                let Some(index) = links.iter().position(|link| *link == previous) else {
-                    continue;
-                };
-                let directories = roots(&previous)?;
-                let retained: Vec<_> = directories
-                    .iter()
-                    .filter(|item| retained.contains(item) || !missing_directory(text(item, "path")))
-                    .cloned()
-                    .collect();
-                if retained.len() == directories.len() {
-                    continue;
-                }
-                if retained.is_empty() {
-                    links.remove(index);
-                } else {
-                    if missing_directory(text(&previous, "path")) {
-                        links[index]["path"] = retained[0]["path"].clone();
-                    }
-                    links[index]["worktrees"] = json!(retained);
-                }
-            }
-            Ok(())
-        })
-        .await?;
-        Ok(())
     }
     fn repository_storage(&self) -> Result<PathBuf> {
         if self.persistent {
@@ -1024,9 +960,10 @@ impl Service {
                 Ok::<_, String>((task, commits))
             }
             .await;
-            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"error":format!("{e} 工作目录不可用或远端已变化，请重新关联。")}))}
+            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"missing":missing_directory(text(&item,"path")),"error":format!("{e} 工作目录不可用或远端已变化，请重新关联。")}))}
         }
         self.validate(context).await?;
+        self.observe_local_branches(context, &tasks).await;
         Ok(
             json!({"source":"local","complete":tasks.iter().all(|t|t["error"]==""),"tasks":tasks,"commits":git::merge_history(commits)}),
         )
@@ -1099,11 +1036,13 @@ impl Service {
                 if cancel.is_cancelled() {
                     return Err("远端检查已取消。".into());
                 }
+                if missing_directory(text(&item, "path")) { continue; }
                 let result = async {
                     let root = self
                         .validate_path(&context.repository, text(&item, "path"))
                         .await?;
                     let task = git::task(&root).await?;
+                    self.observe_local_branches(context, std::slice::from_ref(&task)).await;
                     if task["branch"] == "Detached HEAD" {
                         return Ok(None);
                     }
@@ -1133,11 +1072,13 @@ impl Service {
             let result = async {
                 let _guard = self.claim(&root, cancel).await?;
                 self.validate(context).await?;
-                context.network.fetch(&root, &names, cancel).await
+                let (present, historical) = context.network.branch_presence(&root, &names, cancel).await?;
+                self.observe_branch_presence(context, &names, &present, &historical, false, cancel).await?;
+                context.network.fetch(&root, &present, cancel).await
             }
             .await;
             match result {
-                Ok(_) => branches += names.len(),
+                Ok(heads) => branches += heads.len(),
                 Err(error) => errors.push(format!("{}：{error}", root.display())),
             }
         }
@@ -1241,7 +1182,7 @@ impl Service {
             "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
-            "link" | "unlink" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
+            "link" | "unlink" | "dismissBranchIssue" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
             _ => None,
         }
         .map(|name| self.foreground(name))
@@ -1438,7 +1379,7 @@ impl Service {
         match method {
             "catalog" => {
                 util::allowed(input, &[])?;
-                self.prune_missing_worktrees(None, cancel).await?;
+                self.update_branch_issues(cancel).await?;
                 return self.catalog().await;
             }
             "openRepository" => {
@@ -1560,16 +1501,11 @@ impl Service {
         let id = util::field(input, "repositoryId", 160)?;
         if method == "fetchRepository" {
             util::allowed(input, &["repositoryId"])?;
-            let cleanup_error = self.prune_missing_worktrees(Some(&id), cancel).await.err();
             if cancel.is_cancelled() {
                 return Err("远端检查已取消。".into());
             }
             let context = self.context(&id).await?;
-            let mut result = self.fetch(&context, cancel).await?;
-            if let Some(error) = cleanup_error {
-                result["errors"].as_array_mut().unwrap().push(json!(format!("旧目录关联清理未保存：{error}")));
-            }
-            return Ok(result);
+            return self.fetch(&context, cancel).await;
         }
         let context = self.context(&id).await?;
         if matches!(method, "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
@@ -1687,6 +1623,11 @@ impl Service {
                 return result
                     .map_err(|e| format!("{e} 下载目录已保留：{}，可重新关联。", path.display()));
             }
+            "dismissBranchIssue" => {
+                util::allowed(input, &["repositoryId", "issueId"])?;
+                let issue_id = util::sha(text(input, "issueId"))?;
+                return self.dismiss_branch_issue(&context, &issue_id, cancel).await;
+            }
             "localWorkspace" => {
                 util::allowed(input, &["repositoryId"])?;
                 return self.local_workspace(&context, cancel).await;
@@ -1758,6 +1699,10 @@ impl Service {
                     }
                 };
                 self.validate(&context).await?;
+                if method == "remoteWorkspace" && result["branchesComplete"] == true {
+                    let names: Vec<_> = result["tasks"].as_array().unwrap().iter().map(|task| text(task, "branch").to_owned()).collect();
+                    self.observe_branch_presence(&context, &names, &names, &[], true, cancel).await?;
+                }
                 return Ok(result);
             }
             "discardSync" => {
@@ -2208,11 +2153,12 @@ fn valid_state(v: &Value) -> bool {
                         }))
             })
         })
+        && branch_issues::valid_state(v)
 }
 fn missing_directory(value: &str) -> bool {
     let path = Path::new(value);
     // Keep inaccessible paths and existing symlinks; only an absent directory
-    // is evidence that the saved association can be removed automatically.
+    // is evidence for cleanup after the user dismisses its notice.
     path.is_absolute()
         && fs::symlink_metadata(path)
             .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)

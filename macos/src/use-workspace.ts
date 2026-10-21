@@ -307,6 +307,7 @@ export function useWorkspace(activeRepositoryId = '') {
       return matchedRepositoryIds;
     },
     unlink: (repositoryId: string, branch?: string) => task(repositoryId, () => importAPI('unlink', { repositoryId, ...(branch === undefined ? {} : { branch }) })),
+    dismissBranchIssue: (repositoryId: string, issueId: string) => task(repositoryId, () => importAPI('dismissBranchIssue', { repositoryId, issueId })),
   };
 }
 export type WorkspaceController = ReturnType<typeof useWorkspace>;

@@ -1494,7 +1494,7 @@ impl Provider {
                 .iter()
                 .all(|t| t["error"] == "" && t["treeComplete"] == true);
         Ok(
-            json!({"source":"remote","checkedAt":util::now(),"tasks":tasks,"commits":git::merge_history(commits),"complete":complete,"warnings":warnings}),
+            json!({"source":"remote","checkedAt":util::now(),"tasks":tasks,"commits":git::merge_history(commits),"complete":complete,"branchesComplete":!limited,"warnings":warnings}),
         )
     }
     pub async fn commit(
@@ -2125,12 +2125,7 @@ impl Network {
         )
         .await
     }
-    pub async fn fetch(
-        &self,
-        root: &std::path::Path,
-        branches: &[String],
-        cancel: &CancellationToken,
-    ) -> Result<Vec<String>> {
+    async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
         let names = git::read(root, &["remote"]).await?;
         let mut remote = if self.system_auth { system_remote(root, &self.url, false).await?.0 } else { String::new() };
         if !self.system_auth {
@@ -2145,6 +2140,46 @@ impl Network {
         if remote.is_empty() {
             return Err("工作目录的远端已经变化，请重新关联。".into());
         }
+        Ok(remote)
+    }
+    pub async fn branch_presence(
+        &self,
+        root: &std::path::Path,
+        branches: &[String],
+        cancel: &CancellationToken,
+    ) -> Result<(Vec<String>, Vec<String>)> {
+        let remote = self.fetch_remote(root).await?;
+        let mut refs = Vec::new();
+        for branch in branches {
+            if branch.starts_with('-') || git::read(root, &["check-ref-format", "--branch", branch]).await?.trim() != branch {
+                return Err("分支名称无效。".into());
+            }
+            refs.push(format!("refs/heads/{branch}"));
+        }
+        if refs.is_empty() { return Ok((Vec::new(), Vec::new())); }
+        let mut args = vec!["ls-remote", "--heads", self.url.as_str()];
+        args.extend(refs.iter().map(String::as_str));
+        let output = self.run(root, &args, Some(cancel.clone()), false, false, 120).await?;
+        let mut present = std::collections::BTreeSet::new();
+        for line in output.lines() {
+            let (sha, name) = line.split_once('\t').ok_or("远端分支状态格式无效。")?;
+            if !util::valid_sha(sha) { return Err("远端分支状态格式无效。".into()); }
+            if let Some(index) = refs.iter().position(|reference| reference == name) { present.insert(branches[index].clone()); }
+        }
+        let prefix = format!("refs/remotes/{remote}/");
+        let tracking = git::read(root, &["for-each-ref", "--format=%(refname)", &prefix]).await?;
+        // Only queried branches contribute historical evidence. Dismissed
+        // associations must not reappear from unrelated stale tracking refs.
+        let historical = branches.iter().filter(|branch| tracking.lines().any(|name| name.strip_prefix(&prefix) == Some(branch.as_str()))).cloned().collect();
+        Ok((present.into_iter().collect(), historical))
+    }
+    pub async fn fetch(
+        &self,
+        root: &std::path::Path,
+        branches: &[String],
+        cancel: &CancellationToken,
+    ) -> Result<Vec<String>> {
+        let remote = self.fetch_remote(root).await?;
         let mut refs = Vec::new();
         for b in branches {
             if b.starts_with('-')
