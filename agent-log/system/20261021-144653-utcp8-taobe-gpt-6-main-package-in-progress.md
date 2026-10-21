@@ -31,6 +31,9 @@ main在origin可回读，包含刚批准的Desktop合并历史；从已推送且
 - 14:52—14:54：发现首次main云端macOS类型检查缺少desktop-notifications生成声明，本机已有依赖掩盖了该首次安装缺口。确认固定原版post-install本就使用app install --force；根setup之前先ignore-scripts再普通install被Yarn判为已完成，没有执行该原生依赖的构建。仅在根setup补齐原版--force行为，不修改原版执行代码、产品UI或包内源码；因此保持0.36.4。另行读取Windows任务失败日志并继续验收。
 - 14:54：Windows同一次干净安装在Node直接启动npm.cmd时抛出EINVAL；改用当前npm的JS入口交给Node执行，保留原有npm ci参数，避免shell包装。构建引导改动不进入应用包，产品源码摘要不变。
 - 14:55：本机重新setup、类型/Rust及25项测试通过。检查Windows验收夹具时发现其仅提供POSIX shebang；仅在单元测试进程边界把虚构codex.exe映射为Node夹具，保留产品原生CLI发现/调用不变。共同传输、取消和超时仍在Windows运行，三个POSIX进程组故障注入仅由macOS验收；不把这三项标成Windows已通过。
+- 14:56—14:59：为使交付来源包含构建引导修正，再从干净且已推送的96f41a7516c2ab9b61e78c552dd5e9de18f9f62a重新package:mac，完整构建/开发签名通过；重新运行31项成品检查全部通过，没有应用或扩展异常。最终ZIP为481608573字节，SHA256为b056a36bbc7918af42a022f8166e7f1db19944c9c3c8b0e2a2cc36ad8e6a7625；解压后严格深度验签及来源验证通过。该记录取代14:51阶段产物作为最终本地交付。
+- 14:59：最新main云端验证为39558552749；macOS已通过修正后的首次setup并进入检查，Windows仍在首次setup。取消本任务中两个已被后续修正取代的旧CI运行以释放资源，没有取消其他用户任务。
+- 15:01：Windows首次setup已完成依赖构建，随后来源校验发现大量上游文本字节不一致；日志表明Git检出自动转换了换行。仅给checkout步骤设置core.autocrlf=false，保留来源文件的原始字节和既有SHA256锁，不放宽来源校验或改写原版文件。macOS此前已进入最终构建，本地包及产品源码不受此CI配置改动影响。
 
 ## 验证与交付
 

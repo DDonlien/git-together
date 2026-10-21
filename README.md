@@ -10,6 +10,8 @@ Submit 生成提交说明时优先使用原版 Copilot；账号没有对应权�
 
 在macOS执行 `npm run package:mac` 可构建能直接打开的开发测试版 `.app`，输出到 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。测试版使用独立开发身份及数据目录，不替换已安装应用；正式分发的签名、公证和更新发布另行处理。
 
+2026-10-21已推送main并重新打包0.36.4 Apple Silicon开发版；实际成品的31项Git/Presence、提交说明和多层目录匹配检查通过。独立.app及`GitTogether-0.36.4-mac-arm64-dev.zip`位于`artifacts/macos/0.36.4/`，同目录保留来源、完整性、运行和压缩包校验报告。此开发包尚未公证，也未发布到正式自动更新源。
+
 2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。当前有效运行、检查和构建入口均在根目录；GitHub Actions 验证同时覆盖 main 和 github-desktop-based。旧 Tauri 发布流程归档保留，Desktop 正式签名、公证及更新源迁移仍待单独交付；合并提交不会自动发布安装包。
 
 以下为迁移前稳定版功能记录；涉及独立 Rust 后台、平台 OAuth 和发布包的说明不代表本分支运行方式。
