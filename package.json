@@ -1,0 +1,18 @@
+{
+  "name": "git-together",
+  "version": "0.36.4",
+  "private": true,
+  "type": "module",
+  "description": "GitTogether UI and collaboration extensions on GitHub Desktop",
+  "scripts": {
+    "setup": "node scripts/desktop.mjs setup",
+    "dev": "node scripts/desktop.mjs dev",
+    "desktop": "node scripts/desktop.mjs dev",
+    "check": "node scripts/desktop.mjs check",
+    "build": "node scripts/desktop.mjs build",
+    "package:mac": "node scripts/desktop.mjs package",
+    "verify:upstream": "node scripts/verify-upstream.mjs",
+    "test": "node scripts/desktop.mjs test"
+  },
+  "engines": { "node": ">=22 <25" }
+}

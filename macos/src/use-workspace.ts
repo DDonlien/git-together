@@ -13,8 +13,8 @@ import { branchHiddenEntries, type BranchBehaviorPreferences } from './branch-be
 import { linkedTasks } from './branch-links';
 import { usesSystemAuthentication } from './repository-auth-model';
 
-type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[]; repositoryLastUsed: Record<string, number> } & BranchBehaviorPreferences;
-const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], repositoryLastUsed: {}, unworkedBranchBehavior: 'default' };
+type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[]; repositoryLastUsed: Record<string, number>; accountDisplayNames: Record<string, string> } & BranchBehaviorPreferences;
+const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], repositoryLastUsed: {}, accountDisplayNames: {}, unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
 const writePrefix = (repositoryId: string) => `write:${JSON.stringify(repositoryId)}:`;
 const sameLocalDirectories = (left: string | undefined, right: string) => !!left && JSON.stringify(JSON.parse(left).slice(0, 4)) === JSON.stringify(JSON.parse(right).slice(0, 4));
@@ -52,6 +52,7 @@ export function useWorkspace(activeRepositoryId = '') {
       if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string') || (saved.hiddenEntries !== undefined && (!Array.isArray(saved.hiddenEntries) || !saved.hiddenEntries.every(entry => typeof entry === 'string')))) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
       if ((saved.unworkedBranchBehavior !== undefined && !['default', 'hide'].includes(String(saved.unworkedBranchBehavior))) || (saved.shownBranches !== undefined && (!Array.isArray(saved.shownBranches) || !saved.shownBranches.every(entry => typeof entry === 'string')))) throw new Error('仓库行为偏好格式无效，已使用默认设置；原记录尚未覆盖。');
       if (saved.pinnedRepositories !== undefined && (!Array.isArray(saved.pinnedRepositories) || !saved.pinnedRepositories.every(id => typeof id === 'string'))) throw new Error('仓库置顶偏好格式无效，已使用默认设置；原记录尚未覆盖。');
+      if (saved.accountDisplayNames !== undefined && (!isRecord(saved.accountDisplayNames) || Object.values(saved.accountDisplayNames).some(name => typeof name !== 'string' || !name.trim() || name.length > 120))) throw new Error('账号显示名称偏好格式无效，已使用默认设置；原记录尚未覆盖。');
       if (saved.repositoryLastUsed !== undefined && (!isRecord(saved.repositoryLastUsed) || !Object.values(saved.repositoryLastUsed).every(time => typeof time === 'number' && Number.isFinite(time) && time >= 0))) throw new Error('仓库使用时间格式无效，已使用默认设置；原记录尚未覆盖。');
       return { ...defaults, ...saved } as Preferences;
     } catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); queueMicrotask(() => setStorageError(problem instanceof Error ? problem.message : '无法读取外观设置。')); return defaults; }
@@ -72,14 +73,17 @@ export function useWorkspace(activeRepositoryId = '') {
     markRepositoryUsed(activeRepositoryId);
     return () => markRepositoryUsed(activeRepositoryId);
   }, [activeRepositoryId, markRepositoryUsed]);
+  const accountDisplayNames = useRef(preferences.accountDisplayNames);
+  accountDisplayNames.current = preferences.accountDisplayNames;
   const accept = useCallback((next: Catalog) => {
     if (serviceRef.current && next.instanceId !== serviceRef.current.instanceId) throw new LocalServiceError('session', '本地账号服务已重启，请重新连接检查账号。');
+    const displayed = Object.keys(accountDisplayNames.current).length ? { ...next, accounts: next.accounts.map(account => accountDisplayNames.current[account.id] ? { ...account, name: accountDisplayNames.current[account.id] } : account) } : next;
     if (mounted.current) {
       const current = catalogRef.current;
-      const latest = latestCatalog(current, next, serviceRef.current?.instanceId || next.instanceId);
+      const latest = latestCatalog(current, displayed, serviceRef.current?.instanceId || displayed.instanceId);
       if (latest !== current && JSON.stringify(latest) !== JSON.stringify(current)) { catalogRef.current = latest; setCatalog(latest); }
     }
-    return next;
+    return displayed;
   }, []);
   const ensureService = useCallback(async () => {
     if (updates.installingRef.current) throw new DOMException('应用正在重启更新。', 'AbortError');
@@ -126,7 +130,7 @@ export function useWorkspace(activeRepositoryId = '') {
     },
     onError: (_resource, problem) => { if (!updates.installingRef.current) setError(problem instanceof Error ? problem.message : '自动检查本地连接失败，正在重试。'); },
   });
-  useAutoRefresh({ resources: monitoring ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.catalog, initialDelayMs: syncIntervals.catalog, maxBackoffMs: syncIntervals.remoteMaxBackoff,
+  useAutoRefresh({ resources: monitoring && window.gittogether?.backend !== 'github-desktop' ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.catalog, initialDelayMs: syncIntervals.catalog, maxBackoffMs: syncIntervals.remoteMaxBackoff,
     run: async (resource, signal) => {
       const [instanceId, accountId] = JSON.parse(resource) as [string, string];
       if (instanceId !== catalogRef.current.instanceId || running.current.has(accountId)) return;
@@ -220,6 +224,18 @@ export function useWorkspace(activeRepositoryId = '') {
     catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); setStorageError('无法保存设置；当前会话仍可使用。'); }
   }, [preferences]);
   const updatePreferences = (change: Partial<Preferences> | ((current: Preferences) => Partial<Preferences>)) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...(typeof change === 'function' ? change(current) : change) })); };
+  const setAccountDisplayName = (accountId: string, name: string) => {
+    const displayName = name.trim();
+    if (!displayName || displayName.length > 120) throw new Error('账号显示名称需要为 1–120 个字符。');
+    if (!catalogRef.current.accounts.some(account => account.id === accountId)) throw new Error('账号不存在，请重新加载列表。');
+    const names = { ...accountDisplayNames.current, [accountId]: displayName };
+    accountDisplayNames.current = names;
+    preferencesChanged.current = true;
+    setPreferences(current => ({ ...current, accountDisplayNames: names }));
+    const updated = { ...catalogRef.current, accounts: catalogRef.current.accounts.map(account => account.id === accountId ? { ...account, name: displayName } : account) };
+    catalogRef.current = updated;
+    setCatalog(updated);
+  };
   const toggleRepositoryPin = (repositoryId: string) => updatePreferences(current => ({ pinnedRepositories: current.pinnedRepositories.includes(repositoryId) ? current.pinnedRepositories.filter(id => id !== repositoryId) : [...current.pinnedRepositories, repositoryId] }));
   async function task(key: string, run: () => Promise<Catalog>) {
     const installation = updates.installationRef.current;
@@ -270,7 +286,7 @@ export function useWorkspace(activeRepositoryId = '') {
     }
   }
   return {
-    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, markRepositoryUsed, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, setAccountDisplayName, toggleRepositoryPin, markRepositoryUsed, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

@@ -1,5 +1,19 @@
 # GitTogether
 
+0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
+
+当前 `main` 已合并用户认可的 `github-desktop-based` 0.36.4，采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+
+选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。匹配结果由 GitHub Desktop 原版保存与刷新，重新打开后保留账号关联。
+
+Submit 生成提交说明时优先使用原版 Copilot；账号没有对应权限或请求失败时，使用本机已登录的 Codex CLI。两者复用 GitHub Desktop 的提示词，只读取选中文件的差异，生成后仍可编辑，不自动提交或推送。生成过程保留现有暂存内容。
+
+在macOS执行 `npm run package:mac` 可构建能直接打开的开发测试版 `.app`，输出到 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。测试版使用独立开发身份及数据目录，不替换已安装应用；正式分发的签名、公证和更新发布另行处理。
+
+2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。当前有效运行、检查和构建入口均在根目录；GitHub Actions 验证同时覆盖 main 和 github-desktop-based。旧 Tauri 发布流程归档保留，Desktop 正式签名、公证及更新源迁移仍待单独交付；合并提交不会自动发布安装包。
+
+以下为迁移前稳定版功能记录；涉及独立 Rust 后台、平台 OAuth 和发布包的说明不代表本分支运行方式。
+
 <img src="assets/brand/gittogether-app.png" width="96" height="96" alt="GitTogether 图标" />
 
 把仓库当作项目，把分支当作任务。

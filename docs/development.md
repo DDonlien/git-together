@@ -1,5 +1,11 @@
 # 本地开发
 
+## 当前 main 开发入口（2026-10-21）
+
+main 已采用用户认可的 GitHub Desktop 运行基础；使用 Node.js 22、Rust stable，在仓库根目录执行 `npm run setup`、`npm run check`、`npm test`、`npm run build`、`npm run dev`。根 package.json 是当前产品版本来源。macOS开发包使用根 `npm run package:mac`，它不代表正式签名、公证和自动更新发布。GitHub Actions 同时验证 main 和 github-desktop-based。详细执行边界见 [GitHub Desktop 执行基础](github-desktop-based.md)。
+
+以下记录包含迁移前阶段的验证和旧Tauri发布流程；其中旧server/electron/src-tauri入口不用于当前main开发或交付。
+
 ## 0.27.0：企业 GitHub、GitLab 与 Gitee（2026-10-12）
 
 账号设置提供 GitHub、GitHub 企业版、GitLab、Gitee 和 Gitea。企业 GitHub 域名可自由填写，例如 `github.dxc.com`；GitLab 同时支持官方和自建服务，并保留完整的多层组织路径。三个新平台沿用现有仓库、分支、历史、更改列表和 Git 操作入口。

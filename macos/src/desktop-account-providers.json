@@ -1,0 +1,5 @@
+[
+  { "id": "github", "label": "GitHub" },
+  { "id": "github-enterprise", "label": "GitHub Enterprise" },
+  { "id": "gitea", "label": "Gitea" }
+]

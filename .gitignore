@@ -9,3 +9,9 @@ artifacts/
 *.log
 .codex/
 .claude/
+
+# GitHub Desktop generated outputs
+desktop/out/
+desktop/.webpack-cache/
+desktop/.runtime-cache/
+desktop/.runtime-bin/
