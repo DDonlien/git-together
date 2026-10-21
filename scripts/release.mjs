@@ -30,7 +30,7 @@ if (existsSync(macReport)) {
   const previous = json(macReport);
   if (previous.version === version && previous.build.sourceSha256 === sourceState(root) && !previous.build.sourceDirty) {
     const changed = capture('git', ['diff', '--name-only', previous.build.sourceCommit, head]).split('\n').filter(Boolean);
-    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/release-updates.test.mjs'].includes(path));
+    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/package-desktop.mjs', 'scripts/release-updates.test.mjs'].includes(path));
     if (metadataOnly) {
       run('git', ['merge-base', '--is-ancestor', previous.build.sourceCommit, head]);
       commit = previous.build.sourceCommit;

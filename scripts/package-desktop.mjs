@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { setTimeout as pause } from 'node:timers/promises';
 import { sourceState } from './source-state.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -73,10 +74,25 @@ if (mac) {
   const configPath = join(homedir(), '.config/gittogether/release/notary.json');
   const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : { profile: 'gittogether-notary' };
   const credentials = ['--keychain-profile', config.profile, ...(config.keychain ? ['--keychain', config.keychain] : [])];
+  async function notary(phase, args) {
+    const deadline = Date.now() + 600000;
+    for (let attempt = 1; ; attempt++) {
+      const result = spawnSync('xcrun', ['notarytool', phase, ...args, ...credentials, '--output-format', 'json'], { encoding: 'utf8', timeout: 1800000 });
+      if (result.error) throw result.error;
+      if (result.status === 0) return result.stdout;
+      // Retry only the known failure before credentials were loaded. An upload,
+      // rejected submission or invalid credential must retain its real error.
+      if (result.status !== 69 || !/No Keychain password item found for profile:/.test(result.stderr)) throw new Error(`Apple ${phase} failed (${result.status}): ${result.stderr}`);
+      console.warn(JSON.stringify({ phase, attempt, profile: config.profile, reason: 'saved-keychain-item-temporarily-unavailable' }));
+      if (Date.now() >= deadline) throw new Error('既有Apple公证配置暂不可读取，自动重试已超时；配置保留，未发布安装包。');
+      await pause(15000);
+    }
+  }
   const output = join(destination, `GitTogether-${pkg.version}-mac-arm64.zip`);
   const createZip = () => run('ditto', ['-c', '-k', '--keepParent', app, output]);
   createZip();
-  const result = run('xcrun', ['notarytool', 'submit', output, ...credentials, '--wait', '--output-format', 'json'], { stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', timeout: 1800000 });
+  await notary('history', []);
+  const result = await notary('submit', [output, '--wait']);
   notarization = JSON.parse(result);
   writeFileSync(join(destination, 'notarization.json'), result);
   assert.equal(notarization.status, 'Accepted', 'Apple did not accept this package.');
