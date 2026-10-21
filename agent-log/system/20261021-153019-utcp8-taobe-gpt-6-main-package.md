@@ -1,13 +1,13 @@
-# main 0.36.4 推送与macOS打包
+# main 推送与0.36.5 macOS最终打包
 
 - 用户原始 prompt：`推送打包`
 - 模型：GPT-6；运行环境仅公开此家族标识，无法可靠取得更具体版本。
 - 启动分支/提交：main / 1e2aa333cfe83aad4c8d15f22134689ec47e6f7f。
 - 启动产品版本：0.36.4，根package.json为权威来源；初期构建引导改动不递增，后续Windows源码兼容修补按patch递增为0.36.5，原因见15:15—15:17时间线。
 - 开始时间：2026-10-21 14:46:53 Asia/Shanghai。
-- 结束时间：执行中，交付前补充并按完成时间重命名。
-- 是否提交：执行中，计划提交本次交付记录，并推送origin/main。
-- 需求：DESKTOP-01-main-package-0364。
+- 结束时间：2026-10-21 15:30:19 Asia/Shanghai。
+- 是否提交：是。已提交并推送main源码及兼容修补（最终产品源码d72fc4fd2f）；最后一笔仅提交本次交付记录，使用skip ci避免重复运行已通过的同源构建。
+- 需求：DESKTOP-01-main-package-0364、DESKTOP-01-main-package-setup、DESKTOP-01-main-package-windows。
 
 ## 成功标准
 
@@ -36,12 +36,23 @@ main在origin可回读，包含刚批准的Desktop合并历史；从已推送且
 - 15:01：Windows首次setup已完成依赖构建，随后来源校验发现大量上游文本字节不一致；日志表明Git检出自动转换了换行。仅给checkout步骤设置core.autocrlf=false，保留来源文件的原始字节和既有SHA256锁，不放宽来源校验或改写原版文件。macOS此前已进入最终构建，本地包及产品源码不受此CI配置改动影响。
 - 15:07—15:08：macOS云端完整验证已通过。Windows复跑后一般源码校验恢复，仅剩自带text=auto属性的choosealicense资源受core.eol=native影响；补齐checkout的core.eol=lf，并将无依赖的来源检查提前到安装依赖前。本地隔离Git夹具真实复现CRLF默认加text=auto的转换，验证两项checkout配置能恢复逐字节LF；不修改任何来源锁。此次仍仅CI配置改动，已验证macOS包及产品源码摘要不变。
 - 15:15—15:17：Windows首次setup及两层TypeScript检查通过，Rust检查暴露Presence的Windows配置保护仍调用未移植的super::is_link。对照既有平台保护实现，直接使用Windows MetadataExt的FILE_ATTRIBUTE_REPARSE_POINT属性判断，保留拒绝链接/junction的保护，不改原版执行代码。该项已涉及平台源码兼容修复，按版本纪律将有效产品patch从0.36.4递增到0.36.5；同步根/UI/Desktop/Presence及其锁文件，来源锁仅更新允许的产品package.json元数据摘要。已验证的0.36.4包保留，计划交付重新验收后的0.36.5最终包。
+- 15:18：本机0.36.5类型/Rust及25项回归通过，提交并推送d72fc4fd2f13ce35e31f74037b9a78224ee690fb；正常快进，未改写历史。云端最终复验为39561030648。
+- 15:19—15:22：从干净、已推送的d72fc4fd2f重新生成0.36.5.app及ZIP；源码摘要6a2b9f3984341f14b540c17dcdfc545e495093e2cc9d8e0d1bd429ead6cb7e59。25项回归、12项Git/Presence、8项模型生成、11项目录发现全部通过，应用/扩展异常为0；包内版本、资源、arm64、Git2.53.0/LFS3.7.1、Presence和严格签名通过。最终ZIP为481849803字节，SHA256为bbc1ee6e1f877788164551c041d0e0636145fe9d2af1c4fc3c00151db62f73ec，解压后再次验签及来源检查通过。
+
+- 15:28—交付：两平台最终云端验证均成功；回读Mac25通过/0跳过、Windows16通过/9项明确平台跳过，完整构建均成功。最终包仍来源于已推送d72fc4fd2f；收尾仅为文档记录，不改产品源码。再次fetch确认main与origin一致，原github-desktop-based工作树保持干净。
+
+## 完成工作
+
+- 正常推送main，保留已合并的双亲历史和用户认可的运行架构。
+- 修复干净构建引导及Windows Presence编译缺口，有效产品版本统一为0.36.5；原版Git/授权/后台保持来源锁边界。
+- 生成并验收0.36.5 Apple Silicon独立.app和ZIP，记录来源、资源/架构/签名、31项成品检查、摘要及两平台云端结果。
+- 未操作用户安装版或真实账号/仓库，未公证、上传正式Release或更新公开更新源。
 
 ## 验证与交付
 
-执行中。前一任务来源/类型/Rust、25项回归和完整构建已通过；本次将重新构建实际成品并验收，不把先前源码检查当作包体通过。
+本地最终成品0.36.5已完成完整构建、类型/Rust、25项回归和31项实际包检查；验证见artifacts/macos/0.36.5/validation.json、integrity.json、archive.json及同目录日志。最终云端两平台复验已完成并回读：39561030648的来源/首次安装/类型/Rust/测试/完整构建全部通过，macOS25通过、Windows16通过9跳过（3项POSIX信号和6项Mac/Linux加密格式）；不将已完成的macOS验证记作Windows安装包或原生界面验收。
 
 ## 文档与备注
 
-- 更新REQUIREMENTS.md的DESKTOP-01-main-package-0364及本日志；完成后补充运行说明中的实际交付状态。
+- 已更新上述三个需求ID、README当前版本/本地包/CI状态、docs/github-desktop-based.md的来源与交付/检出要求，以及本日志。
 - 未要求新增运行功能；正式自动更新及旧失效分支关联接口仍按已有Desktop迁移任务保留。

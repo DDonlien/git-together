@@ -6,6 +6,10 @@
 
 同次交付的首次Windows原生检查发现Presence平台配置保护缺少链接属性判断；按既有保护语义补齐后，当前产品patch递增为0.36.5，旧0.36.4本地包保留。根setup同时补齐原版依赖强制构建、Windows的npm JS启动入口；CI固定检出换行并提前校验来源。0.36.5重新打包和两平台复验单独记录，未更改原版Git/授权实现。
 
+0.36.5最终本地成品来自干净且已推送的`d72fc4fd2f13ce35e31f74037b9a78224ee690fb`，源码摘要为`6a2b9f3984341f14b540c17dcdfc545e495093e2cc9d8e0d1bd429ead6cb7e59`。完整构建、25项回归、31项实际包检查、arm64/Git/LFS/Presence及严格签名校验通过；ZIP为481849803字节，SHA256为`bbc1ee6e1f877788164551c041d0e0636145fe9d2af1c4fc3c00151db62f73ec`，解压后重新验签通过。交付与报告位于`artifacts/macos/0.36.5/`；仍使用独立开发身份，未公证或发布自动更新。
+
+同源[云端验证39561030648](https://github.com/DDonlien/git-together/actions/runs/39561030648)在macOS和Windows均完成首次安装、来源/类型/Rust检查、测试及完整构建。macOS25项通过；Windows16项通过、9项跳过（3项POSIX信号注入和6项macOS/Linux加密格式），Windows安装包、真实账号及原生界面未据此视为已验收。
+
 本分支使用 GitHub Desktop `release-3.6.7`，上游提交为 `dbc92f973994da7fccc494d0e5a2ae0ffbd1434e`（准确值以 `github-desktop-upstream.json` 为准）。`desktop/` 保留原始源码、锁文件、许可证和固定版本的子模块资源。原版的 Git、认证、凭据、Store、Dispatcher、后台 Fetch、错误与冲突处理不重新实现。
 
 `npm run verify:upstream` 按 SHA-256 检查全部上游文件，允许的差异限定为 GitTogether 展示替换、产品身份、第三方声明检查和导入时的忽略规则。Git、授权、凭据、Store、Dispatcher 和后台执行代码保持原版；60 个改动界面文件的非渲染控制器方法另有原版摘要。新增代码限定在 `app/src/ui/gittogether/`；Presence 独立在 `gittogether-presence/`，不包含 Git 执行器或 Git 平台凭据。
@@ -13,6 +17,8 @@
 ## 运行
 
 使用 Node.js 22、Rust stable 和当前平台的原生构建工具：
+
+Windows检出本工程需保留LF字节（`core.autocrlf=false`、`core.eol=lf`），以通过逐字节的上游来源校验；CI已在checkout步骤固定这两项，不修改上游来源锁来适配换行转换。
 
 ```sh
 npm run setup
