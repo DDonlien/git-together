@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useRemoteControl } from './RemoteControlProvider';
 import { controlDeviceOnline, controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteAction, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
 import { OutlinedTextField } from './material-inputs';
-import { Button, Checkbox, Modal, Notice } from './ui';
+import { Button, Checkbox, IconButton, Modal, Notice, type IconName } from './ui';
+
+const remoteActionIcons: Record<RemoteAction, IconName> = { commit: 'commit', submit: 'upload', abort: 'close', discard: 'clear' };
 
 export function RemoteActionDialog({ device, workspace, action, onClose }: RemoteActionTarget & { onClose: () => void }) {
   const control = useRemoteControl()!;
@@ -111,7 +113,12 @@ export function RemoteWorkspaceActions({ device, workspace, onAction, label, com
     <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => {
       const count = actionCounts?.[action];
       const countDescription = count ? `，${count} ${action === 'submit' ? '个未推送提交' : action === 'abort' ? '项进行中操作' : '个未提交文件'}` : '';
-      return <Button key={action} aria-label={`${heading} · ${remoteActionLabels[action]}${countDescription}`} disabled={control.busy || !online || (pending && action !== 'abort')} onClick={() => onAction({ device, workspace, action })}><span>{remoteActionLabels[action]}</span>{count !== undefined && count > 0 && <span className="presence-action-count" aria-hidden="true">{count}</span>}</Button>;
+      const actionLabel = `${heading} · ${remoteActionLabels[action]}${countDescription}`;
+      const buttonProps = { disabled: control.busy || !online || (pending && action !== 'abort'), onClick: () => onAction({ device, workspace, action }) };
+      const badge = count !== undefined && count > 0 && <span className="presence-action-count" aria-hidden="true">{count}</span>;
+      return compact
+        ? <IconButton key={action} className="presence-remote-action" icon={remoteActionIcons[action]} label={actionLabel} {...buttonProps}>{badge}</IconButton>
+        : <Button key={action} aria-label={actionLabel} {...buttonProps}><span>{remoteActionLabels[action]}</span>{badge}</Button>;
     })}</div>
     {latest && <div className={'remote-job-result' + (latest.error ? ' is-error' : '')} role="status"><span>{controlJobLabel(latest)}</span>
       {latest.result?.warning && <small>{latest.result.warning}</small>}

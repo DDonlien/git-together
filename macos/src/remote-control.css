@@ -15,7 +15,13 @@
 .remote-job-result { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .remote-job-result small { flex-basis: 100%; }
 .remote-job-result.is-error { color: var(--danger); }
-.remote-action-dialog { display: flex; flex-direction: column; gap: 12px; min-width: min(520px, 75vw); }
+/* Keep focus from horizontally scrolling an oversized grid track in the dialog. */
+.ogui-overlay__surface:has(.remote-action-dialog) { grid-template-columns: minmax(0, 1fr); }
+.ogui-overlay__surface:has(.remote-action-dialog) .ogui-overlay__header { min-width: 0; gap: 12px; }
+.ogui-overlay__surface:has(.remote-action-dialog) .ogui-overlay__header > strong { min-width: 0; overflow-wrap: anywhere; }
+.ogui-overlay__surface:has(.remote-action-dialog) .ogui-overlay__header > button { flex-shrink: 0; }
+.ogui-overlay__surface:has(.remote-action-dialog) .ogui-overlay__body { min-width: 0; }
+.remote-action-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
 .remote-action-dialog p { font-size: 13px; line-height: 1.5; }
 .remote-action-files { max-height: 280px; overflow: auto; }
 .remote-files-heading { font-size: 13px; margin-bottom: 6px; }

@@ -95,8 +95,10 @@
 .presence-branch-actions { display: flex; flex: 1 1 auto; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .presence-remote-target { display: contents; }
 .presence-remote-workspace-label { color: var(--muted); font-size: 10px; white-space: nowrap; }
-.presence-remote-target .remote-target-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.presence-remote-target .app-button.ogui-control--small { position: relative; min-width: 0; min-height: 22px; height: 22px; padding: 3px 8px; border-radius: 8px; font-size: 11px; line-height: 14px; overflow: visible; }
+.presence-remote-target .remote-target-actions { display: flex; flex-wrap: wrap; gap: var(--repository-action-group-gap); margin: 0; }
+.presence-remote-target .presence-remote-action.ogui-control--small { position: relative; flex: 0 0 var(--repository-action-button-size); width: var(--repository-action-button-size); min-width: var(--repository-action-button-size); min-height: var(--repository-action-button-size); height: var(--repository-action-button-size); padding: 0; border-radius: 50%; background: var(--surface); overflow: visible; }
+.presence-remote-target .presence-remote-action:hover:not(:disabled) { background: var(--surface-hover); }
+.presence-remote-target .presence-remote-action:active:not(:disabled) { background: var(--blue-bg); color: var(--blue); }
 .presence-action-count { position: absolute; top: -6px; right: -6px; display: inline-flex; align-items: center; justify-content: center; min-width: 15px; height: 12px; padding: 1px 4px; border-radius: 999px; background: var(--blue-bg); color: var(--blue); font-size: 9px; line-height: 10px; font-variant-numeric: tabular-nums; }
 .presence-remote-target .remote-job-result { flex-basis: 100%; margin-top: 2px; font-size: 11px; overflow-wrap: anywhere; }
 .presence-people-content > .notice { margin: 4px 14px; }

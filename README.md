@@ -2,7 +2,7 @@
 
 0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
-当前 `main` 为0.37.0源码，补齐正式发布与旧版升级入口；采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+当前 `main` 为0.37.2源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切；0.37.0已补齐正式发布与旧版升级入口。采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
 
 [0.37.0已正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.37.0)，提供macOS Apple Silicon和Windows x86/x64安装包。macOS Developer ID签名、Apple公证及31项成品检查通过；[Windows双架构原生安装与Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)通过。隔离的0.33.0更新器已通过公共更新源检查、下载并安装到0.37.0，配置及本地文件保留；新版Squirrel后续升级也完成隔离验证。三平台完整公开下载、更新签名和清单已核对；可在设置中再次检查更新，自行选择下载和安装。
 
