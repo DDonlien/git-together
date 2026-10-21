@@ -4,8 +4,8 @@
 - 模型：GPT-6；运行环境仅公开家族标识，无法可靠取得更具体版本。
 - 启动分支/提交/产品版本：main / f229f9296e981c225228ec9ee47d6c11a62908c2 / 0.36.5。
 - 开始时间：2026-10-21 17:08 Asia/Shanghai。
-- 结束时间：执行中。
-- 是否提交：尚未。
+- 结束时间：2026-10-21 19:08:21 Asia/Shanghai；本轮因公证凭据读取故障受阻，正式交付未完成。
+- 是否提交：是；实现和发布工具已提交并推送main，应用来源8d9a13f243、发布工具811a80d334；本收尾记录随状态文档提交。
 - 需求：DESKTOP-01-updates、DESKTOP-01-updates-pipeline。
 
 ## 已阅读上下文与成功标准
@@ -28,8 +28,21 @@
 
 ## 验证与剩余工作
 
-执行中：实现有效正式构建/发布入口、升级兼容与隔离验证，完成前不声明正式发布。
+已完成并推送的实现：正式production构建、稳定bundle/数据身份、只读旧配置导入、原版更新器的产品源和UI状态桥、Mac Developer ID/公证/staple链、Windows原生x86/x64 Squirrel与NSIS、三平台旧更新签名/新更新清单/正式Release/公共完整回读入口。没有恢复旧Git或授权后台，原版3895文件来源及72项允许差异已验证。
+
+当前实际验证：来源/类型/Rust及31项回归通过；最终8d Mac严格签名及31项成品运行检查通过；Windows39587719512双架构全步骤成功。通过GitHub API及HTTPS Range回读两份包/运行清单后，确认来源提交8d9a13f243b3912d06cdc0ae28aabacd5b1cef46、摘要67a84afd805c25f83045f49d4774a92ee704b8bf0f74c88ec74f093345b32a79及版本完全一致。报告只证明CI生成、安装和执行验收，不代替本机全部载荷下载和公开源验收。
+
+隔离升级预演：旧已公证dc38快照通过真实0.33.0 Tauri更新器的检查、签名、旧归档接受、安装，以及原版Squirrel签名更新/重启，测试配置和文件保留；最终8d候选仍须有自己的Accepted后完成同一隔离验收和公共更新回读。旧快照不发布。
+
+实际阻塞：现有gittogether-notary profile持续返回notarytool 69/No Keychain password item found；两轮10分钟有限重试、不同Apple CLI/默认与显式login、无交互精确metadata诊断均未恢复。登录钥匙串状态为unlocked，Developer ID证书可正常签名；不能将此错误推断为Apple审核拒绝、用户锁屏或凭据已确定删除。GitHub无备用既有secrets。按现有约定保留配置，不创建/导出凭据、不改系统安全或操作用户安装版。
+
+未完成：最终8d的Apple Accepted/staple/最终ZIP与tar、最终三平台更新签名、正式v0.37.0发布、公共完整资产摘要与更新器回读。现有公开latest仍为v0.33.0，因此安装版仍显示最新版本。两项需求保持未完成。恢复既有公证配置可读后，从根npm run release继续，复用同源production构建与已成功的Windows运行39587719512，并执行余下全部门槛。
+
+证据：artifacts/releases/0.37.0/release-status.json、mac-native-validation.json、mac-native-final.log、release-final.log、windows-artifacts.json与windows-final-metadata/{ia32,x64}/；预演见artifacts/updates-test/prototype-dc38/。
 - 18:39：Windows x64已完成真实NSIS安装与应用启动，凭据往返夹具使用了Electron评估域中不存在的全局require，改用主模块require；同时补齐iframe导航等待。x86的7z是构建宿主工具，厂商仅发布x64/arm64，选择器改用既有64位JS编译宿主，目标Electron/Rust/原生模块仍为ia32。原版LFS在每次重新注册仓库时都会要求初始化，隔离Mac夹具明确同意初始化后12项Git检查通过；将此同意加入首次注册和重新注册两个位置，不修改原版控制器。变更desktop.mjs使来源摘要变化，最终三平台固定在新提交重建。此前711b的公证凭据10分钟重试超时，未提交新Apple任务；dc38的Accepted只作为预演证据，不用于新成品报告。
 - 18:45—18:52：最终8d9a13f243签名包完成31项隔离成品检查。Submit测试按钮实际范围为一个工作目录，改为在生成结束后核对该目录的手工Summary/Description均未被覆盖；其他worktree并发/取消仍由实际API检查。重启恢复测试等待原版Store异步载入，未调用手工刷新，全部仓库/多worktree关联及文件状态恢复通过。仅修改验收夹具，不改应用。旧已公证快照的0.33.0与Squirrel双更新器预演完整通过，最终包仍须有自己的Accepted后再重跑。
 - Windows39586104451的x64完成NSIS真实安装、原生凭据往返、原版Commit/Push、文件/index保留及production更新桥检查。x86完整编译已成功，打包器26的新版原生解压模块明确不提供ia32构建；让打包器在64位宿主运行，显式选择ia32目标并继续验证应用/Presence/Git的PE架构。CI将发布工具从workflow自身提交检出到ignored artifacts，应用仍从固定8d9a13f243干净检出，包内来源和三平台应用摘要不变；发布入口也可在仅工具/验收/文档差异时复用同源production构建，单独记录pipeline提交，避免把CI修正冒充新的应用源码。
 - 公证非秘密诊断：login钥匙串unlocked=true；Xcode 1.1.3与CommandLineTools 1.1.2的notarytool、默认及显式login查询均返回69/No Keychain password item found。精确profile账号/标签的只读metadata查询也返回-25300，未读取密码、未重新配置/解锁/改ACL。GitHub仓库secrets列表为空，无既有云端公证凭据可复用。此为凭据不可读取，尚未提交最终8d的Apple审核，也不是Apple拒绝该包。
+- 18:52—19:05：Windows最终工作流39587719512的x86/x64均success：同一8d应用来源/0.37.0、真实NSIS安装、目标PE架构、系统凭据set/get/delete、原版提交/推送至隔离bare remote、本地文件与index保留、正式更新桥通过。应用源码摘要统一67a84afd805c25f83045f49d4774a92ee704b8bf0f74c88ec74f093345b32a79，发布工具来源811a80d334。Mac31项成品检查保持同一8d来源；最终公证第二轮10分钟重试再次超时，后续默认profile只读复查仍为69/NoItem。没有最终Apple审核请求，也没有新Release/tag或公开更新清单。
+- 云端x64成品ZIP约710MB，本机单连接下载在代理与直连均仅约30KB/s，停止本任务的低速下载；使用GitHub认证API和blob HTTPS Range读取小型包清单/运行报告，未导出令牌或显示签名URL。此证据仅确认生产者报告和CI成品验收，不冒称本机完整载荷下载/摘要校验已经完成。新工作流的两种架构产物均保留在Actions，待公证配置恢复后正式入口仍须完整获取、签名并回读公开包。
+- 将根发布目录中旧dc38的Accepted报告/归档与最终8d候选分开，防止历史Accepted被误当作最终公证；当前ZIP明确标记pending-notarization，release-status.json标记blocked-before-publication。README和需求记录同样明确0.37.0尚未正式发布，公开更新仍为0.33.0；未完成需求不勾选。

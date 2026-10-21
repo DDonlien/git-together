@@ -29,6 +29,7 @@
       - [ ] \[DESKTOP-01-account-entries-tls-server] 2026-10-19后续排查澄清：实际Gitea入口为https://git.freshli4.com:10443，IPv4/IPv6均通过证书校验，返回Gitea接口HTTP200，证书由Let's Encrypt YE1签发且覆盖该域名；最终0.36.1包内无认证读取亦成功。未带端口的默认443存在双栈差异：IPv4正常，IPv6返回fnOS默认自签名证书，触发此前提示。用户应填写完整10443入口；真实用户令牌登录仍待本人验收。若要默认443访问，需另外统一IPv6入口配置；本轮未修改服务器、系统代理或证书信任，未读取用户令牌。
 
   - [ ] \[DESKTOP-01-updates] 按2026-10-21用户明确要求，补齐当前main正式发布及自动更新，让0.33.0能检查、下载并升级至当前Desktop版本；沿用正式bundle身份、Developer ID和既有公证/更新签名配置，保留用户配置及本地文件，隔离验证旧版升级和新版后续更新。macOS Apple Silicon与Windows x86/x64使用同源同版本发布，资产齐全且通过验证后才公开更新源，不操作用户安装版。
+    - 2026-10-21：0.37.0应用来源固定8d9a13f243，三平台来源摘要一致。来源/两层类型/Rust及31项回归通过，macOS严格Developer ID签名及31项实际成品检查通过；Windows39587719512两种架构完整构建、NSIS安装、原生凭据往返、原版Commit/Push、文件/index保留与production更新桥均通过。旧已公证快照完成真实0.33.0更新器与Squirrel双升级预演，不代替最终成品验收。现有公证profile两轮10分钟重试仍返回69/No Keychain password item found；最终包无Accepted，正式Release、最终更新签名及公共完整下载/实际升级验收未完成，公开latest仍为0.33.0。保留待完成状态，不操作安装版或重新配置凭据。
     - [ ] \[DESKTOP-01-updates-pipeline] 根“推送打包”入口自动完成干净且已推送main来源、版本、原版执行边界、平台成品、签名、公证、旧版与新版更新清单、GitHub正式Release及公共下载回读；任何阶段失败明确停止，不能把开发包或单纯CI通过记为发布完成。
 
 ## Presence账号与商业边界（2026-10-12）

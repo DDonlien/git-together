@@ -4,17 +4,19 @@
 
 当前 `main` 为0.37.0源码，补齐正式发布与旧版升级入口；采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
 
+0.37.0发布候选已完成macOS Developer ID签名与31项成品检查，以及[Windows x86/x64构建、安装和原版Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)。现有`gittogether-notary`公证凭据读取返回“No Keychain password item found”，两轮有限重试及非秘密诊断后仍未恢复；最终成品尚无Accepted公证，正式发布和公共更新验收保持未完成。公开最新版本仍为0.33.0，安装版目前查不到0.37.0属于预期。旧版升级与Squirrel后续升级的隔离预演已通过，预演使用的旧已公证快照不作为最终包发布。
+
 选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。匹配结果由 GitHub Desktop 原版保存与刷新，重新打开后保留账号关联。
 
 Submit 生成提交说明时优先使用原版 Copilot；账号没有对应权限或请求失败时，使用本机已登录的 Codex CLI。两者复用 GitHub Desktop 的提示词，只读取选中文件的差异，生成后仍可编辑，不自动提交或推送。生成过程保留现有暂存内容。
 
 在macOS执行 `npm run package:mac` 或 `npm run release` 完成正式构建、签名、公证、三平台安装包、隔离升级和GitHub更新发布及公共回读；执行前源码须已提交并推送main。显式 `npm run package:mac:dev` 才生成独立开发测试版.app；任何入口均不替换用户已安装应用。
 
-2026-10-21已推送main，最终交付0.36.5 Apple Silicon开发版；实际成品的31项Git/Presence、提交说明和多层目录匹配检查通过。独立.app及`GitTogether-0.36.5-mac-arm64-dev.zip`位于`artifacts/macos/0.36.5/`，同目录保留来源、完整性、运行和压缩包校验报告。此前0.36.4本地包保留；当前开发包尚未公证，也未发布到正式自动更新源。
+此前2026-10-21交付的0.36.5 Apple Silicon开发版及31项成品检查记录保留。独立.app及`GitTogether-0.36.5-mac-arm64-dev.zip`位于`artifacts/macos/0.36.5/`，同目录保留来源、完整性、运行和压缩包校验报告；该开发包未公证，也未发布到正式自动更新源。
 
-同一源码的[macOS及Windows云端检查和完整构建](https://github.com/DDonlien/git-together/actions/runs/39561030648)均通过；Windows安装包及原生界面仍须按后续发布范围单独交付。
+此前0.36.5的[macOS及Windows云端检查和完整构建](https://github.com/DDonlien/git-together/actions/runs/39561030648)均通过；0.37.0的Windows安装与原生功能验证见上方当前发布记录。
 
-2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。当前有效运行、检查和构建入口均在根目录；GitHub Actions 验证同时覆盖 main 和 github-desktop-based。旧 Tauri 发布流程归档保留，Desktop 正式签名、公证及更新源迁移仍待单独交付；合并提交不会自动发布安装包。
+2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。当前有效运行、检查和构建入口均在根目录；GitHub Actions 验证同时覆盖 main 和 github-desktop-based。旧 Tauri 发布流程归档保留，正式发布以新的Desktop入口及成品报告为准；合并提交不会自动发布安装包。
 
 以下为迁移前稳定版功能记录；涉及独立 Rust 后台、平台 OAuth 和发布包的说明不代表本分支运行方式。
 
