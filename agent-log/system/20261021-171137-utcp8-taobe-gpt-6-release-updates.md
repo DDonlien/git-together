@@ -20,6 +20,9 @@
 - 17:13—17:35：实现0.37.0正式构建、签名公证、同源Windows双架构工作流及旧tar/NSIS兼容；新UI调用原版UpdateStore，更新说明换为产品源且独立失败不会破坏更新检查。新增稳定数据目录启动器、只读解密旧配置并经原版账号Store/Dispatcher导入；旧加密文件不覆盖。Developer ID、公证profile及仓库外更新私钥均可读取，公证history预检通过。类型/Cargo及30项回归通过；独立0.33.0更新器夹具编译通过，源自旧版的归档接受规则逐字节保留，不编译旧Git或授权后台。实际签名包、隔离升级和公开发布仍待执行。
 - 17:32—17:40：首版代码4dea74a364已推送。首次手工Windows派发误传10位缩写，checkout把它当作分支名而失败，尚未进入构建；自动入口使用完整SHA。核对Electron公共服务当前源码，确认其Windows逻辑只读取一个RELEASES，不能把两种架构混用；改为main上的两个架构专用轻量清单，仍使用原版Squirrel。补充Windows实际NSIS安装后启动、系统凭据往返及原版Commit/Push验证。macOS首次production构建通过，上游Sass/许可校验完成；为统一最终来源，在公证提交前停止本任务旧签名流程，未公开任何新Release或更新清单。
 - 17:41—17:49：完整来源dc38e1fe84已推送并构建production；macOS严格Developer ID签名通过，已送公证。Windows39578897785的x64进入setup，x86在Rustup选择非宿主工具链时要求--force-non-host；仅修正CI标志。旧0.33.0公开tar及签名通过新验证工具，篡改载荷及声称错误版本均被拒绝。发布入口允许在仅CI/日志/文档变化、来源摘要完全相同且为main祖先时复用已验收Mac成品；三平台和tag仍固定为同一应用源码提交，单独记录发布脚本提交，避免无源码变化的重复公证。公开前再次核对main状态，拒绝覆盖并行工作。
+- 17:54—18:08：dc38的首轮Mac成品已由Apple接受（0419ee6c-6ff4-46c4-b51f-8ad3ff36c3e0），staple/validate及严格签名通过；主机spctl既有策略显示security disabled，未调整此系统设置，验收独立依赖Developer ID链及Apple票据。Git成品12项在处理夹具的原版LFS提示后通过；生产模式模型测试因虚构账号缺少SDK生产feature flag而正确回退Codex，补齐夹具授权标记，不改变真实授权逻辑；夹具临时路径改为canonical并在隔离全局gitconfig中预装LFS过滤器。
+- 同期Windows39580005047的两种架构已通过setup/check/test；x86的原版Webpack 4GB堆参数超过32位Node地址空间，x64的Squirrel打包缺少因ignore-scripts而未生成的7z。补齐独立64位JS编译宿主（原生依赖及Electron/Rust仍为目标架构）与厂商7z安装脚本，保留原版Git代码；新构建脚本和更新说明兜底已改变来源摘要，因此最终三平台将重新固定在同一新源码，而不复用旧dc38成品。签名独立处理Mach-O和嵌套bundle，普通资源由bundle资源封印覆盖，避免逐个给PNG加签；严格深度验签及公证门槛保留。此前成品尚未发布。
+- 18:12：核对0.33.0实际Presence文件位于稳定数据根目录，而开发版宿主使用presence子目录；正式版宿主改为使用原稳定根，开发版继续隔离。账号导入根作为私有子进程参数显式传递，避免随Presence目录变化而读错父目录；远端操作备份跟随同一根。没有读取或修改用户实际配置。来源/两层类型/Rust及31项回归均须在此最终来源再通过，之后重新生成三平台成品。
 
 ## 验证与剩余工作
 

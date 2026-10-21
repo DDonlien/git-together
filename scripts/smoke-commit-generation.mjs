@@ -64,7 +64,7 @@ try {
   await page.evaluate(() => {
     const a = window.__gittogetherAdapter, getState = a.store.getState.bind(a.store), generate = a.commitMessages.copilot.generateCommitMessage.bind(a.commitMessages.copilot);
     const f = window.__commitModelFixture = { getState, generate, forceDisclaimer: true, fail: false, calls: [] };
-    a.store.getState = () => ({ ...getState(), accounts: [{ login: 'fixture', endpoint: 'https://api.github.com', token: '', emails: [], avatarURL: '', id: 1, name: 'Fixture', isCopilotDesktopEnabled: true, features: ['desktop_copilot_generate_commit_message'] }], ...(f.forceDisclaimer ? { commitMessageGenerationDisclaimerLastSeen: null } : {}) });
+    a.store.getState = () => ({ ...getState(), accounts: [{ login: 'fixture', endpoint: 'https://api.github.com', token: '', emails: [], avatarURL: '', id: 1, name: 'Fixture', isCopilotDesktopEnabled: true, features: ['desktop_copilot_generate_commit_message', 'desktop_enable_copilot_sdk_commit_message_generation'] }], ...(f.forceDisclaimer ? { commitMessageGenerationDisclaimerLastSeen: null } : {}) });
     a.commitMessages.copilot.generateCommitMessage = async (...args) => { f.calls.push({ diff: args[1], path: args[2], rules: args[4] }); if (f.fail) throw new Error('fixture Copilot unavailable'); return { title: 'Copilot fixture title', description: 'Copilot fixture body' }; };
   });
   const count = calls().length, nativeInput = await input(repo, ['partial.txt']);

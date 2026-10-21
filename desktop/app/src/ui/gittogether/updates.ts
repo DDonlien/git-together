@@ -1,6 +1,7 @@
 import { updateStore, UpdateStatus } from '../lib/update-store'
 import type { UpdateStatus as PresentationStatus } from '../../../../../macos/src/update-model'
 import { productVersion } from './adapter'
+import { gt } from 'semver'
 
 /** Translate the original updater; downloads, verification and installation stay upstream. */
 export class DesktopUpdates {
@@ -12,6 +13,8 @@ export class DesktopUpdates {
   public status(): PresentationStatus {
     if (__RELEASE_CHANNEL__ === 'development') return { phase: 'unavailable', currentVersion: productVersion, message: '开发版本暂不提供自动更新。' }
     const state = updateStore.state
+    const releaseVersion = state.newReleases?.[0]?.latestVersion
+    const availableVersion = releaseVersion && gt(releaseVersion, productVersion) ? releaseVersion : undefined
     const phase = this.error ? 'error' : ({
       [UpdateStatus.CheckingForUpdates]: 'checking',
       [UpdateStatus.UpdateAvailable]: 'downloading',
@@ -19,8 +22,8 @@ export class DesktopUpdates {
       [UpdateStatus.UpdateReady]: 'ready',
       [UpdateStatus.UpdateNotChecked]: 'idle',
     } as const)[state.status]
-    return { phase, currentVersion: productVersion, availableVersion: state.newReleases?.[0]?.latestVersion,
-      checkedAt: state.lastSuccessfulCheck?.getTime(), message: this.error ?? (phase === 'downloading' ? '正在下载更新，完成后可重启安装。' : undefined) }
+    return { phase, currentVersion: productVersion, availableVersion,
+      checkedAt: state.lastSuccessfulCheck?.getTime(), message: this.error ?? (phase === 'downloading' ? '正在下载更新，完成后可重启安装。' : phase === 'ready' && !availableVersion ? '更新已下载，重启后完成安装。' : undefined) }
   }
   public async command(method: string): Promise<PresentationStatus> {
     if (__RELEASE_CHANNEL__ === 'development') return this.status()

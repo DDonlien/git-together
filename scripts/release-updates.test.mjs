@@ -41,6 +41,14 @@ test('development builds cannot download or install public releases', async () =
   const u = updater('development'); for (const action of ['check', 'download', 'install']) assert.equal((await u.controller.command(action)).phase, 'unavailable');
   assert.deepEqual(u.calls, []);
 });
+test('missing or stale release notes cannot mislabel the downloaded native update', () => {
+  const u = updater(); u.state.status = 3;
+  for (const latestVersion of ['0.33.0', '0.37.0']) {
+    u.state.newReleases = [{ latestVersion }];
+    assert.equal(u.controller.status().availableVersion, undefined);
+    assert.match(u.controller.status().message, /重启/);
+  }
+});
 test('legacy import uses account stores and dispatcher without rewriting the encrypted original', async t => {
   const profile = mkdtempSync(join(tmpdir(), 'gittogether-upgrade-test-')); t.after(() => rmSync(profile, { recursive: true, force: true }));
   const original = Buffer.from('synthetic encrypted source'); const source = join(profile, 'accounts-v2.encrypted'); writeFileSync(source, original);

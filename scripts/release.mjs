@@ -30,7 +30,7 @@ if (existsSync(macReport)) {
   const previous = json(macReport);
   if (previous.version === version && previous.build.sourceSha256 === sourceState(root) && !previous.build.sourceDirty) {
     const changed = capture('git', ['diff', '--name-only', previous.build.sourceCommit, head]).split('\n').filter(Boolean);
-    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs'].includes(path));
+    const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/release-updates.test.mjs'].includes(path));
     if (metadataOnly) {
       run('git', ['merge-base', '--is-ancestor', previous.build.sourceCommit, head]);
       commit = previous.build.sourceCommit;
@@ -57,8 +57,15 @@ if (!reportValid(join(destination, 'package-darwin-arm64.json'))) {
 const mac = json(join(destination, 'package-darwin-arm64.json'));
 assert.equal(mac.notarization.status, 'Accepted');
 const app = join(mac.directory, 'GitTogether.app');
-for (const script of ['smoke-desktop.mjs', 'smoke-commit-generation.mjs', 'smoke-repository-discovery.mjs']) {
-  run(process.execPath, ['scripts/' + script], { env: { ...process.env, GITTOGETHER_SMOKE_APP: app, GITTOGETHER_SMOKE_EXECUTABLE: 'gittogether' } });
+const nativeReceipt = join(destination, 'mac-native-validation.json');
+const executableSha256 = hash(join(app, 'Contents/MacOS/gittogether'));
+const resourcesSha256 = hash(join(app, 'Contents/_CodeSignature/CodeResources'));
+const previousNative = existsSync(nativeReceipt) ? json(nativeReceipt) : undefined;
+if (!previousNative || previousNative.sourceCommit !== mac.build.sourceCommit || previousNative.sourceSha256 !== mac.build.sourceSha256 || previousNative.executableSha256 !== executableSha256 || previousNative.resourcesSha256 !== resourcesSha256) {
+  for (const script of ['smoke-desktop.mjs', 'smoke-commit-generation.mjs', 'smoke-repository-discovery.mjs']) {
+    run(process.execPath, ['scripts/' + script], { env: { ...process.env, GITTOGETHER_SMOKE_APP: app, GITTOGETHER_SMOKE_EXECUTABLE: 'gittogether' } });
+  }
+  writeFileSync(nativeReceipt, JSON.stringify({ sourceCommit: mac.build.sourceCommit, sourceSha256: mac.build.sourceSha256, executableSha256, resourcesSha256, checks: 31 }, null, 2) + '\n');
 }
 const runFile = join(destination, 'windows-run.json');
 let runId = existsSync(runFile) && json(runFile).commit === commit ? json(runFile).id : undefined;
@@ -120,7 +127,10 @@ writeFileSync(notes, `GitTogether ${version} 采用 GitHub Desktop 原版 Git、
 // Resume only our own unpublished draft, never overwrite a public release.
 const releases = JSON.parse(gh(['release', 'list', '--limit', '30', '--json', 'tagName,isDraft']));
 const existing = releases.find(item => item.tagName === tag);
-if (existing) assert.equal(existing.isDraft, true);
+if (existing) {
+  assert.equal(existing.isDraft, true);
+  assert.equal(JSON.parse(gh(['release', 'view', tag, '--json', 'targetCommitish'])).targetCommitish, commit, 'Draft belongs to a different source.');
+}
 else gh(['release', 'create', tag, '--target', commit, '--title', `GitTogether ${version}`, '--notes-file', notes, '--draft']);
 gh(['release', 'upload', tag, ...[...assets, 'release-integrity.json', 'SHA256SUMS'].map(name => join(destination, name)), '--clobber']);
 const remoteAssets = JSON.parse(gh(['release', 'view', tag, '--json', 'assets'])).assets;
@@ -171,5 +181,13 @@ try {
   for (const [platform, name] of legacyAssets) run(verifier, ['docs/release-updater.json', join(temporary, name), join(temporary, name + '.sig'), version, platform]);
 } finally { rmSync(temporary, { recursive: true, force: true }); }
 run(process.execPath, ['scripts/smoke-updates.mjs', '--public']);
+for (let attempt = 0; ; attempt++) {
+  const response = capture('curl', ['--location', '--silent', '--show-error', '--max-time', '30', 'https://update.electronjs.org/DDonlien/git-together/darwin-arm64/0.33.0']);
+  let feed;
+  try { feed = JSON.parse(response) } catch (error) { if (!(error instanceof SyntaxError)) throw error }
+  if (feed?.url === `https://github.com/${repository}/releases/download/${tag}/${zipName}`) break;
+  assert.ok(attempt < 60, 'Electron public update feed has not reached the released package.');
+  await pause(15000);
+}
 writeFileSync(join(destination, 'public-validation.json'), JSON.stringify({ version, commit, verifiedAt: new Date().toISOString(), assets: integrity.length, latest: true, atom: true, signatures: true, completeDownloads: true }, null, 2) + '\n');
 console.log(`Published and verified https://github.com/${repository}/releases/tag/${tag}`);

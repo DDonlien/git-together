@@ -39,6 +39,10 @@ if (mode === 'setup') {
   yarnRun(['install', '--frozen-lockfile', '--ignore-scripts', '--non-interactive']);
   yarnRun(['install', '--frozen-lockfile', '--ignore-scripts', '--non-interactive'], join(desktop, 'app'));
   run(node, ['scripts/download-runtime.mjs']);
+  if (process.platform === 'win32') {
+    const installer = join(desktop, 'node_modules/electron-winstaller');
+    run(node, ['script/select-7z-arch.js'], installer);
+  }
   // Match upstream post-install: the earlier ignore-scripts pass otherwise
   // leaves local native dependencies and notification declarations unbuilt.
   yarnRun(['install', '--frozen-lockfile', '--non-interactive', '--force'], join(desktop, 'app'));
@@ -68,7 +72,10 @@ if (mode === 'setup') {
   const sourceSha256 = sourceState(root);
   run(node, ['node_modules/vite/bin/vite.js', 'build'], ui);
   run('cargo', ['build', '--locked', '--manifest-path', 'desktop/gittogether-presence/Cargo.toml']);
-  yarnRun(['compile:prod']);
+  // Webpack's upstream 4 GB heap setting needs a 64-bit compiler host. Keep
+  // native dependencies/runtime on the target architecture, and emit the same JS.
+  const compiler = process.env.GITTOGETHER_BUILD_NODE || node;
+  run(compiler, [yarn, 'compile:prod'], desktop, { PATH: [dirname(compiler), env.PATH].join(process.platform === 'win32' ? ';' : ':'), npm_config_arch: process.arch });
   // Unchanged upstream build assembles embedded Git, Git LFS, native modules,
   // license/emoji resources. Compilation does not produce an installer.
   run(node, ['node_modules/ts-node/dist/bin.js', '-P', 'script/tsconfig.json', 'script/build.ts'], desktop, { NODE_ENV: production ? 'production' : 'development', DESKTOP_SKIP_PACKAGE: '1' });

@@ -33,7 +33,7 @@ async fn run() -> util::Result<()> {
         if let Err(error) = result { let _ = sender.send(Err(error)); }
     });
     let service=Arc::new(service::Service{root:root.clone()});
-    let legacy_root=root.parent().ok_or("配置目录无效。")?.to_path_buf();
+    let legacy_root=std::env::args().nth(2).map(PathBuf::from).unwrap_or(root.parent().ok_or("配置目录无效。")?.to_path_buf());
     let presence=presence::Presence::new(root,true,service.clone()).await?;
     let control=remote_control::RemoteControl::new(service,presence.clone(),true).await?;
     while let Some(value) = requests.recv().await {

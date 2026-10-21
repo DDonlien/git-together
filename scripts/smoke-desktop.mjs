@@ -1,6 +1,6 @@
 import { sourceState } from './source-state.mjs';
 import { createRequire } from 'node:module';
-import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, chmodSync, existsSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -13,12 +13,13 @@ const build = JSON.parse(readFileSync(join(appRoot, 'build-info.json'), 'utf8'))
 assert.equal(build.sourceSha256, sourceState(root), 'Rebuild changed sources before running the smoke test.');
 const require = createRequire(join(root, 'desktop/package.json'));
 const { _electron } = require('playwright');
-const fixture = mkdtempSync(join(tmpdir(), 'gittogether-desktop-smoke-'));
+const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'gittogether-desktop-smoke-')));
 const bare = join(fixture, 'remote.git'), repo = join(fixture, 'work');
 const fixtureGitEnv = { ...process.env, GIT_CONFIG_GLOBAL: join(fixture, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1' };
 function git(args, cwd = fixture) { return execFileSync('git', args, { cwd, env: fixtureGitEnv, encoding: 'utf8' }).trim(); }
 git(['config', '--global', 'user.name', 'Desktop Smoke']);
 git(['config', '--global', 'user.email', 'smoke@example.invalid']);
+git(['lfs', 'install', '--skip-repo']);
 git(['init', '--bare', '--initial-branch=main', bare]);
 git(['clone', pathToFileURL(bare).href, repo]);
 git(['config', 'user.name', 'Desktop Smoke'], repo); git(['config', 'user.email', 'smoke@example.invalid'], repo); git(['config', 'commit.gpgsign', 'false'], repo);

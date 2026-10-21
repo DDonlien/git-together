@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, statSync, openSync, readSync, closeSync, mkdtempSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { sourceState } from './source-state.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -43,7 +43,15 @@ if (mac) {
   delete info.CFBundleIconName;
   info.NSAppleEventsUsageDescription = info.NSAppleEventsUsageDescription.replace('GitHub Desktop', 'GitTogether');
   Object.assign(options, { appCategoryType: 'public.app-category.developer-tools', darwinDarkModeSupport: true, extendInfo: info,
-    osxSign: { type: 'distribution', identity, optionsForFile: () => ({ hardenedRuntime: true, entitlements: join(desktop, 'script/entitlements.plist') }) },
+    osxSign: { type: 'distribution', identity,
+      // All resources are sealed by the bundle signature. Independently sign
+      // Mach-O code and nested bundles, rather than attaching signatures to PNGs.
+      ignore: path => {
+        if (!statSync(path).isFile()) return false;
+        const header = Buffer.alloc(4), file = openSync(path, 'r');
+        try { readSync(file, header, 0, 4, 0) } finally { closeSync(file) }
+        return !['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca'].includes(header.toString('hex'));
+      }, optionsForFile: () => ({ hardenedRuntime: true, entitlements: join(desktop, 'script/entitlements.plist') }) },
     protocols: [{ name: 'com.gittogether.standalone', schemes: ['x-github-desktop-auth', 'x-github-desktop-dev-auth', 'x-github-client', 'github-mac'] }],
   });
 }
@@ -56,7 +64,12 @@ let notarization;
 if (mac) {
   const app = join(directory, 'GitTogether.app');
   run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
-  const signature = run('codesign', ['-dv', '--verbose=4', app], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+  const signingInfo = spawnSync('codesign', ['-dv', '--verbose=4', app], { encoding: 'utf8' });
+  assert.equal(signingInfo.status, 0);
+  assert.ok(signingInfo.stderr.includes('Authority=' + identity), 'Developer ID identity mismatch.');
+  assert.ok(signingInfo.stderr.includes('TeamIdentifier=86J7X3KZ5Z'));
+  assert.ok(signingInfo.stderr.includes('Identifier=com.gittogether.standalone'));
+  writeFileSync(join(destination, 'codesign-info.txt'), signingInfo.stderr);
   const configPath = join(homedir(), '.config/gittogether/release/notary.json');
   const config = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : { profile: 'gittogether-notary' };
   const credentials = ['--keychain-profile', config.profile, ...(config.keychain ? ['--keychain', config.keychain] : [])];
@@ -72,6 +85,16 @@ if (mac) {
   run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
   run('spctl', ['--assess', '--type', 'execute', '--verbose=2', app]);
   createZip();
+  const extracted = mkdtempSync(join(tmpdir(), 'gittogether-release-archive-'));
+  try {
+    run('ditto', ['-x', '-k', output, extracted]);
+    const restored = join(extracted, 'GitTogether.app');
+    run('codesign', ['--verify', '--deep', '--strict', restored]);
+    run('xcrun', ['stapler', 'validate', restored]);
+    const restoredBuild = JSON.parse(readFileSync(join(restored, 'Contents/Resources/app/build-info.json'), 'utf8'));
+    assert.equal(restoredBuild.sourceCommit, build.sourceCommit);
+    assert.equal(restoredBuild.sourceSha256, build.sourceSha256);
+  } finally { rmSync(extracted, { recursive: true, force: true }); }
   assets.push(output);
   const tar = join(destination, `GitTogether-${pkg.version}-macOS-arm64.app.tar.gz`);
   // Python's archive writer preserves framework links without AppleDouble or xattrs.

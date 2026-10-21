@@ -30,6 +30,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          architecture: x64
+      - run: '"GITTOGETHER_BUILD_NODE=$(node -p process.execPath)" >> $env:GITHUB_ENV'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
           architecture: ${{ matrix.arch }}
       - uses: dtolnay/rust-toolchain@stable
       - if: matrix.arch == 'x86'

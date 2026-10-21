@@ -20,14 +20,18 @@ export class PresenceHost {
   private readonly previews = new Map<string, { input: ApiInputs['submitCommit']; expires: number; action: string; scope: string }>()
   private readonly committed = new Map<string, { input: ApiInputs['submitCommit']; commitId: string }>()
   public constructor(private readonly desktop: DesktopAdapter) {}
+  private async dataRoot() {
+    const root = await getPath('userData')
+    return __RELEASE_CHANNEL__ === 'development' ? Path.join(root, 'presence') : root
+  }
   private async start() {
     if (this.child) return
     if (this.starting) return this.starting
     this.starting = (async () => {
-      const root = Path.join(await getPath('userData'), 'presence')
+      const root = await this.dataRoot()
       this.storage = new PresenceStorage(root)
       const executable = Path.join(__dirname, process.platform === 'win32' ? 'gittogether-presence.exe' : 'gittogether-presence')
-      const child = spawn(executable, [root], { stdio: 'pipe', windowsHide: true, env: { ...process.env, ...(process.env.GITTOGETHER_SMOKE === '1' ? { GITTOGETHER_PRESENCE_CONFIG_DIR: Path.join(root, 'isolated-editor-config') } : {}) } })
+      const child = spawn(executable, [root, await getPath('userData')], { stdio: 'pipe', windowsHide: true, env: { ...process.env, ...(process.env.GITTOGETHER_SMOKE === '1' ? { GITTOGETHER_PRESENCE_CONFIG_DIR: Path.join(root, 'isolated-editor-config') } : {}) } })
       this.child = child
       child.once('error', e => this.fail(e))
       child.once('exit', () => this.fail(new Error('Presence 连接已结束；请重新连接。')))
@@ -162,7 +166,7 @@ export class PresenceHost {
   }
   private async backupPath(id: string) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('备份标识无效。')
-    return Path.join(await getPath('userData'), 'presence', 'remote-backups', id)
+    return Path.join(await this.dataRoot(), 'remote-backups', id)
   }
   private async backup(id: string, repositoryId: string, taskId: string, paths: string[]) {
     const repo = await this.desktop.repository(repositoryId, taskId)
