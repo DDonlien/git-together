@@ -40,6 +40,7 @@ jobs:
       - run: npm test
       - run: npm run build:release
       - run: node scripts/package-desktop.mjs
+      - run: node scripts/smoke-windows-package.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-release-${{ matrix.arch }}
@@ -48,4 +49,5 @@ jobs:
             artifacts/releases/${{ inputs.version }}/*.nupkg
             artifacts/releases/${{ inputs.version }}/RELEASES-*
             artifacts/releases/${{ inputs.version }}/package-*.json
+            artifacts/releases/${{ inputs.version }}/windows-smoke-*.json
           if-no-files-found: error

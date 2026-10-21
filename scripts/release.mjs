@@ -70,7 +70,12 @@ const downloaded = join(destination, 'windows-download');
 mkdirSync(downloaded, { recursive: true });
 gh(['run', 'download', String(runId), '--pattern', 'desktop-release-*', '--dir', downloaded]);
 for (const directory of readdirSync(downloaded)) for (const name of readdirSync(join(downloaded, directory))) copyFileSync(join(downloaded, directory, name), join(destination, name));
-for (const arch of ['ia32', 'x64']) assert.ok(reportValid(join(destination, `package-win32-${arch}.json`)), `Invalid Windows ${arch} provenance or package.`);
+for (const arch of ['ia32', 'x64']) {
+  assert.ok(reportValid(join(destination, `package-win32-${arch}.json`)), `Invalid Windows ${arch} provenance or package.`);
+  const smoke = json(join(destination, `windows-smoke-${arch}.json`));
+  assert.equal(smoke.sourceCommit, commit); assert.equal(smoke.arch, arch);
+  for (const key of ['installed', 'encryptedStorage', 'originalCommitPush', 'fileAndIndexPreserved', 'productionUpdates']) assert.equal(smoke[key], true);
+}
 run('cargo', ['build', '--release', '--locked', '--manifest-path', 'tools/release-verify/Cargo.toml']);
 const verifier = join(root, 'tools/release-verify/target/release/gittogether-release-verify');
 const platforms = {};
@@ -91,7 +96,7 @@ writeFileSync(join(destination, 'latest.json'), JSON.stringify({ version, notes:
 const zipName = `GitTogether-${version}-mac-arm64.zip`;
 const zipBytes = readFileSync(join(destination, zipName));
 writeFileSync(join(destination, 'latest-mac.yml'), JSON.stringify({ version, files: [{ url: zipName, sha512: createHash('sha512').update(zipBytes).digest('base64'), size: zipBytes.length }], path: zipName, sha512: createHash('sha512').update(zipBytes).digest('base64'), releaseDate: new Date().toISOString() }, null, 2) + '\n');
-writeFileSync(join(destination, 'changelog.json'), JSON.stringify([{ version, pub_date: new Date().toISOString(), notes: ['[New] 使用 GitHub Desktop 原版执行基础和 Material 界面。', '[Fixed] 恢复正式签名、公证发布以及旧版和新版自动更新。'] }], null, 2) + '\n');
+writeFileSync(join(destination, 'changelog.json'), JSON.stringify([{ name: `GitTogether ${version}`, version, pub_date: new Date().toISOString(), notes: ['[New] 使用 GitHub Desktop 原版执行基础和 Material 界面。', '[Fixed] 恢复正式签名、公证发布以及旧版和新版自动更新。'] }], null, 2) + '\n');
 const assets = [...mac.assets.map(item => item.name), ...['ia32', 'x64'].flatMap(arch => json(join(destination, `package-win32-${arch}.json`)).assets.map(item => item.name)), ...legacyAssets.map(([, name]) => name + '.sig'), 'latest.json', 'latest-mac.yml', 'changelog.json'];
 const integrity = assets.map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }));
 writeFileSync(join(destination, 'release-integrity.json'), JSON.stringify({ version, commit, notarization: mac.notarization, windowsRun: runId, assets: integrity }, null, 2) + '\n');
@@ -104,7 +109,34 @@ const existing = releases.find(item => item.tagName === tag);
 if (existing) assert.equal(existing.isDraft, true);
 else gh(['release', 'create', tag, '--target', commit, '--title', `GitTogether ${version}`, '--notes-file', notes, '--draft']);
 gh(['release', 'upload', tag, ...[...assets, 'release-integrity.json', 'SHA256SUMS'].map(name => join(destination, name)), '--clobber']);
+const remoteAssets = JSON.parse(gh(['release', 'view', tag, '--json', 'assets'])).assets;
+for (const item of integrity) assert.ok(remoteAssets.some(asset => asset.name === item.name && asset.size === item.size), 'Draft asset missing or incomplete: ' + item.name);
 gh(['release', 'edit', tag, '--draft=false', '--latest']);
+// Squirrel.Windows requires one architecture per RELEASES feed. Keep these
+// tiny public feeds on main; payloads and tag still reference the release source.
+assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
+assert.equal(capture('git', ['rev-parse', 'HEAD']), commit);
+assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], commit);
+const feeds = [];
+for (const arch of ['ia32', 'x64']) {
+  const name = `GitTogether-${version}-win32-${arch}-full.nupkg`;
+  const bytes = readFileSync(join(destination, name));
+  const relative = `updates/win32-${arch}/RELEASES`;
+  mkdirSync(join(root, 'updates', `win32-${arch}`), { recursive: true });
+  writeFileSync(join(root, relative), `${createHash('sha1').update(bytes).digest('hex').toUpperCase()} https://github.com/${repository}/releases/download/${tag}/${name} ${bytes.length}\n`);
+  feeds.push(relative);
+}
+run('git', ['add', '--', ...feeds]);
+run('git', ['commit', '-m', `chore(DESKTOP-01-updates): publish ${version} Windows feeds [skip ci]`]);
+run('git', ['push', 'origin', 'main']);
+for (const relative of feeds) {
+  for (let attempt = 0; ; attempt++) {
+    const response = capture('curl', ['--location', '--silent', '--show-error', `https://raw.githubusercontent.com/${repository}/main/${relative}`]);
+    if (response === readFileSync(join(root, relative), 'utf8').trim()) break;
+    assert.ok(attempt < 32, 'Public Windows feed is stale: ' + relative);
+    await pause(15000);
+  }
+}
 assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag);
 const temporary = mkdtempSync(join(tmpdir(), 'gittogether-public-release-'));
 try {

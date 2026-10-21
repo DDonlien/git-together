@@ -40,7 +40,7 @@ Presence的系统存储由宿主通过原版TokenStore管理，开发版及不�
 
 ## 正式更新发布（2026-10-21）
 
-`npm run package:mac` 与 `npm run release` 表示完整正式交付：从干净且已推送的main构建production客户端，macOS使用正式bundle身份和既有Developer ID、公证profile；Windows原生构建x86/x64。旧版Tauri更新保留签名的tar/NSIS及latest.json，新版沿用原版Squirrel执行器和公开Electron更新服务，产品changelog由同一Release提供。资产齐备并通过隔离升级后才公开Release，随后完整下载回读。开发包使用显式`package:mac:dev`，不冒充正式交付。
+`npm run package:mac` 与 `npm run release` 表示完整正式交付：从干净且已推送的main构建production客户端，macOS使用正式bundle身份和既有Developer ID、公证profile；Windows原生构建x86/x64并验证实际安装后的凭据及Git执行。旧版Tauri更新保留签名的tar/NSIS及latest.json，新版沿用原版Squirrel执行器；macOS使用公开Electron更新服务，Windows从main上的updates目录分别提供两种架构的RELEASES清单，载荷仍来自同一正式Release。资产齐备并通过隔离升级后才公开Release，随后发布两份轻量清单并完整回读。开发包使用显式`package:mac:dev`，不冒充正式交付。
 
 正式启动先设置既有GitTogether-Standalone-Demo数据目录，保留旧加密文件，通过原版账号Store和Dispatcher一次性导入支持的账号及存在的本地目录；访问或认证失败保留原配置并显示错误。Git、授权、凭据和后台执行器保持原版；额外来源差异仅为产品更新说明展示及ia32打包配置。旧0.33.0的归档接受规则固定为独立验证工具，旧业务服务不进入构建或运行。
 

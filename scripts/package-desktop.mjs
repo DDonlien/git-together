@@ -48,6 +48,9 @@ if (mac) {
   });
 }
 const [directory] = await packager(options);
+const appResources = mac ? join(directory, 'GitTogether.app/Contents/Resources/app') : join(directory, 'resources/app');
+const updateURL = mac ? `https://update.electronjs.org/DDonlien/git-together/darwin-arm64/${pkg.version}` : `https://raw.githubusercontent.com/DDonlien/git-together/main/updates/win32-${process.arch}`;
+assert.ok(readFileSync(join(appResources, 'renderer.js'), 'utf8').includes(updateURL), 'Packaged updater feed does not match the target.');
 const assets = [];
 let notarization;
 if (mac) {
@@ -91,7 +94,7 @@ if (mac) {
   const label = process.arch === 'ia32' ? 'x86' : 'x64';
   const bootstrap = join(destination, `GitTogether-${pkg.version}-Windows-${label}-setup.exe`);
   const script = join(destination, `bootstrap-${process.arch}.nsi`);
-  writeFileSync(script, `Unicode true\nName "GitTogether"\nOutFile "${bootstrap}"\nRequestExecutionLevel user\nSilentInstall silent\nSection\nInitPluginsDir\nSetOutPath "$PLUGINSDIR"\nFile /oname=setup.exe "${join(destination, setup)}"\nExecWait '"$PLUGINSDIR\\setup.exe" --silent' $0\nIntCmp $0 0 +2\nAbort "GitTogether installation failed"\nExec '"$LOCALAPPDATA\\GitTogether\\Update.exe" --processStart GitTogether.exe'\nSectionEnd\n`);
+  writeFileSync(script, `Unicode true\nName "GitTogether"\nOutFile "${bootstrap}"\nRequestExecutionLevel user\nSilentInstall silent\nSection\nInitPluginsDir\nSetOutPath "$PLUGINSDIR"\nFile /oname=setup.exe "${join(destination, setup)}"\nExecWait '"$PLUGINSDIR\\setup.exe" --silent' $0\nIntCmp $0 0 +3\nSetErrorLevel $0\nQuit\nReadEnvStr $1 "GITTOGETHER_INSTALL_NO_LAUNCH"\nStrCmp $1 "1" +2\nExec '"$LOCALAPPDATA\\GitTogether\\Update.exe" --processStart GitTogether.exe'\nSectionEnd\n`);
   run(process.env.GITTOGETHER_MAKENSIS || 'C:\\Program Files (x86)\\NSIS\\makensis.exe', ['/V2', script]);
   assets.push(join(destination, name), join(destination, setup), bootstrap);
   const release = readFileSync(join(output, 'RELEASES'), 'utf8').replaceAll(old, name);

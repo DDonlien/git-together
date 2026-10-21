@@ -17,7 +17,7 @@ else {
   writeFileSync(join(runtimeBin, 'yarn'), `#!/usr/bin/env node\nrequire(${JSON.stringify(join(desktop, 'vendor/yarn-1.21.1.js'))});\n`);
   chmodSync(join(runtimeBin, 'yarn'), 0o755);
 }
-const env = { ...process.env, PATH: [runtimeBin, dirname(process.execPath), join(desktop, 'node_modules/.bin'), process.env.PATH].join(process.platform === 'win32' ? ';' : ':'), DUGITE_CACHE_DIR: join(desktop, '.runtime-cache'), CIRCLE_SHA1: sha.stdout.trim(), RELEASE_CHANNEL: production ? 'production' : 'development', GITTOGETHER_VERSION: version, ...(production ? { NODE_ENV: 'production', DESKTOP_E2E_UPDATES_URL: `https://update.electronjs.org/DDonlien/git-together/${process.platform}-${process.arch}/${version}` } : {}) };
+const env = { ...process.env, PATH: [runtimeBin, dirname(process.execPath), join(desktop, 'node_modules/.bin'), process.env.PATH].join(process.platform === 'win32' ? ';' : ':'), DUGITE_CACHE_DIR: join(desktop, '.runtime-cache'), CIRCLE_SHA1: sha.stdout.trim(), RELEASE_CHANNEL: production ? 'production' : 'development', GITTOGETHER_VERSION: version, ...(production ? { NODE_ENV: 'production', DESKTOP_E2E_UPDATES_URL: (process.platform === 'win32' ? `https://raw.githubusercontent.com/DDonlien/git-together/main/updates/win32-${process.arch}` : `https://update.electronjs.org/DDonlien/git-together/${process.platform}-${process.arch}/${version}`) } : {}) };
 const node = process.execPath;
 const yarn = join(desktop, 'vendor/yarn-1.21.1.js');
 function run(command, args, cwd = root, extra = {}) {
