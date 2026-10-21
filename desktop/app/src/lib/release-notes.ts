@@ -93,7 +93,7 @@ export async function getChangeLog(
   limit?: number
 ): Promise<ReadonlyArray<ReleaseMetadata>> {
   const changelogURL = new URL(
-    'https://central.github.com/deployments/desktop/desktop/changelog.json'
+    'https://github.com/DDonlien/git-together/releases/latest/download/changelog.json'
   )
 
   if (__RELEASE_CHANNEL__ === 'beta' || __RELEASE_CHANNEL__ === 'test') {
@@ -104,14 +104,19 @@ export async function getChangeLog(
     changelogURL.searchParams.set('limit', limit.toString())
   }
 
-  const response = await fetch(changelogURL.toString(), {
-    headers: { 'user-agent': getUserAgent() },
-  })
-  if (response.ok) {
+  try {
+    const response = await fetch(changelogURL.toString(), {
+      headers: { 'user-agent': getUserAgent() },
+    })
+    if (!response.ok) throw new Error(`Release notes HTTP ${response.status}`)
     const releases: ReadonlyArray<ReleaseMetadata> = await response.json()
-    return releases
-  } else {
-    return []
+    if (releases.length > 0) return releases
+    throw new Error('Release notes are empty')
+  } catch (error) {
+    // Release notes are presentation data. Their failure must not break an
+    // independently successful native update check or change its result.
+    log.warn('GitTogether release notes unavailable', error)
+    return [{ name: 'GitTogether', version: getVersion(), pub_date: new Date().toISOString(), notes: [] }]
   }
 }
 

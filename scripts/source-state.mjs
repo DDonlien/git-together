@@ -11,6 +11,6 @@ export function sourceState(root) {
     }
   }
   for (const path of ['macos/src', 'desktop/app/src/ui/gittogether', 'desktop/gittogether-presence/src']) directory(path);
-  for (const path of ['package.json', 'macos/package.json', 'macos/package-lock.json', 'macos/vite.config.mjs', 'desktop/app/package.json', 'desktop/tsconfig.json', 'desktop/gittogether-presence/Cargo.toml', 'desktop/gittogether-presence/Cargo.lock', 'docs/github-desktop-upstream.json']) add(path);
+  for (const path of ['scripts/runtime-bootstrap.cjs', 'scripts/desktop.mjs', 'package.json', 'macos/package.json', 'macos/package-lock.json', 'macos/vite.config.mjs', 'desktop/app/package.json', 'desktop/tsconfig.json', 'desktop/gittogether-presence/Cargo.toml', 'desktop/gittogether-presence/Cargo.lock', 'docs/github-desktop-upstream.json']) add(path);
   return hash.digest('hex');
 }

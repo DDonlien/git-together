@@ -2,19 +2,30 @@ import { AppStore } from '../../lib/stores'
 import { RepositoryStateCache } from '../../lib/stores/repository-state-cache'
 import { CopilotStore } from '../../lib/stores/copilot-store'
 import { Dispatcher } from '../dispatcher'
-import { DesktopAdapter, productVersion } from './adapter'
+import { DesktopAdapter } from './adapter'
 import { PresenceHost } from './presence-host'
 import { showOpenDialog, getPath } from '../main-process-proxy'
 import { shell } from '../../lib/app-shell'
 import * as Path from 'path'
 import { PopupType } from '../../models/popup'
 import { ApplicationTheme } from '../lib/application-theme'
+import { AccountsStore } from '../../lib/stores/accounts-store'
+import { DesktopUpdates } from './updates'
+import { upgradeLegacy } from './upgrade'
 import type { ApiInputs, ApiMethod } from '../../../../../macos/src/import-model'
 
-export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cache: RepositoryStateCache, copilot: CopilotStore) {
+export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cache: RepositoryStateCache, copilot: CopilotStore, accounts: AccountsStore) {
   const adapter = new DesktopAdapter(store, dispatcher, cache, copilot)
   if (process.env.GITTOGETHER_SMOKE === '1') Object.assign(window, { __gittogetherAdapter: adapter })
   const presence = new PresenceHost(adapter)
+  let activeOperations = 0
+  const updates = new DesktopUpdates(async () => {
+    if (activeOperations !== 0) return false
+    const result = await presence.command('internal', 'canInstall', {}) as { ok: boolean; value?: boolean; error?: string }
+    if (!result.ok) throw new Error(result.error || '无法确认远端操作状态，请稍后重试。')
+    return result.value === true
+  })
+  let upgrade: Promise<void> | undefined
   if (process.env.GITTOGETHER_SMOKE === '1') Object.assign(window, { __gittogetherPresence: presence })
   const frame = document.createElement('iframe')
   frame.id = 'gittogether-ui'
@@ -49,8 +60,14 @@ export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cach
       try {
         let value: unknown
         if (group === 'import') {
-          try { value = { ok: true, value: await adapter.handle(method as ApiMethod, input as ApiInputs[ApiMethod]) } }
+          activeOperations++
+          try {
+            if (!upgrade) upgrade = upgradeLegacy(adapter, presence, accounts).catch(error => { upgrade = undefined; throw error })
+            await upgrade
+            value = { ok: true, value: await adapter.handle(method as ApiMethod, input as ApiInputs[ApiMethod]) }
+          }
           catch (e) { value = { ok: false, error: e instanceof Error ? e.message : String(e) } }
+          finally { activeOperations-- }
         } else if (group === 'environment') { const state = store.getState(); value = { nativeGlass: false, platform: process.platform, backend: 'github-desktop', theme: state.selectedTheme, resolvedTheme: state.currentTheme } }
         else if (group === 'select') { await dispatcher.selectRepository(await adapter.repository(method)) }
         else if (group === 'directory') value = await showOpenDialog({ title: '选择本地 Git 仓库或下载位置', properties: ['openDirectory'] })
@@ -61,7 +78,7 @@ export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cach
           else throw new Error('界面入口无效。')
         }
         else if (group === 'presence' || group === 'control') value = await presence.command(group, method, input)
-        else if (group === 'updates') value = { phase: 'unavailable', currentVersion: productVersion, message: '开发版本暂不提供自动更新。' }
+        else if (group === 'updates') value = await updates.command(method)
         else if (group === 'diagnostics') {
           const directory = Path.join(await getPath('userData'), 'logs')
           if (method === 'status') value = { directory, retentionHours: 24, maxBytes: 0, limited: false, error: '' }

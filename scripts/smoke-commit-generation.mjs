@@ -30,7 +30,7 @@ git(['mv', 'rename-source.txt', 'renamed.txt'], repo); writeFileSync(join(repo, 
 writeFileSync(join(repo, ':(glob)literal.txt'), 'literal path fixture\n'); writeFileSync(join(feature, 'partial.txt'), 'independent feature fixture\n');
 const snapshot = path => ({ head: git(['rev-parse', 'HEAD'], path), index: git(['ls-files', '--stage'], path), status: git(['status', '--porcelain'], path), count: git(['rev-list', '--count', 'HEAD'], path) });
 const before = snapshot(repo), beforeFeature = snapshot(feature), calls = () => existsSync(modelLog) ? readFileSync(modelLog, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
-const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', process.env.GITTOGETHER_SMOKE_EXECUTABLE || JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
 const app = await _electron.launch({ executablePath, args: packagedApp ? ['--user-data-dir=' + join(fixture, 'profile')] : ['--allow-file-access-from-files', '--user-data-dir=' + join(fixture, 'profile'), appRoot], cwd: fixture, env, timeout: 60_000 });
 const checks = [], errors = [];
 try {

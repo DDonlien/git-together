@@ -33,15 +33,21 @@ async fn run() -> util::Result<()> {
         if let Err(error) = result { let _ = sender.send(Err(error)); }
     });
     let service=Arc::new(service::Service{root:root.clone()});
+    let legacy_root=root.parent().ok_or("配置目录无效。")?.to_path_buf();
     let presence=presence::Presence::new(root,true,service.clone()).await?;
     let control=remote_control::RemoteControl::new(service,presence.clone(),true).await?;
     while let Some(value) = requests.recv().await {
         let value = value?;
         let p=presence.clone();let c=control.clone();
+        let legacy_root=legacy_root.clone();
         tokio::spawn(async move {
             let result:util::Result<Value>=async {
                 let method=value["method"].as_str().ok_or("Presence 方法无效。")?;
                 let group=value["group"].as_str().ok_or("Presence 请求无效。")?;
+                if group=="internal" && method=="legacyAccounts" {
+                    return Ok(credentials::load(&legacy_root.join("accounts-v2.encrypted")).await?.unwrap_or(Value::Null));
+                }
+                if group=="internal" && method=="canInstall" { return Ok(json!(!c.busy().await)); }
                 if group=="internal" && method=="ensureSaved" {
                     let root=value["input"]["path"].as_str().ok_or("工作目录无效。")?;
                     let paths:Vec<String>=serde_json::from_value(value["input"]["paths"].clone()).map_err(|_|"文件范围无效。")?;

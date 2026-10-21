@@ -10,6 +10,10 @@ export function copyCopilotDependency(
   platform: NodeJS.Platform,
   arch: string
 ): void {
+  if (platform === 'win32' && arch === 'ia32') {
+    console.warn('Copilot does not publish a 32-bit runtime; AI generation remains unavailable on 32-bit Windows.')
+    return
+  }
   const source = join(
     nodeModulesRoot,
     '@github',

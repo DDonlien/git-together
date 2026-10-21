@@ -1,0 +1,25 @@
+{
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk1RkQ2RkMzQUJENjNCNTkKUldSWk85YXJ3Mi85bFVwU0lpR01GUnQ4SmErODZ5ZFZKSGExUWgxM3dMbU4veFdaa0V3YkNFZjUK",
+      "dangerousInsecureTransportProtocol": true,
+      "requireSignedVersion": true
+    }
+  },
+  "productName": "GitTogether Upgrade Fixture",
+  "version": "0.33.0",
+  "identifier": "com.gittogether.releasefixture",
+  "build": {
+    "frontendDist": "../../macos/public"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": []
+  },
+  "bundle": {
+    "active": false,
+    "icon": [
+      "../../macos/src-tauri/icons/icon.png"
+    ]
+  }
+}

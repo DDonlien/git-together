@@ -3901,12 +3901,12 @@
   },
   "patches": {
     "app/src/ui/index.tsx": {
-      "sha256": "16ba949097d3495ec702027b6e1fc9ac9a8d5bae362713474238bbb05e0a0ff6",
-      "reason": "Mount the existing GitTogether UI; keep original initialization and App mounted."
+      "sha256": "588f5b82baee69c866955d7c5c9a19d53bacf89c1304d19e0883e0da28d46041",
+      "reason": "Connect preserved account store to the GitTogether presentation and upgrade adapter"
     },
     "app/package.json": {
-      "sha256": "fe2131a8413cf0865793456d93f0c9f116ca9c1f8e711eefe4925e83f8eb8b3a",
-      "reason": "Product identity, version, and isolated app data identity."
+      "sha256": "5cffd46ffc3fc301c8fa170bd6ec5b702bfe908403ca4f1ab5c45559eca01596",
+      "reason": "GitTogether product identity and version"
     },
     "tsconfig.json": {
       "sha256": "4573429dbc076543a7b6d706ec12ad4615a2589475b2bff4afaffe7982f755e8",
@@ -4171,6 +4171,22 @@
     "app/src/ui/preferences/advanced.tsx": {
       "sha256": "90a19075dd042bf40797f48eb5ed2a30c997266b2a459221581640b69e4937d1",
       "reason": "GitTogether Material view only; original controller callbacks are retained."
+    },
+    "app/src/lib/release-notes.ts": {
+      "sha256": "bb3cef86d226b056a8b1bbbf24169b752322d08ed91ae419f3a83334cc022a7e",
+      "reason": "Product changelog presentation URL and offline bundled metadata; original update engine and release parsing unchanged"
+    },
+    "script/dist-info.ts": {
+      "sha256": "4b178822d8eefa3b1529c1770bf4da2eebc6d2311dfe1cdf16ba0117ff49fdff",
+      "reason": "Build architecture configuration adds supported Electron and dugite ia32 target"
+    },
+    "script/build.ts": {
+      "sha256": "d8c99e85fd0417bba94388a5f87bf4597788de809955ef8fe35a0cdd8b8cff79",
+      "reason": "Build configuration locates bundled ia32 Git credential helper"
+    },
+    "script/copilot.ts": {
+      "sha256": "4bd7f8b60863a298efa7512c0b60041e26f127d9acc4f14148f8c7d9c418823c",
+      "reason": "Skip unavailable vendor Copilot binary for ia32; no runtime or Git execution changes"
     }
   },
   "submodules": [

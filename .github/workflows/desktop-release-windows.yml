@@ -1,0 +1,51 @@
+name: Desktop Windows release packages
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact pushed main commit
+        required: true
+      version:
+        description: Product version
+        required: true
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+        env:
+          GIT_CONFIG_COUNT: '2'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+          GIT_CONFIG_KEY_1: core.eol
+          GIT_CONFIG_VALUE_1: lf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          architecture: ${{ matrix.arch }}
+      - uses: dtolnay/rust-toolchain@stable
+      - if: matrix.arch == 'x86'
+        run: rustup default stable-i686-pc-windows-msvc
+      - run: npm run verify:upstream
+      - run: npm run setup
+      - run: npm run check
+      - run: npm test
+      - run: npm run build:release
+      - run: node scripts/package-desktop.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-${{ matrix.arch }}
+          path: |
+            artifacts/releases/${{ inputs.version }}/*.exe
+            artifacts/releases/${{ inputs.version }}/*.nupkg
+            artifacts/releases/${{ inputs.version }}/RELEASES-*
+            artifacts/releases/${{ inputs.version }}/package-*.json
+          if-no-files-found: error

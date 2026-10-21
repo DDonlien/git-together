@@ -28,6 +28,9 @@
     - [x] \[DESKTOP-01-account-entries-tls] 修正2026-10-19截图反馈中的Gitea客户端证书处理：账号API使用与原版相同的Chromium请求及证书控制器，保留超时、响应体上限和拒绝重定向；连接失败显示中文说明并保留输入及已知目录，证书弹窗沿用原版查看/取消行为和Material设计。0.36.1源码摘要b3882fa75f6ea8c4d1e28a3b985446efb0bc56f001aa7a1548b1ff46d5bb225f；类型/Cargo、7项来源边界、账号及12项Git/Presence包内回归通过。隔离HTTPS证明证书被拒绝且没有HTTP请求或令牌发送，未修改系统信任；11张截图见artifacts/account-entries/0.36.1/。更新的本地测试.app及validation.json见artifacts/macos/0.36.1/GitTogether-dev-darwin-arm64/。
       - [ ] \[DESKTOP-01-account-entries-tls-server] 2026-10-19后续排查澄清：实际Gitea入口为https://git.freshli4.com:10443，IPv4/IPv6均通过证书校验，返回Gitea接口HTTP200，证书由Let's Encrypt YE1签发且覆盖该域名；最终0.36.1包内无认证读取亦成功。未带端口的默认443存在双栈差异：IPv4正常，IPv6返回fnOS默认自签名证书，触发此前提示。用户应填写完整10443入口；真实用户令牌登录仍待本人验收。若要默认443访问，需另外统一IPv6入口配置；本轮未修改服务器、系统代理或证书信任，未读取用户令牌。
 
+  - [ ] \[DESKTOP-01-updates] 按2026-10-21用户明确要求，补齐当前main正式发布及自动更新，让0.33.0能检查、下载并升级至当前Desktop版本；沿用正式bundle身份、Developer ID和既有公证/更新签名配置，保留用户配置及本地文件，隔离验证旧版升级和新版后续更新。macOS Apple Silicon与Windows x86/x64使用同源同版本发布，资产齐全且通过验证后才公开更新源，不操作用户安装版。
+    - [ ] \[DESKTOP-01-updates-pipeline] 根“推送打包”入口自动完成干净且已推送main来源、版本、原版执行边界、平台成品、签名、公证、旧版与新版更新清单、GitHub正式Release及公共下载回读；任何阶段失败明确停止，不能把开发包或单纯CI通过记为发布完成。
+
 ## Presence账号与商业边界（2026-10-12）
 
 - [ ] \[COLLAB-03-automatic-management] 按用户2026-10-12八点纠正，Presence为一个实例维护一个个人身份；接入GitTogether且当前Git账号可访问的仓库自动纳入个人管理，不提供个人仓库勾选列表。用户所属组织在Web端由组织owner配置，并对Git仓库验证ownership；完整仓库地址匹配且用户为成员时自动使用组织范围。一个仓库可以分别归入多个组织，各组织/服务器的状态及操作记录隔离，不限制或合并。

@@ -30,7 +30,7 @@ const hook = join(repo, '.git/hooks/pre-commit');
 const hookLog = join(fixture, 'hooks.log');
 const quotedLog = "'" + hookLog.replaceAll("'", "'\\''") + "'";
 writeFileSync(hook, '#!/bin/sh\nprintf "%s\\n" called >> ' + quotedLog + '\n'); chmodSync(hook, 0o755);
-const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', process.env.GITTOGETHER_SMOKE_EXECUTABLE || JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
 const app = await _electron.launch({ executablePath, args: packagedApp ? ['--user-data-dir=' + join(fixture, 'profile')] : ['--allow-file-access-from-files', '--user-data-dir=' + join(fixture, 'profile'), appRoot], cwd: fixture, env: { ...fixtureGitEnv, GITTOGETHER_SMOKE: '1', NODE_ENV: 'development' }, timeout: 60_000 });
 let page;
 const errors = [];

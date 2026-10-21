@@ -78,7 +78,7 @@ const targets = ['team/project', 'team/second', 'team/level-six', 'team/level-se
 // Saved, non-secret directory metadata exercises the real persistence loader;
 // this fixture neither signs in nor creates system credential-store entries.
 writeFileSync(join(profile, 'gitea-accounts.json'), JSON.stringify({ version: 1, entries: [{ account: alice, userId: 1, repositories: [...targets].reverse() }, { account: bob, userId: 2, repositories: [remote(bob, 7, 'else/foreign')] }] }));
-const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', process.env.GITTOGETHER_SMOKE_EXECUTABLE || JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
 const launch = () => _electron.launch({ executablePath, args: packagedApp ? ['--user-data-dir=' + profile] : ['--user-data-dir=' + profile, appRoot], cwd: fixture, env, timeout: 60_000 });
 let app, page;
 const pageErrors = [], checks = [];

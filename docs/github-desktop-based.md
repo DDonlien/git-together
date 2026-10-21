@@ -32,11 +32,17 @@ npm run dev
 
 Presence的系统存储由宿主通过原版TokenStore管理，开发版及不同数据目录使用独立密钥。旧加密文件仍可读取；系统拒绝访问、密钥缺失或文件认证失败时保留原文件，恢复访问后重试。`npm test`覆盖宿主密钥管理及隔离Presence进程的首次保存、重启、旧格式和失败保护。
 
-在macOS执行 `npm run package:mac` 会先完成同源构建，再用上游固定版本的Electron Packager生成 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。包内自带运行时、Git、LFS、Presence及界面，可直接双击运行，不依赖源码目录或本地开发服务。保留上游开发签名和权限配置，使用GitTogether图标与独立的开发bundle ID和数据目录；本地ad-hoc签名不代表Developer ID公证或正式发布。
+在macOS执行 `npm run package:mac:dev` 会先完成同源构建，再用上游固定版本的Electron Packager生成 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。包内自带运行时、Git、LFS、Presence及界面，可直接双击运行，不依赖源码目录或本地开发服务。保留上游开发签名和权限配置，使用GitTogether图标与独立的开发bundle ID和数据目录；本地ad-hoc签名不代表Developer ID公证或正式发布。
 
 `macos/src/` 继续承载已有 Material 界面。界面以独立 frame 加载，使用仅对本地 frame 发放的 MessagePort 调用原版进程。React 19 与上游 React 16 分别运行。`GitTogetherApp` 继承原版 App 的初始化、订阅、菜单命令、登录回调和后台生命周期，覆盖其展示入口；原版主页面、工具栏、欢迎页及样式表从不挂载。原版弹窗控制器保留字段、验证、回调、焦点、安全默认项和栈管理，外壳、图标与控件使用我们的 Material 设计。设置、关于、菜单、横幅和崩溃恢复另有展示实现。界面层的定时读取只消费原版缓存；远端调度交给原版。
 
 旧 `macos/src-tauri/`、`macos/server/`、`macos/electron/` 和旧脚本属于迁移前实现，不进入当前启动或构建链。旧 Windows 发布流程保存在 `archive/pre-desktop-runtime/`；当前 CI 验证新的 Desktop 运行链。
+
+## 正式更新发布（2026-10-21）
+
+`npm run package:mac` 与 `npm run release` 表示完整正式交付：从干净且已推送的main构建production客户端，macOS使用正式bundle身份和既有Developer ID、公证profile；Windows原生构建x86/x64。旧版Tauri更新保留签名的tar/NSIS及latest.json，新版沿用原版Squirrel执行器和公开Electron更新服务，产品changelog由同一Release提供。资产齐备并通过隔离升级后才公开Release，随后完整下载回读。开发包使用显式`package:mac:dev`，不冒充正式交付。
+
+正式启动先设置既有GitTogether-Standalone-Demo数据目录，保留旧加密文件，通过原版账号Store和Dispatcher一次性导入支持的账号及存在的本地目录；访问或认证失败保留原配置并显示错误。Git、授权、凭据和后台执行器保持原版；额外来源差异仅为产品更新说明展示及ia32打包配置。旧0.33.0的归档接受规则固定为独立验证工具，旧业务服务不进入构建或运行。
 
 ## 功能边界
 

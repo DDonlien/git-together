@@ -25,6 +25,10 @@ function check(path) {
 }
 check('app/src');
 const presentationPatches = new Set([
+  "script/dist-info.ts",
+  "script/build.ts",
+  "script/copilot.ts",
+  "app/src/lib/release-notes.ts",
   ".gitignore",
   "app/package.json",
   "app/src/crash/crash-app.tsx",

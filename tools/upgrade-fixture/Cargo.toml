@@ -1,0 +1,16 @@
+[package]
+name = "gittogether-upgrade-fixture"
+version = "0.33.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = "2.7"
+
+[dependencies]
+tauri = { version = "=2.12.2", features = ["macos-private-api"] }
+tauri-plugin-updater = "=2.13.3"
+serde_json = "1"
+url = "2"
+
+flate2 = "1"
+tar = "0.4"
