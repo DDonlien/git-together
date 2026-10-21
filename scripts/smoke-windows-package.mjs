@@ -28,7 +28,7 @@ const { _electron } = require('playwright');
 const app = await _electron.launch({ executablePath: executable, args: ['--user-data-dir=' + join(fixture, 'profile')], env, timeout: 60000 });
 try {
   const native = await app.evaluate(async ({ app }, account) => {
-    const keytar = require(app.getAppPath() + '/keytar.node');
+    const keytar = process.mainModule.require(app.getAppPath() + '/keytar.node');
     const service = 'GitTogether isolated package validation';
     try { await keytar.setPassword(service, account, 'synthetic-fixture-secret'); return await keytar.getPassword(service, account) === 'synthetic-fixture-secret' }
     finally { await keytar.deletePassword(service, account) }
@@ -52,7 +52,13 @@ try {
   const snapshot = await call('localWorkspace', { repositoryId: link.repositoryId }); assert.ok(snapshot.tasks.length);
   assert.equal(git(['rev-parse', 'HEAD'], repo), head); assert.equal(git(['ls-files', '--stage'], repo), index);
   assert.equal(readFileSync(join(repo, 'work.txt'), 'utf8'), 'keep local content\n');
-  const frame = page.frames().find(frame => frame.url().includes('/gittogether/index.html')); assert.ok(frame);
+  let frame;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    frame = page.frames().find(candidate => candidate.url().includes('/gittogether/index.html'));
+    if (frame) break;
+    await new Promise(done => setTimeout(done, 100));
+  }
+  assert.ok(frame, 'The installed application did not attach its presentation frame.');
   await frame.waitForFunction(() => window.gittogether?.updates);
   const status = await frame.evaluate(() => window.gittogether.updates.status()); assert.equal(status.currentVersion, version); assert.notEqual(status.phase, 'unavailable');
   writeFileSync(join(destination, `windows-smoke-${process.arch}.json`), JSON.stringify({ version, sourceCommit: packageReport.build.sourceCommit, arch: process.arch, installed: true, encryptedStorage: true, originalCommitPush: true, fileAndIndexPreserved: true, productionUpdates: true }, null, 2) + '\n');

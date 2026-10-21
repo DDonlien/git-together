@@ -41,6 +41,7 @@ try {
   await page.waitForFunction(() => window.__gittogetherAdapter, { timeout: 30_000 });
   const call = (method, input) => page.evaluate(async ({ method, input }) => window.__gittogetherAdapter.handle(method, input), { method, input });
   await call('link', { repositoryId: '', path: repo });
+  await page.evaluate(async () => { const a = window.__gittogetherAdapter, popup = a.store.getState().currentPopup; if (popup?.type === 'InitializeLFS') { await a.dispatcher.installLFSHooks(popup.repositories); a.dispatcher.closePopup(); } });
   const catalog = await call('catalog', {});
   const link = catalog.links.find(l => l.path === repo); assert.ok(link);
   const workspace = await call('localWorkspace', { repositoryId: link.repositoryId }); assert.equal(workspace.tasks[0].branch, 'main');
@@ -75,7 +76,7 @@ try {
   await call('discardSync', { repositoryId: link.repositoryId, taskId: task.id, planId: stale.id });
   git(['remote', 'rename', 'origin', 'enterprise'], repo); git(['branch', '-m', 'local-main'], repo);
   git(['branch', '--set-upstream-to=enterprise/main'], repo);
-  const renamed = await page.evaluate(async id => { const a = window.__gittogetherAdapter, r = await a.repository(id); await a.dispatcher.removeRepository(r, false); const added = (await a.dispatcher.addRepositories([r.path]))[0]; await a.dispatcher.selectRepository(added); await a.dispatcher.refreshRepository(added); const ws = await a.workspace(id); a.dispatcher.closePopup(); return ws; }, link.repositoryId);
+  const renamed = await page.evaluate(async id => { const a = window.__gittogetherAdapter, r = await a.repository(id); await a.dispatcher.removeRepository(r, false); const added = (await a.dispatcher.addRepositories([r.path]))[0]; const popup = a.store.getState().currentPopup; if (popup?.type === 'InitializeLFS') { await a.dispatcher.installLFSHooks(popup.repositories); a.dispatcher.closePopup(); } await a.dispatcher.selectRepository(added); await a.dispatcher.refreshRepository(added); const ws = await a.workspace(id); a.dispatcher.closePopup(); return ws; }, link.repositoryId);
   task.id = renamed.tasks[0].id;
   const shallow = await call('prepareSync', { repositoryId: link.repositoryId, taskId: task.id, mode: 'latest' });
   const result = await call('applySync', { repositoryId: link.repositoryId, taskId: task.id, planId: shallow.id, operationId: crypto.randomUUID() });

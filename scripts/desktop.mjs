@@ -41,7 +41,7 @@ if (mode === 'setup') {
   run(node, ['scripts/download-runtime.mjs']);
   if (process.platform === 'win32') {
     const installer = join(desktop, 'node_modules/electron-winstaller');
-    run(node, ['script/select-7z-arch.js'], installer);
+    run(process.env.GITTOGETHER_BUILD_NODE || node, ['script/select-7z-arch.js'], installer);
   }
   // Match upstream post-install: the earlier ignore-scripts pass otherwise
   // leaves local native dependencies and notification declarations unbuilt.
