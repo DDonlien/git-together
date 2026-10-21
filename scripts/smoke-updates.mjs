@@ -97,7 +97,13 @@ try {
   const app = await _electron.launch({ executablePath: join(legacyApp, 'Contents/MacOS/gittogether'), args: ['--user-data-dir=' + profile], env: { ...process.env, GITTOGETHER_SMOKE: '1' }, timeout: 60000 });
   try {
     const page = await app.firstWindow(); await page.waitForFunction(() => window.__gittogetherAdapter);
-    const frame = page.frames().find(frame => frame.url().includes('/gittogether/index.html')); assert.ok(frame);
+    let frame;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      frame = page.frames().find(candidate => candidate.url().includes('/gittogether/index.html'));
+      if (frame) break;
+      await pause(100);
+    }
+    assert.ok(frame, 'The installed application did not attach its presentation frame.');
     await frame.waitForFunction(() => window.gittogether?.updates);
     const status = await frame.evaluate(() => window.gittogether.updates.status());
     assert.equal(status.currentVersion, version); assert.notEqual(status.phase, 'unavailable');
