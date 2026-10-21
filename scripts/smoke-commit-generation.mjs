@@ -115,7 +115,8 @@ try {
   await description.fill('用户可编辑正文');
   assert.equal(await description.inputValue(), '用户可编辑正文');
   await frame.getByText('正在生成提交说明…', { exact: true }).waitFor({ state: 'hidden' });
-  assert.equal(await frame.getByRole('textbox', { name: /^Summary：/ }).nth(1).inputValue(), '生成测试提交说明');
+  assert.equal(await summary.inputValue(), '用户手工草稿');
+  assert.equal(await description.inputValue(), '用户可编辑正文');
   assert.equal(await frame.getByRole('button', { name: '提交', exact: true }).isEnabled(), true);
   await page.screenshot({ path: join(output, 'editable-submit.png') });
   await frame.getByRole('button', { name: '取消', exact: true }).last().click();

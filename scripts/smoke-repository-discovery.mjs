@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, realp
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const root = resolve(import.meta.dirname, '..');
 const packagedApp = process.env.GITTOGETHER_SMOKE_APP;
@@ -158,7 +159,13 @@ try {
   await page.screenshot({ path: join(output, 'matched-dashboard.png') });
   const saved = await paths();
   await app.close(); app = await launch(); await attach();
-  const restored = await call('catalog', {});
+  let restored;
+  const expected = [...result.matchedRepositoryIds, bob.id + ':7'];
+  for (let attempt = 0; attempt < 100; attempt++) {
+    restored = await call('catalog', {});
+    if (expected.every(id => restored.links.some(link => link.repositoryId === id))) break;
+    await delay(100);
+  }
   for (const id of [...result.matchedRepositoryIds, bob.id + ':7']) assert.ok(restored.links.some(link => link.repositoryId === id), id);
   assert.deepEqual(restored.links.find(link => link.repositoryId === targets[0].id).worktrees.map(tree => tree.path).sort(), [main, feature, otherClone].sort());
   assert.deepEqual(await paths(), saved);

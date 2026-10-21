@@ -26,15 +26,16 @@ const head = capture('git', ['rev-parse', 'HEAD']);
 assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head, 'Push main before release.');
 let commit = head;
 const macReport = join(destination, 'package-darwin-arm64.json');
-if (existsSync(macReport)) {
-  const previous = json(macReport);
-  if (previous.version === version && previous.build.sourceSha256 === sourceState(root) && !previous.build.sourceDirty) {
-    const changed = capture('git', ['diff', '--name-only', previous.build.sourceCommit, head]).split('\n').filter(Boolean);
+const outBuild = join(root, 'desktop/out/build-info.json');
+for (const previous of [existsSync(macReport) ? json(macReport).build : undefined, existsSync(outBuild) ? json(outBuild) : undefined]) {
+  if (previous?.version === version && previous.channel === 'production' && previous.sourceSha256 === sourceState(root) && !previous.sourceDirty) {
+    const changed = capture('git', ['diff', '--name-only', previous.sourceCommit, head]).split('\n').filter(Boolean);
     const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/package-desktop.mjs', 'scripts/release-updates.test.mjs'].includes(path));
     if (metadataOnly) {
-      run('git', ['merge-base', '--is-ancestor', previous.build.sourceCommit, head]);
-      commit = previous.build.sourceCommit;
+      run('git', ['merge-base', '--is-ancestor', previous.sourceCommit, head]);
+      commit = previous.sourceCommit;
       console.log(`Reusing identical application source ${commit}; pipeline/main is ${head}.`);
+      break;
     }
   }
 }
@@ -51,7 +52,8 @@ const reportValid = path => {
 if (!reportValid(join(destination, 'package-darwin-arm64.json'))) {
   run(process.execPath, ['scripts/desktop.mjs', 'check']);
   run(process.execPath, ['scripts/desktop.mjs', 'test']);
-  run(process.execPath, ['scripts/desktop.mjs', 'release-build']);
+  const previous = existsSync(outBuild) ? json(outBuild) : undefined;
+  if (!previous || previous.sourceCommit !== commit || previous.version !== version || previous.channel !== 'production' || previous.sourceDirty || previous.sourceSha256 !== sourceState(root)) run(process.execPath, ['scripts/desktop.mjs', 'release-build']);
   run(process.execPath, ['scripts/package-desktop.mjs']);
 }
 const mac = json(join(destination, 'package-darwin-arm64.json'));

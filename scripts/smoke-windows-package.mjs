@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 assert.equal(process.platform, 'win32');
-const root = resolve(import.meta.dirname, '..');
+const root = resolve(process.env.GITTOGETHER_SOURCE_ROOT || resolve(import.meta.dirname, '..'));
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const destination = join(root, 'artifacts/releases', version);
 const packageReport = JSON.parse(readFileSync(join(destination, `package-win32-${process.arch}.json`), 'utf8'));

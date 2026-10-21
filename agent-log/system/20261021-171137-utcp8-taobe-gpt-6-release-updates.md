@@ -30,3 +30,6 @@
 
 执行中：实现有效正式构建/发布入口、升级兼容与隔离验证，完成前不声明正式发布。
 - 18:39：Windows x64已完成真实NSIS安装与应用启动，凭据往返夹具使用了Electron评估域中不存在的全局require，改用主模块require；同时补齐iframe导航等待。x86的7z是构建宿主工具，厂商仅发布x64/arm64，选择器改用既有64位JS编译宿主，目标Electron/Rust/原生模块仍为ia32。原版LFS在每次重新注册仓库时都会要求初始化，隔离Mac夹具明确同意初始化后12项Git检查通过；将此同意加入首次注册和重新注册两个位置，不修改原版控制器。变更desktop.mjs使来源摘要变化，最终三平台固定在新提交重建。此前711b的公证凭据10分钟重试超时，未提交新Apple任务；dc38的Accepted只作为预演证据，不用于新成品报告。
+- 18:45—18:52：最终8d9a13f243签名包完成31项隔离成品检查。Submit测试按钮实际范围为一个工作目录，改为在生成结束后核对该目录的手工Summary/Description均未被覆盖；其他worktree并发/取消仍由实际API检查。重启恢复测试等待原版Store异步载入，未调用手工刷新，全部仓库/多worktree关联及文件状态恢复通过。仅修改验收夹具，不改应用。旧已公证快照的0.33.0与Squirrel双更新器预演完整通过，最终包仍须有自己的Accepted后再重跑。
+- Windows39586104451的x64完成NSIS真实安装、原生凭据往返、原版Commit/Push、文件/index保留及production更新桥检查。x86完整编译已成功，打包器26的新版原生解压模块明确不提供ia32构建；让打包器在64位宿主运行，显式选择ia32目标并继续验证应用/Presence/Git的PE架构。CI将发布工具从workflow自身提交检出到ignored artifacts，应用仍从固定8d9a13f243干净检出，包内来源和三平台应用摘要不变；发布入口也可在仅工具/验收/文档差异时复用同源production构建，单独记录pipeline提交，避免把CI修正冒充新的应用源码。
+- 公证非秘密诊断：login钥匙串unlocked=true；Xcode 1.1.3与CommandLineTools 1.1.2的notarytool、默认及显式login查询均返回69/No Keychain password item found。精确profile账号/标签的只读metadata查询也返回-25300，未读取密码、未重新配置/解锁/改ACL。GitHub仓库secrets列表为空，无既有云端公证凭据可复用。此为凭据不可读取，尚未提交最终8d的Apple审核，也不是Apple拒绝该包。
