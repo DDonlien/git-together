@@ -2,9 +2,9 @@ name: iOS source validation
 on:
   push:
     branches: [main]
-    paths: ['ios/**', '.github/workflows/ios-validation.yml']
+    paths: ['ios/**', '!ios/**/*.md', '.github/workflows/ios-validation.yml']
   pull_request:
-    paths: ['ios/**', '.github/workflows/ios-validation.yml']
+    paths: ['ios/**', '!ios/**/*.md', '.github/workflows/ios-validation.yml']
   workflow_dispatch:
 permissions:
   contents: read

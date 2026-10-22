@@ -17,6 +17,20 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         do {
             let handler = Self.lock.withLock { Self.handler! }
+            var request = self.request
+            if request.httpBody == nil, let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while true {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    if count < 0 { throw stream.streamError ?? AppFailure.message("Mock request body could not be read") }
+                    if count == 0 { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+                request.httpBody = data
+            }
             let (status, headers, body) = try handler(request)
             let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: headers)!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
