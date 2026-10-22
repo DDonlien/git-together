@@ -77,7 +77,7 @@ export function layoutCommitGraph(commits: GraphCommit[]): GraphRow[] {
     if (lane < 0) { lane = lanes.indexOf(null); if (lane < 0) lane = lanes.length; lanes[lane] = { id: commit.id, color: nextColor++ % 6 }; }
     const color = lanes[lane]!.color;
     const incomingLocal = lanes[lane]!.local;
-    const local = !!commit.workingTask || !!commit.unpublished;
+    const local = !!commit.workingTask || !!commit.localOnly;
     const before = [...lanes];
     lanes[lane] = null;
     const parents = commit.parents.filter(parent => known.has(parent));

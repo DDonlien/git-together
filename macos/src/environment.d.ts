@@ -4,7 +4,10 @@ import type { PresenceMethod } from './presence-model';
 declare global {
   interface Window {
     gittogether?: {
-      environment: () => Promise<{ nativeGlass: boolean; platform: string }>;
+      backend?: 'github-desktop';
+      presentation?: (surface: 'Preferences' | 'About' | 'Acknowledgements' | 'RepositorySettings', input?: { id: string }) => Promise<void>;
+      activateRepository?: (id: string) => Promise<void>;
+      environment: () => Promise<{ nativeGlass: boolean; platform: string; theme?: 'light' | 'dark' | 'system'; resolvedTheme?: 'light' | 'dark' }>;
       setTheme: (theme: 'light' | 'dark' | 'system') => Promise<void>;
       import: (method: string, input: unknown, requestId?: string) => Promise<unknown>;
       presence?: (method: PresenceMethod, input: unknown) => Promise<unknown>;

@@ -4,7 +4,7 @@ use crate::{
     git, github_token,
     oauth::Authorization,
     operations::{self, SyncPlan},
-    provider::{self, Network, Provider},
+    provider::{self, Network, Provider, ReadState},
     util::{self, text, Result},
 };
 use serde_json::{json, Value};
@@ -21,8 +21,7 @@ use std::{
 use tokio::sync::{watch, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
-#[cfg(test)]
-mod refresh_tests;
+mod branch_issues;
 
 struct State {
     value: Value,
@@ -70,7 +69,7 @@ pub struct Service {
     state: RwLock<State>,
     locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
     serial: Mutex<BTreeMap<String, Arc<Mutex<()>>>>,
-    readers: Mutex<BTreeMap<String, Provider>>,
+    provider_reads: Arc<ReadState>,
     results: Mutex<VecDeque<(String, String, Value)>>,
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
     pub file_state: std::sync::Mutex<crate::files::State>,
@@ -78,6 +77,7 @@ pub struct Service {
     cancelled_graph_preparations: Mutex<VecDeque<(String, i64)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
+    local_branches: Mutex<BTreeMap<String, (String, BTreeMap<String, String>)>>,
     foreground: std::sync::Mutex<BTreeMap<&'static str, usize>>,
     background: std::sync::Mutex<CancellationToken>,
     pub active: AtomicUsize,
@@ -210,7 +210,7 @@ impl Service {
             }),
             locks: Mutex::new(BTreeMap::new()),
             serial: Mutex::new(BTreeMap::new()),
-            readers: Mutex::new(BTreeMap::new()),
+            provider_reads: Arc::new(ReadState::default()),
             results: Mutex::new(VecDeque::new()),
             plans: Mutex::new(BTreeMap::new()),
             file_state: std::sync::Mutex::new(crate::files::State::default()),
@@ -218,6 +218,7 @@ impl Service {
             cancelled_graph_preparations: Mutex::new(VecDeque::new()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
+            local_branches: Mutex::new(BTreeMap::new()),
             active: AtomicUsize::new(0),
             installing: AtomicBool::new(false),
             running_targets: std::sync::Mutex::new(BTreeMap::new()),
@@ -233,7 +234,7 @@ impl Service {
         Ok(service)
     }
     fn catalog_value(&self, state: &State) -> Value {
-        json!({"instanceId":self.instance,"revision":state.revision,"accounts":state.value["accounts"].as_array().unwrap().iter().map(|a|a["account"].clone()).collect::<Vec<_>>(),"repositories":state.value["repositories"],"links":state.value["links"],"credentialStorage":if self.persistent{"encrypted"}else{"session"}})
+        json!({"instanceId":self.instance,"revision":state.revision,"accounts":state.value["accounts"].as_array().unwrap().iter().map(|a|a["account"].clone()).collect::<Vec<_>>(),"repositories":state.value["repositories"],"links":state.value["links"],"credentialStorage":if self.persistent{"encrypted"}else{"session"},"branchIssues":state.value["branchIssues"].as_array().cloned().unwrap_or_default()})
     }
     pub async fn catalog(&self) -> Result<Value> {
         let state = self.state.read().await;
@@ -276,6 +277,9 @@ impl Service {
         }
         let mut next = state.value.clone();
         change(&mut next)?;
+        if next == state.value {
+            return Ok(self.catalog_value(&state));
+        }
         if !valid_state(&next) {
             return Err("账号配置校验失败，原文件未修改。".into());
         }
@@ -327,20 +331,7 @@ impl Service {
         };
         if !repository_accessible(&repository, &link) { return Err("应用账号无法访问该仓库，请检查仓库授权；已有本地目录可选系统认证。".into()); }
         let identity = context_identity(&repository, &link, &saved);
-        let pkey = format!("{id}:{identity}");
-        let mut readers = self.readers.lock().await;
-        let provider = if let Some(p) = readers.get(&pkey) {
-            p.clone()
-        } else {
-            if readers.len() >= 16 {
-                if let Some(k) = readers.keys().next().cloned() {
-                    readers.remove(&k);
-                }
-            }
-            let p = self.account_provider(&saved);
-            readers.insert(pkey, p.clone());
-            p
-        };
+        let provider = self.account_provider(&saved);
         let network =
             Network::new(&repository, &provider)?.for_link(&link).with_diagnostics(self.diagnostics.clone());
         Ok(Context {
@@ -445,6 +436,7 @@ impl Service {
             self.client.clone(),
         )
         .with_authorization(self.reference.clone(), github_token::generation(saved))
+        .with_read_state(self.provider_reads.clone())
         .with_diagnostics(self.diagnostics.clone())
     }
     fn authorization_log(
@@ -770,7 +762,7 @@ impl Service {
             json!({"provider":kind,"host":host}),
             token.clone(),
             self.client.clone(),
-        ).with_diagnostics(self.diagnostics.clone());
+        ).with_read_state(self.provider_reads.clone()).with_diagnostics(self.diagnostics.clone());
         let user = provisional.user(&c).await?;
         let login = util::field(&user, "login", 120)?;
         if login.is_empty() || login.contains('/') || login.chars().any(char::is_whitespace) {
@@ -810,6 +802,7 @@ impl Service {
             account["authorizationExpiresAt"] = json!(e);
         }
         let p = Provider::new(account.clone(), token.clone(), self.client.clone())
+            .with_read_state(self.provider_reads.clone())
             .with_diagnostics(self.diagnostics.clone());
         let repos = match p.repositories(&c, user["id"].as_u64()).await {
             Ok(v) => {
@@ -912,7 +905,7 @@ impl Service {
         let saved = self.saved(&id).await?;
         let mut repos = None;
         if !token.is_empty() {
-            let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone()).with_diagnostics(self.diagnostics.clone());
+            let p = Provider::new(saved["account"].clone(), token.clone(), self.client.clone()).with_read_state(self.provider_reads.clone()).with_diagnostics(self.diagnostics.clone());
             let user = p.user(cancel).await?;
             if !text(&user, "login").eq_ignore_ascii_case(text(&saved["account"], "login")) {
                 return Err("新令牌不属于这个账号，请添加另一个账号。".into());
@@ -967,9 +960,10 @@ impl Service {
                 Ok::<_, String>((task, commits))
             }
             .await;
-            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"error":format!("{e} 工作目录不可用或远端已变化，请重新关联。")}))}
+            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"missing":missing_directory(text(&item,"path")),"error":format!("{e} 工作目录不可用或远端已变化，请重新关联。")}))}
         }
         self.validate(context).await?;
+        self.observe_local_branches(context, &tasks).await;
         Ok(
             json!({"source":"local","complete":tasks.iter().all(|t|t["error"]==""),"tasks":tasks,"commits":git::merge_history(commits)}),
         )
@@ -1036,34 +1030,63 @@ impl Service {
             .await;
         self.validate(context).await?;
         let mut groups: BTreeMap<PathBuf, (PathBuf, Vec<String>)> = BTreeMap::new();
+        let mut errors = Vec::new();
         if !context.link.is_null() {
             for item in roots(&context.link)? {
-                let root = self
-                    .validate_path(&context.repository, text(&item, "path"))
-                    .await?;
-                let t = git::task(&root).await?;
-                if t["branch"] == "Detached HEAD" {
-                    continue;
+                if cancel.is_cancelled() {
+                    return Err("远端检查已取消。".into());
                 }
-                let common = operations::common(&root).await?;
-                groups
-                    .entry(common)
-                    .or_insert_with(|| (root, Vec::new()))
-                    .1
-                    .push(text(&t, "branch").into());
+                if missing_directory(text(&item, "path")) { continue; }
+                let result = async {
+                    let root = self
+                        .validate_path(&context.repository, text(&item, "path"))
+                        .await?;
+                    let task = git::task(&root).await?;
+                    self.observe_local_branches(context, std::slice::from_ref(&task)).await;
+                    if task["branch"] == "Detached HEAD" {
+                        return Ok(None);
+                    }
+                    let common = operations::common(&root).await?;
+                    Ok::<_, String>(Some((common, root, text(&task, "branch").to_owned())))
+                }
+                .await;
+                match result {
+                    Ok(Some((common, root, branch))) => groups
+                        .entry(common)
+                        .or_insert_with(|| (root, Vec::new()))
+                        .1
+                        .push(branch),
+                    Ok(None) => (),
+                    Err(error) => errors.push(format!("{}：{error}", text(&item, "path"))),
+                }
             }
         }
         let mut branches = 0;
         for (_, (root, mut names)) in groups {
+            if cancel.is_cancelled() {
+                return Err("远端检查已取消。".into());
+            }
             names.sort();
             names.dedup();
-            let _guard = self.claim(&root, cancel).await?;
             self.validate(context).await?;
-            context.network.fetch(&root, &names, cancel).await?;
-            branches += names.len();
+            let result = async {
+                let _guard = self.claim(&root, cancel).await?;
+                self.validate(context).await?;
+                let (present, historical) = context.network.branch_presence(&root, &names, cancel).await?;
+                self.observe_branch_presence(context, &names, &present, &historical, false, cancel).await?;
+                context.network.fetch(&root, &present, cancel).await
+            }
+            .await;
+            match result {
+                Ok(heads) => branches += heads.len(),
+                Err(error) => errors.push(format!("{}：{error}", root.display())),
+            }
+        }
+        if cancel.is_cancelled() {
+            return Err("远端检查已取消。".into());
         }
         self.validate(context).await?;
-        Ok(json!({"branches":branches,"checkedAt":util::now()}))
+        Ok(json!({"branches":branches,"checkedAt":util::now(),"errors":errors}))
     }
     async fn previous(&self, id: &str, identity: &str) -> Result<Option<Value>> {
         if let Some((_, i, v)) = self.results.lock().await.iter().find(|(k, _, _)| k == id) {
@@ -1080,6 +1103,44 @@ impl Service {
             results.pop_front();
         }
         results.push_back((id, identity, v));
+    }
+    pub async fn import_response(
+        self: &Arc<Self>,
+        method: &str,
+        input: Value,
+        cancel: CancellationToken,
+    ) -> Value {
+        let result = self.handle(method, input.clone(), cancel).await;
+        // Retry metadata stays separate from the human-readable error. It also
+        // accompanies partial workspaces so successful branch data can publish.
+        let retry_at = if matches!(method, "remoteWorkspace" | "remoteHistory" | "remoteCommit" | "remoteFile" | "refresh") {
+            let saved = {
+                let state = self.state.read().await;
+                let account_id = input["accountId"].as_str().or_else(|| {
+                    state.value["repositories"].as_array()?.iter()
+                        .find(|repository| repository["id"] == input["repositoryId"])?["accountId"].as_str()
+                });
+                state.value["accounts"].as_array().unwrap().iter()
+                    .find(|saved| Some(text(&saved["account"], "id")) == account_id).cloned()
+            };
+            if let Some(saved) = saved { self.account_provider(&saved).retry_at().await } else { None }
+        } else { None };
+        match result {
+            Err(error) => json!({"ok":false,"error":error,"retryAt":retry_at}),
+            Ok(mut value) => {
+                if let Some(retry_at) = retry_at {
+                    if method == "remoteWorkspace" { value["retryAt"] = json!(retry_at); }
+                    if method == "refresh" {
+                        for account in value["accounts"].as_array_mut().unwrap() {
+                            if account["id"] == input["accountId"] {
+                                account["retryAt"] = json!(retry_at);
+                            }
+                        }
+                    }
+                }
+                json!({"ok":true,"value":value})
+            }
+        }
     }
     pub async fn handle(
         self: &Arc<Self>,
@@ -1136,7 +1197,7 @@ impl Service {
             "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
-            "link" | "unlink" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
+            "link" | "unlink" | "dismissBranchIssue" | "matchAccountRepositories" | "setRepositoryAuthentication" => Some("保存仓库关联"),
             _ => None,
         }
         .map(|name| self.foreground(name))
@@ -1191,7 +1252,8 @@ impl Service {
                     .filter(|task| !text(task, "error").is_empty())
                     .count()
             })
-            .unwrap_or(0);
+            .unwrap_or(0)
+            + result.as_ref().ok().and_then(|value| value["errors"].as_array()).map_or(0, Vec::len);
         let mut details = json!({"event":"api","outcome":match &result {
             Err(error) if cancel.is_cancelled() || git::diagnostic_code(error) == "aborted" => "cancelled",
             Err(_) => "failure", Ok(_) if failures > 0 => "partial", Ok(_) => "success"
@@ -1334,6 +1396,7 @@ impl Service {
         match method {
             "catalog" => {
                 util::allowed(input, &[])?;
+                self.update_branch_issues(cancel).await?;
                 return self.catalog().await;
             }
             "openRepository" => {
@@ -1419,7 +1482,7 @@ impl Service {
             "removeAccount" => {
                 util::allowed(input, &["accountId"])?;
                 let id = util::field(input, "accountId", 100)?;
-                return self
+                let catalog = self
                     .mutate(|next| {
                         let ids: Vec<Value> = next["repositories"]
                             .as_array()
@@ -1442,7 +1505,9 @@ impl Service {
                             .retain(|l| !ids.contains(&l["repositoryId"]));
                         Ok(())
                     })
-                    .await;
+                    .await?;
+                self.provider_reads.forget(&format!("{}:", util::digest(&id))).await;
+                return Ok(catalog);
             }
             "matchAccountRepositories" => {
                 util::allowed(input, &["accountId", "path"])?;
@@ -1451,6 +1516,14 @@ impl Service {
             _ => (),
         }
         let id = util::field(input, "repositoryId", 160)?;
+        if method == "fetchRepository" {
+            util::allowed(input, &["repositoryId"])?;
+            if cancel.is_cancelled() {
+                return Err("远端检查已取消。".into());
+            }
+            let context = self.context(&id).await?;
+            return self.fetch(&context, cancel).await;
+        }
         let context = self.context(&id).await?;
         if matches!(method, "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
             return self.graph_dispatch(method, input, &context, cancel).await;
@@ -1567,6 +1640,11 @@ impl Service {
                 return result
                     .map_err(|e| format!("{e} 下载目录已保留：{}，可重新关联。", path.display()));
             }
+            "dismissBranchIssue" => {
+                util::allowed(input, &["repositoryId", "issueId"])?;
+                let issue_id = util::sha(text(input, "issueId"))?;
+                return self.dismiss_branch_issue(&context, &issue_id, cancel).await;
+            }
             "localWorkspace" => {
                 util::allowed(input, &["repositoryId"])?;
                 return self.local_workspace(&context, cancel).await;
@@ -1585,10 +1663,6 @@ impl Service {
                 return Ok(
                     json!({"path":t["path"],"branch":t["branch"],"files":t["files"],"commits":w["commits"]}),
                 );
-            }
-            "fetchRepository" => {
-                util::allowed(input, &["repositoryId"])?;
-                return self.fetch(&context, cancel).await;
             }
             "remoteWorkspace" | "remoteHistory" | "remoteCommit" | "remoteFile" => {
                 let result = match method {
@@ -1642,6 +1716,10 @@ impl Service {
                     }
                 };
                 self.validate(&context).await?;
+                if method == "remoteWorkspace" && result["branchesComplete"] == true {
+                    let names: Vec<_> = result["tasks"].as_array().unwrap().iter().map(|task| text(task, "branch").to_owned()).collect();
+                    self.observe_branch_presence(&context, &names, &names, &[], true, cancel).await?;
+                }
                 return Ok(result);
             }
             "discardSync" => {
@@ -2092,6 +2170,15 @@ fn valid_state(v: &Value) -> bool {
                         }))
             })
         })
+        && branch_issues::valid_state(v)
+}
+fn missing_directory(value: &str) -> bool {
+    let path = Path::new(value);
+    // Keep inaccessible paths and existing symlinks; only an absent directory
+    // is evidence for cleanup after the user dismisses its notice.
+    path.is_absolute()
+        && fs::symlink_metadata(path)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
 }
 fn roots(link: &Value) -> Result<Vec<Value>> {
     if link.is_null() {

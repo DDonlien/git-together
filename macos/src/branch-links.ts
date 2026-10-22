@@ -90,7 +90,7 @@ export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
 export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryState, localState?: LocalRepositoryState, branch?: string, available = true, systemAuthentication = false): GitSignals {
   const tasks = branch ? local.filter(task => task.branch === branch) : local;
   const remoteTasks = branch ? remote.workspace?.tasks.filter(task => task.branch === branch) : remote.workspace?.tasks;
-  const localError = localState?.error || (localState?.workspace ? tasks.find(task => task.error)?.error : '') || '';
+  const localError = localState?.error || (localState?.workspace ? tasks.find(task => task.error && !task.missing)?.error : '') || '';
   const remoteError = !available ? '访问账号目前无权读取此仓库。' : remote.error || remoteTasks?.find(task => task.error)?.error || '';
   const localReading = !!localState?.loading;
   const remoteReading = available && remote.loading;
@@ -114,7 +114,7 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
   result.reconcile.detail = '本地与远端的文件内容尚未完整比较，变更数量未确认。';
   result.clear.detail = '本地与远端的文件内容尚未完整比较，变更数量未确认。';
   const changes = tasks.reduce((sum, task) => sum + task.files.length, 0);
-  result.commit = { ...result.commit, tone: changes ? 'warning' : 'off', ...(changes ? { count: changes } : {}), detail: changes ? `工作目录中有 ${changes} 项未提交更改（含未跟踪文件）。` : !localState?.workspace && tasks.some(task => task.error) ? '本地更改尚未确认。' : '已关联工作目录没有未提交更改。' };
+  result.commit = { ...result.commit, tone: changes ? 'warning' : 'off', ...(changes ? { count: changes } : {}), detail: changes ? `工作目录中有 ${changes} 项未提交更改（含未跟踪文件）。` : tasks.some(task => task.error) ? '本地更改尚未确认。' : '已关联工作目录没有未提交更改。' };
   const commits = new Map([...(remote.workspace?.commits || []), ...(localState?.workspace?.commits || [])].map(commit => [commit.id, commit.parents]));
   // Several directories can share the same branch/HEAD. Traverse each head
   // once, including the common-ancestor check for a proven divergence.

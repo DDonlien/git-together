@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRemoteControl } from './RemoteControlProvider';
-import { controlDeviceOnline, controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
+import { controlDeviceOnline, controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteAction, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
 import { OutlinedTextField } from './material-inputs';
-import { Button, Checkbox, Modal, Notice } from './ui';
+import { Button, Checkbox, IconButton, Modal, Notice, type IconName } from './ui';
+
+const remoteActionIcons: Record<RemoteAction, IconName> = { commit: 'commit', submit: 'upload', abort: 'close', discard: 'clear' };
 
 export function RemoteActionDialog({ device, workspace, action, onClose }: RemoteActionTarget & { onClose: () => void }) {
   const control = useRemoteControl()!;
@@ -84,7 +86,7 @@ export function RemoteActionDialog({ device, workspace, action, onClose }: Remot
     </div>
   </Modal>;
 }
-export function RemoteWorkspaceActions({ device, workspace, onAction, label, compact = false }: { device: ControlDevice; workspace: ControlWorkspace; onAction: (target: RemoteActionTarget) => void; label?: string; compact?: boolean }) {
+export function RemoteWorkspaceActions({ device, workspace, onAction, label, compact = false, actionCounts }: { device: ControlDevice; workspace: ControlWorkspace; onAction: (target: RemoteActionTarget) => void; label?: string; compact?: boolean; actionCounts?: Partial<Record<RemoteAction, number>> }) {
   const control = useRemoteControl();
   const status = control?.status;
   const [error, setError] = useState('');
@@ -106,8 +108,18 @@ export function RemoteWorkspaceActions({ device, workspace, onAction, label, com
     catch (problem) { setError(problem instanceof Error ? problem.message : '远端请求未完成。'); }
   }
   return <div className={'remote-target' + (compact ? ' presence-remote-target' : '')}>
-    <div className="remote-target-heading"><strong>{heading}</strong><small>{online ? '在线' : '离线'}</small></div>
-    <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => <Button key={action} aria-label={`${heading} · ${remoteActionLabels[action]}`} disabled={control.busy || !online || (pending && action !== 'abort')} onClick={() => onAction({ device, workspace, action })}>{remoteActionLabels[action]}</Button>)}</div>
+    {!compact && <div className="remote-target-heading"><strong>{heading}</strong><small>{online ? '在线' : '离线'}</small></div>}
+    {compact && label && <span className="presence-remote-workspace-label">{label}</span>}
+    <div className={'remote-target-actions' + (pending ? ' is-pending' : '')}>{workspace.actions.map(action => {
+      const count = actionCounts?.[action];
+      const countDescription = count ? `，${count} ${action === 'submit' ? '个未推送提交' : action === 'abort' ? '项进行中操作' : '个未提交文件'}` : '';
+      const actionLabel = `${heading} · ${remoteActionLabels[action]}${countDescription}`;
+      const buttonProps = { disabled: control.busy || !online || (pending && action !== 'abort'), onClick: () => onAction({ device, workspace, action }) };
+      const badge = count !== undefined && count > 0 && <span className="presence-action-count" aria-hidden="true">{count}</span>;
+      return compact
+        ? <IconButton key={action} className="presence-remote-action" icon={remoteActionIcons[action]} label={actionLabel} {...buttonProps}>{badge}</IconButton>
+        : <Button key={action} aria-label={actionLabel} {...buttonProps}><span>{remoteActionLabels[action]}</span>{badge}</Button>;
+    })}</div>
     {latest && <div className={'remote-job-result' + (latest.error ? ' is-error' : '')} role="status"><span>{controlJobLabel(latest)}</span>
       {latest.result?.warning && <small>{latest.result.warning}</small>}
       {retry?.result?.phase === 'committed' && retry.action === 'submit' && <Button disabled={control.busy || !online || pending} onClick={() => void followup(retry, 'retryPush')}>重试推送</Button>}

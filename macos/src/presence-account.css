@@ -1,4 +1,4 @@
 .presence-account-settings { display: grid; gap: 8px; border-top: 1px solid var(--line); }
 .presence-account-settings .setting-row { border-bottom: 0; }
-.presence-account-settings .setting-row:has(small) { min-height: 72px; }
+.presence-account-settings .setting-row:has(small) { min-height: 56px; }
 .presence-account-form { display: grid; gap: 12px; max-width: 520px; padding-block: 8px; }

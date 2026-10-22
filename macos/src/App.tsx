@@ -22,9 +22,9 @@ type AppLocation = { page: AppPage; repoId: string; commitTask: string | null; g
 const sameLocation = (left: AppLocation, right: AppLocation) => left.page === right.page && left.repoId === right.repoId && left.commitTask === right.commitTask && left.globalSearch === right.globalSearch;
 
 export function App() {
-  const controller = useWorkspace();
   const [page, setPage] = useState<AppPage>('dashboard');
   const [repoId, setRepoId] = useState('');
+  const controller = useWorkspace(page === 'repo' ? repoId : '');
   const [commitTask, setCommitTask] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
   const routeHistory = useRef<AppLocation[]>([{ page: 'dashboard', repoId: '', commitTask: null, globalSearch: '' }]);
@@ -35,6 +35,7 @@ export function App() {
   const [configuring, setConfiguring] = useState<{ repository: RemoteRepository; branch?: string } | null>(null);
   const [downloading, setDownloading] = useState<{ repository: RemoteRepository; branch: string } | null>(null);
   const [bridgeError, setBridgeError] = useState('');
+  const [desktopTheme, setDesktopTheme] = useState<'light' | 'dark'>();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const searchRef = useRef<HTMLElement>(null);
   const repository = controller.catalog.repositories.find(r => r.id === repoId);
@@ -68,6 +69,7 @@ export function App() {
   const showDashboard = () => navigate({ page: 'dashboard', repoId: '', commitTask: null, globalSearch: '' });
   const showSettings = () => navigate({ page: 'settings', repoId: '', commitTask: null, globalSearch: '' });
   const openRepository = (id: string, taskId?: string) => {
+    void window.gittogether?.activateRepository?.(id).catch(problem => setBridgeError(problem instanceof Error ? problem.message : '无法打开仓库。'));
     const target = controller.catalog.repositories.find(item => item.id === id);
     if (target && controller.preferences.collapsedAccounts.includes(target.accountId)) {
       controller.updatePreferences({ collapsedAccounts: controller.preferences.collapsedAccounts.filter(accountId => accountId !== target.accountId) });
@@ -102,7 +104,7 @@ export function App() {
     let cancelled = false;
     if (window.gittogether) {
       document.documentElement.dataset.desktop = 'true';
-      void window.gittogether.environment().catch(() => { if (!cancelled) setBridgeError('桌面桥接不可用，部分本地操作可能无法使用。'); });
+      void window.gittogether.environment().then(environment => { if (!cancelled && window.gittogether?.backend === 'github-desktop') { setDesktopTheme(environment.resolvedTheme); if (environment.theme) controller.updatePreferences({ theme: environment.theme }); } }).catch(() => { if (!cancelled) setBridgeError('桌面桥接不可用，部分本地操作可能无法使用。'); });
     }
     return () => { cancelled = true; };
   }, []);
@@ -113,16 +115,32 @@ export function App() {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
       const theme = controller.preferences.theme;
-      document.documentElement.dataset.theme = theme === 'system' ? media.matches ? 'dark' : 'light' : theme;
-      void window.gittogether?.setTheme(theme).catch(() => setBridgeError('无法同步桌面外观，网页外观仍可使用。'));
+      document.documentElement.dataset.theme = desktopTheme || (theme === 'system' ? media.matches ? 'dark' : 'light' : theme);
     };
     apply(); media.addEventListener('change', apply); return () => media.removeEventListener('change', apply);
-  }, [controller.preferences.theme]);
+  }, [controller.preferences.theme, desktopTheme]);
+  useEffect(() => { void window.gittogether?.setTheme(controller.preferences.theme).catch(() => setBridgeError('无法同步桌面外观，网页外观仍可使用。')); }, [controller.preferences.theme]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !configuring && !downloading) { event.preventDefault(); searchRef.current?.focus(); } };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [configuring, downloading]);
-  return <MaterialProvider appearance={controller.preferences.theme}><PresenceProvider><RemoteControlProvider><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><RepositoryOperationProvider sessionId={controller.catalog.instanceId} pauseRepositoryRefresh={controller.pauseRepositoryRefresh}><div className="app-frame">
+  const nativeNavigation = useRef<(event: Event) => void>(() => {});
+  nativeNavigation.current = (event: Event) => {
+    const detail = (event as CustomEvent<{ method: string; theme?: 'light' | 'dark' | 'system'; resolvedTheme?: 'light' | 'dark' }>).detail;
+    const method = detail.method;
+    if (method === 'theme' && detail.theme) { controller.updatePreferences({ theme: detail.theme }); setDesktopTheme(detail.resolvedTheme); return; }
+    if (method === 'find-text') { searchRef.current?.focus(); return; }
+    if (repository) {
+      openRepository(repository.id);
+      if (method === 'go-to-commit-message' || method === 'show-changes') requestAnimationFrame(() => document.querySelector<HTMLElement>('md-outlined-text-field')?.focus());
+    }
+  };
+  useEffect(() => {
+    const listener = (event: Event) => nativeNavigation.current(event);
+    window.addEventListener('gittogether:presentation', listener);
+    return () => window.removeEventListener('gittogether:presentation', listener);
+  }, []);
+  return <MaterialProvider appearance={desktopTheme || controller.preferences.theme}><PresenceProvider><RemoteControlProvider><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><RepositoryOperationProvider sessionId={controller.catalog.instanceId}><div className="app-frame">
     <WindowChrome native={!!window.gittogether} />
     <div className="app-body">
     <aside id="global-sidebar" className={`global-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}><SidebarHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(value => !value)} /><nav className="global-nav"><button className={`nav-item sidebar-permanent ${page === 'dashboard' ? 'active' : ''}`} title="Dashboard" aria-label="Dashboard" onClick={showDashboard}><span className="sidebar-button-icon" aria-hidden="true"><Icon name="dashboard" size={19} /></span><span>Dashboard</span></button></nav>
@@ -132,7 +150,7 @@ export function App() {
     <div className="app-content">
       {!controller.updates.installing && controller.error && <Notice kind="error">{controller.error}<Button variant="quiet" disabled={controller.loading} onClick={() => { if (controller.needsReload) location.reload(); else void controller.reload(); }}>{controller.needsReload ? '刷新页面' : controller.loading ? '检查连接…' : '重新连接'}</Button></Notice>}{controller.storageError && <Notice kind="error">{controller.storageError}</Notice>}{bridgeError && <Notice kind="info">{bridgeError}</Notice>}
       {page === 'dashboard' && <Dashboard controller={controller} onOpen={openRepository} onSettings={showSettings} onConfigure={(repository, branch) => setConfiguring({ repository, branch })} onDownload={(repository, branch) => setDownloading({ repository, branch })} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshRepositories} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
-      {page === 'repo' && repository && account && <RepositoryView key={`${controller.catalog.instanceId}:${repoId}:${localPath || ''}`} initialCommitTask={commitTask} repository={repository} account={account} localPath={localPath} localLink={localLink} hiddenEntries={hiddenEntries} manualHiddenEntries={new Set(controller.preferences.hiddenEntries || [])} onToggleHidden={() => { const key = hiddenEntryKey(repoId); controller.updatePreferences(toggleBranchVisibility(controller.preferences, key, hiddenEntries.has(key))); }} localState={controller.localStates[repoId]} remoteState={remote.state} readRemoteCommit={remote.readCommit} submitCommit={controller.submitCommit} pushCommit={controller.pushCommit} applySync={controller.applySync} writeGraph={controller.writeGraph} onLocalFilesChanged={() => controller.refreshLocal(repoId)} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} onConfigure={() => setConfiguring({ repository })} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshRepositories} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
+      {page === 'repo' && repository && account && <RepositoryView key={`${controller.catalog.instanceId}:${repoId}:${localPath || ''}`} initialCommitTask={commitTask} repository={repository} account={account} localPath={localPath} localLink={localLink} branchIssues={controller.catalog.branchIssues?.filter(issue => issue.repositoryId === repoId)} onDismissIssue={issueId => controller.dismissBranchIssue(repoId, issueId)} hiddenEntries={hiddenEntries} manualHiddenEntries={new Set(controller.preferences.hiddenEntries || [])} onToggleHidden={() => { const key = hiddenEntryKey(repoId); controller.updatePreferences(toggleBranchVisibility(controller.preferences, key, hiddenEntries.has(key))); }} localState={controller.localStates[repoId]} remoteState={remote.state} readRemoteCommit={remote.readCommit} submitCommit={controller.submitCommit} pushCommit={controller.pushCommit} applySync={controller.applySync} writeGraph={controller.writeGraph} onLocalFilesChanged={() => controller.refreshLocal(repoId)} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} onConfigure={() => setConfiguring({ repository })} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshRepositories} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
       {page === 'settings' && <SettingsView controller={controller} onDashboard={showDashboard} />}
     </div></div>{configuring && <LocalRepositoryModal key={`${configuring.repository.id}:${configuring.branch || ''}`} repository={controller.catalog.repositories.find(r => r.id === configuring.repository.id) || configuring.repository} branch={configuring.branch} controller={controller} onClose={() => setConfiguring(null)} />}{downloading && <BranchDownloadModal key={`${downloading.repository.id}:${downloading.branch}`} repository={controller.catalog.repositories.find(r => r.id === downloading.repository.id) || downloading.repository} branch={downloading.branch} controller={controller} onClose={() => setDownloading(null)} />}
   </div></RepositoryOperationProvider></RepositoryActionDraftsProvider></RemoteControlProvider></PresenceProvider></MaterialProvider>;

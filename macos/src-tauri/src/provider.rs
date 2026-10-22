@@ -10,10 +10,14 @@ use std::{
     sync::{Arc, Weak},
     time::Duration,
 };
-use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
+mod read_state;
+pub use read_state::ReadState;
+
+#[cfg(test)]
+use tokio::sync::Mutex;
 #[cfg(test)]
 mod tests;
 
@@ -111,7 +115,7 @@ pub struct Provider {
     authorization: Option<(Weak<crate::service::Service>, String)>,
     diagnostics: Option<crate::diagnostics::Diagnostics>,
     client: Client,
-    cache: Arc<Mutex<BTreeMap<String, Value>>>,
+    read_state: Arc<ReadState>,
 }
 impl Provider {
     pub fn new(account: Value, token: String, client: Client) -> Self {
@@ -121,7 +125,7 @@ impl Provider {
             authorization: None,
             diagnostics: None,
             client,
-            cache: Arc::new(Mutex::new(BTreeMap::new())),
+            read_state: Arc::new(ReadState::default()),
         }
     }
     pub fn kind(&self) -> &str {
@@ -140,6 +144,28 @@ impl Provider {
     pub fn with_diagnostics(mut self, diagnostics: crate::diagnostics::Diagnostics) -> Self {
         self.diagnostics = Some(diagnostics);
         self
+    }
+    pub fn with_read_state(mut self, state: Arc<ReadState>) -> Self {
+        self.read_state = state;
+        self
+    }
+    fn budget_key(&self) -> String {
+        // Explicit reauthorization and token rotation must retain the same
+        // verified user's quota. Provisional identity reads use their token.
+        let identity = if text(&self.account, "login").is_empty() {
+            util::digest(&self.token)
+        } else {
+            text(&self.account, "login").to_ascii_lowercase()
+        };
+        util::digest(format!("{}:{identity}", self.api()))
+    }
+    fn cache_namespace(&self) -> String {
+        let generation = self.authorization.as_ref().map(|(_, generation)| generation.clone())
+            .unwrap_or_else(|| util::digest(&self.token));
+        format!("{}:{}:", util::digest(text(&self.account, "id")), util::digest(format!("{}:{}:{generation}", self.api(), text(&self.account, "login"))))
+    }
+    pub async fn retry_at(&self) -> Option<i64> {
+        self.read_state.retry_at(&self.budget_key()).await
     }
     async fn access_token(
         &self,
@@ -160,14 +186,10 @@ impl Provider {
             None => Ok(self.token.clone()),
         }
     }
-    fn http_failure(&self, status: u16, headers: &HeaderMap) {
+    fn http_failure(&self, status: u16, rate_limited: bool, retry_at: Option<i64>) {
         if let Some(diagnostics) = &self.diagnostics {
-            let rate_limited = status == 429
-                || status == 403
-                    && headers
-                        .get("x-ratelimit-remaining")
-                        .is_some_and(|remaining| remaining == "0");
             let mut record = json!({"event":"provider-read","outcome":"failure","provider":self.kind(),"endpoint":"other","httpStatus":status,"code":if rate_limited{"rate-limit"}else if status==401||status==403{"permission"}else{"connection"},"resource":&util::digest(text(&self.account,"id"))[..24]});
+            if let Some(until) = retry_at { record["retryMs"] = json!((until - util::now()).max(0)); }
             if status == 401 && self.kind() == "github" {
                 record["event"] = json!("authorization");
                 record["authorizationStage"] = json!("token-rejected");
@@ -234,9 +256,14 @@ impl Provider {
             url.query_pairs_mut()
                 .append_pair("access_token", &self.token);
         }
+        let cache_key = format!("{}http:{}", self.cache_namespace(), util::digest(format!("{format}:{url}")));
         let operation = async {
             let mut token = self.access_token(None, cancel).await?;
             for attempt in 0..2 {
+                let mut permit = self.read_state.acquire(&self.budget_key(), cancel).await?;
+                // Re-read after queue admission: an earlier request may have
+                // filled the conditional cache while this one was waiting.
+                let cached = if format != "status" { self.read_state.cached(&cache_key).await } else { None };
                 let mut request = self
                     .client
                     .get(url.clone())
@@ -261,11 +288,29 @@ impl Provider {
                 if github(self.kind()) {
                     request = request.header("X-GitHub-Api-Version", "2022-11-28");
                 }
+                if let Some((_, Some(headers))) = &cached {
+                    if let Some(etag) = headers.get("etag") {
+                        request = request.header("If-None-Match", etag);
+                    } else if let Some(modified) = headers.get("last-modified") {
+                        request = request.header("If-Modified-Since", modified);
+                    }
+                }
                 let mut response = request.send().await.map_err(transport_error)?;
                 let status = response.status().as_u16();
                 let headers = response.headers().clone();
-                if !response.status().is_success() {
-                    self.http_failure(status, &headers);
+                let mut error_body = Vec::new();
+                if status == 403 && !read_state::rate_limited(status, &headers, &[]) {
+                    while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                        if error_body.len() + chunk.len() > 65_536 { break; }
+                        error_body.extend_from_slice(&chunk);
+                    }
+                }
+                let limited = read_state::rate_limited(status, &headers, &error_body);
+                permit.observe(status, &headers, limited);
+                let retry_at = if limited { self.retry_at().await } else { None };
+                if status >= 400 { self.http_failure(status, limited, retry_at); }
+                else if let Some(diagnostics) = &self.diagnostics {
+                    diagnostics.record(&json!({"event":"provider-read","outcome":"success","provider":self.kind(),"endpoint":"other","httpStatus":status,"resource":&util::digest(text(&self.account,"id"))[..24]}), false);
                 }
                 if github(self.kind()) && headers.get("x-github-sso").and_then(|v| v.to_str().ok()).is_some_and(|v| v.starts_with("required") || v.starts_with("partial-results")) {
                     return Err("企业要求SSO授权，当前仓库范围未完整开放。请先在企业网站完成SSO登录并授权令牌，或重新进行网页授权。".into());
@@ -278,18 +323,19 @@ impl Provider {
                     }
                     return Err("令牌已失效或被撤销（HTTP 401），请在设置中重新连接账号。".into());
                 }
-                if status == 429
-                    || (status == 403
-                        && headers
-                            .get("x-ratelimit-remaining")
-                            .is_some_and(|v| v == "0"))
-                {
-                    return Err(format!(
-                        "远端访问频率受限（HTTP {status}）；保留上次结果，等待下次检查。"
-                    ));
+                if limited {
+                    return Err(read_state::cooldown_message(retry_at.unwrap(), Some(status)));
                 }
                 if status == 403 {
                     return Err("远端拒绝读取（HTTP 403）；请检查读取权限与服务访问限制。".into());
+                }
+                if status == 304 {
+                    let Some((value, Some(mut retained))) = cached else {
+                        return Err("远端返回304但对应账号缓存已不可用，请稍后重新检查。".into());
+                    };
+                    retained.extend(headers);
+                    self.read_state.remember(cache_key.clone(), value.clone(), Some(retained.clone())).await;
+                    return Ok((value, retained));
                 }
                 if !response.status().is_success() {
                     return Err(format!(
@@ -314,6 +360,9 @@ impl Provider {
                 } else {
                     serde_json::from_slice(&bytes).map_err(|_| "账号服务返回了无效 JSON 数据。")?
                 };
+                if headers.contains_key("etag") || headers.contains_key("last-modified") {
+                    self.read_state.remember(cache_key.clone(), value.clone(), Some(headers.clone())).await;
+                }
                 return Ok((value, headers));
             }
             unreachable!("the bounded HTTP retry returns on its final attempt")
@@ -659,16 +708,10 @@ impl Provider {
         Ok(result)
     }
     async fn cached(&self, key: &str) -> Option<Value> {
-        self.cache.lock().await.get(key).cloned()
+        self.read_state.cached(&format!("{}object:{key}", self.cache_namespace())).await.map(|(value, _)| value)
     }
     async fn remember(&self, key: String, v: Value) -> Value {
-        let mut cache = self.cache.lock().await;
-        if cache.len() >= 128 {
-            if let Some(k) = cache.keys().next().cloned() {
-                cache.remove(&k);
-            }
-        }
-        cache.insert(key, v.clone());
+        self.read_state.remember(format!("{}object:{key}", self.cache_namespace()), v.clone(), None).await;
         v
     }
     pub async fn history_page(
@@ -1459,7 +1502,7 @@ impl Provider {
                 .iter()
                 .all(|t| t["error"] == "" && t["treeComplete"] == true);
         Ok(
-            json!({"source":"remote","checkedAt":util::now(),"tasks":tasks,"commits":git::merge_history(commits),"complete":complete,"warnings":warnings}),
+            json!({"source":"remote","checkedAt":util::now(),"tasks":tasks,"commits":git::merge_history(commits),"complete":complete,"branchesComplete":!limited,"warnings":warnings}),
         )
     }
     pub async fn commit(
@@ -2090,12 +2133,7 @@ impl Network {
         )
         .await
     }
-    pub async fn fetch(
-        &self,
-        root: &std::path::Path,
-        branches: &[String],
-        cancel: &CancellationToken,
-    ) -> Result<Vec<String>> {
+    async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
         let names = git::read(root, &["remote"]).await?;
         let mut remote = if self.system_auth { system_remote(root, &self.url, false).await?.0 } else { String::new() };
         if !self.system_auth {
@@ -2110,6 +2148,46 @@ impl Network {
         if remote.is_empty() {
             return Err("工作目录的远端已经变化，请重新关联。".into());
         }
+        Ok(remote)
+    }
+    pub async fn branch_presence(
+        &self,
+        root: &std::path::Path,
+        branches: &[String],
+        cancel: &CancellationToken,
+    ) -> Result<(Vec<String>, Vec<String>)> {
+        let remote = self.fetch_remote(root).await?;
+        let mut refs = Vec::new();
+        for branch in branches {
+            if branch.starts_with('-') || git::read(root, &["check-ref-format", "--branch", branch]).await?.trim() != branch {
+                return Err("分支名称无效。".into());
+            }
+            refs.push(format!("refs/heads/{branch}"));
+        }
+        if refs.is_empty() { return Ok((Vec::new(), Vec::new())); }
+        let mut args = vec!["ls-remote", "--heads", self.url.as_str()];
+        args.extend(refs.iter().map(String::as_str));
+        let output = self.run(root, &args, Some(cancel.clone()), false, false, 120).await?;
+        let mut present = std::collections::BTreeSet::new();
+        for line in output.lines() {
+            let (sha, name) = line.split_once('\t').ok_or("远端分支状态格式无效。")?;
+            if !util::valid_sha(sha) { return Err("远端分支状态格式无效。".into()); }
+            if let Some(index) = refs.iter().position(|reference| reference == name) { present.insert(branches[index].clone()); }
+        }
+        let prefix = format!("refs/remotes/{remote}/");
+        let tracking = git::read(root, &["for-each-ref", "--format=%(refname)", &prefix]).await?;
+        // Only queried branches contribute historical evidence. Dismissed
+        // associations must not reappear from unrelated stale tracking refs.
+        let historical = branches.iter().filter(|branch| tracking.lines().any(|name| name.strip_prefix(&prefix) == Some(branch.as_str()))).cloned().collect();
+        Ok((present.into_iter().collect(), historical))
+    }
+    pub async fn fetch(
+        &self,
+        root: &std::path::Path,
+        branches: &[String],
+        cancel: &CancellationToken,
+    ) -> Result<Vec<String>> {
+        let remote = self.fetch_remote(root).await?;
         let mut refs = Vec::new();
         for b in branches {
             if b.starts_with('-')

@@ -150,8 +150,7 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   return <Modal title={mode === 'commit' ? 'Commit' : mode === 'push' ? 'Push' : 'Submit'} onClose={close} visible={visible} onCollapse={onCollapse}>
     <div className="repository-action-dialog">
       <p className="repository-submit-count">{included.length} 个工作目录{mode !== 'push' && ` · 已选 ${entries.reduce((count, entry) => count + entry.paths.length, 0)} / ${entries.reduce((count, entry) => count + entry.task.files.length, 0)} 个更改`}</p>
-      {generating && <p className="repository-submit-generating" role="status"><Icon name="spinner" className="spin" size={16} />正在生成提交说明 · {generatingEntry!.repositoryName} · {generatingEntry!.task.branch}…</p>}
-      {busy && <p className="repository-submit-generating" role="status">{phase === 'push' ? '正在推送' : '正在创建本地提交'} · {activeTarget}</p>}
+      {generating && <p className="repository-submit-generating" role="status"><Icon name="spinner" className="spin" size={16} />正在生成提交说明…</p>}
       <div className="repository-submit-content">
         {entries.map((entry, index) => <section key={`${entry.repositoryId}:${entry.task.id}`} aria-label={`${entry.repositoryName} · ${entry.task.branch}`}>
           <h3><Icon name="branch" size={15} /><span>{entry.repositoryName} · {entry.task.branch}</span></h3>

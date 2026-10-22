@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { connectAfterServiceCheck, importAPI, LocalServiceError, verifyServiceVersion } from './import-api';
+import { connectAfterServiceCheck, importAPI, LocalServiceError, RemoteReadError, verifyServiceVersion } from './import-api';
 import { emptyCatalog, isCatalog, isRecord, latestCatalog, type ApiInputs, type ApiOutputs, type Catalog, type ConnectInput, type LocalSnapshot, type ServiceInfo, type UpdateAccountInput } from './import-model';
 import { syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
@@ -13,8 +13,8 @@ import { branchHiddenEntries, type BranchBehaviorPreferences } from './branch-be
 import { linkedTasks } from './branch-links';
 import { usesSystemAuthentication } from './repository-auth-model';
 
-type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[] } & BranchBehaviorPreferences;
-const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], unworkedBranchBehavior: 'default' };
+type Preferences = { theme: 'light' | 'dark' | 'system'; reducedGlass: boolean; collapsedAccounts: string[]; pinnedRepositories: string[]; repositoryLastUsed: Record<string, number>; accountDisplayNames: Record<string, string> } & BranchBehaviorPreferences;
+const defaults: Preferences = { theme: 'system', reducedGlass: false, collapsedAccounts: [], pinnedRepositories: [], repositoryLastUsed: {}, accountDisplayNames: {}, unworkedBranchBehavior: 'default' };
 const preferenceKey = 'gittogether.preferences.v2';
 const writePrefix = (repositoryId: string) => `write:${JSON.stringify(repositoryId)}:`;
 const sameLocalDirectories = (left: string | undefined, right: string) => !!left && JSON.stringify(JSON.parse(left).slice(0, 4)) === JSON.stringify(JSON.parse(right).slice(0, 4));
@@ -22,7 +22,7 @@ export function repositoryActionBusy(busy: Record<string, boolean>, repositoryId
   return !!busy[repositoryId] && !Object.keys(busy).some(key => key.startsWith(writePrefix(repositoryId)) && busy[key]);
 }
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; loading?: boolean; error: string; checkedAt: number }
-export function useWorkspace() {
+export function useWorkspace(activeRepositoryId = '') {
   const updates = useUpdates();
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const catalogRef = useRef<Catalog>(emptyCatalog);
@@ -59,17 +59,38 @@ export function useWorkspace() {
       if (!isRecord(saved) || !['light', 'dark', 'system'].includes(String(saved.theme)) || typeof saved.reducedGlass !== 'boolean' || !Array.isArray(saved.collapsedAccounts) || !saved.collapsedAccounts.every(a => typeof a === 'string') || (saved.hiddenEntries !== undefined && (!Array.isArray(saved.hiddenEntries) || !saved.hiddenEntries.every(entry => typeof entry === 'string')))) throw new Error('外观偏好格式无效，已使用默认外观；原记录尚未覆盖。');
       if ((saved.unworkedBranchBehavior !== undefined && !['default', 'hide'].includes(String(saved.unworkedBranchBehavior))) || (saved.shownBranches !== undefined && (!Array.isArray(saved.shownBranches) || !saved.shownBranches.every(entry => typeof entry === 'string')))) throw new Error('仓库行为偏好格式无效，已使用默认设置；原记录尚未覆盖。');
       if (saved.pinnedRepositories !== undefined && (!Array.isArray(saved.pinnedRepositories) || !saved.pinnedRepositories.every(id => typeof id === 'string'))) throw new Error('仓库置顶偏好格式无效，已使用默认设置；原记录尚未覆盖。');
+      if (saved.accountDisplayNames !== undefined && (!isRecord(saved.accountDisplayNames) || Object.values(saved.accountDisplayNames).some(name => typeof name !== 'string' || !name.trim() || name.length > 120))) throw new Error('账号显示名称偏好格式无效，已使用默认设置；原记录尚未覆盖。');
+      if (saved.repositoryLastUsed !== undefined && (!isRecord(saved.repositoryLastUsed) || !Object.values(saved.repositoryLastUsed).every(time => typeof time === 'number' && Number.isFinite(time) && time >= 0))) throw new Error('仓库使用时间格式无效，已使用默认设置；原记录尚未覆盖。');
       return { ...defaults, ...saved } as Preferences;
     } catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); queueMicrotask(() => setStorageError(problem instanceof Error ? problem.message : '无法读取外观设置。')); return defaults; }
   });
+  const markRepositoryUsed = useCallback((repositoryId: string) => {
+    const now = Date.now();
+    preferencesChanged.current = true;
+    setPreferences(current => {
+      if (now - (current.repositoryLastUsed[repositoryId] ?? 0) < 60_000) return current;
+      const ids = new Set(catalogRef.current.repositories.map(repository => repository.id));
+      if (!ids.has(repositoryId)) return current;
+      const retained = Object.fromEntries(Object.entries(current.repositoryLastUsed).filter(([id]) => ids.has(id)));
+      return { ...current, repositoryLastUsed: { ...retained, [repositoryId]: now } };
+    });
+  }, []);
+  useEffect(() => {
+    if (!activeRepositoryId) return;
+    markRepositoryUsed(activeRepositoryId);
+    return () => markRepositoryUsed(activeRepositoryId);
+  }, [activeRepositoryId, markRepositoryUsed]);
+  const accountDisplayNames = useRef(preferences.accountDisplayNames);
+  accountDisplayNames.current = preferences.accountDisplayNames;
   const accept = useCallback((next: Catalog) => {
     if (serviceRef.current && next.instanceId !== serviceRef.current.instanceId) throw new LocalServiceError('session', '本地账号服务已重启，请重新连接检查账号。');
+    const displayed = Object.keys(accountDisplayNames.current).length ? { ...next, accounts: next.accounts.map(account => accountDisplayNames.current[account.id] ? { ...account, name: accountDisplayNames.current[account.id] } : account) } : next;
     if (mounted.current) {
       const current = catalogRef.current;
-      const latest = latestCatalog(current, next, serviceRef.current?.instanceId || next.instanceId);
+      const latest = latestCatalog(current, displayed, serviceRef.current?.instanceId || displayed.instanceId);
       if (latest !== current && JSON.stringify(latest) !== JSON.stringify(current)) { catalogRef.current = latest; setCatalog(latest); }
     }
-    return next;
+    return displayed;
   }, []);
   const ensureService = useCallback(async () => {
     if (updates.installingRef.current) throw new DOMException('应用正在重启更新。', 'AbortError');
@@ -116,15 +137,15 @@ export function useWorkspace() {
     },
     onError: (_resource, problem) => { if (!updates.installingRef.current) setError(problem instanceof Error ? problem.message : '自动检查本地连接失败，正在重试。'); },
   });
-  useAutoRefresh({ resources: monitoring ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.remote, initialDelayMs: syncIntervals.remote,
+  useAutoRefresh({ resources: monitoring && window.gittogether?.backend !== 'github-desktop' ? catalog.accounts.map(account => JSON.stringify([catalog.instanceId, account.id])) : [], intervalMs: syncIntervals.catalog, initialDelayMs: syncIntervals.catalog, maxBackoffMs: syncIntervals.remoteMaxBackoff,
     run: async (resource, signal) => {
       const [instanceId, accountId] = JSON.parse(resource) as [string, string];
       if (instanceId !== catalogRef.current.instanceId || running.current.has(accountId)) return;
       const next = await importAPI('refresh', { accountId }, signal);
       if (signal.aborted || instanceId !== catalogRef.current.instanceId) return;
       accept(next);
-      const failure = next.accounts.find(account => account.id === accountId)?.error;
-      if (failure) throw new Error(failure); // Account errors retain their last successful directory and back off independently.
+      const account = next.accounts.find(account => account.id === accountId);
+      if (account?.error || (account?.retryAt ?? 0) > Date.now()) throw new RemoteReadError(account?.error || '账号远端请求正在冷却，恢复后继续检查。', account?.retryAt ?? 0);
     },
     onError: (_resource, problem) => { if (!updates.installingRef.current && problem instanceof LocalServiceError) setError(problem.message); },
   });
@@ -160,9 +181,10 @@ export function useWorkspace() {
           if (previous !== undefined && previous !== next) changed = true;
         }
         localChanges.current.set(resource, nextChanges);
-        // The resumed remote check already covers changes made by the operation.
-        const refreshedOperation = refreshBaselines.current.delete(resource);
-        if (changed && !refreshedOperation) setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
+        if (changed) {
+          markRepositoryUsed(repositoryId);
+          setChangeVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
+        }
         setLocalStates(current => {
           const previous = current[repositoryId];
           const retained = preserveLocalWorkspace(previous && sameLocalDirectories(previous.mappingKey, resource) ? previous.workspace : undefined, workspace);
@@ -200,7 +222,7 @@ export function useWorkspace() {
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id)), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched, new Set(catalog.links.filter(usesSystemAuthentication).map(link => link.repositoryId)));
+  const remoteStates = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id) || preferences.repositoryLastUsed[repository.id] !== undefined || preferences.pinnedRepositories.includes(repository.id) || repository.id === activeRepositoryId), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched, new Set(catalog.links.filter(usesSystemAuthentication).map(link => link.repositoryId)), { activeRepositoryId, lastUsed: preferences.repositoryLastUsed, pinned: preferences.pinnedRepositories });
   const hiddenEntries = new Set(preferences.hiddenEntries || []);
   for (const repository of catalog.repositories) for (const key of branchHiddenEntries(repository.id, preferences, remoteStates[repository.id]?.workspace?.tasks, linkedTasks(catalog.links.find(link => link.repositoryId === repository.id), localStates[repository.id]))) hiddenEntries.add(key);
   useEffect(() => {
@@ -209,6 +231,18 @@ export function useWorkspace() {
     catch (problem) { logDiagnostic({ event: 'ui-action', outcome: 'failure', method: 'preferences', ...diagnosticFailure(problem) }); setStorageError('无法保存设置；当前会话仍可使用。'); }
   }, [preferences]);
   const updatePreferences = (change: Partial<Preferences> | ((current: Preferences) => Partial<Preferences>)) => { logDiagnostic({ event: 'ui-action', outcome: 'start', method: 'preferences' }); preferencesChanged.current = true; setPreferences(current => ({ ...current, ...(typeof change === 'function' ? change(current) : change) })); };
+  const setAccountDisplayName = (accountId: string, name: string) => {
+    const displayName = name.trim();
+    if (!displayName || displayName.length > 120) throw new Error('账号显示名称需要为 1–120 个字符。');
+    if (!catalogRef.current.accounts.some(account => account.id === accountId)) throw new Error('账号不存在，请重新加载列表。');
+    const names = { ...accountDisplayNames.current, [accountId]: displayName };
+    accountDisplayNames.current = names;
+    preferencesChanged.current = true;
+    setPreferences(current => ({ ...current, accountDisplayNames: names }));
+    const updated = { ...catalogRef.current, accounts: catalogRef.current.accounts.map(account => account.id === accountId ? { ...account, name: displayName } : account) };
+    catalogRef.current = updated;
+    setCatalog(updated);
+  };
   const toggleRepositoryPin = (repositoryId: string) => updatePreferences(current => ({ pinnedRepositories: current.pinnedRepositories.includes(repositoryId) ? current.pinnedRepositories.filter(id => id !== repositoryId) : [...current.pinnedRepositories, repositoryId] }));
   async function task(key: string, run: () => Promise<Catalog>) {
     const installation = updates.installationRef.current;
@@ -259,7 +293,7 @@ export function useWorkspace() {
     }
   }
   return {
-    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, toggleRepositoryPin, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched,
+    catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, setAccountDisplayName, toggleRepositoryPin, markRepositoryUsed, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched,
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),
@@ -296,6 +330,7 @@ export function useWorkspace() {
       return matchedRepositoryIds;
     },
     unlink: (repositoryId: string, branch?: string) => task(repositoryId, () => importAPI('unlink', { repositoryId, ...(branch === undefined ? {} : { branch }) })),
+    dismissBranchIssue: (repositoryId: string, issueId: string) => task(repositoryId, () => importAPI('dismissBranchIssue', { repositoryId, issueId })),
   };
 }
 export type WorkspaceController = ReturnType<typeof useWorkspace>;

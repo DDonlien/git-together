@@ -1,0 +1,33 @@
+name: GitHub Desktop based validation
+on:
+  push:
+    branches: [main, github-desktop-based]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        env:
+          # Keep the pinned upstream bytes identical on Windows and macOS.
+          GIT_CONFIG_COUNT: '2'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+          GIT_CONFIG_KEY_1: core.eol
+          GIT_CONFIG_VALUE_1: lf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run verify:upstream
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm run setup
+      - run: npm run check
+      - run: npm test
+      - run: npm run build

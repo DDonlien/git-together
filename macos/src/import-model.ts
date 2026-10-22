@@ -7,14 +7,14 @@ import type { RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } fro
 import type { FileDirectory, FileOperationInput, FileOperationPlan, FileOperationResult } from './file-operation-model';
 import type { GraphSnapshot, GraphSourceChoice, GraphSource, GraphPreviewInput, GraphPreview, GraphMergePlan, GraphMergeInput, GraphWriteInput, GraphWriteResult } from './graph-operation-model';
 
-export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea'] as const;
+export const providers = ['github', 'github-enterprise', 'gitlab', 'gitee', 'gitea', 'local'] as const;
 export type Provider = typeof providers[number];
-export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '' };
+export const providerHosts: Record<Provider, string> = { github: 'https://github.com', 'github-enterprise': '', gitlab: 'https://gitlab.com', gitee: 'https://gitee.com', gitea: '', local: 'file:///' };
 export const repositoryPermissionKeys = ['admin', 'maintain', 'push', 'triage', 'pull'] as const;
 export type RepositoryPermissions = Partial<Record<typeof repositoryPermissionKeys[number], boolean>>;
 export type Account = {
   id: string; provider: Provider; host: string; login: string; name: string;
-  updatedAt: string; error?: string; authorizationExpiresAt?: string;
+  updatedAt: string; avatarUrl?: string; error?: string; authorizationExpiresAt?: string; retryAt?: number;
 };
 export type RemoteRepository = {
   id: string; remoteId: number; accountId: string; name: string; fullName: string;
@@ -25,10 +25,12 @@ export type RemoteRepository = {
 };
 export type LocalWorktreeLink = { branch: string; path: string };
 export type LocalLink = { repositoryId: string; path: string; worktrees?: LocalWorktreeLink[]; authentication?: RepositoryAuthentication };
+export type BranchIssue = { id: string; repositoryId: string; branch: string; kind: 'remote-missing' | 'both-missing' | 'local-missing'; paths: string[] };
 export type Catalog = {
   instanceId: string;
   revision: number;
   accounts: Account[]; repositories: RemoteRepository[]; links: LocalLink[];
+  branchIssues?: BranchIssue[];
   credentialStorage: 'session' | 'encrypted';
 };
 export type ConnectInput = { provider: Provider; host: string; token: string; name: string };
@@ -69,6 +71,7 @@ export type ApiInputs = {
   submitCommit: LocalSubmitInput;
   pushCommit: LocalPushInput;
   fetchRepository: { repositoryId: string };
+  dismissBranchIssue: { repositoryId: string; issueId: string };
   prepareSync: { repositoryId: string; taskId: string; mode: RepositorySyncMode };
   applySync: { repositoryId: string; taskId: string; planId: string; operationId: string };
   discardSync: { repositoryId: string; taskId: string; planId: string };
@@ -115,7 +118,8 @@ export type ApiOutputs = {
   localCommit: LocalCommitDetails;
   submitCommit: LocalSubmitResult;
   pushCommit: LocalPushResult;
-  fetchRepository: { branches: number; checkedAt: number };
+  fetchRepository: { branches: number; checkedAt: number; errors?: string[] };
+  dismissBranchIssue: Catalog;
   prepareSync: RepositorySyncPlan;
   applySync: RepositorySyncResult;
   discardSync: { discarded: boolean };
@@ -138,8 +142,8 @@ export type ApiOutputs = {
 };
 export type ApiMethod = keyof ApiInputs;
 export const emptyCatalog: Catalog = { instanceId: '', revision: 0, accounts: [], repositories: [], links: [], credentialStorage: 'session' };
-export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea' })[provider];
-export const accountLabel = (account: Account) => `${account.name} · ${account.login}@${new URL(account.host).host}`;
+export const providerName = (provider: Provider) => ({ github: 'GitHub', 'github-enterprise': 'GitHub 企业版', gitlab: 'GitLab', gitee: 'Gitee', gitea: 'Gitea', local: '本地 Git' })[provider];
+export const accountLabel = (account: Account) => account.provider === 'local' ? account.name : `${account.name} · ${account.login}@${new URL(account.host).host}`;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -148,7 +152,8 @@ export function isCatalog(value: unknown): value is Catalog {
   return isRecord(value) && typeof value.instanceId === 'string' && typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && ['session', 'encrypted'].includes(String(value.credentialStorage)) &&
     Array.isArray(value.accounts) && value.accounts.every(a => isRecord(a) &&
       ['id', 'host', 'login', 'name', 'updatedAt'].every(k => typeof a[k] === 'string') &&
-      providers.some(provider => provider === a.provider)) &&
+      (a.avatarUrl === undefined || typeof a.avatarUrl === 'string') &&
+      providers.some(provider => provider === a.provider) && (a.retryAt === undefined || typeof a.retryAt === 'number' && Number.isSafeInteger(a.retryAt) && a.retryAt > 0)) &&
     Array.isArray(value.repositories) && value.repositories.every(r => isRecord(r) &&
       ['id', 'accountId', 'name', 'fullName', 'description', 'defaultBranch', 'url'].every(k => typeof r[k] === 'string') &&
       typeof r.remoteId === 'number' && typeof r.private === 'boolean' && typeof r.available === 'boolean' &&
@@ -157,6 +162,7 @@ export function isCatalog(value: unknown): value is Catalog {
       (r.fork === undefined || typeof r.fork === 'boolean') && (r.collaborator === undefined || typeof r.collaborator === 'boolean') &&
       (r.metadataError === undefined || typeof r.metadataError === 'string') &&
       (r.permissions === undefined || (isRecord(r.permissions) && Object.entries(r.permissions).every(([key, flag]) => repositoryPermissionKeys.some(allowed => allowed === key) && typeof flag === 'boolean')))) &&
+    (value.branchIssues === undefined || Array.isArray(value.branchIssues) && value.branchIssues.every(issue => isRecord(issue) && ['id', 'repositoryId', 'branch'].every(key => typeof issue[key] === 'string') && /^[a-f0-9]{64}$/.test(String(issue.id)) && ['remote-missing', 'both-missing', 'local-missing'].includes(String(issue.kind)) && Array.isArray(issue.paths) && issue.paths.every(path => typeof path === 'string'))) &&
     Array.isArray(value.links) && value.links.every(l => isRecord(l) && typeof l.repositoryId === 'string' && typeof l.path === 'string' && (l.authentication === undefined || l.authentication === 'system' || l.authentication === 'account') &&
       (l.worktrees === undefined || Array.isArray(l.worktrees) && l.worktrees.length <= 64 && l.worktrees.every(w => isRecord(w) && typeof w.branch === 'string' && typeof w.path === 'string')));
 }

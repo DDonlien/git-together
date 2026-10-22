@@ -167,3 +167,8 @@ Desktop updates (2026-10-09, latest user request): package the actual app and ex
 - 沿用Material 3、原bundle ID、Developer ID、数据目录及账号/目录关联；兼容旧加密文件和固定偏好键，不将真实用户升级等同于源码编译。Git CLI与Git LFS从Rust调用，保留正常钩子、签名及用户配置。
 - 正式main打包继续完整签名、公证、发布和公共回读；同时提供旧Electron过渡ZIP/清单与Tauri最终tar/签名/清单。更新私钥仅存仓库外，不输出或打包，未来版本继续匹配内置公钥。开发版不安装更新。
 - 延续发布持续授权和安装版不操作约定；本次不新增或运行测试，执行类型/Cargo检查、生产构建及包和公开更新源校验。
+
+
+## GitHub Desktop based branch (2026-10-18, latest)
+
+On `github-desktop-based`, the root AGENTS GitHub Desktop replacement direction supersedes all historical Rust/Tauri, independent OAuth, Git-service and packaging directions above. Keep this existing UI and use its private Desktop bridge. Root npm setup/check/build/dev are authoritative. Only UI, Submit/Clear/Get Latest and Presence may add behavior; standard Git/auth/background implementation must remain upstream. The old native/server/scripts are historical and may not be restored to production entrypoints.

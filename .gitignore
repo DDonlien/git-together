@@ -3,9 +3,16 @@
 **/dist-electron/
 **/target/
 **/src-tauri/gen/
+tools/upgrade-fixture/gen/
 macos/src-tauri/*.key
 .DS_Store
 artifacts/
 *.log
 .codex/
 .claude/
+
+# GitHub Desktop generated outputs
+desktop/out/
+desktop/.webpack-cache/
+desktop/.runtime-cache/
+desktop/.runtime-bin/

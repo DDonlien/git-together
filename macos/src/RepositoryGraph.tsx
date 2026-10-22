@@ -28,7 +28,7 @@ function CommitActions({ commit, onCopy, onLocateParent, onAction, onOpenCommit,
     <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.summary)}><Icon name="copy" size={14} />复制提交说明</MenuItem>
     <MenuItem disabled={!committed || !commit?.parents.length} onClick={() => commit && onLocateParent(commit)}><Icon name="branch" size={14} />定位父提交</MenuItem>
     <div className="graph-menu-group-label">AI 操作</div>
-    <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>
+    {window.gittogether?.backend !== 'github-desktop' && <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>}
   </>;
 }
 
@@ -206,7 +206,7 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
               {edges.map((edge, edgeIndex) => <path key={edgeIndex} d={edge.from === edge.to ? `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} V ${edge.boundary ? rowHeight - 3 : rowHeight}` : `M ${edge.from * 14 + 12} ${edge.node ? rowHeight / 2 : 0} C ${edge.from * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight * .78}, ${edge.to * 14 + 12} ${rowHeight}`} className={`graph-line graph-color-${edge.color}${edge.boundary ? ' graph-boundary' : ''}${edge.local ? ' graph-local-edge' : ''}`} />)}
               {incoming && <path d={`M ${lane * 14 + 12} 0 V ${rowHeight / 2}`} className={`graph-line graph-color-${color}${incomingLocal ? ' graph-local-edge' : ''}`} />}
               {isHead && !commit.unpublished && <circle cx={lane * 14 + 12} cy={rowHeight / 2} r="6" className="graph-head-marker" />}
-              <circle cx={lane * 14 + 12} cy={rowHeight / 2} r={workingTask || commit.unpublished || commit.parents.length > 1 ? 4 : 3.5} className={`graph-node graph-color-${color}${workingTask ? ' graph-working-node' : commit.unpublished ? ' graph-unpublished-node' : commit.parents.length > 1 ? ' graph-merge-node' : ''}`} />
+              <circle cx={lane * 14 + 12} cy={rowHeight / 2} r={workingTask || commit.localOnly || commit.parents.length > 1 ? 4 : 3.5} className={`graph-node graph-color-${color}${workingTask ? ' graph-working-node' : commit.localOnly ? ' graph-local-node' : ''}${commit.parents.length > 1 ? ' graph-merge-node' : ''}`} />
             </svg></td>
             <td><button ref={element => { if (element) buttons.current.set(commit.id, element); else buttons.current.delete(commit.id); }} className="repository-graph-description" tabIndex={tabStopIndex === index ? 0 : -1} onFocus={() => setCursor(commit.id)} onKeyDown={event => keyboard(event, index)} aria-pressed={selected === commit.id} aria-label={label} title={`${label}${workingTask ? '' : `\n${timeLabel}`}\n↑ ↓ 导航 · ← 父提交 · → 子提交 · Esc 取消`}>
               <strong><GraphText text={commit.summary} term={query.term} /></strong>

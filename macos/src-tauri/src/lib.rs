@@ -44,11 +44,7 @@ async fn import_command(
     request_id: Option<String>,
 ) -> util::Result<Value> {
     let _ = request_id;
-    Ok(envelope(
-        service
-            .handle(&method, input, tokio_util::sync::CancellationToken::new())
-            .await,
-    ))
+    Ok(service.import_response(&method, input, tokio_util::sync::CancellationToken::new()).await)
 }
 #[tauri::command]
 async fn github_web(

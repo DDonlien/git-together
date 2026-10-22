@@ -1,0 +1,15 @@
+[package]
+name = "gittogether-release-verify"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gittogether-release-verify"
+path = "main.rs"
+
+[dependencies]
+base64 = "0.22"
+minisign-verify = "0.2"
+serde_json = "1"
+flate2 = "1"
+tar = "0.4"

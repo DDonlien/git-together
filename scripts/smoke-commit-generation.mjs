@@ -1,0 +1,133 @@
+import { sourceState } from './source-state.mjs';
+import { writeFakeCodex } from './commit-model-fixture.mjs';
+import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, delimiter } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import assert from 'node:assert/strict';
+
+const root = resolve(import.meta.dirname, '..'), packagedApp = process.env.GITTOGETHER_SMOKE_APP;
+const appRoot = packagedApp ? join(resolve(packagedApp), 'Contents/Resources/app') : join(root, 'desktop/out');
+const build = JSON.parse(readFileSync(join(appRoot, 'build-info.json'), 'utf8'));
+assert.equal(build.sourceSha256, sourceState(root), 'Rebuild changed sources before checking model generation.');
+const require = createRequire(join(root, 'desktop/package.json')), { _electron } = require('playwright');
+const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'gittogether-commit-generation-')));
+const repo = join(fixture, 'work'), feature = join(fixture, 'feature/work'), mode = join(fixture, 'mode'), modelLog = join(fixture, 'calls.jsonl');
+const output = join(root, 'artifacts/commit-generation', build.version, ...(packagedApp ? ['package'] : [])); mkdirSync(output, { recursive: true });
+writeFakeCodex(join(fixture, 'bin')); writeFileSync(mode, 'success');
+const env = { ...process.env, PATH: join(fixture, 'bin') + delimiter + process.env.PATH, GIT_CONFIG_GLOBAL: join(fixture, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GITTOGETHER_MODEL_MODE: mode, GITTOGETHER_MODEL_LOG: modelLog, GITTOGETHER_SMOKE: '1', NODE_ENV: 'development' };
+const git = (args, cwd = fixture) => execFileSync(join(appRoot, 'git/bin/git'), args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+git(['config', '--global', 'user.name', 'Model Fixture']); git(['config', '--global', 'user.email', 'model@example.invalid']); git(['config', '--global', 'commit.gpgsign', 'false']);
+git(['init', '--bare', '--initial-branch=main', join(fixture, 'remote.git')]); git(['clone', join(fixture, 'remote.git'), repo]);
+for (const name of ['partial.txt', 'unselected.txt', 'rename-source.txt']) writeFileSync(join(repo, name), 'base\n');
+writeFileSync(join(repo, 'deleted.xlsx'), Buffer.from([0, 0x50, 0x4b, 0, 0xff]));
+git(['add', '.'], repo); git(['commit', '-m', 'initial'], repo); git(['push', '-u', 'origin', 'main'], repo); git(['worktree', 'add', '-b', 'feature', feature], repo);
+writeFileSync(join(repo, 'partial.txt'), 'index fixture\n'); git(['add', 'partial.txt'], repo); writeFileSync(join(repo, 'partial.txt'), 'selected fixture\n');
+writeFileSync(join(repo, 'unselected.txt'), 'unselected private fixture\n'); unlinkSync(join(repo, 'deleted.xlsx'));
+git(['mv', 'rename-source.txt', 'renamed.txt'], repo); writeFileSync(join(repo, '新文件.txt'), 'unicode selected fixture\n');
+writeFileSync(join(repo, ':(glob)literal.txt'), 'literal path fixture\n'); writeFileSync(join(feature, 'partial.txt'), 'independent feature fixture\n');
+const snapshot = path => ({ head: git(['rev-parse', 'HEAD'], path), index: git(['ls-files', '--stage'], path), status: git(['status', '--porcelain'], path), count: git(['rev-list', '--count', 'HEAD'], path) });
+const before = snapshot(repo), beforeFeature = snapshot(feature), calls = () => existsSync(modelLog) ? readFileSync(modelLog, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+const executablePath = packagedApp ? join(resolve(packagedApp), 'Contents/MacOS', process.env.GITTOGETHER_SMOKE_EXECUTABLE || JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8')).productName) : join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron');
+const app = await _electron.launch({ executablePath, args: packagedApp ? ['--user-data-dir=' + join(fixture, 'profile')] : ['--allow-file-access-from-files', '--user-data-dir=' + join(fixture, 'profile'), appRoot], cwd: fixture, env, timeout: 60_000 });
+const checks = [], errors = [];
+try {
+  const page = await app.firstWindow(); page.on('pageerror', error => errors.push({ message: error.message, stack: error.stack }));
+  await page.waitForFunction(() => window.__gittogetherAdapter);
+  await page.evaluate(() => {
+    const fixture = window.__codexSignalFixture = { kill: process.kill, denied: 0 };
+    process.kill = function(pid, ...args) {
+      if (pid < 0) { fixture.denied++; throw Object.assign(new Error('fixture process-group signal denied'), { code: 'EPERM' }); }
+      return fixture.kill.call(this, pid, ...args);
+    };
+  });
+  const call = (method, input) => page.evaluate(({ method, input }) => window.__gittogetherAdapter.handle(method, input), { method, input });
+  await call('link', { repositoryId: '', path: repo }); await call('link', { repositoryId: '', path: feature });
+  const catalog = await call('catalog', {}), link = catalog.links.find(link => link.path === repo || link.worktrees?.some(tree => tree.path === repo)); assert.ok(link);
+  const workspace = () => call('localWorkspace', { repositoryId: link.repositoryId });
+  const input = async (path = repo, paths) => {
+    const task = (await workspace()).tasks.find(task => task.path === path); assert.ok(task);
+    return { repositoryId: link.repositoryId, taskId: task.id, expectedHead: task.head, changeKey: task.changeKey, generationId: crypto.randomUUID(), ...(paths ? { paths } : {}) };
+  };
+  const paths = ['partial.txt', 'deleted.xlsx', 'renamed.txt', '新文件.txt', ':(glob)literal.txt'];
+  assert.deepEqual(await call('generateCommitMessage', await input(repo, paths)), { summary: '生成测试提交说明', description: '保留可编辑的提交草稿。' });
+  const first = calls().at(-1); assert.match(first.input, /selected fixture/); assert.match(first.input, /deleted\.xlsx/); assert.match(first.input, /Binary files/); assert.match(first.input, /rename from rename-source\.txt/); assert.match(first.input, /unicode selected fixture/); assert.match(first.input, /literal path fixture/); assert.doesNotMatch(first.input, /unselected private fixture|index fixture|unselected\.txt/);
+  assert.equal(await page.evaluate(() => window.__codexSignalFixture.denied), 0);
+  assert.deepEqual(snapshot(repo), before); assert.deepEqual(snapshot(feature), beforeFeature);
+  checks.push('Selected text, deleted binary spreadsheet, rename, Unicode and literal pathspecs use upstream patch format; real staging, HEAD, worktrees and files are preserved.');
+  await call('generateCommitMessage', await input(repo, ['deleted.xlsx'])); assert.match(calls().at(-1).input, /Binary files/); assert.doesNotMatch(calls().at(-1).input, /partial\.txt/);
+  checks.push('A deleted binary spreadsheet alone can be sent to the model, matching the reported screenshot case.');
+  // Replace only the model boundary and account snapshot in this isolated test.
+  // No user credentials, account store writes or real Copilot requests are used.
+  await page.evaluate(() => {
+    const a = window.__gittogetherAdapter, getState = a.store.getState.bind(a.store), generate = a.commitMessages.copilot.generateCommitMessage.bind(a.commitMessages.copilot);
+    const f = window.__commitModelFixture = { getState, generate, forceDisclaimer: true, fail: false, calls: [] };
+    a.store.getState = () => ({ ...getState(), accounts: [{ login: 'fixture', endpoint: 'https://api.github.com', token: '', emails: [], avatarURL: '', id: 1, name: 'Fixture', isCopilotDesktopEnabled: true, features: ['desktop_copilot_generate_commit_message', 'desktop_enable_copilot_sdk_commit_message_generation'] }], ...(f.forceDisclaimer ? { commitMessageGenerationDisclaimerLastSeen: null } : {}) });
+    a.commitMessages.copilot.generateCommitMessage = async (...args) => { f.calls.push({ diff: args[1], path: args[2], rules: args[4] }); if (f.fail) throw new Error('fixture Copilot unavailable'); return { title: 'Copilot fixture title', description: 'Copilot fixture body' }; };
+  });
+  const count = calls().length, nativeInput = await input(repo, ['partial.txt']);
+  const native = call('generateCommitMessage', nativeInput); const consent = page.locator('dialog[data-gittogether-surface="GenerateCommitMessageDisclaimer"]');
+  await consent.waitFor({ state: 'visible' }); await consent.getByRole('button', { name: 'I understand', exact: true }).click();
+  assert.equal((await native).summary, 'Copilot fixture title'); assert.equal(calls().length, count);
+  assert.equal(await page.evaluate(() => window.__commitModelFixture.getState().commitMessageGenerationDisclaimerLastSeen !== null), true);
+  await page.evaluate(() => { window.__commitModelFixture.forceDisclaimer = false; window.__commitModelFixture.fail = true; });
+  assert.equal((await call('generateCommitMessage', await input(repo, ['partial.txt']))).summary, '生成测试提交说明'); assert.equal(calls().length, count + 1);
+  checks.push('An eligible Copilot account enters the original model interface after its original disclaimer; permission timestamp is saved, and a failed Copilot call falls back to Codex.');
+  await page.evaluate(() => { window.__commitModelFixture.forceDisclaimer = true; });
+  const declined = call('generateCommitMessage', await input(repo, ['partial.txt'])); const declinedAssertion = assert.rejects(declined, /已取消/);
+  await consent.waitFor({ state: 'visible' }); await delay(300); await consent.getByRole('button', { name: /^(取消|Cancel)$/ }).click(); await declinedAssertion;
+  assert.equal(calls().length, count + 1);
+  await page.evaluate(() => { const f = window.__commitModelFixture, a = window.__gittogetherAdapter; a.store.getState = f.getState; a.commitMessages.copilot.generateCommitMessage = f.generate; });
+  checks.push('Dismissing the original Copilot disclaimer cancels generation and does not start a different model.');
+  writeFileSync(mode, 'hang'); const pendingInput = await input(repo, ['partial.txt']), callCount = calls().length;
+  const pending = call('generateCommitMessage', pendingInput), cancelled = assert.rejects(pending, /已取消/);
+  for (let i = 0; i < 100 && calls().length === callCount; i++) await delay(30);
+  assert.equal(calls().length, callCount + 1);
+  assert.equal((await call('cancelCommitGeneration', { ...pendingInput, taskId: 'wrong-task' })).cancelled, false);
+  await assert.rejects(call('generateCommitMessage', { ...pendingInput, generationId: crypto.randomUUID() }), /正在生成/);
+  writeFileSync(mode, 'success'); assert.equal((await call('generateCommitMessage', await input(feature, ['partial.txt']))).summary, '生成测试提交说明');
+  assert.equal((await call('cancelCommitGeneration', pendingInput)).cancelled, true); await cancelled;
+  assert.throws(() => process.kill(calls().at(-2).pid, 0), /ESRCH/);
+  assert.ok(await page.evaluate(() => window.__codexSignalFixture.denied > 0));
+  await page.evaluate(() => { process.kill = window.__codexSignalFixture.kill; });
+  checks.push('Successful configuration reads use stdin EOF; injected native EPERM during cancellation falls back to the owned child without crashing the app.');
+  checks.push('Cancellation is scoped to generation and worktree, terminates the CLI, rejects duplicate work and allows another worktree to generate independently.');
+  const stale = await input(repo, ['partial.txt']); writeFileSync(join(repo, 'partial.txt'), 'changed after preview\n');
+  await assert.rejects(call('generateCommitMessage', stale), /已变化/); writeFileSync(join(repo, 'partial.txt'), 'selected fixture\n');
+  writeFileSync(mode, 'delay'); const lateInput = await input(repo, ['partial.txt']), lateCount = calls().length;
+  const late = call('generateCommitMessage', lateInput), lateRejected = assert.rejects(late, /已变化/);
+  for (let i = 0; i < 100 && calls().length === lateCount; i++) await delay(20);
+  assert.equal(calls().length, lateCount + 1); writeFileSync(join(repo, 'partial.txt'), 'changed during generation\n');
+  await lateRejected; writeFileSync(join(repo, 'partial.txt'), 'selected fixture\n');
+  checks.push('Stale previews and files changed during generation reject model requests or late results.');
+  // Exercise the actual frame form without confirming a commit or push.
+  await page.evaluate(async id => { const a = window.__gittogetherAdapter; await a.dispatcher.selectRepository(await a.repository(id)); a.dispatcher.closePopup(); }, link.repositoryId);
+  writeFileSync(mode, 'delay');
+  const frame = page.frameLocator('#gittogether-ui');
+  await frame.locator('[data-action-name="Submit"] button').first().click();
+  const summary = frame.getByRole('textbox', { name: /^Summary：/ }).first(); await summary.waitFor();
+  await summary.fill('用户手工草稿');
+  const description = frame.getByRole('textbox', { name: /^Description：/ }).first();
+  for (let i = 0; i < 100 && await description.inputValue() !== '保留可编辑的提交草稿。'; i++) await delay(100);
+  assert.equal(await description.inputValue(), '保留可编辑的提交草稿。'); assert.equal(await summary.inputValue(), '用户手工草稿');
+  await description.fill('用户可编辑正文');
+  assert.equal(await description.inputValue(), '用户可编辑正文');
+  await frame.getByText('正在生成提交说明…', { exact: true }).waitFor({ state: 'hidden' });
+  assert.equal(await summary.inputValue(), '用户手工草稿');
+  assert.equal(await description.inputValue(), '用户可编辑正文');
+  assert.equal(await frame.getByRole('button', { name: '提交', exact: true }).isEnabled(), true);
+  await page.screenshot({ path: join(output, 'editable-submit.png') });
+  await frame.getByRole('button', { name: '取消', exact: true }).last().click();
+  assert.deepEqual(snapshot(repo), before); assert.deepEqual(snapshot(feature), beforeFeature);
+  assert.equal(git(['rev-parse', 'main'], join(fixture, 'remote.git')), before.head);
+  checks.push('The real Submit form accepts edits during generation, preserves manual drafts and closes without commit, push or staging changes.');
+  const extensions = errors.filter(error => /Unable to initialize web-extension bridge/.test(error.message) && (error.stack || '').split('\n').filter(line => /^\s*at /.test(line)).every(line => line.includes('chrome-extension://')));
+  assert.deepEqual(errors.filter(error => !extensions.includes(error)), []);
+  writeFileSync(join(output, 'report.json'), JSON.stringify({ build, fixture, checks, extensionErrors: extensions.length, userCredentialsUsed: false, realCopilotRequest: false }, null, 2));
+  console.log(JSON.stringify({ success: true, checks, output }));
+} catch (error) {
+  const page = app.windows()[0]; if (page) await page.screenshot({ path: join(output, 'failure.png') });
+  throw error;
+} finally { await app.close(); }

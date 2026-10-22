@@ -5,7 +5,7 @@ export type RemoteCommitFile = { path: string; status: string; previousPath?: st
 export type RemoteCommitDetails = { commit: RepositoryCommit; files: RemoteCommitFile[]; diff: string; tree: string[]; treeComplete: boolean; warnings: string[] };
 export type RemoteHistoryPage = { head: string; page: number; commits: RepositoryCommit[]; hasMore: boolean };
 export type RemoteFileContent = { text: string; binary: boolean; size: number };
-export type RemoteRepositoryWorkspace = RepositoryWorkspace & { source: 'remote'; checkedAt: number; warnings: string[] };
+export type RemoteRepositoryWorkspace = RepositoryWorkspace & { source: 'remote'; checkedAt: number; warnings: string[]; branchesComplete?: boolean; retryAt?: number };
 export type RemoteRepositoryState = { workspace: RemoteRepositoryWorkspace | null; loading: boolean; error: string };
 export type ReadRemoteCommit = (commitId: string, signal: AbortSignal) => Promise<RemoteCommitDetails>;
 
@@ -33,7 +33,7 @@ export function isRepositoryCommit(value: unknown): value is RepositoryCommit {
   return record(value) && ['id', 'summary', 'author', 'time'].every(key => typeof value[key] === 'string') && strings(value.parents) && strings(value.refs);
 }
 export function isRemoteWorkspace(value: unknown): value is RemoteRepositoryWorkspace {
-  return record(value) && value.source === 'remote' && typeof value.checkedAt === 'number' && Number.isFinite(value.checkedAt) && typeof value.complete === 'boolean' && strings(value.warnings) &&
+  return record(value) && value.source === 'remote' && typeof value.checkedAt === 'number' && Number.isFinite(value.checkedAt) && typeof value.complete === 'boolean' && (value.branchesComplete === undefined || typeof value.branchesComplete === 'boolean') && strings(value.warnings) && (value.retryAt === undefined || typeof value.retryAt === 'number' && Number.isSafeInteger(value.retryAt) && value.retryAt > 0) &&
     Array.isArray(value.commits) && value.commits.every(isRepositoryCommit) && Array.isArray(value.tasks) && value.tasks.every(task => record(task) &&
       ['id', 'branch', 'head', 'error'].every(key => typeof task[key] === 'string') && task.path === null && task.remote === true && typeof task.treeComplete === 'boolean' && strings(task.tree) && Array.isArray(task.files) && task.files.length === 0 && (task.historyHasMore === undefined || typeof task.historyHasMore === 'boolean') && (task.hasAccountCommits === undefined || typeof task.hasAccountCommits === 'boolean') && (task.hasAccountPush === undefined || typeof task.hasAccountPush === 'boolean') && (task.hasAccountCreation === undefined || typeof task.hasAccountCreation === 'boolean') && (task.participationError === undefined || typeof task.participationError === 'string'));
 }

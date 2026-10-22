@@ -37,14 +37,16 @@ fn trusted(headers: &HeaderMap) -> bool {
             .is_none_or(|v| v == "same-origin")
 }
 fn envelope(result: Result<Value>) -> Response {
-    let status = if result.is_ok() {
+    response(match result {
+        Ok(v) => json!({"ok":true,"value":v}),
+        Err(e) => json!({"ok":false,"error":e}),
+    })
+}
+fn response(v: Value) -> Response {
+    let status = if v["ok"] == true {
         StatusCode::OK
     } else {
         StatusCode::BAD_REQUEST
-    };
-    let v = match result {
-        Ok(v) => json!({"ok":true,"value":v}),
-        Err(e) => json!({"ok":false,"error":e}),
     };
     (
         status,
@@ -71,11 +73,10 @@ async fn import(
     };
     let cancel = CancellationToken::new();
     let _guard = CancelOnDrop(cancel.clone());
-    let result = tokio::spawn(async move { service.handle(&method, input, cancel).await })
-        .await
-        .map_err(|_| "本地服务操作未完成。".into())
-        .and_then(|v| v);
-    envelope(result)
+    match tokio::spawn(async move { service.import_response(&method, input, cancel).await }).await {
+        Ok(value) => response(value),
+        Err(_) => envelope(Err("本地服务操作未完成。".into())),
+    }
 }
 async fn diagnostics(
     State(service): State<Arc<Service>>,

@@ -14,6 +14,9 @@ import { isGraphMergePlan, isGraphPreview, isGraphSource, isGraphWriteResult } f
 export class LocalServiceError extends Error {
   constructor(readonly code: 'connection' | 'timeout' | 'unsupported' | 'server' | 'version' | 'session', message: string, readonly status?: number) { super(message); this.name = 'LocalServiceError'; }
 }
+export class RemoteReadError extends Error {
+  constructor(message: string, readonly retryAt: number) { super(message); this.name = 'RemoteReadError'; }
+}
 export function verifyServiceVersion(version: string, expected: string): void {
   if (version !== expected) throw new LocalServiceError('version', '页面与账号服务版本不一致，请刷新页面后再连接。');
 }
@@ -52,7 +55,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : ['downloadBranch', 'prepareSync', 'applySync', 'prepareGraphMerge', 'applyGraphMerge'].includes(method) ? 30 * 60_000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'remoteWorkspace' ? 15 * 60_000 : ['downloadBranch', 'prepareSync', 'applySync', 'prepareGraphMerge', 'applyGraphMerge'].includes(method) ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -76,7 +79,11 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!response.ok && isRecord(envelope) && envelope.ok === true) throw new Error('账号服务返回格式无效。');
   }
   const validationStarted = performance.now();
-  if (!isRecord(envelope) || envelope.ok !== true) throw new Error(isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '账号服务返回格式无效。');
+  if (!isRecord(envelope) || envelope.ok !== true) {
+    const message = isRecord(envelope) && typeof envelope.error === 'string' ? envelope.error : '账号服务返回格式无效。';
+    if (isRecord(envelope) && typeof envelope.retryAt === 'number' && Number.isSafeInteger(envelope.retryAt) && envelope.retryAt > 0) throw new RemoteReadError(message, envelope.retryAt);
+    throw new Error(message);
+  }
   const value = envelope.value;
   if (method === 'accountRepositoryAccess') {
     if (!isAccountRepositoryAccess(value) || !('accountId' in input) || value.accountId !== input.accountId) throw new Error('仓库授权信息返回格式无效。');
@@ -121,7 +128,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   } else if (method === 'applySync') {
     if (!isRepositorySyncResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('操作结果返回格式无效，请重新读取目录。');
   } else if (method === 'fetchRepository') {
-    if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt)) throw new Error('后台获取结果返回格式无效。');
+    if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt) || value.errors !== undefined && (!Array.isArray(value.errors) || !value.errors.every(error => typeof error === 'string'))) throw new Error('后台获取结果返回格式无效。');
   } else if (method === 'localDirectory') {
     if (!isFileDirectory(value) || !('path' in input) || value.path !== input.path) throw new Error('本地目录返回格式无效。');
   } else if (method === 'prepareFileOperation') {
