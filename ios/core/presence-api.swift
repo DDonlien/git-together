@@ -85,7 +85,12 @@ struct PresenceAPI: Sendable {
                             while !Task.isCancelled {
                                 let heartbeat = JSONValue.object(["type": .string("heartbeat"), "version": .number(3), "sessionId": .string(sessionID)])
                                 try await socket.send(.string(String(decoding: JSONEncoder().encode(heartbeat), as: UTF8.self)))
-                                try await socket.sendPing()
+                                try await withCheckedThrowingContinuation { (pong: CheckedContinuation<Void, any Error>) in
+                                    socket.sendPing { error in
+                                        if let error { pong.resume(throwing: error) }
+                                        else { pong.resume() }
+                                    }
+                                }
                                 try await Task.sleep(for: .milliseconds(Int(interval)))
                             }
                         }

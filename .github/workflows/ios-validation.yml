@@ -19,4 +19,5 @@ jobs:
       - name: Core protocol regression
         run: swift test --package-path ios
       - name: Simulator compilation
+        if: ${{ !cancelled() }}
         run: xcodebuild -project ios/git-together.xcodeproj -scheme git-together -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath _builds/ios CODE_SIGNING_ALLOWED=NO build
