@@ -4,7 +4,7 @@ import { logDiagnostic } from './diagnostics-api';
 
 // Resource identities, not changing payload objects, control timer lifetime.
 // Adding/removing an account keeps the other accounts' cadence and backoff.
-export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, intervals = {}, initialDelays = {}, priorities = {}, maxConcurrent = Infinity, maxBackoffMs, minTriggerIntervalMs = 0, triggers = {}, run, onError, onReading }: {
+export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, intervals = {}, initialDelays = {}, priorities = {}, maxConcurrent = Infinity, maxBackoffMs, minTriggerIntervalMs = 0, triggers = {}, pausedResources = [], run, onError, onReading }: {
   resources: string[];
   intervalMs: number;
   initialDelayMs?: number;
@@ -30,6 +30,7 @@ export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, inte
   const paused = useRef(new Set<string>()); paused.current = new Set(pausedResources);
   const previousPaused = useRef(new Set<string>());
   const resourceKey = JSON.stringify(resources);
+  const pauseKey = JSON.stringify(pausedResources);
   const cadenceKey = JSON.stringify(resources.map(key => [key, intervals[key] ?? intervalMs]));
   const triggerKey = JSON.stringify(resources.map(key => [key, triggers[key] ?? 0]));
   useEffect(() => {
@@ -42,7 +43,7 @@ export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, inte
       retryIntervalMs: intervalMs, maxBackoffMs,
       initialDelayMs: initialDelays[key] ?? initialDelayMs, minTriggerIntervalMs,
       acquire: signal => queue.current!.acquire(key, signal),
-      isActive: () => document.visibilityState !== 'hidden' && navigator.onLine !== false,
+      isActive: () => !paused.current.has(key) && document.visibilityState !== 'hidden' && navigator.onLine !== false,
       run: signal => callbacks.current.run(key, signal),
       onError: problem => callbacks.current.onError?.(key, problem),
       onReading: reading => callbacks.current.onReading?.(key, reading),

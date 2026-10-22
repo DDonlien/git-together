@@ -92,6 +92,12 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
 
 ## Phase - v0.1.0 - 独立 TypeScript 客户端
 
+### ios/main: 原生远端仓库与桌面协作客户端
+
+- [ ] \[0.1.0-FE-A-001] 增加 SwiftUI iOS App，沿用现有客户端的界面文案、功能与组件语义；底栏和搜索采用系统 Liquid Glass，正文继续采用 GitTogether Material 3。iOS 只浏览远端，通过 Presence 控制拥有本地仓库的桌面设备，不在手机上创建或操作本地 Git 仓库。具体实现与验收见 [iOS 需求](ios/REQUIREMENTS.md)。
+  - [ ] \[0.1.0-FE-A-001-worktrees] 在每个仓库中按服务器、设备和组织范围展示各个 worktree 的分支、HEAD、Git 修改、编辑器状态、未推送提交及可用远程操作；同分支的多个目录分别展示，离线保留上次记录并明确标注未知，不把目录哈希伪装成本地路径。
+  - [ ] \[0.1.0-FE-A-001-source] 交付可在 Mac 打开的 Xcode 工程、Swift 源码与接口回归，完成当前 Windows 环境可执行的检查后提交并推送；Xcode 编译、Simulator、真机和 Liquid Glass 视觉验收由后续 Mac 测试确认。
+
 ### codex/standalone-ts: 多仓库与文件提交工作台
 
 - [x] \[R-05-graph-actions] 提交右键菜单分为标准 Git 操作、Git Together 非 AI 操作、AI 操作。标准组提供比较、创建分支/标签、Merge、Rebase、Cherry-pick、Revert、Reset；非 AI 组保留复制/定位并支持从选中提交创建关联工作目录及打开远端提交。写入明确选择目标工作目录，保留真实状态和错误，不提供伪执行入口。 0.33.0源码实现；类型及Cargo检查单独记录，未运行测试、真实AI/Git流程或安装包验收。

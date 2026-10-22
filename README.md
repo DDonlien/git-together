@@ -1,5 +1,7 @@
 # GitTogether
 
+新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](ios/REQUIREMENTS.md)。
+
 0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
 当前 `main` 为0.37.2源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切；0.37.0已补齐正式发布与旧版升级入口。采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。

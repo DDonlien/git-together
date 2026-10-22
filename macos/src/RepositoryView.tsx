@@ -84,9 +84,9 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const selection = commitSelection && workspace.tasks.some(task => task.id === commitSelection.taskId) ? commitSelection : null;
   const selectedCommits = useMemo<Record<string, string>>(() => selection ? { [selection.taskId]: selection.commitId } : {}, [selection]);
   const selectedCommit = workspace.commits.find(commit => commit.id === selection?.commitId);
-  const remoteCommits = useRemoteCommits(workspace.tasks, focus, selectedCommits, readRemoteCommit, refreshPaused);
+  const remoteCommits = useRemoteCommits(workspace.tasks, focus, selectedCommits, readRemoteCommit);
   const localCommits = useLocalCommits(workspace.tasks, selectedCommits, suppliedReadLocalCommit || (async (task, commitId, signal) =>
-    importAPI('localCommit', { repositoryId: repository.id, taskId: task.id, commitId }, signal)), refreshPaused);
+    importAPI('localCommit', { repositoryId: repository.id, taskId: task.id, commitId }, signal)));
   const selectCommit = (id: string | null) => {
     if (!id) { setCommitSelection(null); return; }
     const task = repositoryCommitTask(workspace, id, focus);

@@ -16,3 +16,10 @@ desktop/out/
 desktop/.webpack-cache/
 desktop/.runtime-cache/
 desktop/.runtime-bin/
+
+# Native iOS generated state
+ios/.build/
+ios/.swiftpm/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+_builds/

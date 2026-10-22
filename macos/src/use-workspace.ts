@@ -289,7 +289,6 @@ export function useWorkspace(activeRepositoryId = '') {
     } finally {
       running.current.delete(key);
       if (mounted.current) setBusy(current => { const next = { ...current }; delete next[key]; next[input.repositoryId] = [...running.current].some(item => item === input.repositoryId || item.startsWith(writePrefix(input.repositoryId))); return next; });
-      resumeRefresh();
     }
   }
   return {
