@@ -4,7 +4,7 @@ import { usePresence } from './PresenceProvider';
 import { presencePeople, presenceRepositoryColor, presenceRepositoryId, type PresencePerson } from './presence-model';
 import { useRemoteControl } from './RemoteControlProvider';
 import { RemoteActionDialog, RemoteWorkspaceActions } from './RemoteControlProjects';
-import { controlDeviceOnline, presenceRemoteTargets, type RemoteActionTarget } from './remote-control-model';
+import { controlDeviceOnline, presenceDeviceSources, presenceRemoteTargets, type RemoteActionTarget } from './remote-control-model';
 import { Button, Icon, Notice, Popover } from './ui';
 
 function PresenceAvatar({ person, large = false }: { person: PresencePerson; large?: boolean }) {
@@ -36,7 +36,7 @@ export function PresenceAvatarGroup({ repository, branch, people, className = ''
     return { ...target, actionCounts: { ...(source ? { commit: source.changedFiles, submit: source.unpublishedCommits, discard: source.changedFiles } : {}), abort: pendingActions } };
   }) : [] })) }));
   // The shared popup measures once on opening; changing actions/results can grow it.
-  const roster = JSON.stringify([people, rows.map(row => row.branches.map(entry => entry.targets.map(({ device, workspace }) => [device.serverId, device.deviceId, device.name, workspace.id, workspace.actions, status && controlDeviceOnline(status, device), status?.jobs.filter(job => job.serverId === device.serverId && job.deviceId === device.deviceId && job.workspaceId === workspace.id).map(job => [job.id, job.status, job.result?.phase, job.result?.warning, job.error])])))]);
+  const roster = JSON.stringify([people, rows.map(row => [row.branches.map(entry => entry.targets.map(({ device, workspace }) => [device.serverId, device.deviceId, device.name, workspace.id, workspace.actions, status && controlDeviceOnline(status, device), status?.jobs.filter(job => job.serverId === device.serverId && job.deviceId === device.deviceId && job.workspaceId === workspace.id).map(job => [job.id, job.status, job.result?.phase, job.result?.warning, job.error])]))])]);
   function openAction(value: RemoteActionTarget) {
     setOpen(false);
     setTarget(value);

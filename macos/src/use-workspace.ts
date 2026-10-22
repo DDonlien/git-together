@@ -29,9 +29,16 @@ export function useWorkspace(activeRepositoryId = '') {
   const [localStates, setLocalStates] = useState<Record<string, LocalRepositoryState>>({});
   const localChanges = useRef(new Map<string, Map<string, string>>());
   const localReadVersions = useRef(new Map<string, number>());
+  const refreshPauses = useRef(new Map<string, number>());
+  const refreshBaselines = useRef(new Set<string>());
+  const resumedRepositories = useRef(new Set<string>());
+  const [pausedRepositories, setPausedRepositories] = useState<ReadonlySet<string>>(new Set());
   const [changeVersions, setChangeVersions] = useState<Record<string, number>>({});
   const [fetchVersions, setFetchVersions] = useState<Record<string, number>>({});
   const onFetched = useCallback((repositoryId: string) => {
+    // The operation's resume already schedules a local read. Its remote check
+    // must not schedule a second immediate scan of the same worktrees.
+    if (resumedRepositories.current.delete(repositoryId)) return;
     setFetchVersions(current => ({ ...current, [repositoryId]: (current[repositoryId] ?? 0) + 1 }));
   }, []);
   const [loading, setLoading] = useState(true);
@@ -259,7 +266,6 @@ export function useWorkspace(activeRepositoryId = '') {
     const resource = JSON.stringify([catalogRef.current.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']);
     const currentLink = () => mounted.current && catalogRef.current.links.some(item => JSON.stringify([catalogRef.current.instanceId, item.repositoryId, item.path, item.worktrees, item.authentication || 'system']) === resource);
     running.current.add(key); setBusy(current => ({ ...current, [key]: true, [input.repositoryId]: true }));
-    localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
     try {
       const result = await importAPI(method, input);
       if ('catalog' in result && isCatalog(result.catalog)) accept(result.catalog);

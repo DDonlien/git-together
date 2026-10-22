@@ -48,10 +48,14 @@ export type ControlStatus = {
   teams: { id: string; name?: string; role?: string; serverId?: string; projects: string[] }[];
   localRepositories: { id: string; name: string; remoteId: string; enabled: boolean; teamId: string | null }[];
 };
+// Keep current-device labels and remote targets on the same scoped identity match.
+export function presenceDeviceSources(device: ControlDevice, branch: PresenceBranch): PresenceBranch['sources'] {
+  return branch.sources.filter(source => source.serverId === device.serverId && source.deviceId === device.deviceId && source.userId === device.userId && (!source.identityId || source.identityId === device.identityId));
+}
 export function presenceRemoteTargets(status: ControlStatus | null | undefined, repositoryId: string, branch: PresenceBranch): RemoteTarget[] {
   if (!status?.enabled) return [];
   return status.devices.filter(device => !device.isCurrent && device.deviceId !== status.deviceId).flatMap(device => {
-    const sources = branch.sources.filter(source => source.serverId === device.serverId && source.deviceId === device.deviceId && source.userId === device.userId && (!source.identityId || source.identityId === device.identityId));
+    const sources = presenceDeviceSources(device, branch);
     if (!sources.length) return [];
     const workspaces = device.workspaces.filter(workspace => workspace.repositoryId === repositoryId && workspace.branch === (branch.branch ?? 'Detached HEAD') && workspace.actions.length > 0 && sources.some(source => source.organizationId === workspace.teamId));
     // Older devices omit worktreeId; only a unique branch target is unambiguous.

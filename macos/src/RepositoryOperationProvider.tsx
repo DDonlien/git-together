@@ -14,7 +14,7 @@ type Operations = {
 const OperationsContext = createContext<Operations | null>(null);
 const overlaps = (left: readonly RepositoryActionTarget[], right: readonly RepositoryActionTarget[]) => left.some(a => a.task.path && right.some(b => b.task.path === a.task.path));
 
-export function RepositoryOperationProvider({ sessionId, children }: { sessionId: string; children: ReactNode }) {
+export function RepositoryOperationProvider({ sessionId, children, pauseRepositoryRefresh }: { sessionId: string; children: ReactNode; pauseRepositoryRefresh?: (repositoryIds: string[]) => () => void }) {
   const [operations, setOperations] = useState<Operation[]>([]), current = useRef<Operation[]>([]);
   const [active, setActive] = useState<string | null>(null), activeRef = useRef<string | null>(null);
   const save = useCallback((next: Operation[]) => { current.current = next; setOperations(next); }, []);

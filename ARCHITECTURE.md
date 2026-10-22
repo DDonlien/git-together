@@ -1,5 +1,13 @@
 # GitHub Desktop / GitTogether UI / Presence 架构
 
+## 原生 iOS 客户端
+
+`ios/` 是独立 SwiftUI 交付物，不进入桌面 GitHub Desktop 的启动或后台链。`app/` 在 Main Actor 维护界面与账号状态，使用本App Keychain保存访问令牌、Presence会话及独立设备凭证；非凭证目录缓存位于系统 Application Support。`core/` 以 URLSession 直接读取各提供方API，不调用Git、shell或本地仓库。
+
+Presence 使用现有账号/身份交换、控制协议与只读observer WebSocket。手机始终announce空本地workspaces，catalogue只登记自身Git账号可访问的远端仓库；不复用桌面设备身份。设备清单与协作快照按服务器、设备身份、仓库、组织及worktree标识匹配；旧设备无worktreeId时仅匹配唯一分支目标。没有唯一目标的快照仍可浏览，不能猜测控制目录。
+
+远程动作只发送协议允许的有限请求，不发送Git令牌、shell或文件正文；预览、生成说明、确认执行、重试Push和恢复绑定原服务器/设备/workspace，执行前复核权限与预览有效期。后台/停用取消连接并使缓存失效为未知。Swift Package隔离测试core，Xcode工程将app/core编译到同一App；iOS版本独立存于config/version.xcconfig。
+
 2026-10-21：用户认可的 github-desktop-based 0.36.4 通过保留双亲历史的合并成为本地 main；根 package/scripts 继续作为唯一有效入口。原main历史及0.34.5修复保留，旧Tauri/Git/账号服务仍不进入Desktop运行链。共享界面兼容保留账号显示名称、警告样式、主线Presence展示与可关闭Notice；当前Desktop桥尚未移植旧Tauri的分支消失记录/关闭清理接口，不能把旧路径验证当成Desktop功能验收。正式更新发布也尚未迁移。
 
 2026-10-18 起，`github-desktop-based` 分支以固定版本的 GitHub Desktop 为执行基础。Git、认证、凭据、Store、`ui/dispatcher`、trampoline、hooks、LFS 与后台任务保持上游字节一致。`docs/github-desktop-upstream.json` 锁定来源、子模块和明确的展示/产品身份差异；原版界面控制器的非渲染方法另外摘要验证。主进程仅有菜单名称及系统错误文案的展示差异。
@@ -58,7 +66,7 @@ OAuth应用按平台+origin保存在provider-oauth-v1.encrypted；更换Client I
 
 导入历史的提交匹配（2026-10-13，IMPORT-12-branch-behavior-import）：设置名称为「未找到我的提交」，沿用既有偏好键和hasAccountCommits字段。Gitea返回空作者账号时，使用当前登录账号的已验证邮箱匹配Git作者邮箱；外部作者没有本地平台账号是正常情况，完整父节点历史和可用邮箱读取完成后没有匹配就返回false。账号邮箱读取失败、没有可用的已验证邮箱、未映射提交缺少作者邮箱及历史不完整保留participationError和可见；后续找到明确本人提交仍优先返回true。hasAccountCreation独立核对创建活动实际操作者，fork或迁移创建的仓库也沿用该记录，不把导入者写进原提交作者；唯一分支例外和多分支筛选范围不变。
 
-Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作者、提交者与平台实际推送者是三种不同身份。账号邮箱与Git邮箱不一致时，作者和提交者的Gitea账号都可能为空；Rust在作者未匹配时，独立核对同仓库commit_repo活动的act_user.login，并要求Commits[].Sha1或HeadCommit.Sha1出现在当前HEAD已读取的真实父节点历史中。成功证据写入可选hasAccountPush，不冒称hasAccountCommits=true；推送确认足以保留分支，即使作者或更早历史仍不完整。活动每页50条、最多十页，满页即继续翻页，兼容服务器无Link的50条上限；权限、身份、格式或读取上限失败保留participationError与可见。正常无匹配还要求作者历史完整，创建记录与手动隐藏/恢复保持独立。结果按账号、仓库、HEAD缓存五分钟，不改保存账号或Git邮箱；SHA不得从消息或CompareURL中猜取。
+Gitea推送参与（2026-10-14，IMPORT-12-branch-behavior-account）：Git作者、提交者与平台实际推送者是三种不同身份。账号邮箱与Git邮箱不一致时，作者和提交者的Gitea账号都可能为空；Rust在作者未匹配时，独立核对同仓库commit_repo活动的act_user.login，并要求Commits[].Sha1或HeadCommit.Sha1出现在当前HEAD已读取的真实父节点历史中。成功证据写入可选hasAccountPush，不冒称hasAccountCommits=true；推送确认足以保留分支，即使作者或更早历史仍不完整。Gitea的CreateRef也发出commit_repo活动，但content为空；该事件没有提交SHA，跳过它继续核对真实推送，不作为本人推送证据。字段缺失、非字符串及非空损坏内容仍保留格式错误。活动每页50条、最多十页，满页即继续翻页，兼容服务器无Link的50条上限；权限、身份、格式或读取上限失败保留participationError与可见。正常无匹配还要求作者历史完整，创建记录与手动隐藏/恢复保持独立。结果按账号、仓库、HEAD缓存五分钟，不改保存账号或Git邮箱；SHA不得从消息或CompareURL中猜取。
 
 创建参与（IMPORT-12-branch-behavior-created）：完整远端分支列表只有一个分支且hasAccountCommits=false、尚未确认本人推送时，Rust补充hasAccountCreation。Gitea核对仓库remoteId和创建日期，分页读取创建当天的activities/feeds，只信任create_repo活动中同仓库的act_user.login；user_id是接收人，组织owner和管理权限均不作为创建证据。成功结果按账号/仓库缓存五分钟；最多十页，每页100条，只有找到明确创建者才返回true/false。活动缺失、身份/权限/格式失败或平台未提供证据时保留participationError与warning，不把未知写成false。客户端保留创建者及创建身份未知的唯一分支，也拒绝带参与错误的自动隐藏；手动隐藏与显式恢复沿用原优先级。此仓库创建例外不泛化到多分支，默认模式及已有本人提交或推送不额外读取创建活动。官方契约见[Gitea仓库活动](https://docs.gitea.com/api/operations/repo-list-activity-feeds/)。
 
@@ -366,7 +374,9 @@ Git错误分类先识别Unix和Windows磁盘不足，再区分LFS命令缺失、
 
 AccountService 从已保存仓库、账号与关联定位真实 worktree，复核 expectedHead/changeKey、remote 与映射身份，不接受 renderer 命令或任意路径。每个关联根串行执行；operationId 在当前服务实例内对已确认成功结果幂等，同 ID 不同内容拒绝。冲突、待完成 merge/rebase、已有 index.lock、过期快照在写入前拒绝。local-submit 使用真实 Git、私有 index 和独占 index.lock；分别保存原暂存区和从HEAD（unborn使用空树）建立的提交索引；GIT_LITERAL_PATHSPECS防止文件名被当作模式，仅对选中路径add --all，重命名附带原路径，之后再次复核快照，以标准 input 提供提交说明并保留 Git identity/hooks/signing。确认新HEAD的父提交与实际树后，在保存索引中仅将选中路径更新到新HEAD，再原子发布index，未选文件的已暂存内容（包括部分暂存）保持，失败保留原 index；已确认提交但响应/后处理有问题返回真实成功及警告。进入 commit 后不因浏览器断连取消，120秒执行上限仍保留。不会checkout、移动HEAD的reset、push或修改另一个worktree；路径限定的reset仅更新保存索引条目，不改HEAD或工作文件。
 
-controller 在提交前后递增本地读取版本，丢弃写入前轮询的迟到响应；成功立即重新读取共享 localWorkspace，再触发一次仓库远端状态检查，不清空其他任务选择和草稿。图谱从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
+controller 按仓库持有可嵌套的刷新暂停，生成说明和完整 Commit→Push 批次持有外层暂停，单步写操作仍可独立使用。暂停保留同一个调度器、最后成功内容及退避时限，递增读取版本以丢弃旧响应；同仓库最后一个任务结束后合并触发一次本地与远端检查，首个本地回读更新基线，不再把操作自身的变化重复触发远端检查。写 API 返回真实结果后立即交给下一步，列表刷新失败由共享读取状态表达，不阻塞 Push。Rust 前景操作取消同仓库已在途 localWorkspace/remoteWorkspace/Fetch，并拒绝其执行期间的新后台读取；原生桥没有传递 AbortSignal，因此取消在服务内落实，其他仓库保持原节奏。图谱仍从已验证本地/远端祖先派生未推送状态，缺失远端仍标本地提交；虚线轨道标记跨行传递，保持真实父子关系。
+
+Submit 生成任务（0.32.2）：打开弹窗进入等待确认，点击独立「AI 生成说明」才请求本机 CLI。RepositoryActionDraftsProvider 在服务会话内同时保存草稿和后台任务，按仓库、分支、实际目录、HEAD、changeKey及排序后的选中文件绑定结果；同对象在途请求复用，收起或关闭不结束生成，重开读取已保存结果。字段修改实时保存，完成时只填未手工修改的字段；对象变化不应用旧结果，显式停止、确认提交及会话结束取消对应任务。生成状态与错误由任务保存并订阅，弹窗只展示真实生成/本地提交/推送及目标；不创建额外的Codex聊天，也不跨服务会话保存明文说明。真实准备完成仍需用户确认才写入 Git。
 
 commit-generator 仅收集当前任务选中范围最多96KB的差异证据，限制未跟踪文本与文件数量，跳过二进制/符号链接。Windows 在 PATH/native CLI 与已安装桌面版的 LocalAppData/OpenAI/Codex/bin 缓存中比较实际语义版本，使用新版 CLI，避免旧 PATH 副本拒绝当前模型。通过该 CLI 的 app-server 只读 config/read 与 model/list 获取工具名称和实际推荐模型，不创建会话或修改全局配置；生成说明时使用此推荐模型，保留登录/provider。随后在空临时目录内以 read-only sandbox、ephemeral 和限定 JSON schema 执行 exec，忽略 rules，禁用 shell、多 agent、apps、plugins、hooks 和 web search，并为每个已配置 MCP 显式设置 enabled=false；空 mcp_servers 表不会清除合并配置。更改内容作为不可信数据放入 prompt；生成结束复核同一任务快照，过期结果拒绝。每个本地版本探测最多5秒，配置及模型目录读取最多20秒，生成子进程最多150秒；显式 generationId 取消经 HTTP/IPC 到子进程，取消只作用于匹配任务/生成请求，临时文件最终清理。CLI 失败按模型不可用、认证、版本参数、网络或其他生成失败显示固定提示；诊断只记受控分类及退出码，原始 CLI 输出、配置值和提交正文不进入日志。
 

@@ -1,0 +1,23 @@
+name: iOS source validation
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '!ios/**/*.md', '.github/workflows/ios-validation.yml']
+  pull_request:
+    paths: ['ios/**', '!ios/**/*.md', '.github/workflows/ios-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  swift:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: xcodebuild -version && swift --version
+      - name: Core protocol regression
+        run: swift test --package-path ios
+      - name: Simulator compilation
+        if: ${{ !cancelled() }}
+        run: xcodebuild -project ios/git-together.xcodeproj -scheme git-together -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath _builds/ios CODE_SIGNING_ALLOWED=NO build

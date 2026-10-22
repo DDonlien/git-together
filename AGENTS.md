@@ -394,6 +394,8 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 ## 文档入口与范围
 
+- `ios/` 是独立 SwiftUI 原生远端客户端；子功能说明、需求、视觉、协作和执行记录分别见 `ios/README.md`、`ios/REQUIREMENTS.md`、`ios/DESIGN.md`、`ios/AGENTS.md` 与 `ios/agent-log/`。iOS不执行本地Git，桌面既有执行基础继续生效。
+
 - `README.md`：产品与本地运行入口。
 - `REQUIREMENTS.md`：D-01 至 D-03、R-01 至 R-04 的功能追踪和状态。
 - `DESIGN.md`：Material 3 色彩与卡片层级、字体、布局、可访问性。
