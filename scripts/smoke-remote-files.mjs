@@ -1,0 +1,106 @@
+import { sourceState } from './source-state.mjs';
+import { createRequire } from 'node:module';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
+const root = resolve(import.meta.dirname, '..');
+const build = JSON.parse(readFileSync(join(root, 'desktop/out/build-info.json'), 'utf8'));
+assert.equal(build.sourceSha256, sourceState(root), 'Rebuild before checking the actual Desktop runtime.');
+const require = createRequire(join(root, 'desktop/package.json'));
+const { _electron } = require('playwright');
+const resultSchema = process.env.GITTOGETHER_CONTROL_SCHEMA ? (await import(pathToFileURL(resolve(process.env.GITTOGETHER_CONTROL_SCHEMA)).href)).ControlResult : undefined;
+const fixture = realpathSync(mkdtempSync(join(tmpdir(), 'gittogether-remote-files-')));
+const repo = join(fixture, 'work'); mkdirSync(repo); mkdirSync(join(repo, 'Content'));
+const env = { ...process.env, GIT_CONFIG_GLOBAL: join(fixture, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GITTOGETHER_SMOKE: '1', NODE_ENV: 'development' };
+const git = args => execFileSync('git', args, { cwd: repo, env, encoding: 'utf8' }).trim();
+git(['init', '--initial-branch=main']); git(['config', 'user.name', 'Remote Files Test']); git(['config', 'user.email', 'remote@example.invalid']); git(['config', 'commit.gpgsign', 'false']); git(['config', 'core.hooksPath', join(fixture, 'empty-hooks')]);
+const paths = Array.from({ length: 1205 }, (_, i) => `Content/remote-file-${'long-scope-'.repeat(8)}${String(i).padStart(4, '0')}.txt`);
+for (const path of paths) writeFileSync(join(repo, path), 'initial\n');
+git(['add', '.']); git(['commit', '-m', 'baseline']);
+for (const path of paths) writeFileSync(join(repo, path), 'first change\n');
+const app = await _electron.launch({ executablePath: join(root, 'desktop/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron'), args: ['--allow-file-access-from-files', '--user-data-dir=' + join(fixture, 'profile'), join(root, 'desktop/out')], cwd: fixture, env, timeout: 60_000 });
+const report = { version: build.version, fixture, checks: [] };
+try {
+  const page = await app.firstWindow();
+  await page.waitForFunction(() => window.__gittogetherAdapter && window.__gittogetherPresence, { timeout: 30_000 });
+  await page.evaluate(async path => { await window.__gittogetherAdapter.handle('link', { repositoryId: '', path }); window.__gittogetherAdapter.dispatcher.closePopup(); }, repo);
+  const workspace = await page.evaluate(async path => {
+    const a = window.__gittogetherAdapter, catalog = await a.catalog();
+    const link = catalog.links.find(l => l.path === path);
+    if (!link) throw new Error('Fixture was not linked.');
+    const value = await a.workspace(link.repositoryId);
+    return { repositoryId: link.repositoryId, task: value.tasks[0] };
+  }, repo);
+  const { repositoryId, task } = workspace;
+  const scope = { requesterDeviceId: 'requester', deviceId: 'target', workspaceId: 'workspace', organizationId: null, scopeVersion: 1, action: 'commit' };
+  const call = async (job, serverId = 'fixture-server') => {
+    const result = await page.evaluate(input => window.__gittogetherPresence.execute(input), { serverId, repositoryId, taskId: task.id, job: { ...scope, id: crypto.randomUUID(), ...job } });
+    if (resultSchema) resultSchema.parse(result);
+    return result;
+  };
+  const first = await call({ kind: 'preview', cursor: 0 });
+  assert.equal(first.filePage.total, paths.length); assert.ok(first.files.length <= 100);
+  assert.ok(Buffer.byteLength(JSON.stringify(paths.map(path => ({ path, status: 'M', tracked: true })))) > 96 * 1024);
+  const beforeAll = git(['rev-parse', 'HEAD']);
+  const all = await call({ kind: 'execute', previewId: first.previewId, selection: { all: true, ranges: [] }, summary: 'all 1205 remote files', description: '' });
+  assert.equal(all.phase, 'committed'); assert.notEqual(all.commitId, beforeAll);
+  assert.equal(Object.hasOwn(all, 'taskId'), false);
+  assert.equal(git(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD']).split('\n').length, paths.length);
+  assert.equal(git(['status', '--porcelain']), '');
+  report.checks.push('real original Commit includes 1205 selected files before remaining pages are loaded');
+  for (const path of paths) writeFileSync(join(repo, path), 'second change\n');
+  git(['add', paths[400]]);
+  const staged = git(['diff', '--cached', '--name-only']);
+  const preview = await call({ kind: 'preview', cursor: 0 });
+  const manifest = [...preview.files];
+  let cursor = preview.filePage.nextCursor, pages = 1;
+  while (cursor !== undefined) {
+    const value = await call({ kind: 'preview', previewId: preview.previewId, cursor });
+    assert.equal(value.previewId, preview.previewId); assert.equal(value.filePage.offset, manifest.length);
+    assert.equal(value.filePage.total, paths.length); assert.ok(Buffer.byteLength(JSON.stringify(value)) < 64 * 1024);
+    manifest.push(...value.files); cursor = value.filePage.nextCursor; pages++;
+  }
+  assert.deepEqual(manifest.map(f => f.path), paths);
+  assert.ok(pages > 10);
+  await assert.rejects(call({ kind: 'preview', previewId: preview.previewId, cursor: -1 }), /游标/);
+  await assert.rejects(call({ kind: 'preview', previewId: preview.previewId, cursor: 100, requesterDeviceId: 'different-requester' }), /目标|过期/);
+  await assert.rejects(call({ kind: 'preview', previewId: preview.previewId, cursor: 100 }, 'different-server'), /目标|过期/);
+  await assert.rejects(call({ kind: 'execute', previewId: preview.previewId, selection: { all: false, ranges: [[0, paths.length]] }, summary: 'invalid' }), /范围/);
+  await page.evaluate(() => {
+    const adapter = window.__gittogetherAdapter, original = adapter.handle.bind(adapter);
+    adapter.handle = async (method, input) => {
+      if (method === 'generateCommitMessage') { window.__remoteGeneratedPaths = input.paths; return { summary: 'selected four files', description: 'scope fixture' }; }
+      return original(method, input);
+    };
+  });
+  const selection = { all: false, ranges: [[0, 0], [1001, 1002], [1204, 1204]] };
+  const generated = await call({ kind: 'generate', previewId: preview.previewId, selection });
+  assert.equal(generated.summary, 'selected four files');
+  const expected = [paths[0], paths[1001], paths[1002], paths[1204]];
+  assert.deepEqual(await page.evaluate(() => window.__remoteGeneratedPaths), expected);
+  assert.equal(git(['diff', '--cached', '--name-only']), staged);
+  const partial = await call({ kind: 'execute', previewId: preview.previewId, selection, summary: generated.summary, description: generated.description });
+  assert.equal(partial.phase, 'committed');
+  assert.deepEqual(git(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD']).split('\n'), expected);
+  assert.equal(git(['status', '--porcelain']).split('\n').length, paths.length - expected.length);
+  for (const path of paths) assert.equal(readFileSync(join(repo, path), 'utf8'), 'second change\n');
+  report.checks.push('paged list is complete and byte bounded', 'indices across pages generate AI text only for selected paths and preserve the index during generation', 'partial Commit contains exactly four selected files', '1201 unselected working changes and all file contents are preserved; staging follows original Desktop Commit semantics', 'invalid ranges, requester changes and cross-server preview reuse are rejected');
+  await assert.rejects(call({ kind: 'preview', previewId: preview.previewId, cursor: 100 }), /HEAD.*变化|内容.*变化|过期/);
+  const changed = await call({ kind: 'preview', cursor: 0 });
+  writeFileSync(join(repo, paths[10]), 'changed after preview\n');
+  const unchangedHead = git(['rev-parse', 'HEAD']);
+  await assert.rejects(call({ kind: 'preview', previewId: changed.previewId, cursor: 100 }), /内容.*变化/);
+  await assert.rejects(call({ kind: 'execute', previewId: changed.previewId, selection: { all: true, ranges: [] }, summary: 'stale' }), /内容.*变化/);
+  assert.equal(git(['rev-parse', 'HEAD']), unchangedHead);
+  const expired = await call({ kind: 'preview', cursor: 0 });
+  await page.evaluate(id => { window.__gittogetherPresence.previews.get(id).expires = Date.now() - 1; }, expired.previewId);
+  await assert.rejects(call({ kind: 'preview', previewId: expired.previewId, cursor: 100 }), /过期/);
+  report.checks.push('HEAD/content changes and expired previews invalidate later pages and execution without creating a commit');
+  if (resultSchema) report.checks.push('actual preview, page, generated and committed results pass the canonical GitPresence ControlResult schema');
+  const evidence = join(root, 'artifacts/remote-files', build.version); mkdirSync(evidence, { recursive: true });
+  writeFileSync(join(evidence, 'native.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify({ ok: true, ...report }, null, 2));
+} finally { await app.close(); }

@@ -34,7 +34,9 @@ Presence的系统存储由宿主通过原版TokenStore管理，开发版及不�
 
 在macOS执行 `npm run package:mac:dev` 会先完成同源构建，再用上游固定版本的Electron Packager生成 `artifacts/macos/<版本>/GitTogether-dev-darwin-<架构>/GitTogether-dev.app`。包内自带运行时、Git、LFS、Presence及界面，可直接双击运行，不依赖源码目录或本地开发服务。保留上游开发签名和权限配置，使用GitTogether图标与独立的开发bundle ID和数据目录；本地ad-hoc签名不代表Developer ID公证或正式发布。
 
-`macos/src/` 继续承载已有 Material 界面。界面以独立 frame 加载，使用仅对本地 frame 发放的 MessagePort 调用原版进程。React 19 与上游 React 16 分别运行。`GitTogetherApp` 继承原版 App 的初始化、订阅、菜单命令、登录回调和后台生命周期，覆盖其展示入口；原版主页面、工具栏、欢迎页及样式表从不挂载。原版弹窗控制器保留字段、验证、回调、焦点、安全默认项和栈管理，外壳、图标与控件使用我们的 Material 设计。设置、关于、菜单、横幅和崩溃恢复另有展示实现。界面层的定时读取只消费原版缓存；远端调度交给原版。
+`macos/src/` 继续承载已有 Material 界面。界面以独立 frame 加载，使用仅对本地 frame 发放的 MessagePort 调用原版进程。React 19 与上游 React 16 分别运行。`GitTogetherApp` 继承原版 App 的初始化、订阅、菜单命令、登录回调和后台生命周期，覆盖其展示入口；原版主页面、工具栏、欢迎页及样式表从不挂载。原版弹窗控制器保留字段、验证、回调、焦点、安全默认项和栈管理，外壳、图标与控件使用我们的 Material 设计。设置、关于、菜单、横幅和崩溃恢复另有展示实现。GitHub 仓库的远端调度交给原版；Gitea 等原版未启动后台 Fetch 的仓库采用下述平台适配。
+
+2026-10-22 自动 Fetch 修复：复用现有按使用时间分级、错峰和限并发的刷新入口，为非 GitHub 仓库调用原版 `Dispatcher.fetch(BackgroundTask)`，不新增定时器或 Git 执行器。共享对象库合并请求，最近五分钟已获取或正在提交/同步时跳过，失败保留结果并逐步延后重试；不同目录独立报告错误。远端图谱在 Fetch 结束后再读取，Pull/Push 角标直接使用 Git 状态中的实际 upstream 和领先/落后提交数。Pull 的原版进度通过私有 MessagePort 推送给任务弹窗，显示阶段、Git 原始说明及已用时间；只有 Git 明确报告阶段百分比时才显示百分比，原版估计的整体权重不冒充精确进度。收起及恢复继续同一任务，完成后重新读取同步数量。
 
 旧 `macos/src-tauri/`、`macos/server/`、`macos/electron/` 和旧脚本属于迁移前实现，不进入当前启动或构建链。旧 Windows 发布流程保存在 `archive/pre-desktop-runtime/`；当前 CI 验证新的 Desktop 运行链。
 
@@ -71,6 +73,8 @@ Presence的系统存储由宿主通过原版TokenStore管理，开发版及不�
 完整展示目录见 [界面替换清单](github-desktop-ui-surfaces.md)。两层共用 `macos/src/material-tokens.css`；不加载原版主题，也不以遮住旧窗口或隐藏旧弹窗代替替换。系统窗口按钮、文件选择器和渲染器无法启动时的系统错误框沿用操作系统。开源许可和原始错误输出保留准确原文。
 
 `npm test` 检查来源完整性和执行边界；`node scripts/smoke-desktop.mjs` 在完整构建后启动隔离开发实例及临时 bare 远端，验证真实 Store/Dispatcher、界面连接、Commit、Push、Clear、Get Latest 和 Presence 启动。它不使用用户仓库，不代用户进行 OAuth 授权，也不操作已安装应用。
+
+`node scripts/smoke-remote-files.mjs` 在隔离原生实例和1205文件临时仓库中验证远程清单分页、首批直接全选提交、跨页部分选择、AI范围、未选工作区改动保留及失效预览拒绝。可将 `GITTOGETHER_CONTROL_SCHEMA` 指向 GitPresence 构建后的 `dist/protocol/src/control.js`，同时校验实际结果符合公共协议；证据输出到 `artifacts/remote-files/<版本>/`。它不连接真实Presence服务器或操作用户工作目录。
 
 将 `GITTOGETHER_SMOKE_APP` 指向生成的 `.app` 后运行相同脚本，可验证包内可执行文件、资源和实际Git流程。该模式从临时目录启动，不传开发页面或文件访问开关，继续使用隔离的测试配置。
 

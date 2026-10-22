@@ -6,14 +6,27 @@ export type ControlDevice = { deviceId: string; userId: string; identityId?: str
 export type RemoteTarget = { device: ControlDevice; workspace: ControlWorkspace };
 export type RemoteActionTarget = RemoteTarget & { action: RemoteAction };
 export type RemoteFile = { path: string; fromPath?: string | null; status: string; tracked: boolean };
+export type RemoteFileSelection = { all: boolean; ranges: [number, number][] };
+export function remoteFileSelection(all: boolean, exceptions: ReadonlySet<number>): RemoteFileSelection {
+  const ranges: [number, number][] = [];
+  for (const index of [...exceptions].sort((a, b) => a - b)) {
+    const previous = ranges[ranges.length - 1];
+    if (previous && index === previous[1] + 1) previous[1] = index;
+    else ranges.push([index, index]);
+  }
+  return { all, ranges };
+}
 export type ControlResult = {
   branch?: string;
   previewId?: string; expiresAt?: number; files?: RemoteFile[]; summary?: string; description?: string;
+  filePage?: { offset: number; total: number; nextCursor?: number };
   aiError?: string; operation?: 'none' | 'merge' | 'rebase'; running?: boolean; cancelRequested?: boolean;
   phase?: 'prepared' | 'committed' | 'pushed' | 'aborted' | 'discarded' | 'restored' | 'interrupted';
   commitId?: string; pushed?: boolean; backupId?: string; warning?: string; head?: string; changeKey?: string;
 };
 export type ControlJob = {
+  cursor?: number;
+  selection?: RemoteFileSelection;
   previousId?: string;
   serverId?: string;
   organizationId?: string | null;
@@ -29,8 +42,9 @@ export function controlRepositoryId(input: string): string {
 export type ControlStatus = {
   enabled: boolean; registered: boolean; deviceId: string; userId: string; name: string;
   connection: 'disabled' | 'connected' | 'offline'; error: string;
+  filePages?: boolean;
   devices: ControlDevice[]; jobs: ControlJob[]; repositories: string[];
-  servers?: { serverId: string; connection: 'disabled' | 'connected' | 'offline' }[];
+  servers?: { serverId: string; connection: 'disabled' | 'connected' | 'offline'; filePages?: boolean }[];
   teams: { id: string; name?: string; role?: string; serverId?: string; projects: string[] }[];
   localRepositories: { id: string; name: string; remoteId: string; enabled: boolean; teamId: string | null }[];
 };

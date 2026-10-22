@@ -2,7 +2,7 @@
 
 0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
-当前 `main` 为0.37.2源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切；0.37.0已补齐正式发布与旧版升级入口。采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+当前 `main` 为0.38.1源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切，并修复Gitea自动Fetch、同步角标和Pull进度；0.37.0已补齐正式发布与旧版升级入口。采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
 
 [0.37.0已正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.37.0)，提供macOS Apple Silicon和Windows x86/x64安装包。macOS Developer ID签名、Apple公证及31项成品检查通过；[Windows双架构原生安装与Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)通过。隔离的0.33.0更新器已通过公共更新源检查、下载并安装到0.37.0，配置及本地文件保留；新版Squirrel后续升级也完成隔离验证。三平台完整公开下载、更新签名和清单已核对；可在设置中再次检查更新，自行选择下载和安装。
 
@@ -76,9 +76,15 @@ Material 3 的亮暗主题与清晰的信息分区，让工作台保持统一：
 
 ### 接入团队协作状态
 
+远程Commit支持超过1000个文件：在当前弹窗分批加载清单、逐项或全选全部文件，翻页保留选择；AI说明只按选中范围生成。此能力需发起端、目标端及Presence服务器支持新版分页协议，源码与实际升级分别验收。
+
 0.23.0 源码在「设置 → 插件 → Presence」连接自托管服务器，查看团队在线工作区、分支、Git 修改和编辑器未保存状态。仓库图标显示实际协作连接，工作台的 Presence 可展开查看文件；失联时保留上次记录并明确显示未知。首个 NAS 服务已部署，初次只开放 GitTogether 和 GitPresence 两个仓库。源码与网页预览已连通，桌面已随0.27.1在macOS和Windows x86/x64正式交付，详见 [Presence 使用说明](docs/presence.md)。
 
 当前源码的协作弹窗按设备分别显示：同一账号的两台设备各占一行，显示各自的设备名、工作状态和远程操作；仓库入口展示该设备操作的分支，分支入口仅展示对应分支，标题按设备数统计。
+
+侧边栏和Dashboard的活动头像只提示其他设备，本机状态保留在项目Presence详情。详情包含干净工作区，本机直接显示采集结果并去除服务器回传重复；没有头像不代表离线。此修复已进入源码，安装包更新另行交付。
+
+干净工作区继续不显示头像；「暂无活动」与设备在线分开。只有服务器正常连接并确认设备会话失效才显示离线，连接中断或尚未读取时显示状态未知，没有上报记录时显示暂无工作区状态。
 
 GitHub企业版支持自定义域名（如`github.dxc.com`），GitLab支持官方与自建服务，Gitee使用v5接口。账号可以使用访问令牌连接，也可在「网页授权应用配置」中填写该平台及域名登记的OAuth应用，之后通过系统浏览器完成登录和企业SSO。GitLab公共客户端使用PKCE，无需Client Secret；企业GitHub与Gitee需要该域名的应用密钥。应用配置按域名在本机加密保存，切换域名不会复用其他服务的凭据；未获SSO批准时明确提示并保留上次仓库数据。
 

@@ -26,7 +26,7 @@ export function AccountSidebar({ catalog, collapsedAccounts, pinnedRepositories,
         {!collapsed && <div id={`account-${account.id}`} className="sidebar-account-repositories">
           {repositories.map(repo => <div key={repo.id} className="sidebar-repository-entry"><button className={`nav-item repository-item ${repo.id === selectedRepositoryId ? 'active' : ''}`} title={repo.fullName} aria-label={repo.available ? repo.name : `${repo.name}（不可访问）`} onClick={() => onOpen(repo.id)}>
             <RepositoryLogo repository={repo} /><span>{repo.name}</span>{!repo.available && <Icon name="warning" size={13} />}
-          </button><PresenceAvatars repository={repo} /><RepositoryPinButton name={repo.fullName} pinned={pinned.has(repo.id)} onToggle={() => onTogglePin(repo.id)} /></div>)}
+          </button><PresenceAvatars repository={repo} excludeCurrent /><RepositoryPinButton name={repo.fullName} pinned={pinned.has(repo.id)} onToggle={() => onTogglePin(repo.id)} /></div>)}
           {!repositories.length && <p className="sidebar-account-empty">{account.error ? '仓库读取失败' : '此账号暂无仓库'}</p>}
         </div>}
       </section>;

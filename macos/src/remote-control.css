@@ -24,6 +24,10 @@
 .remote-action-dialog { display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
 .remote-action-dialog p { font-size: 13px; line-height: 1.5; }
 .remote-action-files { max-height: 280px; overflow: auto; }
+.remote-files-section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.remote-files-section .remote-files-heading { flex-wrap: wrap; }
+.remote-file-progress { color: var(--muted); font-size: 11px; }
+.remote-message-actions { display: flex; justify-content: flex-end; margin-top: -6px; }
 .remote-files-heading { font-size: 13px; margin-bottom: 6px; }
 .remote-action-file { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; }
 .remote-action-file > span { flex: 1; overflow-wrap: anywhere; }

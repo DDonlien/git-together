@@ -33,7 +33,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
         }
       } catch (problem) { if (active && current === generation.current) {
         setReadError(problem instanceof Error ? problem.message : 'Presence 状态读取失败。');
-        setStatus(previous => previous?.enabled ? { ...previous, connection: 'offline', bridge: { ...previous.bridge, connected: false }, sessions: previous.sessions.map(session => ({ ...session, alive: false })), servers: previous.servers?.map(s => ({ ...s, connection: s.enabled ? 'offline' : 'disabled' })), organizations: previous.organizations?.map(o => ({ ...o, connected: false })) } : previous);
+        setStatus(previous => previous?.enabled ? { ...previous, connection: 'offline', bridge: { ...previous.bridge, connected: false }, local: previous.local ? { ...previous.local, connected: false } : previous.local, sessions: previous.sessions.map(session => ({ ...session, alive: false })), servers: previous.servers?.map(s => ({ ...s, connection: s.enabled ? 'offline' : 'disabled' })), organizations: previous.organizations?.map(o => ({ ...o, connected: false })) } : previous);
       } }
       if (active) timer = setTimeout(() => void read(), 1500);
     }

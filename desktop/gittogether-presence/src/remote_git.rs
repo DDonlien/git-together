@@ -10,5 +10,5 @@ pub async fn run(control: &Arc<RemoteControl>, workspace: &Workspace, job: &Valu
     let previous = if let Some(id)=job["previousId"].as_str() {
         control.records.lock().await.get(id).and_then(|r|r.result.clone()).unwrap_or(Value::Null)
     }else {Value::Null};
-    call("execute", json!({"repositoryId":workspace.repository,"taskId":workspace.task,"job":job,"previousResult":previous["result"]})).await
+    call("execute", json!({"serverId":control.server_id(),"repositoryId":workspace.repository,"taskId":workspace.task,"job":job,"previousResult":previous["result"]})).await
 }

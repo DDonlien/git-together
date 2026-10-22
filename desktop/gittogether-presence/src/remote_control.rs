@@ -284,7 +284,7 @@ impl RemoteControl {
         for (url, snapshot) in snapshots {
             let id = util::digest(&url);
             let registered = snapshot["registered"] == true;
-            servers.push(json!({"serverId":id,"url":url,"deviceId":snapshot["deviceId"],"userId":snapshot["userId"],"registered":registered,"connection":snapshot["connection"],"error":snapshot["error"]}));
+            servers.push(json!({"serverId":id,"url":url,"deviceId":snapshot["deviceId"],"userId":snapshot["userId"],"registered":registered,"connection":snapshot["connection"],"error":snapshot["error"],"filePages":snapshot["filePages"] == true}));
             if registered {
                 value["registered"] = json!(true);
             }
@@ -611,6 +611,8 @@ impl RemoteControl {
                         "previewId",
                         "previousId",
                         "paths",
+                        "cursor",
+                        "selection",
                         "summary",
                         "description",
                     ],
@@ -773,6 +775,9 @@ impl RemoteControl {
         }
         Ok(())
     }
+    pub(crate) fn server_id(&self) -> String {
+        util::digest(self.config.borrow().server_url.as_bytes())
+    }
     pub(crate) async fn authorize(&self, job: &Value) -> Result<Workspace> {
         let c = self.config.borrow().clone();
         if !c.enabled || c.device_id != text(job, "deviceId") {
@@ -808,6 +813,8 @@ impl RemoteControl {
             "previewId",
             "previousId",
             "paths",
+            "cursor",
+            "selection",
             "summary",
             "description",
             "requesterDeviceId",

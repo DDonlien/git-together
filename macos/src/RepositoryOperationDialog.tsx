@@ -3,8 +3,9 @@ import { RepositoryActionDialog } from './RepositoryActionDialog';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { importAPI } from './import-api';
-import type { ApplyRepositorySync, RepositorySyncMode, RepositorySyncPlan, RepositorySyncResult } from './repository-sync-model';
+import { isRepositorySyncProgress, type ApplyRepositorySync, type RepositorySyncMode, type RepositorySyncPlan, type RepositorySyncResult, type RepositorySyncProgress } from './repository-sync-model';
 import { Button, Icon, Modal, Notice } from './ui';
+import { LinearProgress } from './material-inputs';
 
 const isSync = (mode: RepositoryActionMode): mode is RepositorySyncMode => mode === 'pull' || mode === 'latest' || mode === 'clean';
 const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clear' };
@@ -26,6 +27,23 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
   const [results, setResults] = useState<Record<string, RepositorySyncResult>>({});
   const [reading, setReading] = useState(true), [writing, setWriting] = useState(false), [revision, setRevision] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [progress, setProgress] = useState<Record<string, RepositorySyncProgress>>({});
+  const [now, setNow] = useState(Date.now);
+  const active = useRef<{ key: string; operationId: string; repositoryId: string; taskId: string } | null>(null);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const value: unknown = (event as CustomEvent).detail, current = active.current;
+      if (!current || !isRepositorySyncProgress(value) || value.operationId !== current.operationId || value.repositoryId !== current.repositoryId || value.taskId !== current.taskId) return;
+      setProgress(previous => ({ ...previous, [current.key]: value }));
+    };
+    window.addEventListener('gittogether:sync-progress', receive);
+    return () => window.removeEventListener('gittogether:sync-progress', receive);
+  }, []);
+  useEffect(() => {
+    if (!writing) return;
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [writing]);
   useEffect(() => { onStateChange?.(finished ? 'completed' : writing ? 'working' : Object.keys(errors).length ? 'failed' : reading ? 'preparing' : 'ready'); }, [finished, writing, errors, reading, onStateChange]);
   const saved = useRef<Record<string, RepositorySyncPlan>>({});
   const completed = useRef<Record<string, RepositorySyncResult>>({});
@@ -59,13 +77,19 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
       const id = key(target), plan = saved.current[id];
       if (!plan) break;
       delete saved.current[id];
+      const operationId = crypto.randomUUID(), startedAt = Date.now();
+      active.current = { key: id, operationId, repositoryId: target.repositoryId, taskId: target.task.id };
+      setNow(startedAt);
+      setProgress(previous => ({ ...previous, [id]: { ...active.current!, state: 'running', title: '核验操作预览', description: '正在检查本地更改及跟踪分支。', value: null, startedAt, updatedAt: startedAt } }));
       try {
-        const result = await run({ repositoryId: target.repositoryId, taskId: target.task.id, planId: plan.id, operationId: crypto.randomUUID() });
+        const result = await run({ repositoryId: target.repositoryId, taskId: target.task.id, planId: plan.id, operationId });
         completed.current[id] = result;
         if (mounted.current) setResults(current => ({ ...current, [id]: result }));
       } catch (p) {
         if (mounted.current) setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '操作未完成。' }));
         break; // Never continue a destructive batch after a failed target.
+      } finally {
+        active.current = null;
       }
     }
     if (!mounted.current) return;
@@ -78,9 +102,18 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
     <div className="commit-composer repository-sync-dialog">
       {!targets.length && <Notice kind="info">当前筛选范围没有可操作的已关联工作目录。</Notice>}
       {targets.map(target => {
-        const id = key(target), plan = plans[id], result = results[id];
+        const id = key(target), plan = plans[id], result = results[id], current = progress[id];
+        const running = writing && active.current?.key === id;
+        const elapsed = current ? Math.max(0, Math.floor((now - current.startedAt) / 1_000)) : 0;
         return <section key={id} className="commit-message-preview">
           <h3>{target.repositoryName} · {target.task.branch}</h3><p className="muted" title={target.task.path || ''}>{target.task.path}</p>
+          {running && current && <div className="push-progress repository-sync-progress" aria-label={`${labels[mode]} 执行进度`}>
+            <div className="repository-sync-progress-title" role="status"><span><Icon name="spinner" className="spin" /> {current.title}</span>{current.value !== null && <span>{Math.round(current.value * 100)}%</span>}</div>
+            <LinearProgress indeterminate={current.value === null} value={current.value ?? 0} aria-label={current.title} />
+            {current.description && <small className="repository-sync-progress-detail">{current.description}</small>}
+            <small>工作目录 {targets.findIndex(item => key(item) === id) + 1} / {targets.length} · 已用 {elapsed < 60 ? `${elapsed} 秒` : `${Math.floor(elapsed / 60)} 分 ${elapsed % 60} 秒`}{now - current.updatedAt >= 15_000 ? ' · 等待 Git 返回下一条进度…' : ''}</small>
+          </div>}
+          {writing && !running && !result && !errors[id] && <p className="muted">等待前一个工作目录完成…</p>}
           {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件${mode === 'latest' ? ` · 回收 ${(result.reclaimedBytes / 1024 / 1024).toFixed(1)} MB${result.protectedHistory ? '，共享历史仍保留' : ''}` : ''}`}</Notice> : errors[id] ? <Notice kind="error">{errors[id]}</Notice> : plan ? <>
             <p>{plan.note}</p>
             {mode === 'latest' && <p>当前分支旧历史：{plan.historyCommits} 个提交；最新目录保留 1 个提交。</p>}
@@ -92,7 +125,7 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
       <div className="commit-composer-actions">
         <Button variant="quiet" disabled={writing} onClick={onClose}>关闭</Button>
         {!!Object.keys(errors).length && <Button disabled={reading || writing} onClick={() => setRevision(value => value + 1)}>重新预览未完成目录</Button>}
-        {!!pending.length && <Button variant="primary" disabled={!canApply} onClick={() => void apply()}>{writing ? <><Icon name="spinner" className="spin" /> 正在执行…</> : `确认 ${labels[mode]}`}</Button>}
+        {!!pending.length && <Button variant="primary" disabled={!canApply} onClick={() => void apply()}>{writing ? <><Icon name="spinner" className="spin" /> 正在 {labels[mode]} · {Object.keys(results).length + 1} / {targets.length}</> : `确认 ${labels[mode]}`}</Button>}
       </div>
     </div>
   </Modal>;

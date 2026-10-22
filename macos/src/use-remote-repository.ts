@@ -50,6 +50,13 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
         result => result,
         problem => problem instanceof Error ? problem : new Error('本地远端引用更新失败。'),
       );
+      // Desktop's remote view reads local tracking refs. Read it after the
+      // platform fetch settles, otherwise a successful fetch leaves old heads
+      // on screen for the entire next refresh interval.
+      if (window.gittogether?.backend === 'github-desktop') {
+        await fetching;
+        if (signal.aborted || !sameAuthentication()) return;
+      }
       if (!repository.available) {
         const result = await fetching;
         if (signal.aborted || !sameAuthentication()) return;
@@ -83,7 +90,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
       if (!(fetchResult instanceof Error) && (fetchResult.branches > 0 || !fetchFailure)) onFetched?.(repositoryId);
       setStates(previous => ({ ...previous, [key]: { ...previous[key], loading: false, error: [readFailure?.message, fetchFailure ? `${readFailure ? '' : '远端内容已读取；'}本地远端引用更新未完成：${fetchFailure.message}` : ''].filter(Boolean).join(' ') } }));
       if (readFailure) throw readFailure;
-      if (fetchFailure) throw new RemoteReadError(fetchFailure.message, retryAt);
+      if (fetchFailure) throw new RemoteReadError(fetchFailure.message, Math.max(retryAt, fetchResult instanceof Error ? 0 : fetchResult.retryAt || 0));
       // Partial branch failures retain their own feedback and successful
       // siblings, but new local changes must still respect the retry deadline.
       if (taskFailures || retryAt > Date.now()) throw new RemoteReadError(taskFailures ? '部分远端分支读取失败，正在等待下次检查。' : '账号远端请求正在冷却，恢复后继续检查。', retryAt);

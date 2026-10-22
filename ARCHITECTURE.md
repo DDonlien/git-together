@@ -428,3 +428,5 @@ RemoteWorkspaceActions由详情和人员卡片共用，沿用RemoteActionDialog�
 仓库操作收起（0.31.0，IMPORT-14-operation-collapse）：App内RepositoryOperationProvider在路由外维护服务会话级操作记录，打开时复制目标快照，按入口范围及真实工作目录恢复。所有OperationDialog持续挂载；visible只控制公共Dialog的Portal、遮罩和焦点锁，不改变AI/同步准备的effect依赖、操作UUID、草稿或结果。Dashboard仓库/分支、仓库顶部、中栏Submit/选中提交Push复用宿主。隐藏完成留存原按钮，活动Commit/Submit/Push沿用成功关闭；异步完成不关闭其他任务。服务instanceId改变清理记录，显式取消才中断可取消的准备并清理预览。
 
 客户端写忙碌按repositoryId/taskId隔离，并汇总仓库状态继续阻止目录变更和重复操作；具体物理路径的活动弹窗阻止重叠范围。同仓库其他worktree可继续准备/确认，Rust已有git-common-dir队列仍串行真实写入。PushFeedbackProvider按仓库保存多个批次，更新/定时器只作用于自身UUID，聚合任务状态时不会覆盖兄弟任务；恢复弹窗不创建新请求。
+
+0.38.0远程文件清单：当前Desktop PresenceHost缓存绑定请求者与目标范围的稳定文件快照，按100项/48KiB返回文件页；Rust只转交cursor与selection，不执行Git。全选或部分选择使用索引包含/排除区间，由目标依据原快照解析；分页、AI生成与最终执行核对HEAD/内容摘要。前端加载下一批不会重建选择或调用AI，全选覆盖未加载文件，AI由用户显式触发。GitPresence 0.7.0的可选Schema与filePages能力声明保持旧控制消息兼容。

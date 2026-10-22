@@ -7,13 +7,14 @@ export type PresenceFile = {
   sources: { sourceId: string; kind: 'unreal' | 'godot'; alive: boolean; unsaved: PresenceFact; activity: 'idle' | 'viewing' | 'editing' }[];
 };
 export type PresenceProject = { repositoryId: string; worktreeId: string; branch: string | null; head: string | null; gitReady: boolean; unpublishedCommits: number | null; files: PresenceFile[]; organizationId?: string | null };
-export type PresenceSession = { sessionId: string; userId: string; identityId?: string; serverId?: string; displayName: string; avatarUrl: string | null; deviceId: string; deviceName?: string | null; alive: boolean; lastSeen: number; projects: PresenceProject[] };
+export type PresenceSession = { sessionId: string; userId: string; identityId?: string; serverId?: string; isCurrent?: boolean; displayName: string; avatarUrl: string | null; deviceId: string; deviceName?: string | null; alive: boolean; lastSeen: number; projects: PresenceProject[] };
 export type PresenceOrganization = { id: string; name: string; role: 'owner' | 'admin' | 'member'; projects: string[]; revision: number; serverId: string; serverUrl: string; connected: boolean };
 export type PresenceServer = { id: string; url: string; enabled: boolean; connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string };
 export type PresenceStatus = {
   version: 1; enabled: boolean; configured: boolean; serverUrl: string; serverName: string;
   connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string; localError?: string; sessions: PresenceSession[];
   bridge: { connected: boolean; error: string; projects: PresenceProject[] };
+  local?: { deviceId: string; deviceName: string; connected: boolean; projects: PresenceProject[] } | null;
   account?: { id: string; identityId?: string; issuer?: string; subject?: string; email: string; displayName: string; emailVerified: boolean; expiresAt: number; repositories: string[]; mode: 'personal' | 'hosted' } | null;
   servers?: PresenceServer[];
   organizations?: PresenceOrganization[];
@@ -64,11 +65,18 @@ function projectWorkState(project: PresenceProject): PresenceWorkState | null {
   return project.gitReady && project.unpublishedCommits !== null && project.unpublishedCommits > 0 ? 'committed' : null;
 }
 
-export function presencePeople(status: PresenceStatus | null, repositoryId: string, branch?: string): PresencePerson[] {
+export type PresenceWorkspaceConnection = 'online' | 'offline' | 'unknown';
+export const presenceWorkspaceConnectionLabels = { online: '在线', offline: '离线', unknown: '状态未知' } as const;
+export function presenceSessionConnection(status: PresenceStatus, session: PresenceSession): PresenceWorkspaceConnection {
+  if (!status.enabled || status.connection !== 'connected' || session.serverId && status.servers && !status.servers.some(server => server.id === session.serverId && server.enabled && server.connection === 'connected')) return 'unknown';
+  return session.alive ? 'online' : 'offline';
+}
+
+export function presencePeople(status: PresenceStatus | null, repositoryId: string, branch?: string, { excludeCurrent = false }: { excludeCurrent?: boolean } = {}): PresencePerson[] {
   if (!status?.enabled || status.connection !== 'connected') return [];
   const people = new Map<string, PresencePerson>();
   for (const session of status.sessions) {
-    if (!session.alive) continue;
+    if (presenceSessionConnection(status, session) !== 'online' || excludeCurrent && session.isCurrent) continue;
     for (const project of session.projects) {
       if (project.repositoryId.toLowerCase() !== repositoryId || (branch !== undefined && project.branch !== branch)) continue;
       const state = projectWorkState(project);
@@ -99,6 +107,28 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
     }
   }
   return [...people.values()].sort((a, b) => a.userId.localeCompare(b.userId)).map(person => ({ ...person, branches: person.branches.sort((a, b) => (a.branch || '').localeCompare(b.branch || '')) }));
+}
+
+export type PresenceWorkspace = {
+  key: string; displayName: string; deviceName: string; isCurrent: boolean; connection: PresenceWorkspaceConnection; serverId?: string; project: PresenceProject;
+};
+export function presenceWorkspaces(status: PresenceStatus | null, repositoryId: string): PresenceWorkspace[] {
+  if (!status?.enabled) return [];
+  const local = status.local;
+  const projects = local?.projects.filter(project => project.repositoryId.toLowerCase() === repositoryId) || [];
+  const workspaces: PresenceWorkspace[] = projects.map(project => ({
+    key: `local:${project.worktreeId}`, displayName: status.account?.displayName || '我', deviceName: local!.deviceName,
+    isCurrent: true, connection: local!.connected ? 'online' : 'unknown', project,
+  }));
+  for (const session of status.sessions) for (const project of session.projects) {
+    if (project.repositoryId.toLowerCase() !== repositoryId || session.isCurrent && projects.some(local => local.worktreeId === project.worktreeId)) continue;
+    workspaces.push({
+      key: JSON.stringify([session.serverId, project.organizationId, session.sessionId, project.worktreeId]),
+      displayName: session.displayName, deviceName: session.deviceName?.trim() || '设备未知',
+      isCurrent: session.isCurrent === true, connection: presenceSessionConnection(status, session), serverId: session.serverId, project,
+    });
+  }
+  return workspaces;
 }
 
 export function presenceRepositoryColor(repositoryId: string): string {

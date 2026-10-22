@@ -127,6 +127,13 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
     histories.set(head, ids); return ids;
   };
   const comparisons = tasks.map(task => {
+    // Native Git knows the configured upstream, including renamed remotes and
+    // branches. A bounded graph cannot reliably count a large divergence.
+    if (task.tracking) {
+      const { upstream, ahead, behind } = task.tracking;
+      if (!upstream || ahead === null || behind === null) return { pull: 'off' as const, push: 'off' as const, pullCount: 0, pushCount: 0, text: `${task.branch}：${upstream ? `跟踪 ${upstream}，同步数量尚未确认。` : '尚未设置跟踪分支。'}` };
+      return { pull: behind > 0 ? 'warning' as const : 'good' as const, push: ahead > 0 ? 'warning' as const : 'off' as const, pullCount: behind, pushCount: ahead, text: `${task.branch} → ${upstream}：待拉取 ${behind} 个提交，待推送 ${ahead} 个提交${ahead > 0 && behind > 0 ? '；两侧已经分叉，Pull 需要合并或处理冲突' : ''}。` };
+    }
     const target = remote.workspace?.tasks.find(remoteTask => remoteTask.branch === task.branch);
     if (!target || !target.head || !task.head) return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地或远端 HEAD 尚未确认。` };
     if (task.head === target.head) return { pull: 'good' as const, push: 'off' as const, text: `${task.branch}：本地与远端一致（${task.head.slice(0, 8)}）。` };
@@ -138,10 +145,10 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
     return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地 ${task.head.slice(0, 8)} 与远端 ${target.head.slice(0, 8)} 不同；在已读取范围内无法确认领先、落后或分叉，待同步数量未知。` };
   });
   const detail = [...new Set(comparisons.map(item => item.text))].slice(0, 4).join(' ');
-  const pullCount = comparisons.filter(item => item.pull === 'warning').length;
+  const pullCount = comparisons.reduce((sum, item) => sum + (item.pullCount ?? Number(item.pull === 'warning')), 0);
   const pullTone = pullCount ? 'warning' : comparisons.every(item => item.pull === 'good') ? 'good' : 'off';
   result.pull = { ...result.pull, tone: pullTone, ...(pullTone === 'good' || pullCount ? { count: pullCount } : {}), detail };
-  const pushCount = comparisons.filter(item => item.push === 'warning').length;
+  const pushCount = comparisons.reduce((sum, item) => sum + (item.pushCount ?? Number(item.push === 'warning')), 0);
   result.push = { ...result.push, tone: pushCount ? 'warning' : 'off', ...(pushCount ? { count: pushCount } : {}), detail };
   return result;
 }

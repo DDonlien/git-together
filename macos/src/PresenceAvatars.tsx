@@ -14,10 +14,10 @@ function PresenceAvatar({ person, large = false }: { person: PresencePerson; lar
   </span>;
 }
 
-export function PresenceAvatars({ repository, branch, className = '' }: { repository: RemoteRepository; branch?: string; className?: string }) {
+export function PresenceAvatars({ repository, branch, className = '', excludeCurrent = false }: { repository: RemoteRepository; branch?: string; className?: string; excludeCurrent?: boolean }) {
   const presence = usePresence();
   const id = presenceRepositoryId(repository);
-  const people = presencePeople(presence?.status || null, id, branch);
+  const people = presencePeople(presence?.status || null, id, branch, { excludeCurrent });
   return people.length > 0 ? <PresenceAvatarGroup key={`${id}:${branch ?? ''}`} repository={repository} branch={branch} people={people} className={className} /> : null;
 }
 

@@ -129,6 +129,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isRepositorySyncResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('操作结果返回格式无效，请重新读取目录。');
   } else if (method === 'fetchRepository') {
     if (!isRecord(value) || typeof value.branches !== 'number' || !Number.isSafeInteger(value.branches) || value.branches < 0 || typeof value.checkedAt !== 'number' || !Number.isSafeInteger(value.checkedAt) || value.errors !== undefined && (!Array.isArray(value.errors) || !value.errors.every(error => typeof error === 'string'))) throw new Error('后台获取结果返回格式无效。');
+    if (value.retryAt !== undefined && (typeof value.retryAt !== 'number' || !Number.isSafeInteger(value.retryAt) || value.retryAt < 0)) throw new Error('后台获取冷却时间返回格式无效。');
   } else if (method === 'localDirectory') {
     if (!isFileDirectory(value) || !('path' in input) || value.path !== input.path) throw new Error('本地目录返回格式无效。');
   } else if (method === 'prepareFileOperation') {

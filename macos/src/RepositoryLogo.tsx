@@ -1,6 +1,6 @@
 import { Icon } from './ui';
 import { usePresence } from './PresenceProvider';
-import { presenceRepositoryId } from './presence-model';
+import { presenceRepositoryId, presenceWorkspaces } from './presence-model';
 import type { RemoteRepository } from './import-model';
 import { usePresenceRepositoryIcon } from './PresenceManaged';
 
@@ -9,8 +9,9 @@ export function RepositoryLogo({ repository, size = 18 }: { repository: RemoteRe
   const controller = usePresence();
   const status = controller?.status;
   const id = presenceRepositoryId(repository);
-  const online = status?.connection === 'connected' && status.sessions.some(session => session.alive && session.projects.some(project => project.repositoryId.toLowerCase() === id));
-  const presence = online ? 'online' : status?.connection === 'connected' ? 'offline' : 'attention';
-  const label = !status?.enabled ? undefined : online ? 'Presence：此仓库有在线协作工作区' : presence === 'offline' ? 'Presence：此仓库暂无在线协作会话' : 'Presence：协作连接未就绪，状态未知';
-  return <span className="repository-logo" title={folder.title ? `${folder.title} · ${label}` : label}><Icon name={folder.icon} size={size} />{status?.enabled && <span className={`repository-presence ${presence}`} aria-label={label} />}</span>;
+  const peers = presenceWorkspaces(status || null, id).filter(workspace => !workspace.isCurrent);
+  const online = peers.some(peer => peer.connection === 'online');
+  const presence = online ? 'online' : peers.some(peer => peer.connection === 'unknown') ? 'attention' : 'offline';
+  const label = !peers.length ? undefined : online ? 'Presence：此仓库有其他在线协作工作区' : presence === 'offline' ? 'Presence：其他协作设备已离线' : 'Presence：其他设备的协作状态未知';
+  return <span className="repository-logo" title={[folder.title, label].filter(Boolean).join(' · ') || undefined}><Icon name={folder.icon} size={size} />{peers.length > 0 && <span className={`repository-presence ${presence}`} aria-label={label} />}</span>;
 }

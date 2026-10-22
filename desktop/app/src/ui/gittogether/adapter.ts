@@ -13,6 +13,7 @@ import { BranchType } from '../../models/branch'
 import { Commit } from '../../models/commit'
 import { AppFileStatusKind, WorkingDirectoryFileChange } from '../../models/status'
 import { TipState } from '../../models/tip'
+import { FetchType } from '../../models/fetch'
 import { addWorktree } from '../../lib/git/worktree'
 import { Branch } from '../../models/branch'
 import { DiffType, IDiff } from '../../models/diff'
@@ -30,6 +31,7 @@ import { CustomActions } from './custom-actions'
 import { giteaAccounts } from './gitea-accounts'
 import { discoverRepositories, repositoryIdentity, repositoryURL } from './repository-discovery'
 import { CommitMessageGenerator } from './commit-message-generator'
+import { PlatformFetchGate } from './platform-fetch'
 
 export const instanceId = randomUUID()
 import { version as productVersion } from '../../../../../package.json'
@@ -108,6 +110,7 @@ export class DesktopAdapter {
   private readonly remoteCache = new Map<string, { state: unknown; epoch: number; value: Awaited<ReturnType<DesktopAdapter['readRemoteWorkspace']>> }>()
   private readonly reads = new Map<string, Promise<RepositoryWorkspace>>()
   private readonly results = new Map<string, { fingerprint: string; result: Promise<unknown> }>()
+  private readonly platformFetch = new PlatformFetchGate()
   public readonly actions: CustomActions
   public readonly commitMessages: CommitMessageGenerator
   public readonly gitea = giteaAccounts
@@ -369,7 +372,7 @@ export class DesktopAdapter {
       const branches = await getBranches(repo)
       for (const c of history) commits.set(c.sha, commitDTO(c, branches.filter(b => b.tip.sha === c.sha).map(b => b.name)))
       const tree = await git(['ls-files', '-z', '--cached', '--others', '--exclude-standard'], repo.path, 'getTrackedFiles')
-      tasks.push({ id: taskId(branch, repo.path), branch, head: status.currentTip || '', path: repo.path, files: status.workingDirectory.files.map(fileStatus), tree: [...new Set(tree.stdout.split('\0').filter(Boolean))], error: '', treeComplete: true, changeKey: await this.changeKey(repo, status.workingDirectory.files) })
+      tasks.push({ id: taskId(branch, repo.path), branch, head: status.currentTip || '', path: repo.path, files: status.workingDirectory.files.map(fileStatus), tree: [...new Set(tree.stdout.split('\0').filter(Boolean))], error: '', treeComplete: true, changeKey: await this.changeKey(repo, status.workingDirectory.files), tracking: { upstream: status.currentUpstreamBranch ?? null, ahead: status.branchAheadBehind?.ahead ?? null, behind: status.branchAheadBehind?.behind ?? null } })
     }
     return { tasks, commits: [...commits.values()], complete: true, source: 'local' }
   }
@@ -584,11 +587,35 @@ export class DesktopAdapter {
       case 'remoteWorkspace': return this.remoteWorkspace(id)
       case 'fetchRepository': {
         await this.catalog()
-        if (!this.local.has(id)) return { branches: 0, checkedAt: 0 }
-        // UI freshness polling only observes Desktop's cache. Its unchanged
-        // background fetcher owns network scheduling and backoff.
-        const repo = await this.repository(id)
-        return { branches: this.cache.get(repo).branchesState.allBranches.length, checkedAt: this.cache.get(repo).lastFetched?.valueOf() || 0 }
+        const repos = this.local.get(id) || []
+        const errors: string[] = []
+        let retryAt = 0
+        for (const repo of repos) {
+          // GitHub retains its upstream scheduler. Gitea has no upstream
+          // BackgroundFetcher; adapt the existing tiered freshness request.
+          if (repo.gitHubRepository || this.actions.isApplying(repo.path)) continue
+          try {
+            await this.dispatcher.refreshRepository(repo)
+            if (!this.cache.get(repo).remote) continue
+            const common = await fs.realpath(Path.resolve(repo.path, (await git(['rev-parse', '--git-common-dir'], repo.path, 'getGitDirectory')).stdout.trim()))
+            const outcome = await this.platformFetch.run(common, repo, {
+              lastFetched: () => this.cache.get(repo).lastFetched?.valueOf() || 0,
+              busy: () => this.repositories().some(other => {
+                const directory = other.resolvedGitDir
+                const shared = directory === common || directory.startsWith(common + Path.sep)
+                const state = this.cache.get(other)
+                return shared && (state.isPushPullFetchInProgress || state.isCommitting || this.actions.isApplying(other.path))
+              }),
+              fetch: async () => {
+                await this.dispatcher.fetch(repo, FetchType.BackgroundTask)
+                this.epoch++; this.workspaceCache.clear(); this.remoteCache.clear()
+              },
+            })
+            if (outcome.error) errors.push(`${repo.path}：${outcome.error}`)
+            retryAt = Math.max(retryAt, outcome.retryAt || 0)
+          } catch (problem) { errors.push(`${repo.path}：${problem instanceof Error ? problem.message : '自动 Fetch 失败。'}`) }
+        }
+        return { branches: repos.reduce((sum, repo) => sum + this.cache.get(repo).branchesState.allBranches.length, 0), checkedAt: Math.min(...repos.map(repo => this.cache.get(repo).lastFetched?.valueOf() || 0), ...(repos.length ? [] : [0])), ...(errors.length ? { errors, retryAt } : {}) }
       }
       case 'localCommit':
       case 'remoteCommit': {

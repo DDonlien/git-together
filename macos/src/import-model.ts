@@ -118,7 +118,7 @@ export type ApiOutputs = {
   localCommit: LocalCommitDetails;
   submitCommit: LocalSubmitResult;
   pushCommit: LocalPushResult;
-  fetchRepository: { branches: number; checkedAt: number; errors?: string[] };
+  fetchRepository: { branches: number; checkedAt: number; errors?: string[]; retryAt?: number };
   dismissBranchIssue: Catalog;
   prepareSync: RepositorySyncPlan;
   applySync: RepositorySyncResult;

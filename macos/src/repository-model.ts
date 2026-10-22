@@ -1,7 +1,7 @@
 import type { LocalFile, LocalSnapshot } from './import-model';
 
 export type RepositoryCommit = LocalSnapshot['commits'][number] & { parents: string[]; refs: string[] };
-export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; missing?: boolean; remote?: boolean; treeComplete?: boolean; historyHasMore?: boolean; changeKey?: string; hasAccountCommits?: boolean; hasAccountPush?: boolean; hasAccountCreation?: boolean; participationError?: string };
+export type RepositoryTask = { id: string; branch: string; head: string; path: string | null; files: LocalFile[]; tree: string[]; error: string; missing?: boolean; remote?: boolean; treeComplete?: boolean; historyHasMore?: boolean; changeKey?: string; tracking?: { upstream: string | null; ahead: number | null; behind: number | null }; hasAccountCommits?: boolean; hasAccountPush?: boolean; hasAccountCreation?: boolean; participationError?: string };
 export type RepositoryWorkspace = { tasks: RepositoryTask[]; commits: RepositoryCommit[]; complete: boolean; source?: 'local' | 'remote' | 'mixed' };
 
 export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {
@@ -9,8 +9,11 @@ export function isLocalWorkspace(value: unknown): value is RepositoryWorkspace {
   const w = value as Record<string, unknown>;
   const strings = (v: unknown) => Array.isArray(v) && v.every(item => typeof item === 'string');
   const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  const count = (v: unknown) => v === null || typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
   return w.source === 'local' && typeof w.complete === 'boolean' && Array.isArray(w.tasks) && w.tasks.length <= 64 && w.tasks.every(task => record(task) &&
-    ['id', 'branch', 'head', 'error', 'path'].every(key => typeof task[key] === 'string') && (task.missing === undefined || typeof task.missing === 'boolean') && task.remote !== true && (task.changeKey === undefined || typeof task.changeKey === 'string' && /^[a-f0-9]{64}$/.test(task.changeKey)) && strings(task.tree) && Array.isArray(task.files) && task.files.every(file => record(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) &&
+    ['id', 'branch', 'head', 'error', 'path'].every(key => typeof task[key] === 'string') && (task.missing === undefined || typeof task.missing === 'boolean') && task.remote !== true &&
+    (task.tracking === undefined || record(task.tracking) && (task.tracking.upstream === null || typeof task.tracking.upstream === 'string') && count(task.tracking.ahead) && count(task.tracking.behind)) &&
+    (task.changeKey === undefined || typeof task.changeKey === 'string' && /^[a-f0-9]{64}$/.test(task.changeKey)) && strings(task.tree) && Array.isArray(task.files) && task.files.every(file => record(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) &&
     Array.isArray(w.commits) && w.commits.every(commit => record(commit) && ['id', 'summary', 'author', 'time'].every(key => typeof commit[key] === 'string') && strings(commit.parents) && strings(commit.refs));
 }
 

@@ -11,6 +11,19 @@ export type RepositorySyncResult = {
   taskId: string; mode: RepositorySyncMode; head: string; files: number;
   reclaimedBytes: number; protectedHistory: boolean; warning?: string;
 };
+export type RepositorySyncProgress = {
+  repositoryId: string; taskId: string; operationId: string;
+  state: 'running' | 'completed' | 'failed';
+  title: string; description: string; value: number | null;
+  startedAt: number; updatedAt: number;
+};
+export function isRepositorySyncProgress(v: unknown): v is RepositorySyncProgress {
+  return isRecord(v) && ['repositoryId', 'taskId', 'operationId', 'title', 'description'].every(k => typeof v[k] === 'string') &&
+    ['running', 'completed', 'failed'].includes(String(v.state)) &&
+    (v.value === null || typeof v.value === 'number' && Number.isFinite(v.value) && v.value >= 0 && v.value <= 1) &&
+    typeof v.startedAt === 'number' && Number.isSafeInteger(v.startedAt) && v.startedAt > 0 &&
+    typeof v.updatedAt === 'number' && Number.isSafeInteger(v.updatedAt) && v.updatedAt >= v.startedAt;
+}
 export type PrepareRepositorySync = (input: { repositoryId: string; taskId: string; mode: RepositorySyncMode }, signal?: AbortSignal) => Promise<RepositorySyncPlan>;
 export type ApplyRepositorySync = (input: { repositoryId: string; taskId: string; planId: string; operationId: string }) => Promise<RepositorySyncResult>;
 const sha = (v: unknown) => typeof v === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(v);

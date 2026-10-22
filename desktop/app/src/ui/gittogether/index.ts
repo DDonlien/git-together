@@ -49,6 +49,7 @@ export function installGitTogether(store: AppStore, dispatcher: Dispatcher, cach
   }
   store.onDidUpdate(updateVisibility)
   window.addEventListener('gittogether:presentation', event => activePort?.postMessage({ event: 'presentation', value: (event as CustomEvent).detail }))
+  window.addEventListener('gittogether:sync-progress', event => activePort?.postMessage({ event: 'sync-progress', value: (event as CustomEvent).detail }))
   window.addEventListener('message', event => {
     if (event.source !== frame.contentWindow || event.data?.type !== 'gittogether:ready' || frame.contentWindow?.location.href !== frame.src) return
     activePort?.close()

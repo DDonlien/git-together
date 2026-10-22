@@ -9,6 +9,8 @@ import { getStatus, git } from '../../lib/git'
 import { shell } from '../../lib/app-shell'
 import type { ApiInputs } from '../../../../../macos/src/import-model'
 import { PresenceStorage } from './presence-storage'
+import { remoteFilePage, selectedRemoteFiles } from './remote-file-pages'
+import type { RemoteFile, RemoteFileSelection } from '../../../../../macos/src/remote-control-model'
 
 type Input = Record<string, unknown>
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void }
@@ -17,7 +19,7 @@ export class PresenceHost {
   private starting: Promise<void> | undefined
   private storage: PresenceStorage | undefined
   private readonly pending = new Map<string, Pending>()
-  private readonly previews = new Map<string, { input: ApiInputs['submitCommit']; expires: number; action: string; scope: string }>()
+  private readonly previews = new Map<string, { input: ApiInputs['submitCommit']; expires: number; action: string; scope: string; files: RemoteFile[] }>()
   private readonly committed = new Map<string, { input: ApiInputs['submitCommit']; commitId: string }>()
   public constructor(private readonly desktop: DesktopAdapter) {}
   private async dataRoot() {
@@ -100,27 +102,43 @@ export class PresenceHost {
     const repo = await this.desktop.repository(repositoryId, taskId)
     const status = await getStatus(repo)
     if (!status) throw new Error("无法读取此工作目录。")
-    const scope = JSON.stringify([job.deviceId, job.workspaceId, job.organizationId, job.scopeVersion])
+    const scope = JSON.stringify([input.serverId, job.requesterDeviceId, job.deviceId, job.workspaceId, job.organizationId, job.scopeVersion])
     if (job.kind === 'preview' || job.kind === 'generate') {
-      const files = status.workingDirectory.files.map(fileStatus)
-      const plan: ApiInputs['submitCommit'] = { repositoryId, taskId, expectedHead: status.currentTip || '', changeKey: await this.desktop.changeKey(repo, status.workingDirectory.files), operationId: String(job.id), summary: '', description: '' }
-      const previewId = String(job.id), expires = Date.now() + 15 * 60_000
-      this.previews.set(previewId, { input: plan, expires, action: String(job.action), scope })
+      const existing = typeof job.previewId === 'string' ? this.previews.get(job.previewId) : undefined
+      if (job.previewId && (!existing || existing.expires < Date.now() || existing.input.repositoryId !== repositoryId || existing.input.taskId !== taskId || existing.action !== job.action || existing.scope !== scope)) throw new Error('远端预览已过期或不属于此目标，请重新读取清单。')
+      if (existing) await this.desktop.checked(existing.input)
+      else if (job.selection || job.cursor !== undefined && job.cursor !== 0) throw new Error('文件分页和选择必须绑定有效预览。')
+      const files = existing?.files || status.workingDirectory.files.map(file => {
+        const value = fileStatus(file)
+        return { path: value.path, status: value.status, tracked: !!value.tracked, ...(value.previousPath ? { fromPath: value.previousPath } : {}) }
+      })
+      const plan: ApiInputs['submitCommit'] = existing?.input || { repositoryId, taskId, expectedHead: status.currentTip || '', changeKey: await this.desktop.changeKey(repo, status.workingDirectory.files), operationId: String(job.id), summary: '', description: '' }
+      const previewId = existing ? String(job.previewId) : String(job.id), expires = existing?.expires || Date.now() + 15 * 60_000
+      const paged = job.cursor !== undefined || job.selection !== undefined
+      if (!paged && files.length > 1000) throw new Error('大清单需要分页预览，请更新发起端 GitTogether 和 Presence 服务器后在原弹窗重试。')
+      const page = paged ? remoteFilePage(files, job.cursor ?? 0) : { files }
+      const selected = job.selection ? selectedRemoteFiles(files, job.selection as RemoteFileSelection) : files.filter(file => !Array.isArray(job.paths) || job.paths.includes(file.path))
+      if (job.selection && job.paths || job.kind === 'generate' && !selected.length || Array.isArray(job.paths) && job.paths.some(path => !selected.some(file => file.path === path))) throw new Error('请选择有效的提交文件范围。')
+      if (!existing) {
+        for (const [id, preview] of this.previews) if (preview.expires < Date.now()) this.previews.delete(id)
+        this.previews.set(previewId, { input: plan, expires, action: String(job.action), scope, files })
+      }
       let summary = '', description = '', aiError = ''
       if (job.kind === 'generate') {
         try {
-          const draft = await this.desktop.handle('generateCommitMessage', { ...plan, generationId: randomUUID() }) as { summary: string; description: string }
+          const draft = await this.desktop.handle('generateCommitMessage', { ...plan, paths: selected.map(file => file.path), generationId: randomUUID() }) as { summary: string; description: string }
           summary = draft.summary; description = draft.description
         } catch (e) { aiError = e instanceof Error ? e.message : String(e) }
       }
-      return { phase: 'prepared', previewId, expiresAt: expires, files, summary, description, aiError, head: plan.expectedHead, changeKey: plan.changeKey, operation: status.mergeHeadFound ? 'merge' : status.rebaseInternalState ? 'rebase' : 'none', running: false }
+      if (!existing || job.kind === 'generate') await this.desktop.checked(plan)
+      return { phase: 'prepared', previewId, expiresAt: expires, ...page, summary, description, aiError, head: plan.expectedHead, changeKey: plan.changeKey, operation: status.mergeHeadFound ? 'merge' : status.rebaseInternalState ? 'rebase' : 'none', running: false }
     }
     if (job.kind === 'retryPush') {
       const persisted = input.previousResult as { commitId?: string; pushed?: boolean } | undefined
       const previous = this.committed.get(String(job.previousId)) || (persisted?.commitId && !persisted.pushed ? { input: { repositoryId, taskId }, commitId: persisted.commitId } : undefined)
       if (job.action !== 'submit' || !previous || previous.input.repositoryId !== repositoryId || previous.input.taskId !== taskId) throw new Error('无法恢复此推送记录，请在目标设备查看本地提交后推送。')
-      const result = await this.desktop.push({ repositoryId, taskId, expectedHead: previous.commitId, commitId: previous.commitId, operationId: String(job.id) })
-      return { ...(result as object), phase: 'pushed' }
+      const result = await this.desktop.push({ repositoryId, taskId, expectedHead: previous.commitId, commitId: previous.commitId, operationId: String(job.id) }) as { commitId: string; branch: string }
+      return { commitId: result.commitId, branch: result.branch, pushed: true, phase: 'pushed' }
     }
     if (job.kind === 'restore') {
       const previous = input.previousResult as { backupId?: string } | undefined
@@ -130,7 +148,10 @@ export class PresenceHost {
     const preview = this.previews.get(String(job.previewId))
     if (!preview || preview.expires < Date.now() || preview.input.repositoryId !== repositoryId || preview.input.taskId !== taskId || preview.action !== job.action || preview.scope !== scope) throw new Error('远端预览已过期，请重新准备。')
     await this.desktop.checked(preview.input)
-    await this.ensureSaved(repo.path, status.workingDirectory.files.map(f => f.path))
+    if (job.selection && job.paths) throw new Error('文件范围不能同时使用索引和路径。')
+    const selectedPaths = job.selection ? selectedRemoteFiles(preview.files, job.selection as RemoteFileSelection).map(file => file.path) : preview.files.filter(file => !Array.isArray(job.paths) || job.paths.includes(file.path)).map(file => file.path)
+    if (job.action !== 'abort' && (!selectedPaths.length || Array.isArray(job.paths) && job.paths.some(path => !selectedPaths.includes(String(path))))) throw new Error('文件选择范围已变化或为空，请重新预览。')
+    await this.ensureSaved(repo.path, job.action === 'abort' ? status.workingDirectory.files.map(f => f.path) : selectedPaths)
     if (job.action === 'abort') {
       if (status.rebaseInternalState) await this.desktop.dispatcher.abortRebase(repo)
       else if (status.mergeHeadFound) await this.desktop.dispatcher.abortMerge(repo)
@@ -138,7 +159,7 @@ export class PresenceHost {
       return { phase: 'aborted' }
     }
     if (job.action === 'discard') {
-      const selected = status.workingDirectory.files.filter(f => !Array.isArray(job.paths) || job.paths.includes(f.path))
+      const selected = status.workingDirectory.files.filter(f => selectedPaths.includes(f.path))
       if (!selected.length || Array.isArray(job.paths) && job.paths.some(p => !selected.some(f => f.path === p))) throw new Error('丢弃范围已变化。')
       const backupId = String(job.id)
       await this.backup(backupId, repositoryId, taskId, selected.map(f => f.path))
@@ -149,16 +170,18 @@ export class PresenceHost {
       return { phase: 'discarded', backupId, warning: "可回收文件已移入系统回收站，目标设备也保留了恢复备份。" }
     }
     if (job.action !== 'commit' && job.action !== 'submit') throw new Error('远端动作不在允许范围内。')
-    const plan = { ...preview.input, summary: String(job.summary || ''), description: String(job.description || ''), operationId: String(job.id), ...(Array.isArray(job.paths) ? { paths: job.paths.map(String) } : {}) }
+    const plan = { ...preview.input, summary: String(job.summary || ''), description: String(job.description || ''), operationId: String(job.id), paths: selectedPaths }
     if (!plan.summary.trim()) throw new Error('提交说明不能为空。')
     const result = await this.desktop.commit(plan) as { commitId: string; branch: string; taskId: string }
+    // taskId contains a local path; publish only the control protocol's result.
+    const published = { commitId: result.commitId, branch: result.branch }
     this.committed.set(String(job.id), { input: plan, commitId: result.commitId })
     this.previews.delete(String(job.previewId))
     if (job.action === 'submit') {
-      try { await this.desktop.push({ repositoryId, taskId, expectedHead: result.commitId, commitId: result.commitId, operationId: randomUUID() }); return { ...result, phase: 'pushed', pushed: true } }
-      catch (e) { return { ...result, phase: 'committed', warning: e instanceof Error ? e.message : String(e) } }
+      try { await this.desktop.push({ repositoryId, taskId, expectedHead: result.commitId, commitId: result.commitId, operationId: randomUUID() }); return { ...published, phase: 'pushed', pushed: true } }
+      catch (e) { return { ...published, phase: 'committed', warning: e instanceof Error ? e.message : String(e) } }
     }
-    return { ...result, phase: 'committed' }
+    return { ...published, phase: 'committed' }
   }
   private async ensureSaved(path: string, paths: string[]) {
     const result = await this.command('internal', 'ensureSaved', { path, paths }) as { ok: boolean; error?: string }

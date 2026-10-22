@@ -108,10 +108,19 @@ impl Presence {
         let mut status =
             serde_json::to_value(&*self.state.read().await).map_err(|_| "账号状态无法读取。")?;
         let config = self.config.borrow().clone();
-        if config.account.is_none() {
-            status["localRepositories"] = json!([]);
-            return Ok(status);
+        // IDs can differ by server. Identify this instance without hiding its
+        // account's other devices or trusting a flag supplied by a server.
+        for session in status["sessions"].as_array_mut().unwrap() {
+            session["isCurrent"] = json!(session["deviceId"] == config.device_id
+                || config.servers.iter().any(|server| {
+                    !server.device_id.is_empty()
+                        && session["serverId"] == util::digest(&server.url)
+                        && session["deviceId"] == server.device_id
+                }));
         }
+        status["local"] = if config.enabled && config.account.is_some() {
+            json!({"deviceId":config.device_id,"deviceName":crate::platform::device_name(),"connected":true,"projects":self.source_snapshot().await})
+        } else { Value::Null };
         status["localRepositories"] = json!([]);
         Ok(status)
     }

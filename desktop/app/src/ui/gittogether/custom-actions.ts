@@ -9,12 +9,15 @@ import { shell } from '../../lib/app-shell'
 import type { ApiInputs } from '../../../../../macos/src/import-model'
 import type { RepositorySyncPlan, RepositorySyncResult } from '../../../../../macos/src/repository-sync-model'
 import { DesktopAdapter, safePath } from './adapter'
+import { SyncProgressReporter } from './sync-progress'
 
 type Plan = { public: RepositorySyncPlan; key: string; upstream: string; remoteURL: string; remoteName: string; remoteBranch: string; diskKey: string; expires: number }
 /** The only Git semantics added by GitTogether. Uses Desktop's Git/trampoline. */
 export class CustomActions {
   private readonly plans = new Map<string, Plan>()
+  private readonly activeTasks = new Set<string>()
   public constructor(private readonly desktop: DesktopAdapter) {}
+  public isApplying(path: string): boolean { return [...this.activeTasks].some(task => task.endsWith(`:${path}`)) }
   public discard(id: string) { return { discarded: this.plans.delete(id) } }
   public async prepare(input: ApiInputs['prepareSync']): Promise<RepositorySyncPlan> {
     const repo = await this.desktop.repository(input.repositoryId, input.taskId)
@@ -42,8 +45,25 @@ export class CustomActions {
     this.plans.set(plan.id, { public: plan, key: await this.desktop.changeKey(repo, status.workingDirectory.files), upstream: status.currentUpstreamBranch, remoteURL: remote.url, remoteName: remote.name, remoteBranch, diskKey: await diskKey(repo.path), expires: Date.now() + 15 * 60_000 })
     return plan
   }
+  private async withProgress<T>(input: ApiInputs['applySync'], run: (progress: SyncProgressReporter, observe: (repo?: Repository) => void) => Promise<T>): Promise<T> {
+    if (this.activeTasks.has(input.taskId)) throw new Error('这个工作目录正在执行同步，请等待完成。')
+    this.activeTasks.add(input.taskId)
+    const progress = new SyncProgressReporter(input, value => window.dispatchEvent(new CustomEvent('gittogether:sync-progress', { detail: value })))
+    let observing: Repository | undefined
+    const subscription = this.desktop.store.onDidUpdate(() => {
+      if (observing) progress.native(this.desktop.cache.get(observing).pushPullFetchProgress)
+    })
+    try {
+      const result = await run(progress, repo => { observing = repo })
+      progress.finish('completed')
+      return result
+    } catch (problem) {
+      progress.finish('failed', problem instanceof Error ? problem.message : '操作未完成。')
+      throw problem
+    } finally { subscription.dispose(); this.activeTasks.delete(input.taskId) }
+  }
   public async apply(input: ApiInputs['applySync']): Promise<RepositorySyncResult> {
-    return this.desktop.once(input.operationId, input, async () => {
+    return this.desktop.once(input.operationId, input, () => this.withProgress(input, async (progress, observe) => {
       const saved = this.plans.get(input.planId)
       if (!saved || saved.expires < Date.now() || saved.public.repositoryId !== input.repositoryId || saved.public.taskId !== input.taskId) throw new Error('预览已过期，请重新打开操作。')
       const plan = saved.public
@@ -55,10 +75,16 @@ export class CustomActions {
       let reclaimedBytes = 0
       if (plan.mode === 'pull') {
         await this.desktop.dispatcher.selectRepository(repo)
+        observe(repo)
+        progress.update('等待 Git 响应', '正在连接远端并启动 Pull。')
         await this.desktop.dispatcher.pull(repo)
+        observe()
+        progress.update('核验 Pull 结果', '正在重新读取本地状态和待拉取提交数。')
         const after = await getStatus(repo)
+        if (after?.workingDirectory.files.some(file => file.status.kind === 'Conflicted')) throw new Error('Pull 遇到合并冲突，请先在冲突窗口中处理；当前更改已保留。')
         if (!after?.currentTip || (after.branchAheadBehind?.behind ?? 1) > 0) throw new Error("未确认 Pull 完成；请查看冲突或错误提示。")
       } else if (plan.mode === 'clean') {
+        progress.update('恢复工作目录文件', '正在按已确认的文件清单恢复和清理。')
         const stage = await fs.mkdtemp(Path.join(Path.dirname(repo.path), '.gittogether-clear-'))
         try {
           const index = Path.join(stage, 'index')
@@ -83,6 +109,7 @@ export class CustomActions {
           }
         } finally { await fs.rm(stage, { recursive: true, force: true }) }
       } else {
+        progress.update('下载最新快照', '正在下载并验证文件和大文件内容，完成后整理历史。')
         const stage = await fs.mkdtemp(Path.join(Path.dirname(repo.path), '.gittogether-latest-'))
         const clone = Path.join(stage, 'snapshot')
         const original = Path.join(stage, 'original')
@@ -127,7 +154,7 @@ export class CustomActions {
       await this.desktop.dispatcher.refreshRepository(repo)
       const final = await getStatus(repo)
       return { taskId: input.taskId, mode: plan.mode, head: final?.currentTip || plan.head, files: plan.files.length, reclaimedBytes, protectedHistory: plan.protectedHistory }
-    }) as Promise<RepositorySyncResult>
+    })) as Promise<RepositorySyncResult>
   }
 }
 async function diskFiles(root: string, path = ''): Promise<string[]> {

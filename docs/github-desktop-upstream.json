@@ -3905,7 +3905,7 @@
       "reason": "Connect preserved account store to the GitTogether presentation and upgrade adapter"
     },
     "app/package.json": {
-      "sha256": "d5869d00dfbee6ffff70fde2fa61d5c3592c2e6d624a93d6cb4a883edbc2b6fd",
+      "sha256": "e492381c003f185015ff56b904f89b10dcb46369e7768234c3272af1f06eade1",
       "reason": "GitTogether product identity and version"
     },
     "tsconfig.json": {

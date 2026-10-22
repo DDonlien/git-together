@@ -379,7 +379,7 @@ impl Presence {
         if connections.is_empty() {
             std::future::pending::<()>().await;
         }
-        tokio::select! { _=futures_util::future::join_all(connections)=>{}, _=self.catalogue_loop(generation)=>{}, _=self.source_loop(generation)=>{} }
+        tokio::select! { _=futures_util::future::join_all(connections)=>{}, _=self.catalogue_loop(generation)=>{} }
     }
     async fn catalogue_loop(&self, generation: u64) {
         loop {
@@ -553,7 +553,7 @@ impl Presence {
         .into();
         state.error.clear();
     }
-    async fn source_loop(&self, generation: u64) {
+    pub(super) async fn source_loop(&self, generation: u64) {
         if self.config.borrow().account.is_none() {
             std::future::pending::<()>().await;
         }
@@ -609,11 +609,17 @@ impl Presence {
         }
         let mut active = BTreeSet::new();
         let mut errors = vec![];
+        let linked: BTreeSet<_> = catalog["links"]
+            .as_array()
+            .ok_or("本机工作区关联清单无效。")?
+            .iter()
+            .map(|link| text(link, "repositoryId"))
+            .collect();
         for repository in catalog["repositories"]
             .as_array()
             .ok_or("Git仓库清单无效。")?
             .iter()
-            .filter(|r| r["available"] == true)
+            .filter(|r| r["available"] == true && linked.contains(text(r, "id")))
         {
             let id = text(repository, "id").to_owned();
             active.insert(id.clone());

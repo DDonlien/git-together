@@ -287,6 +287,7 @@ impl Presence {
                     biased;
                     changed = rx.changed() => { if changed.is_err() { break; } }
                     _ = presence.remote_loops(config, generation) => {}
+                    _ = presence.source_loop(generation) => {}
                     _ = presence.bridge_loop(generation) => {}
                 }
             }

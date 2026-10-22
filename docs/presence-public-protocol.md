@@ -44,6 +44,15 @@ POST `v1/control/enroll` 以账号会话作Bearer与 `X-Presence-Account`，body
 
 请求UUID、server、organizationId、scopeVersion、deviceId、repositoryId、workspaceId及preview共同绑定。提交说明逐分支生成并可编辑。跨用户只能由同一纳管组织内严格更高角色操作；同一身份不同设备允许个人控制。目标仍验证保存的Git身份、真实工作目录及文件变化，只有固定有限行为，不接受任意shell、文件正文或Git凭证。Commit后Push失败只重试Push。
 
+
+### 大清单分页与选中范围（控制协议2的可选扩展）
+
+支持此扩展的服务器在控制state返回`filePages: true`，多服务器客户端按对应serverId协商。首次`preview`携带`cursor: 0`；目标缓存同一份真实文件顺序和HEAD/内容摘要，返回`previewId`、`files`及`filePage: {offset,total,nextCursor?}`。每页最多100项且文件JSON不超过48KiB；结束页省略nextCursor，总文件数可以超过1000。后续页用相同previewId与nextCursor再次请求preview，不新建快照，不混合不同读取时刻的清单。
+
+`generate`和`execute`可以携带`selection: {all,ranges}`代替paths。ranges是按预览索引排序、互不重叠的闭区间；all为true时区间表示排除，为false时表示包含。全选未加载文件用`{all:true,ranges:[]}`，不会上传全部长路径。目标核对预览、请求者、设备、工作目录、动作、组织修订以及HEAD/内容摘要，再将索引还原为真实文件，交给既有Git执行链；AI只接收该选中范围。后续分页和说明生成也核对原预览的发起者归属，不能借同账号的另一设备或另一动作复用。
+
+原128KiB请求/结果边界、旧paths与旧非分页结果继续接受；1000项限制只保留在旧单次paths/files数组，不能解释为整个工作区的文件上限。新客户端仍可读取旧端的小清单；超过旧端限制时明确提示更新客户端/服务器后在本弹窗重试，不要求到目标设备缩减文件。服务器、发起端与目标端均需支持分页，编辑器及Presence状态协议版本保持不变。
+
 ## 远端状态协议3
 
 `v1/ws`支持账号会话或独立设备Bearer，设备握手deviceId须为服务端登记UUID。版本3支持bridge/observer、welcome/heartbeat/world/snapshot；完整快照含仓库/worktree/branch/HEAD、独立git/editor事实和unpublishedCommits。world的session包含identityId，project包含服务器确定的organizationId；world.organizations包含id/name/role/projects/revision。App不能通过上报organizationId选择自己的权限，服务器重新计算。

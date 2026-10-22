@@ -1,69 +1,103 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRemoteControl } from './RemoteControlProvider';
-import { controlDeviceOnline, controlJobLabel, remoteActionLabels, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteAction, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
+import { controlDeviceOnline, controlJobLabel, remoteActionLabels, remoteFileSelection, type ControlDevice, type ControlJob, type ControlWorkspace, type RemoteAction, type RemoteActionTarget, type ControlResult, type RemoteFile } from './remote-control-model';
 import { OutlinedTextField } from './material-inputs';
 import { Button, Checkbox, IconButton, Modal, Notice, type IconName } from './ui';
 
 const remoteActionIcons: Record<RemoteAction, IconName> = { commit: 'commit', submit: 'upload', abort: 'close', discard: 'clear' };
 
+function readFilePage(value: ControlResult | null | undefined, offset: number) {
+  if (!value?.previewId || !Array.isArray(value.files)) throw new Error('目标没有返回有效预览。');
+  const page = value.filePage;
+  if (page && (!Number.isSafeInteger(page.total) || page.total < offset + value.files.length || page.offset !== offset || (page.nextCursor === undefined ? offset + value.files.length !== page.total : !value.files.length || page.nextCursor !== offset + value.files.length || page.nextCursor >= page.total))) throw new Error('文件分页与原预览不一致，请重新读取清单。');
+  if (!page && offset !== 0) throw new Error('目标版本没有返回文件页，请更新目标端 GitTogether 后重试。');
+  return value as ControlResult & { previewId: string; files: RemoteFile[] };
+}
+function remotePreviewError(problem: unknown) {
+  const message = problem instanceof Error ? problem.message : '远端请求未完成。';
+  return /^(远端文件清单过大|更改文件过多)/.test(message) ? '目标端仍使用旧版大清单限制。请更新目标端 GitTogether 和 Presence 服务器，再在此弹窗选择范围，无需到目标设备删减文件。' : message;
+}
+
 export function RemoteActionDialog({ device, workspace, action, onClose }: RemoteActionTarget & { onClose: () => void }) {
   const control = useRemoteControl()!;
   const [preview, setPreview] = useState<ControlResult | null>(null);
   const [files, setFiles] = useState<RemoteFile[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState({ all: true, exceptions: new Set<number>() });
+  const [nextCursor, setNextCursor] = useState<number | undefined>();
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [pageError, setPageError] = useState('');
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const active = useRef(true);
   const cancel = useRef(new AbortController());
-  const manuallyEdited = useRef(false);
-  const selection = useRef<string[] | undefined>(undefined);
-  const revision = useRef(0);
-  const preparing = useRef(false);
+  const server = control.status?.servers?.find(value => value.serverId === device.serverId);
+  const paged = server ? server.filePages === true : control.status?.filePages === true;
+  const total = preview?.filePage?.total ?? files.length;
+  const selectedCount = selection.all ? total - selection.exceptions.size : selection.exceptions.size;
   const base = { serverId: device.serverId, deviceId: device.deviceId, workspaceId: workspace.id, repositoryId: workspace.repositoryId, action };
+  function selectedInput() {
+    return preview?.filePage ? { selection: remoteFileSelection(selection.all, selection.exceptions) } : { paths: files.filter((_, index) => selection.all !== selection.exceptions.has(index)).map(file => file.path) };
+  }
   async function prepare() {
-    if (preparing.current) return;
-    preparing.current = true;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setPageError(''); setPreview(null);
     try {
-      let again = true;
-      while (again && active.current) {
-        const current = revision.current;
-        const paths = selection.current;
-        const job = await control.enqueue({ ...base, kind: paths ? 'generate' : 'preview', ...(paths ? { paths } : {}) });
-        const completed = await control.wait(job, cancel.current.signal);
-        const value = completed.result;
-        if (!value?.previewId || !Array.isArray(value.files)) throw new Error('目标没有返回有效预览。');
-        again = current !== revision.current;
-        if (again || !active.current) continue;
-        setPreview(value);
-        if (selection.current === undefined) {
-          setFiles(value.files); setSelected(value.files.map(file => file.path)); selection.current = value.files.map(file => file.path);
-        }
-        if (!manuallyEdited.current) { setSummary(value.summary || ''); setDescription(value.description || ''); }
-      }
+      const job = await control.enqueue({ ...base, kind: 'preview', ...(paged ? { cursor: 0 } : {}) });
+      const completed = await control.wait(job, cancel.current.signal);
+      const value = readFilePage(completed.result, 0);
+      if (!active.current) return;
+      setPreview(value); setFiles(value.files); setNextCursor(value.filePage?.nextCursor);
+      setSelection({ all: true, exceptions: new Set() });
+      setSummary(current => current || value.summary || ''); setDescription(current => current || value.description || '');
     } catch (problem) {
-      if (active.current) { setPreview(null); setError(problem instanceof Error ? problem.message : '远端预览失败。'); }
-    } finally { preparing.current = false; if (active.current) setBusy(false); }
+      if (active.current) { setFiles([]); setError(remotePreviewError(problem)); }
+    } finally { if (active.current) setBusy(false); }
   }
   useEffect(() => {
     active.current = true;
     void prepare();
     return () => { active.current = false; cancel.current.abort(); };
   }, []);
-  function choose(paths: string[]) {
-    setSelected(paths); selection.current = paths; revision.current++;
-    if (!paths.length) { setPreview(null); return; }
-    void prepare();
+  function choose(index: number) {
+    setSelection(previous => {
+      const exceptions = new Set(previous.exceptions);
+      if (exceptions.has(index)) exceptions.delete(index); else exceptions.add(index);
+      return { ...previous, exceptions };
+    });
+  }
+  async function loadMore() {
+    if (!preview?.previewId || nextCursor === undefined || loadingPage) return;
+    setLoadingPage(true); setPageError('');
+    try {
+      const job = await control.enqueue({ ...base, kind: 'preview', previewId: preview.previewId, cursor: nextCursor });
+      const completed = await control.wait(job, cancel.current.signal);
+      const value = readFilePage(completed.result, nextCursor);
+      if (value.previewId !== preview.previewId || value.filePage?.total !== total) throw new Error('目标文件清单已变化，请重新预览。');
+      if (active.current) { setFiles(previous => [...previous, ...value.files]); setNextCursor(value.filePage?.nextCursor); }
+    } catch (problem) { if (active.current) setPageError(remotePreviewError(problem)); }
+    finally { if (active.current) setLoadingPage(false); }
+  }
+  async function generate() {
+    if (!preview?.previewId || !selectedCount) return;
+    setBusy(true); setError('');
+    try {
+      const job = await control.enqueue({ ...base, kind: 'generate', previewId: preview.previewId, ...selectedInput() });
+      const completed = await control.wait(job, cancel.current.signal);
+      const value = readFilePage(completed.result, 0);
+      if (!active.current) return;
+      setPreview({ ...value, files: preview.files, filePage: preview.filePage });
+      if (!value.aiError) { setSummary(value.summary || ''); setDescription(value.description || ''); }
+    } catch (problem) { if (active.current) setError(remotePreviewError(problem)); }
+    finally { if (active.current) setBusy(false); }
   }
   async function execute() {
     if (!preview?.previewId) return;
     setBusy(true); setError('');
     try {
-      await control.enqueue({ ...base, kind: 'execute', previewId: preview.previewId, paths: selected, ...(action === 'commit' || action === 'submit' ? { summary, description } : {}) });
+      await control.enqueue({ ...base, kind: 'execute', previewId: preview.previewId, ...(action !== 'abort' ? selectedInput() : {}), ...(action === 'commit' || action === 'submit' ? { summary, description } : {}) });
       onClose();
-    } catch (problem) { if (active.current) { setError(problem instanceof Error ? problem.message : '远端操作未受理。'); setBusy(false); } }
+    } catch (problem) { if (active.current) { setError(remotePreviewError(problem)); setBusy(false); } }
   }
   const committing = action === 'commit' || action === 'submit';
   return <Modal title={remoteActionLabels[action] + ' · ' + device.name + ' / ' + (preview?.branch || workspace.branch)} onClose={onClose}>
@@ -72,17 +106,18 @@ export function RemoteActionDialog({ device, workspace, action, onClose }: Remot
       {preview?.aiError && <Notice kind="error">{preview.aiError}</Notice>}
       {error && <Notice kind="error">{error}</Notice>}
       {committing && <>
-        <OutlinedTextField label="Summary" value={summary} required maxLength={500} disabled={busy} onChange={event => { manuallyEdited.current = true; setSummary(event.target.value); }} />
-        <OutlinedTextField type="textarea" label="Description" value={description} rows={3} maxLength={16384} disabled={busy} onChange={event => { manuallyEdited.current = true; setDescription(event.target.value); }} />
+        <OutlinedTextField label="Summary" value={summary} required maxLength={500} disabled={busy} onChange={event => setSummary(event.target.value)} />
+        <OutlinedTextField type="textarea" label="Description" value={description} rows={3} maxLength={16384} disabled={busy} onChange={event => setDescription(event.target.value)} />
+        <div className="remote-message-actions"><Button variant="quiet" disabled={busy || loadingPage || !!pageError || !preview || !selectedCount} onClick={() => void generate()}>AI生成说明</Button></div>
       </>}
       {action === 'abort' && preview && <p>{preview.running ? '请求目标中止当前操作；已经开始的提交会安全收尾。' : '中止目标正在进行的 ' + preview.operation + '，保留中止前的文件备份。'}</p>}
       {action === 'discard' && <p>将选中的文件恢复到目标当前提交，删除选中的新增文件，并保留恢复备份。</p>}
       <small className="remote-control-hint">仅处理已保存到磁盘的 Git 文件。未接入编辑器时，无法读取它的未保存内容。</small>
-      {action !== 'abort' && <div className="remote-action-files"><div className="remote-files-heading"><strong>更改清单 · {selected.length}</strong><Button variant="quiet" disabled={busy || !files.length} onClick={() => choose(selected.length === files.length ? [] : files.map(file => file.path))}>{selected.length === files.length ? '取消全选' : '全选'}</Button></div>{files.map(file => <div className="remote-action-file" key={file.path}>
-        <Checkbox label={'选择 ' + file.path} checked={selected.includes(file.path)} disabled={busy} onChange={() => choose(selected.includes(file.path) ? selected.filter(path => path !== file.path) : [...selected, file.path])} />
+      {action !== 'abort' && <section className="remote-files-section" aria-label="更改清单"><div className="remote-files-heading"><strong>已选 {selectedCount} / {total} 个文件</strong><Button variant="quiet" disabled={busy || !preview || !total} onClick={() => setSelection({ all: selectedCount !== total, exceptions: new Set() })}>{selectedCount === total ? '取消全选' : `全选全部 ${total} 个`}</Button></div><small className="remote-file-progress" role="status">已加载 {files.length} / {total} 个文件{selection.all && nextCursor !== undefined ? '，全选包含尚未加载的文件' : ''}</small><div className="remote-action-files">{files.map((file, index) => <div className="remote-action-file" key={file.path}>
+        <Checkbox label={'选择 ' + file.path} checked={selection.all !== selection.exceptions.has(index)} disabled={busy} onChange={() => choose(index)} />
         <span>{file.fromPath ? file.fromPath + ' → ' : ''}{file.path}</span><small>{file.status === '??' ? '新增' : file.status.includes('D') ? '删除' : file.status.includes('A') ? '新增' : file.status.includes('R') ? '重命名' : '修改'}</small>
-      </div>)}</div>}
-      <div className="remote-dialog-actions"><Button onClick={onClose}>取消</Button>{error && <Button disabled={busy} onClick={() => void prepare()}>重新预览</Button>}<Button variant="primary" disabled={busy || !preview || (committing && !summary.trim()) || (action !== 'abort' && !selected.length)} onClick={() => void execute()}>{remoteActionLabels[action]}</Button></div>
+      </div>)}</div>{pageError && <Notice kind="error">{pageError}</Notice>}{nextCursor !== undefined && <Button variant="quiet" disabled={busy || loadingPage} onClick={() => void loadMore()}>{loadingPage ? '正在加载…' : pageError ? '重试加载' : '加载下一批'}</Button>}</section>}
+      <div className="remote-dialog-actions"><Button onClick={onClose}>取消</Button>{(error || pageError) && <Button disabled={busy || loadingPage} onClick={() => void prepare()}>重新预览</Button>}<Button variant="primary" disabled={busy || loadingPage || !!pageError || !preview || (committing && !summary.trim()) || (action !== 'abort' && !selectedCount)} onClick={() => void execute()}>{remoteActionLabels[action]}</Button></div>
     </div>
   </Modal>;
 }

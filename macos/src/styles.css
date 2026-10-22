@@ -434,6 +434,9 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-icon-anchor > .push-feedback-icon { position: absolute; right: -3px; bottom: -3px; border-radius: 50%; background: var(--content); padding: 1px; box-sizing: content-box; }
 .push-progress { display: flex; flex-direction: column; gap: 6px; margin-block: 10px; min-width: 0; }
 .push-progress small { color: var(--muted); font-size: 11px; }
+.repository-sync-progress-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.repository-sync-progress-title > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.repository-sync-progress-detail { overflow-wrap: anywhere; white-space: pre-wrap; }
 .push-progress md-linear-progress { --md-linear-progress-active-indicator-height: 3px; --md-linear-progress-track-height: 3px; --md-linear-progress-active-indicator-color: var(--blue); --md-linear-progress-track-color: var(--line); }
 .repository-push-status { display: flex; align-items: center; gap: 10px; }
 .repository-push-status .push-progress { flex: 1; }

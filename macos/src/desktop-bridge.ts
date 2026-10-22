@@ -16,6 +16,7 @@ export async function installDesktopBridge(): Promise<void> {
   const waiting = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
   port.onmessage = event => {
     if (event.data?.event === 'presentation') { window.dispatchEvent(new CustomEvent('gittogether:presentation', { detail: event.data.value })); return; }
+    if (event.data?.event === 'sync-progress') { window.dispatchEvent(new CustomEvent('gittogether:sync-progress', { detail: event.data.value })); return; }
     const request = waiting.get(event.data?.id); if (!request) return;
     waiting.delete(event.data.id);
     if (event.data.ok) request.resolve(event.data.value); else request.reject(new Error(event.data.error || "操作失败。"));
