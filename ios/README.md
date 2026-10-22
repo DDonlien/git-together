@@ -15,6 +15,8 @@ xcodebuild -project ios/git-together.xcodeproj -scheme git-together \
 
 上述命令从仓库根目录执行。GitHub Actions 的 `iOS source validation` 使用 macOS 运行核心回归与 Simulator 编译，具体运行结果以该次工作流及执行日志为准；这不能代替实际界面和双设备验收。
 
+0.1.0(1)源码63470557ac已通过 [16项Swift核心回归与iOS Simulator完整编译](https://github.com/DDonlien/git-together/actions/runs/39782016144)，使用Xcode26.6 / Swift6.3.3。尚未进行Simulator交互、真机、真实账号、双设备写操作或Liquid Glass视觉验收，没有生成分发包。
+
 ## 使用
 
 在“设置 → 账号”连接 GitHub、GitHub Enterprise、GitLab、Gitee 或 Gitea，填写该平台访问令牌。iOS 使用独立 Keychain，不读取或同步桌面的登录凭据。GitHub细粒度令牌需要所选仓库的 Metadata/Contents 读取权限；GitLab使用可读API的个人访问令牌，其余平台按自己的仓库读取授权配置。

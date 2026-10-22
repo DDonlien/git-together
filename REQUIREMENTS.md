@@ -96,7 +96,7 @@ Wireframes v0.1 是最初的页面范围。2026-10-04 起按用户最新要求�
 
 - [ ] \[0.1.0-FE-A-001] 增加 SwiftUI iOS App，沿用现有客户端的界面文案、功能与组件语义；底栏和搜索采用系统 Liquid Glass，正文继续采用 GitTogether Material 3。iOS 只浏览远端，通过 Presence 控制拥有本地仓库的桌面设备，不在手机上创建或操作本地 Git 仓库。具体实现与验收见 [iOS 需求](ios/REQUIREMENTS.md)。
   - [ ] \[0.1.0-FE-A-001-worktrees] 在每个仓库中按服务器、设备和组织范围展示各个 worktree 的分支、HEAD、Git 修改、编辑器状态、未推送提交及可用远程操作；同分支的多个目录分别展示，离线保留上次记录并明确标注未知，不把目录哈希伪装成本地路径。
-  - [ ] \[0.1.0-FE-A-001-source] 交付可在 Mac 打开的 Xcode 工程、Swift 源码与接口回归，完成当前 Windows 环境可执行的检查后提交并推送；Xcode 编译、Simulator、真机和 Liquid Glass 视觉验收由后续 Mac 测试确认。
+  - [x] \[0.1.0-FE-A-001-source] 交付可在 Mac 打开的 Xcode 工程、Swift 源码与接口回归，完成当前 Windows 环境可执行的检查后提交并推送。源码63470557ac已推送main；macOS CI 39782016144在Xcode26.6/Swift6.3.3下通过16项核心回归及iOS Simulator完整编译。Simulator交互、真机、真实账号、双设备操作和Liquid Glass视觉仍由后续Mac测试确认；父项与worktree实际运行验收继续保留未完成。
 
 ### codex/standalone-ts: 多仓库与文件提交工作台
 
