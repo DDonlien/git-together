@@ -78,15 +78,15 @@ If nobody has responded to your issue in a few days, you're welcome to respond t
 
 ## How can I contribute to GitHub Desktop?
 
-The [CONTRIBUTING.md](./.github/CONTRIBUTING.md) document will help you get setup and
-familiar with the source. The [documentation](docs/) folder also contains more
+The [CONTRIBUTING.md](.github/CONTRIBUTING.md) document will help you get setup and
+familiar with the source. The [documentation](docs) folder also contains more
 resources relevant to the project.
 
 If you're looking for something to work on, check out the [help wanted](https://github.com/desktop/desktop/issues?q=is%3Aissue+is%3Aopen+label%3A%22help%20wanted%22) label.
 
 ## Building Desktop
 
-To setup your development environment for building Desktop, check out: [`setup.md`](./docs/contributing/setup.md).
+To setup your development environment for building Desktop, check out: [`setup.md`](docs/contributing/setup.md).
 
 ## More Resources
 

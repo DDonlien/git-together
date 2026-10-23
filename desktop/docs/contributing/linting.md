@@ -9,7 +9,7 @@ Our linting tooling uses a combination of
 * [Prettier](https://github.com/prettier/prettier)
 * [ESLint](https://github.com/eslint/eslint)
 
-Most (if not all) editors have integrations for these tools so that they will report errors and fix formatting in realtime. See [tooling](./tooling.md) for how to set these integrations up while developing for desktop.
+Most (if not all) editors have integrations for these tools so that they will report errors and fix formatting in realtime. See [tooling](tooling.md) for how to set these integrations up while developing for desktop.
 
 ## Running Checks
 

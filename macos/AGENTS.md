@@ -1,5 +1,17 @@
 # Prototype Instructions
 
+
+## 通用规范继承
+
+继承当前工作副本根 [AGENTS.md](../AGENTS.md#通用规则) 的新版通用规则。
+
+<!-- local-agent-template-rollout:v2.0.1-261023-173015 -->
+> 通用规则来源于本地 `DDonlien/agent-template` `v2.0.1-261023-173015`。项目自己的范围、命令和技术契约继续有效；旧模板中要求 REQUIREMENTS / agent-log 双写、例行远端同步与提交的通用制度已停用。
+>
+> 项目任务以当前工作副本根 `../issue/` 为唯一工作入口，正文维护当前事实，Comments 追加历史。旧工作文档在有可追溯迁移映射和 Git 历史 / 版本化来源副本后移除；未把历史日志机械创建为新任务。`versioncontrolid` 仍为未定义占位。
+<!-- /local-agent-template-rollout -->
+
+
 Dashboard status header (2026-10-12): keep the existing identity-column width and icon/name geometry. Center the sortable Status label over the folder tile, align Repository with repository names, and place status arrows outside the centered text. Remove the final collapsed repository's bottom divider even when followed by an empty/hidden branch tbody; retain middle dividers and expanded repository-to-branch separation. Sort from the same real reading/pushing/error/Git signal facts as the row, with unknown distinct from confirmed synchronized. Preserve Presence, filters, collapse, account/link data and the existing readers; this UI change does not update the installed app.
 
 Windows dual-architecture releases (2026-10-12, latest user request): starting with the next formal release, package macOS Apple Silicon, Windows x86 (32-bit, i686-pc-windows-msvc), and Windows x64 (64-bit, x86_64-pc-windows-msvc) together from the same main commit/tag and product version. Use the same React/Tauri/Rust client; complete platform-specific storage, paths, Git/Codex discovery, file/process and system integration before claiming Windows support. Prefer native Windows builds with separate NSIS installers labeled Windows-x86 and Windows-x64. Verify both actual application architectures, complete artifacts/digests and signed public windows-i686/windows-x86_64 update entries along with the existing macOS assets. All three platforms are required for complete release delivery. Keep signing keys outside the repository and retain the existing automatic release authorization and installed-app boundary. This policy-only change does not require a version bump or new release; RUN-01-windows-packaging tracks actual implementation and verification.

@@ -4,13 +4,13 @@
 
 Refer to the specific instructions for each platform:
 
- - [macOS](./setup-macos.md)
- - [Windows](./setup-windows.md)
- - [Linux](./setup-linux.md)
+ - [macOS](setup-macos.md)
+ - [Windows](setup-windows.md)
+ - [Linux](setup-linux.md)
 
 Experimental support for building Desktop is also available for these platforms:
 
- - [ARM64](./building-arm64.md)
+ - [ARM64](building-arm64.md)
 
 ## Verification
 
