@@ -243,6 +243,7 @@ export class Button extends React.Component<IButtonProps, {}> {
         onKeyDown={this.props.onKeyDown}
         onContextMenu={disabled ? preventDefault : this.onContextMenu}
         type={this.props.type || 'button'}
+        disabled={this.props.type === 'submit' && disabled}
         ref={this.innerButtonRef}
         tabIndex={this.props.tabIndex}
         onMouseEnter={disabled ? preventDefault : this.props.onMouseEnter}

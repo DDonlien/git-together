@@ -267,6 +267,7 @@ export abstract class BaseMultiCommitOperation extends React.Component<IMultiCom
 
         return (
           <ConflictsDialog
+            operationKind={operationDetail.kind}
             dispatcher={dispatcher}
             repository={repository}
             accounts={this.props.accounts}

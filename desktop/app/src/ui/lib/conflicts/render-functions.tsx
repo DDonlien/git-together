@@ -4,11 +4,10 @@ import * as octicons from '../../octicons/octicons.generated'
 import { LinkButton } from '../link-button'
 
 export function renderUnmergedFilesSummary(conflictedFilesCount: number) {
-  // localization, it burns :vampire:
   const message =
-    conflictedFilesCount === 1
-      ? `1 conflicted file`
-      : `${conflictedFilesCount} conflicted files`
+    conflictedFilesCount === 0
+      ? '所有文件的冲突均已解决'
+      : `仍有 ${conflictedFilesCount} 个文件存在冲突`
   return <h2 className="summary">{message}</h2>
 }
 
@@ -18,7 +17,7 @@ export function renderAllResolved() {
       <div className="green-circle">
         <Octicon symbol={octicons.check} />
       </div>
-      <div className="message">All conflicts resolved</div>
+      <div className="message">所有文件的冲突均已解决</div>
     </div>
   )
 }

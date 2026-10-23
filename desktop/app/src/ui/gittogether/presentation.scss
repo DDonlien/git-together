@@ -67,12 +67,13 @@ dialog.gt-dialog-wide { width: min(860px, calc(100vw - 40px)); }
 .gt-dialog-footer .checkbox-component { margin-right: auto; }
 .gt-dialog .button-group { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .gt-button, .gt-menu-list button, .gt-choice { border: 0; border-radius: 999px; padding: 9px 18px; min-height: 36px; background: var(--surface); color: var(--text); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; line-height: 18px; }
-.gt-button:hover { background: var(--surface-hover); }
-.gt-button:not(:disabled):active { transform: translateY(1px); }
+.gt-button:not(:disabled):not([aria-disabled=true]):hover { background: var(--surface-hover); }
+.gt-button:not(:disabled):not([aria-disabled=true]):active { transform: translateY(1px); }
 .gt-dialog .button-group:not(.destructive) .gt-button[type=submit], .gt-dialog-footer > .gt-button[type=submit] { color: var(--on-primary); background: var(--blue); }
 .gt-dialog .button-group.destructive .gt-button[type=button], .gt-button.danger { color: var(--on-primary); background: var(--danger); }
 .gt-dialog .button-group.destructive .gt-button[type=submit] { background: var(--surface); color: var(--text); }
-.gt-button:disabled, .gt-dialog button:disabled, .gt-dialog a[aria-disabled=true] { opacity: .38; }
+.gt-button:disabled, .gt-button[aria-disabled=true], .gt-dialog button:disabled, .gt-dialog a[aria-disabled=true] { opacity: .38; }
+#conflicts-dialog .gt-button[type=submit]:disabled { background: var(--surface); color: var(--muted); }
 .gt-dialog .link-button-component { display: inline-flex; align-items: center; gap: 5px; }
 .gt-dialog .row-component { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0; min-width: 0; }
 .gt-dialog .row-component > .gt-field, .gt-dialog .row-component > .select-component { flex: 1; min-width: 180px; }
@@ -249,6 +250,10 @@ dialog.gt-dialog-wide { width: min(860px, calc(100vw - 40px)); }
 .gt-dialog .action-buttons .button-group-item:last-child { border-radius: 0 20px 20px 0; padding: 8px 10px; border-left: 1px solid var(--line); }
 .gt-dialog .green-circle, .gt-dialog .all-conflicts-resolved { color: var(--teal); }
 .gt-dialog .all-conflicts-resolved { display: flex; gap: 10px; align-items: center; padding: 12px; }
+#conflicts-dialog .conflicts-footer-with-copilot { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; }
+#conflicts-dialog .conflicts-footer-with-copilot > .copilot-resolve-button { flex-shrink: 0; white-space: nowrap; }
+#conflicts-dialog .conflicts-footer-with-copilot > .button-group { flex-wrap: nowrap; }
+@media (max-width: 480px) { #conflicts-dialog .conflicts-footer-with-copilot { justify-content: flex-start; flex-wrap: wrap; } #conflicts-dialog .conflicts-footer-with-copilot > .button-group { margin-left: auto; flex-wrap: wrap; } }
 @media (max-width: 640px) { .gt-dialog .unmerged-file-statuses > li { flex-wrap: wrap; } .gt-dialog .unmerged-file-statuses .action-buttons { margin-left: 30px; } }
 
 .gt-crash-page .gt-button[type=submit] { background: var(--blue); color: var(--on-primary); }

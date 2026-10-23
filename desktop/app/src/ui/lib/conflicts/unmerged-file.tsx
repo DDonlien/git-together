@@ -15,6 +15,7 @@ import { Octicon } from '../../octicons'
 import * as octicons from '../../octicons/octicons.generated'
 import { PathText } from '../path-text'
 import { ManualConflictResolution } from '../../../models/manual-conflict-resolution'
+import { MultiCommitOperationKind } from '../../../models/multi-commit-operation'
 import {
   OpenWithDefaultProgramLabel,
   RevealInFileManagerLabel,
@@ -23,20 +24,43 @@ import { openFile } from '../open-file'
 import { Button } from '../button'
 import { IMenuItem } from '../../../lib/menu-item'
 import {
-  hasUnresolvedConflicts,
   getUnmergedStatusEntryDescription,
   getLabelForManualResolutionOption,
 } from '../../../lib/status'
 import { revealInFileManager } from '../../../lib/app-shell'
 import { DialogPreferredFocusClassName } from '../../dialog'
+import { isConflictResolved } from '../../gittogether/conflict-progress'
 
-const defaultConflictsResolvedMessage = 'No conflicts remaining'
+const defaultConflictsResolvedMessage = '此文件的冲突已解决'
+
+function isChineseLocale(): boolean {
+  return navigator.language.toLowerCase().startsWith('zh')
+}
+
+function getOpenWithDefaultProgramLabel(): string {
+  return isChineseLocale()
+    ? '使用系统默认应用打开'
+    : OpenWithDefaultProgramLabel
+}
+
+function getRevealInFileManagerLabel(): string {
+  if (!isChineseLocale()) {
+    return RevealInFileManagerLabel
+  }
+
+  if (__DARWIN__) {
+    return '在 Finder 中显示'
+  }
+
+  return __WIN32__ ? '在资源管理器中显示' : '在文件管理器中显示'
+}
 
 /**
  * Renders an unmerged file status and associated buttons for the merge conflicts modal
  * (An "unmerged file" can be conflicted _and_ resolved or _just_ conflicted)
  */
 export const renderUnmergedFile: React.FunctionComponent<{
+  readonly operationKind: MultiCommitOperationKind
   /** repository this file is in (for pathing and git operations) */
   readonly repository: Repository
   /** file path relative to repository */
@@ -84,9 +108,10 @@ export const renderUnmergedFile: React.FunctionComponent<{
 }> = props => {
   if (
     isConflictWithMarkers(props.status) &&
-    hasUnresolvedConflicts(props.status, props.manualResolution)
+    !isConflictResolved(props.status, props.manualResolution)
   ) {
     return renderConflictedFileWithConflictMarkers({
+      operationKind: props.operationKind,
       path: props.path,
       status: props.status,
       resolvedExternalEditor: props.resolvedExternalEditor,
@@ -104,9 +129,10 @@ export const renderUnmergedFile: React.FunctionComponent<{
   }
   if (
     isManualConflict(props.status) &&
-    hasUnresolvedConflicts(props.status, props.manualResolution)
+    !isConflictResolved(props.status, props.manualResolution)
   ) {
     return renderManualConflictedFile({
+      operationKind: props.operationKind,
       path: props.path,
       status: props.status,
       repository: props.repository,
@@ -139,7 +165,7 @@ const renderResolvedFile: React.FunctionComponent<{
   readonly branch?: string
   readonly dispatcher: Dispatcher
 }> = props => {
-  const fileStatusSummary = getResolvedFileStatusSummary(
+  const fileStatusSummary = resolvedFileStatusString(
     props.status,
     props.manualResolution,
     props.branch
@@ -151,7 +177,7 @@ const renderResolvedFile: React.FunctionComponent<{
         <PathText path={props.path} />
         <div className="file-conflicts-status">{fileStatusSummary}</div>
       </div>
-      {fileStatusSummary === defaultConflictsResolvedMessage ? null : (
+      {props.manualResolution === undefined ? null : (
         <Button
           className="undo-button"
           onClick={makeUndoManualResolutionClickHandler(
@@ -173,6 +199,7 @@ const renderResolvedFile: React.FunctionComponent<{
 
 /** renders the status of a manually conflicted file and associated buttons for the merge conflicts modal */
 const renderManualConflictedFile: React.FunctionComponent<{
+  readonly operationKind: MultiCommitOperationKind
   readonly path: string
   readonly status: ManualConflict
   readonly repository: Repository
@@ -187,7 +214,8 @@ const renderManualConflictedFile: React.FunctionComponent<{
     props.repository,
     props.dispatcher,
     props.ourBranch,
-    props.theirBranch
+    props.theirBranch,
+    props.operationKind
   )
 
   const onDropdownKeyDown = makeManualConflictDropdownOnKeyDownHandler(
@@ -196,7 +224,8 @@ const renderManualConflictedFile: React.FunctionComponent<{
     props.repository,
     props.dispatcher,
     props.ourBranch,
-    props.theirBranch
+    props.theirBranch,
+    props.operationKind
   )
 
   const { ourBranch, theirBranch } = props
@@ -255,6 +284,7 @@ function renderConflictedFileWrapper(
 }
 
 const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
+  readonly operationKind: MultiCommitOperationKind
   readonly path: string
   readonly status: ConflictsWithMarkers
   readonly resolvedExternalEditor: string | null
@@ -273,9 +303,9 @@ const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
     props.status.conflictMarkerCount
   )
   const message =
-    humanReadableConflicts === 1
-      ? `1 conflict`
-      : `${humanReadableConflicts} conflicts`
+    Number.isFinite(humanReadableConflicts) && humanReadableConflicts > 0
+      ? `${humanReadableConflicts} 处冲突`
+      : '冲突状态待确认'
 
   const disabled = props.resolvedExternalEditor === null
   const tooltip = editorButtonTooltip(props.resolvedExternalEditor)
@@ -286,6 +316,7 @@ const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
     props.status,
     props.ourBranch,
     props.theirBranch,
+    props.operationKind,
     props.setIsFileResolutionOptionsMenuOpen
   )
 
@@ -295,7 +326,8 @@ const renderConflictedFileWithConflictMarkers: React.FunctionComponent<{
     props.repository,
     props.dispatcher,
     props.ourBranch,
-    props.theirBranch
+    props.theirBranch,
+    props.operationKind
   )
 
   const openEditorButtonClassName = props.isFirstConflictedFile
@@ -339,8 +371,9 @@ const makeManualConflictDropdownClickHandler = (
   status: ManualConflict,
   repository: Repository,
   dispatcher: Dispatcher,
-  ourBranch?: string,
-  theirBranch?: string
+  ourBranch: string | undefined,
+  theirBranch: string | undefined,
+  operationKind: MultiCommitOperationKind
 ) => {
   return () => {
     showContextualMenu(
@@ -350,7 +383,8 @@ const makeManualConflictDropdownClickHandler = (
         dispatcher,
         status,
         ourBranch,
-        theirBranch
+        theirBranch,
+        operationKind
       )
     )
   }
@@ -362,8 +396,9 @@ const makeManualConflictDropdownOnKeyDownHandler = (
   status: ManualConflict,
   repository: Repository,
   dispatcher: Dispatcher,
-  ourBranch?: string,
-  theirBranch?: string
+  ourBranch: string | undefined,
+  theirBranch: string | undefined,
+  operationKind: MultiCommitOperationKind
 ) => {
   return (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'ArrowDown') {
@@ -373,7 +408,8 @@ const makeManualConflictDropdownOnKeyDownHandler = (
         repository,
         dispatcher,
         ourBranch,
-        theirBranch
+        theirBranch,
+        operationKind
       )()
     }
   }
@@ -401,6 +437,7 @@ const makeMarkerConflictDropdownClickHandler = (
   status: ConflictsWithMarkers,
   ourBranch: string | undefined,
   theirBranch: string | undefined,
+  operationKind: MultiCommitOperationKind,
   setIsFileResolutionOptionsMenuOpen: (
     isFileResolutionOptionsMenuOpen: boolean
   ) => void
@@ -409,11 +446,11 @@ const makeMarkerConflictDropdownClickHandler = (
     const absoluteFilePath = join(repository.path, relativeFilePath)
     const items: IMenuItem[] = [
       {
-        label: OpenWithDefaultProgramLabel,
+        label: getOpenWithDefaultProgramLabel(),
         action: () => openFile(absoluteFilePath, dispatcher),
       },
       {
-        label: RevealInFileManagerLabel,
+        label: getRevealInFileManagerLabel(),
         action: () => revealInFileManager(repository, relativeFilePath),
       },
       {
@@ -425,7 +462,8 @@ const makeMarkerConflictDropdownClickHandler = (
         dispatcher,
         status,
         ourBranch,
-        theirBranch
+        theirBranch,
+        operationKind
       ),
     ]
     setIsFileResolutionOptionsMenuOpen(true)
@@ -440,12 +478,18 @@ function getManualResolutionMenuItems(
   repository: Repository,
   dispatcher: Dispatcher,
   status: ConflictedFileStatus,
-  ourBranch?: string,
-  theirBranch?: string
+  ourBranch: string | undefined,
+  theirBranch: string | undefined,
+  operationKind: MultiCommitOperationKind
 ): ReadonlyArray<IMenuItem> {
   return [
     {
-      label: getLabelForManualResolutionOption(status.entry.us, ourBranch),
+      label: getManualResolutionMenuLabel(
+        status.entry.us,
+        ourBranch,
+        'ours',
+        operationKind
+      ),
       action: () =>
         dispatcher.updateManualConflictResolution(
           repository,
@@ -455,7 +499,12 @@ function getManualResolutionMenuItems(
     },
 
     {
-      label: getLabelForManualResolutionOption(status.entry.them, theirBranch),
+      label: getManualResolutionMenuLabel(
+        status.entry.them,
+        theirBranch,
+        'theirs',
+        operationKind
+      ),
       action: () =>
         dispatcher.updateManualConflictResolution(
           repository,
@@ -464,6 +513,52 @@ function getManualResolutionMenuItems(
         ),
     },
   ]
+}
+
+function getManualResolutionMenuLabel(
+  entry:
+    | GitStatusEntry.Added
+    | GitStatusEntry.UpdatedButUnmerged
+    | GitStatusEntry.Deleted,
+  branch: string | undefined,
+  side: 'ours' | 'theirs',
+  operationKind: MultiCommitOperationKind
+): string {
+  const isChinese = isChineseLocale()
+
+  // Rebase and cherry-pick branch names do not represent local and remote sides.
+  if (
+    operationKind === MultiCommitOperationKind.Merge &&
+    entry === GitStatusEntry.UpdatedButUnmerged
+  ) {
+    if (side === 'ours') {
+      return isChinese ? '使用本地版本' : 'Use local'
+    }
+
+    const branchSuffix = branch
+      ? isChinese
+        ? `：${branch}`
+        : `: ${branch}`
+      : ''
+    return isChinese
+      ? `使用远端版本${branchSuffix}`
+      : `Use remote${branchSuffix}`
+  }
+
+  if (!isChinese) {
+    return getLabelForManualResolutionOption(entry, branch)
+  }
+
+  switch (entry) {
+    case GitStatusEntry.Added:
+      return branch ? `使用来自 ${branch} 的新增文件` : '使用新增文件'
+    case GitStatusEntry.UpdatedButUnmerged:
+      return branch ? `使用来自 ${branch} 的修改文件` : '使用修改文件'
+    case GitStatusEntry.Deleted:
+      return branch ? `不包含 ${branch} 上的此文件` : '不包含此文件'
+    default:
+      return getLabelForManualResolutionOption(entry, branch)
+  }
 }
 
 function resolvedFileStatusString(
@@ -478,19 +573,6 @@ function resolvedFileStatusString(
     return getUnmergedStatusEntryDescription(status.entry.them, branch)
   }
   return defaultConflictsResolvedMessage
-}
-
-const getResolvedFileStatusSummary = (
-  status: ConflictedFileStatus,
-  manualResolution?: ManualConflictResolution,
-  branch?: string
-) => {
-  const noConflictMarkers =
-    isConflictWithMarkers(status) && status.conflictMarkerCount === 0
-
-  return noConflictMarkers
-    ? defaultConflictsResolvedMessage
-    : resolvedFileStatusString(status, manualResolution, branch)
 }
 
 /** returns the name of the branch that corresponds to the chosen manual resolution */
@@ -520,11 +602,19 @@ function calculateConflicts(conflictMarkers: number) {
 }
 
 function editorButtonString(editorName: string | null): string {
+  if (editorName === 'Default') {
+    return 'Open with system default'
+  }
+
   const defaultEditorString = 'editor'
   return `Open in ${editorName || defaultEditorString}`
 }
 
 function editorButtonTooltip(editorName: string | null): string | undefined {
+  if (editorName === 'Default') {
+    return 'Open this file with the system default application'
+  }
+
   if (editorName !== null) {
     // no need to render a tooltip if we have a known editor
     return

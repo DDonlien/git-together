@@ -3997,8 +3997,8 @@
       "reason": "GitTogether Material presentation only; original controller callbacks and execution are retained."
     },
     "app/src/ui/lib/button.tsx": {
-      "sha256": "4f2ff1011b232d6f85ec019209e58d4d3cba4ad6bc17d23297759146ea711a10",
-      "reason": "GitTogether Material presentation only; original controller callbacks and execution are retained."
+      "sha256": "3740e4f06b061a05d891d58821609a758d4bbaac1fd31227764b604846b65cd9",
+      "reason": "Use native disabled behavior for submit buttons and style disabled controls consistently."
     },
     "app/src/ui/lib/text-box.tsx": {
       "sha256": "82de901ebab8f9a1d96186e0f18bf2b4aa3c2f13507835c3c2559c3fb85c5c28",
@@ -4053,8 +4053,8 @@
       "reason": "GitTogether Material view only; original controller callbacks are retained."
     },
     "app/src/ui/preferences/preferences.tsx": {
-      "sha256": "e8a5603b03747cfb4c99d98955167f8ec93822492685eeb01fd33bc2472e74f1",
-      "reason": "GitTogether Material view only; original controller callbacks are retained."
+      "sha256": "dfb9b777a9b6c39dd4878d0a5fef4fe0e7d80fb838ecda5f9bae4b2b77ad9d0e",
+      "reason": "Authorized editor selection UI supports System Default and unavailable saved-editor feedback; existing update paths are retained."
     },
     "app/src/ui/repository-settings/repository-settings.tsx": {
       "sha256": "a4009a362c75c480dc82dc40c1d8c635da09be24f8f3ccb083aaaa1ae8426ee8",
@@ -4187,6 +4187,38 @@
     "script/copilot.ts": {
       "sha256": "4bd7f8b60863a298efa7512c0b60041e26f127d9acc4f14148f8c7d9c418823c",
       "reason": "Skip unavailable vendor Copilot binary for ia32; no runtime or Git execution changes"
+    },
+    "app/src/lib/editors/win32.ts": {
+      "sha256": "75fca0022a4f451c6448caa87c243d3c960baea15775aa63b268597dda3df2f2",
+      "reason": "Authorized editor discovery adds Visual Studio via vswhere; existing editor providers are preserved."
+    },
+    "app/src/lib/stores/app-store.ts": {
+      "sha256": "aa7580ebc9f4bbce5a961dea571713a25e353fbe76b06d818ef3fca02134e277",
+      "reason": "Authorized System Default editor preference persists the null selection and uses the system file opener."
+    },
+    "app/src/ui/dispatcher/dispatcher.ts": {
+      "sha256": "b2e470e33a0e5338117422f159c077839d6351742f9d7dd102a3cd30f1b43653",
+      "reason": "Pass System Default editor selection through the existing preference change action."
+    },
+    "app/src/ui/lib/conflicts/render-functions.tsx": {
+      "sha256": "b9a62c2de844e722ba17f4b8fb2d7210de661f7144bc4ac23b0ac981f86790b5",
+      "reason": "Present GitTogether conflict status and progress while preserving conflict behavior."
+    },
+    "app/src/ui/lib/conflicts/unmerged-file.tsx": {
+      "sha256": "64b3bd85c2234fda793687584a531cf97fec5da01050b4482b07d89777b681b1",
+      "reason": "Use operation-specific conflict wording and localized file actions while retaining ours/theirs callbacks."
+    },
+    "app/src/ui/multi-commit-operation/base-multi-commit-operation.tsx": {
+      "sha256": "54b206d92ae4229ff83f7ea41be59bc855826f0ae8bf8bb1e80ece31f4ec9856",
+      "reason": "Pass operation kind to conflict presentation for merge/rebase-specific wording."
+    },
+    "app/src/ui/multi-commit-operation/dialog/conflicts-dialog.tsx": {
+      "sha256": "c28a986b734b8fb67238b8e43bcb065c6ee47512b3ded9121fabad8bade077ac",
+      "reason": "Approved conflict progress and submission guards plus Resolve with AI label/footer layout; preserve the resolution callback and account checks."
+    },
+    "app/src/ui/preferences/integrations.tsx": {
+      "sha256": "9ae4ea0b0784a7907eae3054135ee74db7968795b607c14b42ea869315d6bf94",
+      "reason": "Show System Default, discovered editors, and feedback for an unavailable saved editor."
     }
   },
   "submodules": [
@@ -4234,6 +4266,11 @@
     "app/src/ui/lfs/initialize-lfs.tsx": "b67e538278db1265dbdc1f44df8d94d8b5367018ede192f5f49e6cf77208e212",
     "app/src/ui/lib/authentication-form.tsx": "710bc0c311f16b6bc272a0dd86301e42c9fb6d6054f4a9c6176cad7d7771bebf",
     "app/src/ui/lib/button.tsx": "22566c76033e36ec4146dabb0516d81796e6da3d8368eda616490f5c53714a0d",
+    "app/src/lib/stores/app-store.ts": "08b27b30d5bd9afca8cc0624234a3125877b72836e85730fec7054322a6d7d8b",
+    "app/src/ui/dispatcher/dispatcher.ts": "165b75d0ff759afc291b42e43578eff24edb1484d557d78a6fbaba6ff7191492",
+    "app/src/ui/multi-commit-operation/base-multi-commit-operation.tsx": "eefc617475e60a4f81967dffe7e131e6cdec4d480333f04f4e79743bc0ceac4b",
+    "app/src/ui/multi-commit-operation/dialog/conflicts-dialog.tsx": "d02b77e26076fb154f41a39f7301fe2b9b3008621ea00a2211212d5b733344c8",
+    "app/src/ui/preferences/integrations.tsx": "59e7306e074efa9e5a7feeb0119c25c659b8a4d6f658de76759ca3f174ea2229",
     "app/src/ui/lib/text-box.tsx": "a1200fcabeef01a5bd4c1153de75a4d5bff52ed339632e4713128eb684493d1d",
     "app/src/ui/move-to-applications-folder.tsx": "218a95c4a9671068c19ae670efe7c86d3a282b33b9dfa916c985da2589aa718c",
     "app/src/ui/multi-commit-operation/dialog/warn-force-push-dialog.tsx": "522de7e39e41116627d425de40dc9472eb6ef89fa580b1b8613378b96344b83b",
@@ -4245,7 +4282,7 @@
     "app/src/ui/preferences/copilot.tsx": "6b201490de45a4fe1f757f3c3fd05f50560df4d6f631d0e216649b15b17bc47d",
     "app/src/ui/preferences/git.tsx": "4c4ab94436d0a8146e3b2c80736ed625ce6047c1db8712f9e849d55159e48721",
     "app/src/ui/preferences/notifications.tsx": "9b95b726b24a8fc0c6aad51980ade6d35dc380f3fc4433a42a56cf4b71088fab",
-    "app/src/ui/preferences/preferences.tsx": "bd1de06d0377c1ba0cc4ce0343d6330b7a57f6eeeef9ccb7a946edf842b5efa3",
+    "app/src/ui/preferences/preferences.tsx": "1b77006f828fc58203f523b31c89a0d1a078204c46056e5c48d0be7268607444",
     "app/src/ui/push-needs-pull/push-needs-pull-warning.tsx": "19c00b19613e2e0acc62c346157c27032ed7293e10e9614db9541baf3749493f",
     "app/src/ui/remove-repository/confirm-remove-repository.tsx": "e03bc63d8950d35fc64dec841ae97fb95fc917edb8f80f5e4647818008f24bdb",
     "app/src/ui/repositories-list/repositories-list.tsx": "15a1ccaafdefce69a1a3d2871a2c4bdd8dfce2cfc42167aab653a44765c7202c",

@@ -175,7 +175,6 @@ import {
 } from '../app-state'
 import {
   findEditorOrDefault,
-  getAvailableEditors,
   launchCustomExternalEditor,
   launchExternalEditor,
 } from '../editors'
@@ -2843,22 +2842,10 @@ export class AppStore extends TypedBaseStore<IAppState> {
   }
 
   private async lookupSelectedExternalEditor(): Promise<string | null> {
-    const editors = (await getAvailableEditors()).map(found => found.editor)
-
     const value = localStorage.getItem(externalEditorKey)
-    // ensure editor is still installed
-    if (value && editors.includes(value)) {
-      return value
-    }
-
-    if (editors.length) {
-      const value = editors[0]
-      // store this value to avoid the lookup next time
-      localStorage.setItem(externalEditorKey, value)
-      return value
-    }
-
-    return null
+    // An empty preference means the system default app. Preserve unavailable
+    // saved editor names so the user can see and replace the stale choice.
+    return value || null
   }
 
   /**
@@ -7675,6 +7662,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
     try {
       if (useCustomEditor && customEditor) {
         await launchCustomExternalEditor(fullPath, customEditor)
+      } else if (selectedExternalEditor === null) {
+        const errorMessage = await shell.openPath(fullPath)
+        if (errorMessage !== '') {
+          throw new ExternalEditorError(
+            `Unable to open file ${fullPath} with the system default app: ${errorMessage}`
+          )
+        }
       } else {
         const match = await findEditorOrDefault(selectedExternalEditor)
         if (match === null) {
@@ -7917,9 +7911,13 @@ export class AppStore extends TypedBaseStore<IAppState> {
     return Promise.resolve()
   }
 
-  public _setExternalEditor(selectedEditor: string) {
+  public _setExternalEditor(selectedEditor: string | null) {
     const promise = this.updateSelectedExternalEditor(selectedEditor)
-    localStorage.setItem(externalEditorKey, selectedEditor)
+    if (selectedEditor === null) {
+      localStorage.removeItem(externalEditorKey)
+    } else {
+      localStorage.setItem(externalEditorKey, selectedEditor)
+    }
     this.emitUpdate()
 
     this.updateMenuLabelsForSelectedRepository()
@@ -8888,8 +8886,7 @@ export class AppStore extends TypedBaseStore<IAppState> {
   }
 
   public async _resolveCurrentEditor() {
-    const match = await findEditorOrDefault(this.selectedExternalEditor)
-    const resolvedExternalEditor = match != null ? match.editor : null
+    const resolvedExternalEditor = this.selectedExternalEditor ?? 'Default'
     if (this.resolvedExternalEditor !== resolvedExternalEditor) {
       this.resolvedExternalEditor = resolvedExternalEditor
 

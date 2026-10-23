@@ -44,6 +44,10 @@ Presence的系统存储由宿主通过原版TokenStore管理，开发版及不�
 
 `npm run package:mac` 与 `npm run release` 表示完整正式交付：从干净且已推送的main构建production客户端，macOS使用正式bundle身份和既有Developer ID、公证profile；Windows原生构建x86/x64并验证实际安装后的凭据及Git执行。旧版Tauri更新保留签名的tar/NSIS及latest.json，新版沿用原版Squirrel执行器；macOS使用公开Electron更新服务，Windows从main上的updates目录分别提供两种架构的RELEASES清单，载荷仍来自同一正式Release。资产齐备并通过隔离升级后才公开Release，随后发布两份轻量清单并完整回读。开发包使用显式`package:mac:dev`，不冒充正式交付。
 
+`.github/workflows/desktop-auto-release.yml` 在每次main推送后运行完整发布流程，使用GitHub托管的`macos-15` Apple Silicon runner签名和公证macOS包，并派发Windows x86/x64构建。发布任务串行运行，等待队列最多100个；版本号按根目录版本和已有Release自动递增patch。成功发布后，工作流把各产品版本文件与Windows更新清单作为`[skip ci]`元数据提交回main，不会再次触发发布。每次推送都打正式版本，因此日常试验或未准备公开的改动应留在分支。
+
+启用正式发布前，需要在仓库Settings → Secrets and variables → Actions中设置`GITTOGETHER_MACOS_CERTIFICATE_P12_BASE64`、`GITTOGETHER_MACOS_CERTIFICATE_PASSWORD`、`GITTOGETHER_APPLE_API_KEY_ID`、`GITTOGETHER_APPLE_API_ISSUER_ID`、`GITTOGETHER_APPLE_API_PRIVATE_KEY_P8`和`GITTOGETHER_TAURI_SIGNING_KEY`。第一项是Developer ID身份的base64编码P12文件，第二项是P12密码；Apple三项来自App Store Connect API key；最后一项是与`docs/release-updater.json`公钥对应的Tauri updater私钥。Updater私钥可由发布配置预置；其余值必须由仓库管理员提供，不能写入仓库文件。
+
 公证定位配置在仓库外的`~/.config/gittogether/release/notary.json`，仅保存profile及可选文件钥匙串路径。未指定路径时，Apple工具使用数据保护钥匙串，普通login钥匙串已解锁并不代表它可读。读取以Apple的notarytool为准；遇到69/NoItem时保留原配置，结合对应进程的系统错误区分锁定和暂不可见，并有限重试，不导出凭据或请求解锁。发布目录的`notary-submission.json`将任务绑定到输入ZIP及应用签名摘要，分别记录创建、上传、Accepted；重跑可续等已上传任务或给同一Accepted候选附加凭证，上传失败则保留候选并明确报错。上传使用Apple普通S3线路，避免已观察到的加速线路连接超时。Windows CI和公开包下载支持有界分段重试，但完整大小和SHA-256仍须全部匹配后才能进入后续步骤。
 
 未公开的GitHub草稿可以续传；只有服务端状态为uploaded、大小和完整SHA-256均与本地一致的资产才跳过重传。公开后仍完整下载验证，已经公开的版本禁止覆盖。

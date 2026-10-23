@@ -18,6 +18,7 @@ import { showOpenDialog } from '../main-process-proxy'
 import { copilotAppMarketingUrl } from '../../lib/copilot-app'
 
 const CustomIntegrationValue = 'other'
+const SystemDefaultEditorValue = 'system-default'
 
 interface IIntegrationsPreferencesProps {
   readonly availableEditors: ReadonlyArray<string>
@@ -30,7 +31,7 @@ interface IIntegrationsPreferencesProps {
   readonly customShell: ICustomIntegration
   readonly copilotAppPath: string
   readonly copilotAppPathError?: string
-  readonly onSelectedEditorChanged: (editor: string) => void
+  readonly onSelectedEditorChanged: (editor: string | null) => void
   readonly onSelectedShellChanged: (shell: Shell) => void
   readonly onUseCustomEditorChanged: (useCustomEditor: boolean) => void
   readonly onCustomEditorChanged: (customEditor: ICustomIntegration) => void
@@ -73,18 +74,6 @@ export class Integrations extends React.Component<
   public async componentWillReceiveProps(
     nextProps: IIntegrationsPreferencesProps
   ) {
-    const editors = nextProps.availableEditors
-    let selectedExternalEditor = nextProps.selectedExternalEditor
-    if (editors.length) {
-      const indexOf = selectedExternalEditor
-        ? editors.indexOf(selectedExternalEditor)
-        : -1
-      if (indexOf === -1) {
-        selectedExternalEditor = editors[0]
-        nextProps.onSelectedEditorChanged(selectedExternalEditor)
-      }
-    }
-
     const shells = nextProps.availableShells
     let selectedShell = nextProps.selectedShell
     if (shells.length) {
@@ -95,7 +84,7 @@ export class Integrations extends React.Component<
       }
     }
     this.setState({
-      selectedExternalEditor,
+      selectedExternalEditor: nextProps.selectedExternalEditor,
       selectedShell,
       useCustomEditor: nextProps.useCustomEditor,
       useCustomShell: nextProps.useCustomShell,
@@ -107,21 +96,12 @@ export class Integrations extends React.Component<
 
   public componentDidMount(): void {
     if (enableCustomIntegration()) {
-      const {
-        availableEditors,
-        availableShells,
-        useCustomEditor,
-        useCustomShell,
-      } = this.props
+      const { availableShells, useCustomShell } = this.props
 
       // When there are no available editors or shells, the `Select` component
       // will have the custom editor or shell already selected, but we need
       // to handle that as initial value, otherwise the custom integration
       // form won't be rendered.
-
-      if (availableEditors.length === 0 && !useCustomEditor) {
-        this.setSelectedEditor(CustomIntegrationValue)
-      }
 
       if (availableShells.length === 0 && !useCustomShell) {
         this.setSelectedShell(CustomIntegrationValue)
@@ -152,10 +132,10 @@ export class Integrations extends React.Component<
       return
     }
 
-    this.setSelectedEditor(value)
+    this.setSelectedEditor(value === SystemDefaultEditorValue ? null : value)
   }
 
-  private setSelectedEditor = (editor: string) => {
+  private setSelectedEditor = (editor: string | null) => {
     if (editor === CustomIntegrationValue) {
       this.setState({ useCustomEditor: true })
       this.props.onUseCustomEditorChanged(true)
@@ -200,25 +180,6 @@ export class Integrations extends React.Component<
     const { selectedExternalEditor, useCustomEditor } = this.state
     const label = __DARWIN__ ? 'External Editor' : 'External editor'
 
-    if (!enableCustomIntegration() && options.length === 0) {
-      // this is emulating the <Select/> component's UI so the styles are
-      // consistent for either case.
-      //
-      // TODO: see whether it makes sense to have a fallback UI
-      // which we display when the select list is empty
-      return (
-        <div className="select-component no-options-found">
-          <label>{label}</label>
-          <span>
-            No editors found.{' '}
-            <LinkButton uri={suggestedExternalEditor.url}>
-              Install {suggestedExternalEditor.name}?
-            </LinkButton>
-          </span>
-        </div>
-      )
-    }
-
     return (
       <Select
         label={enableCustomIntegration() ? undefined : label}
@@ -226,10 +187,23 @@ export class Integrations extends React.Component<
         value={
           useCustomEditor
             ? CustomIntegrationValue
-            : selectedExternalEditor ?? undefined
+            : selectedExternalEditor ?? SystemDefaultEditorValue
         }
         onChange={this.onSelectedEditorChanged}
       >
+        {selectedExternalEditor !== null &&
+          !options.includes(selectedExternalEditor) && (
+            <option
+              key={`unavailable-${selectedExternalEditor}`}
+              value={selectedExternalEditor}
+              disabled
+            >
+              {selectedExternalEditor} (not installed)
+            </option>
+          )}
+        <option key={SystemDefaultEditorValue} value={SystemDefaultEditorValue}>
+          Default (system default app)
+        </option>
         {options.map(n => (
           <option key={n} value={n}>
             {n}
@@ -243,6 +217,26 @@ export class Integrations extends React.Component<
           </option>
         )}
       </Select>
+    )
+  }
+
+  private renderUnavailableEditorHint() {
+    const { selectedExternalEditor, useCustomEditor } = this.state
+    if (
+      useCustomEditor ||
+      selectedExternalEditor === null ||
+      this.props.availableEditors.includes(selectedExternalEditor)
+    ) {
+      return null
+    }
+
+    return (
+      <Row>
+        <div className="no-options-found">
+          The saved editor “{selectedExternalEditor}” is not installed. Choose
+          Default or an available editor.
+        </div>
+      </Row>
     )
   }
 
@@ -444,6 +438,8 @@ export class Integrations extends React.Component<
         <DialogContent>
           <h2>Applications</h2>
           <Row>{this.renderExternalEditor()}</Row>
+          {this.renderUnavailableEditorHint()}
+          {this.renderNoExternalEditorHint()}
           <Row>{this.renderSelectedShell()}</Row>
           {this.renderCopilotApp()}
         </DialogContent>
@@ -457,6 +453,7 @@ export class Integrations extends React.Component<
             <h2>{__DARWIN__ ? 'External Editor' : 'External editor'}</h2>
           </legend>
           <Row>{this.renderExternalEditor()}</Row>
+          {this.renderUnavailableEditorHint()}
           {this.state.useCustomEditor && this.renderCustomExternalEditor()}
           {this.renderNoExternalEditorHint()}
         </fieldset>

@@ -7,12 +7,8 @@ import {
   WorkingDirectoryStatus,
   WorkingDirectoryFileChange,
 } from '../../../models/status'
-import {
-  isConflictedFile,
-  getResolvedFiles,
-  getConflictedFiles,
-  getUnmergedFiles,
-} from '../../../lib/status'
+import { isConflictedFile, getResolvedFiles } from '../../../lib/status'
+import { getConflictProgress } from '../../gittogether/conflict-progress'
 import {
   renderUnmergedFile,
   renderUnmergedFilesSummary,
@@ -20,6 +16,7 @@ import {
   renderAllResolved,
 } from '../../lib/conflicts'
 import { ManualConflictResolution } from '../../../models/manual-conflict-resolution'
+import { MultiCommitOperationKind } from '../../../models/multi-commit-operation'
 import { OkCancelButtonGroup } from '../../dialog/ok-cancel-button-group'
 import { DialogSuccess } from '../../dialog/success'
 import { enableCopilotConflictResolution } from '../../../lib/feature-flag'
@@ -30,6 +27,7 @@ import * as octicons from '../../octicons/octicons.generated'
 import { Button } from '../../lib/button'
 
 interface IConflictsDialogProps {
+  readonly operationKind: MultiCommitOperationKind
   readonly dispatcher: Dispatcher
   readonly repository: Repository
   readonly workingDirectory: WorkingDirectoryStatus
@@ -49,21 +47,20 @@ interface IConflictsDialogProps {
   readonly openRepositoryInShell: (repository: Repository) => void
   readonly someConflictsHaveBeenResolved?: () => void
   /**
-   * Optional callback to initiate Copilot-powered conflict resolution.
-   * When provided and the feature flag is enabled, a "Resolve with Copilot"
-   * button is shown in the dialog footer.
+   * Optional callback to initiate Copilot-backed AI conflict resolution.
+   * When provided and the feature flag is enabled, a "Resolve with AI" button
+   * is shown in the dialog footer.
    */
   readonly onResolveWithCopilot?: () => void
   /**
    * Authenticated GitHub accounts. Used to determine whether the
-   * "Resolve with Copilot" button should be shown — the button is only
+   * "Resolve with AI" button should be shown — the button is only
    * available when at least one account has Copilot for Desktop enabled.
    */
   readonly accounts: ReadonlyArray<Account>
   /**
-   * Whether to show the "New" call-to-action bubble on the
-   * "Resolve with Copilot" button. Hidden once the user has clicked it
-   * for the first time.
+   * Legacy call-to-action state still supplied by existing callers. The
+   * Material dialog no longer renders a callout bubble.
    */
   readonly shouldShowCopilotConflictResolutionCallOut: boolean
 }
@@ -85,6 +82,9 @@ export class ConflictsDialog extends React.Component<
 > {
   /** Tracks whether we've ever seen resolved files, for the "undone" banner */
   private hasSeenResolvedFiles = false
+
+  /** Blocks repeated actions before React commits the disabled state. */
+  private isActionInProgress = false
 
   public constructor(props: IConflictsDialogProps) {
     super(props)
@@ -129,10 +129,22 @@ export class ConflictsDialog extends React.Component<
    *  Invokes submit callback and dismisses modal
    */
   private onSubmit = async () => {
+    if (
+      this.isActionInProgress ||
+      getConflictProgress(
+        this.props.workingDirectory,
+        this.props.manualResolutions
+      ).conflictedFiles.length > 0
+    ) {
+      return
+    }
+
+    this.isActionInProgress = true
     this.setState({ isCommitting: true })
     try {
       await this.props.onSubmit()
     } catch (e) {
+      this.isActionInProgress = false
       this.setState({ isCommitting: false })
       const error = e instanceof Error ? e : new Error(String(e))
       log.error('ConflictsDialog: onSubmit failed', error)
@@ -146,6 +158,11 @@ export class ConflictsDialog extends React.Component<
   private onAbort = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
 
+    if (this.isActionInProgress) {
+      return
+    }
+
+    this.isActionInProgress = true
     this.setState({ isAborting: true })
     try {
       await this.props.onAbort()
@@ -154,6 +171,7 @@ export class ConflictsDialog extends React.Component<
       log.error('ConflictsDialog: onAbort failed', error)
       sendNonFatalException('multiCommitOperation', error)
     } finally {
+      this.isActionInProgress = false
       this.setState({ isAborting: false })
     }
   }
@@ -181,6 +199,7 @@ export class ConflictsDialog extends React.Component<
             const isFirst = isFirstUnmergedFile
             isFirstUnmergedFile = false
             return renderUnmergedFile({
+              operationKind: this.props.operationKind,
               path: f.path,
               status: f.status,
               resolvedExternalEditor: this.props.resolvedExternalEditor,
@@ -224,17 +243,19 @@ export class ConflictsDialog extends React.Component<
    * Renders the banner based on count of resolved files.
    *
    * Always shows the resolved count when there are resolved files. If the
-   * count drops to 0 after having been non-zero, shows the "undone" banner.
+   * count drops to 0, report what remains without inferring an undo: staging
+   * a resolved file also removes it from the conflict list.
    */
-  public renderBanner(conflictedFilesCount: number) {
-    const { workingDirectory, manualResolutions } = this.props
-    const countResolved = getResolvedFiles(
-      workingDirectory,
-      manualResolutions
-    ).length
-
+  public renderBanner(conflictedFilesCount: number, countResolved: number) {
     if (countResolved > 0) {
       this.hasSeenResolvedFiles = true
+    }
+
+    // Staging resolved files removes their rows; this is not an undo.
+    if (conflictedFilesCount === 0) {
+      return countResolved > 0 ? (
+        <DialogSuccess>所有文件的冲突均已解决。</DialogSuccess>
+      ) : null
     }
 
     if (countResolved === 0 && !this.hasSeenResolvedFiles) {
@@ -242,25 +263,23 @@ export class ConflictsDialog extends React.Component<
     }
 
     if (countResolved === 0) {
-      return <DialogSuccess>All resolutions have been undone.</DialogSuccess>
-    }
-
-    if (conflictedFilesCount === 0) {
       return (
-        <DialogSuccess>All conflicted files have been resolved. </DialogSuccess>
+        <DialogSuccess>
+          仍有 {conflictedFilesCount} 个文件存在冲突，请继续处理。
+        </DialogSuccess>
       )
     }
 
-    const conflictPluralized = countResolved === 1 ? 'file has' : 'files have'
     return (
       <DialogSuccess>
-        {countResolved} conflicted {conflictPluralized} been resolved.
+        已解决 {countResolved} 个文件，仍有 {conflictedFilesCount}{' '}
+        个文件存在冲突。
       </DialogSuccess>
     )
   }
 
   /**
-   * Renders the "Resolve with Copilot" button when the feature is available.
+   * Renders the "Resolve with AI" button when the feature is available.
    * Only shown when:
    * - The onResolveWithCopilot callback is provided (operation supports it)
    * - The feature flag is enabled
@@ -292,24 +311,15 @@ export class ConflictsDialog extends React.Component<
         tooltip={
           this.state.isAborting
             ? 'Cannot resolve while operation is being aborted'
-            : 'Use Copilot to suggest resolutions for conflicted files'
+            : 'Use AI to suggest resolutions for conflicted files'
         }
       >
         <Octicon symbol={octicons.copilot} />
-        {' Resolve with Copilot'}
+        {' Resolve with AI'}
       </Button>
     )
 
-    if (!this.props.shouldShowCopilotConflictResolutionCallOut) {
-      return button
-    }
-
-    return (
-      <div className="copilot-resolve-button-with-call-out">
-        <span className="call-to-action-bubble">New</span>
-        {button}
-      </div>
-    )
+    return button
   }
 
   private renderFooter(
@@ -322,11 +332,15 @@ export class ConflictsDialog extends React.Component<
     const buttonGroup = (
       <OkCancelButtonGroup
         okButtonText={submitButton}
-        okButtonDisabled={conflictedFilesCount > 0}
+        okButtonDisabled={
+          conflictedFilesCount > 0 ||
+          this.state.isCommitting ||
+          this.state.isAborting
+        }
         okButtonTitle={tooltipString}
         cancelButtonText={abortButton}
         onCancelButtonClick={this.onAbort}
-        cancelButtonDisabled={this.state.isAborting}
+        cancelButtonDisabled={this.state.isCommitting || this.state.isAborting}
       />
     )
 
@@ -351,11 +365,8 @@ export class ConflictsDialog extends React.Component<
       abortButton,
     } = this.props
 
-    const unmergedFiles = getUnmergedFiles(this.props.workingDirectory)
-    const conflictedFiles = getConflictedFiles(
-      workingDirectory,
-      manualResolutions
-    )
+    const { unmergedFiles, conflictedFiles, resolvedFilesCount } =
+      getConflictProgress(workingDirectory, manualResolutions)
 
     const tooltipString =
       conflictedFiles.length > 0
@@ -365,14 +376,14 @@ export class ConflictsDialog extends React.Component<
     return (
       <Dialog
         id="conflicts-dialog"
-        dismissDisabled={this.state.isCommitting}
+        dismissDisabled={this.state.isCommitting || this.state.isAborting}
         onDismissed={this.props.onDismissed}
         onSubmit={this.onSubmit}
         title={headerTitle}
-        loading={this.state.isCommitting}
-        disabled={this.state.isCommitting}
+        loading={this.state.isCommitting || this.state.isAborting}
+        disabled={this.state.isCommitting || this.state.isAborting}
       >
-        {this.renderBanner(conflictedFiles.length)}
+        {this.renderBanner(conflictedFiles.length, resolvedFilesCount)}
         <DialogContent>
           {this.renderContent(unmergedFiles, conflictedFiles.length)}
         </DialogContent>

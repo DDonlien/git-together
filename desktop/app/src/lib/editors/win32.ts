@@ -8,6 +8,7 @@ import {
   RegistryValueType,
 } from 'registry-js'
 import { pathExists } from '../path-exists'
+import { execFile } from '../exec-file'
 
 import { IFoundEditor } from './found-editor'
 import memoizeOne from 'memoize-one'
@@ -607,6 +608,48 @@ const getJetBrainsToolboxEditors = memoizeOne(async () => {
   return editors
 })
 
+const getVisualStudioEditors = memoizeOne(async () => {
+  const programFilesRoots = [
+    process.env['ProgramFiles(x86)'],
+    process.env.ProgramFiles,
+  ].filter((root): root is string => root !== undefined)
+  const vswherePaths = [...new Set(programFilesRoots)].map(root =>
+    Path.win32.join(root, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe')
+  )
+
+  for (const vswherePath of vswherePaths) {
+    if (!(await pathExists(vswherePath))) {
+      continue
+    }
+
+    try {
+      const { stdout } = await execFile(
+        vswherePath,
+        ['-all', '-products', '*', '-property', 'installationPath'],
+        { windowsHide: true }
+      )
+      for (const installationPath of stdout
+        .split(/\r?\n/)
+        .map(path => path.trim())
+        .filter(Boolean)) {
+        const executable = Path.win32.join(
+          installationPath,
+          'Common7',
+          'IDE',
+          'devenv.exe'
+        )
+        if (await pathExists(executable)) {
+          return [{ editor: 'Visual Studio', path: executable }]
+        }
+      }
+    } catch (error) {
+      log.warn('Failed resolving Visual Studio installations', error)
+    }
+  }
+
+  return []
+})
+
 /**
  * Lookup known external editors using the Windows registry to find installed
  * applications and their location on disk for Desktop to launch.
@@ -630,6 +673,8 @@ export async function getAvailableEditors(): Promise<
       results.push({ editor: editor.name, path })
     }
   }
+
+  results.push(...(await getVisualStudioEditors()))
 
   return results
 }

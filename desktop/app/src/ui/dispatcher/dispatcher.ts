@@ -2191,7 +2191,7 @@ export class Dispatcher {
   /**
    * Sets the user's preference for an external program to open repositories in.
    */
-  public setExternalEditor(editor: string): Promise<void> {
+  public setExternalEditor(editor: string | null): Promise<void> {
     return this.appStore._setExternalEditor(editor)
   }
 

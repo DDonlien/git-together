@@ -549,7 +549,10 @@ export class Preferences extends React.Component<
             accounts={this.props.accounts}
             onDotComSignIn={this.onDotComSignIn}
             onEnterpriseSignIn={this.onEnterpriseSignIn}
-            onEnterpriseHostSignIn={host => { this.props.onDismissed(); this.props.dispatcher.showEnterpriseSignInDialog(host) }}
+            onEnterpriseHostSignIn={host => {
+              this.props.onDismissed()
+              this.props.dispatcher.showEnterpriseSignInDialog(host)
+            }}
             onLogout={this.onLogout}
           />
         )
@@ -881,7 +884,7 @@ export class Preferences extends React.Component<
     this.setState({ defaultBranch })
   }
 
-  private onSelectedEditorChanged = (editor: string) => {
+  private onSelectedEditorChanged = (editor: string | null) => {
     this.setState({ selectedExternalEditor: editor })
   }
 
@@ -1169,7 +1172,9 @@ export class Preferences extends React.Component<
       this.state.confirmWorktreeRemoval
     )
 
-    if (this.state.selectedExternalEditor) {
+    if (
+      this.props.selectedExternalEditor !== this.state.selectedExternalEditor
+    ) {
       await dispatcher.setExternalEditor(this.state.selectedExternalEditor)
     }
     await dispatcher.setShell(this.state.selectedShell)
