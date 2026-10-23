@@ -20,4 +20,4 @@
 - Git令牌、Presence账号及设备凭证仅进入本App的Keychain。密码只用于当前登录，不落盘或记录；不读取桌面凭据。账号、服务器、组织、设备和worktree身份分别绑定，不能按邮箱、分支名或设备名称合并。
 - iOS 不公布本地工作区；设备心跳公布空工作区数组。远程写操作必须先预览、选择文件并确认，固定目标和预览ID；失败后不自动重发写请求。
 - `swift test --package-path ios` 测试可独立运行的核心逻辑。Mac编译：`xcodebuild -project ios/git-together.xcodeproj -scheme git-together -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath _builds/ios CODE_SIGNING_ALLOWED=NO build`。
-- 子功能说明、需求、视觉及日志分别见 README.md、REQUIREMENTS.md、DESIGN.md、agent-log/。Windows静态检查、Swift单测、Xcode编译与设备交互分别报告；本轮用户只要求源码推送，不打包、签名或发布。
+- 子功能说明见 README.md，视觉规范见 DESIGN.md；任务和执行证据统一在根 issue/ 对应 Issue 的正文与 Comments。Windows静态检查、Swift单测、Xcode编译与设备交互分别报告；本轮用户只要求源码推送，不打包、签名或发布。

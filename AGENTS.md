@@ -239,6 +239,6 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 保留 `macos/src/` 的 Material 界面；不把旧 server/electron/src-tauri 的 Git、账号和定时后台重新挂入启动、构建或发布链。
 - 根 package.json 为版本来源；根 `npm run setup/check/build/dev` 为有效入口。`desktop/` 是有来源锁的上游副本；上游仅允许有来源锁的界面展示替换、产品身份和编译配置差异；Git、授权、凭据和后台执行代码不得改写。用 `npm run verify:upstream` 核对。
 - 当前分支允许与替换相关的类型、构建、来源和隔离真实 Git/原生运行验证；旧文档对其他交付的“不新增/运行测试”不限制本次替换验收。测试不得写入用户仓库或代用户授权。
-- 详细边界和命令见 docs/github-desktop-based.md；需求统一在根 REQUIREMENTS.md，日志在 agent-log/system。未要求提交、推送、合并或发布，不据历史持续授权发布此实验分支。
+- 详细边界和命令见 docs/github-desktop-based.md；需求与执行证据统一在根 issue/，正文维护当前事实，Comments 追加历史。未要求提交、推送、合并或发布，不据历史持续授权发布此实验分支。
 - 2026-10-18补充：全部原版视觉界面均须由 GitTogether Material 展示层替代，包括授权、安全确认、错误、冲突、设置、更新与崩溃恢复。原版业务控制器与执行回调保留；允许有来源校验的纯展示代码差异。禁止继续挂载原版主界面或以遮挡/隐藏旧弹窗冒充替换。
 - 2026-10-21用户明确要求：main正式交付须补齐签名、公证、发布和自动更新，保证现有0.33.0可升级；以后“推送打包”均指完整正式发布，不得只交付开发包。沿用原版更新执行器，允许必要的产品更新源和平台打包配置差异；保留旧更新格式兼容，不恢复旧Git/授权后台，不操作用户安装版。
