@@ -24,12 +24,12 @@ We support a collection of templates, organized in this way:
   with popular programming languages and technologies. These define a meaningful
   set of rules to help get started, and ensure you are not committing
   unimportant files into your repository.
-- [`Global`](./Global) contains templates for various editors, tools and
+- [`Global`](Global) contains templates for various editors, tools and
   operating systems that can be used in different situations. It is recommended
   that you either [add these to your global template](https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files#configuring-ignored-files-for-all-repositories-on-your-computer)
   or merge these rules into your project-specific templates if you want to use
   them permanently.
-- [`community`](./community) contains specialized templates for other popular
+- [`community`](community) contains specialized templates for other popular
   languages, tools and project, which don't currently belong in the mainstream
   templates. These should be added to your project-specific templates when you
   decide to adopt the framework or tool.
@@ -152,4 +152,4 @@ by automatically forking the project and prompting to send a pull request too.
 
 ## License
 
-[CC0-1.0](./LICENSE).
+[CC0-1.0](LICENSE).

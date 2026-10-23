@@ -111,7 +111,7 @@ Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示�
 
 Windows 提供明确标识 `Windows-x86` 和 `Windows-x64` 的当前用户 NSIS 安装包，包含 WebView2 引导程序，Git/Git LFS 沿用本机安装。两个目标已在 Windows 原生环境验证编译、加密存储、Git 选择范围提交和暂存保留、进程取消，以及实际安装、界面启动和卸载。账号保存在当前用户 LocalAppData 中，以系统 DPAPI 加密并限制访问。更新包使用应用内置公钥验签；Windows 安装器当前未配置 Authenticode 代码签名。可选 AI 提交说明使用已登录的本机 Codex CLI，官方 Windows CLI 支持 x64/ARM64，纯32位系统暂不提供该 AI 功能。
 
-发布入口会收集同一 `main` 提交和版本的 macOS、Windows x86/x64 包，验证两个 Windows 原生构建报告并在发布机签署更新包；三个平台一并写入 `latest.json`、上传到同一 Release，再回读公开文件。任一目标失败会停止正式发布，不会退化为只发 macOS。Windows 双架构工作流见 [.github/workflows/windows-package.yml](.github/workflows/windows-package.yml)。
+发布入口会收集同一 `main` 提交和版本的 macOS、Windows x86/x64 包，验证两个 Windows 原生构建报告并在发布机签署更新包；三个平台一并写入 `latest.json`、上传到同一 Release，再回读公开文件。任一目标失败会停止正式发布，不会退化为只发 macOS。Windows 双架构工作流见 .github/workflows/windows-package.yml（原引用 `.github/workflows/windows-package.yml`，当前分支未提供此文件）。
 
 ## 本地试用
 
@@ -133,7 +133,7 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 
 ## 进一步了解
 
-[产品范围与进展](REQUIREMENTS.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
+[产品范围与进展](issue/issue-DESKTOP-01-UI-github-desktop-foundation-versioncontrolid.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
 

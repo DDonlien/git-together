@@ -62,7 +62,7 @@ This is important because `yarn` uses lock files to pin dependencies. If you
 find yourself changing packages, this will prevent mismatches in versions
 between machines.
 
-If you're not familiar with `yarn`, please read [this document](./working-with-packages.md)
+If you're not familiar with `yarn`, please read [this document](working-with-packages.md)
 to help familiarize yourself with how to do the common package tasks that are
 relevant to Desktop.
 

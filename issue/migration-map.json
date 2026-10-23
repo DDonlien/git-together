@@ -1,0 +1,5048 @@
+{
+  "history_base": "433ae99073a125b03f45bd5ebe0153c37db95671",
+  "versioncontrolid": "versioncontrolid",
+  "versioncontrolid_definition": "pending",
+  "sources": [
+    {
+      "path": "REQUIREMENTS.md",
+      "sha256": "6a6ef41a329ec87bf9672f78876efcfad1d17f3d663b32730f787faf555de95a",
+      "bytes": 255047,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a1370e81978ec6b86ee8671b186d2fddb6ba966f"
+    },
+    {
+      "path": "agent-log/20261008-151819-utcp8-taobe-gpt-5.md",
+      "sha256": "7eccce5321bdcd977d2e1ae25e645d93649489b4de87f8c55fd71e0a81295182",
+      "bytes": 6704,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f228be45500451701663ba1ff96662cf0a4ae855"
+    },
+    {
+      "path": "agent-log/20261008-171655-utcp8-taobe-gpt-5.md",
+      "sha256": "f2cc06f7745124eb70cbc012e7d79a8eb6b1676cf735b64b48adfddd809f0242",
+      "bytes": 5488,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7d9dd214ca5b28ebc2de419b378f94be22bbd4d5"
+    },
+    {
+      "path": "agent-log/20261008-223125-utcp8-taobe-gpt-5.md",
+      "sha256": "d6426827e679e8f0bf186ca13de4b39fe61f70d5500ac8084d9840224a91befa",
+      "bytes": 5174,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1aa77ebec6a47d4301dcdce2853085225a1bc6b3"
+    },
+    {
+      "path": "agent-log/20261008-225816-utcp8-taobe-gpt-5.md",
+      "sha256": "fe0d6775cda8bc25004ca9fb65a9370794540554ff8a5cf0b225ca3df6518dd9",
+      "bytes": 4478,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "2e8f47c207e7e58f668e80730774f3b326ccdba4"
+    },
+    {
+      "path": "agent-log/20261008-233000-utcp8-taobe-gpt-5.md",
+      "sha256": "7c059e5c31797036831ea4a86a7fa7c7211776d07455e98e0347774650d6ca0b",
+      "bytes": 3819,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "97ec91608448079e30488492bace8f4d7657e435"
+    },
+    {
+      "path": "agent-log/20261008-234042-utcp8-taobe-gpt-5.md",
+      "sha256": "2ca4877850dab9fb2976896a03a59a67e733ccfb0f4724b21402a8f9cd78f2f9",
+      "bytes": 2820,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6efc66cbd67a7a2b6021b3e0cf53f614b0068bb5"
+    },
+    {
+      "path": "agent-log/20261008-234814-utcp8-taobe-gpt-5.md",
+      "sha256": "ffac9c87d8a03027b8c0dd286ca614153c1e13d829a23a56672a3f53eadf1d4e",
+      "bytes": 2522,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8501045287c6938f44f3c275b5f69b1da115af54"
+    },
+    {
+      "path": "agent-log/20261015-010156-utcp8-taobe-gpt-6.md",
+      "sha256": "9d8d3fc060b42ddaa656ff62efaac9c3f5574719020cecea1ad306586ea021ed",
+      "bytes": 5876,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "42b1bd38ce661d123b88174467016db6510d319b"
+    },
+    {
+      "path": "agent-log/content/20261012-000106-utcp8-taobe-gpt-6.md",
+      "sha256": "5194e005264747c2ec19832c8b7e7860a635de3fe1320c4e54d27ac10ba3d087",
+      "bytes": 2011,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "92ccf6b3a0ed9ccf43ebf5906e1ad64a7050f806"
+    },
+    {
+      "path": "agent-log/content/20261012-002253-utcp8-taobe-gpt-6.md",
+      "sha256": "57d2f97d1b72dcc4034514d5fd9b8a539e131827660a82f1b48416a113a24a36",
+      "bytes": 3577,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7327c5df3a5a373ffd0656b181ab67fb232688d0"
+    },
+    {
+      "path": "agent-log/content/20261012-010024-utcp8-taobe-gpt-6.md",
+      "sha256": "4d4977867fec221a87c011a67fdba84da427d59fa707f4bccd36dad73f8e7344",
+      "bytes": 2720,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "842fe87645fd2ed50cb9fa9e60e0af649999d343"
+    },
+    {
+      "path": "agent-log/content/20261012-082227-utcp8-taobe-gpt-6.md",
+      "sha256": "195dd1bcabc4a6f8d7491ef700ff8ef940149a01949cd8245bbbda1e8cf5a64d",
+      "bytes": 2784,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "bc25d2c1e22498095698cb933f14240b2db06ee7"
+    },
+    {
+      "path": "agent-log/content/20261012-085412-utcp8-taobe-gpt-6.md",
+      "sha256": "23a35c74ba21f93a8813ba653e2eb0c81840e603ef47f831025d55a6b8fce88f",
+      "bytes": 3393,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "81ecdf6474ad7daaa58ac8e9c7d59d63c1126144"
+    },
+    {
+      "path": "agent-log/content/20261012-092024-utcp8-taobe-gpt-6.md",
+      "sha256": "82e44243758eac45d13f183ee8cb391f51d8f0b606a8c509314b709fe52402c8",
+      "bytes": 3385,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7238129825ab44ad33051bd084d1839a348daa21"
+    },
+    {
+      "path": "agent-log/system/20261002-225419-utcp10-taobe-gpt-5.md",
+      "sha256": "7eb49b960345e801f939f32bca8d37cc1b56d90b55db59917a1d2b2214e3f352",
+      "bytes": 4975,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b965bbe788abd018110de2b8691670dc61fb2ba5"
+    },
+    {
+      "path": "agent-log/system/20261004-011756-utcp10-taobe-gpt-5.md",
+      "sha256": "e2210636d9cacc1cda06c4ea4b486969f75fe34c68ef3b9e2c0127b4310e7af0",
+      "bytes": 5948,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5aa87d0d6a3cacd651aabd167fb4f0e2e4d03b82"
+    },
+    {
+      "path": "agent-log/system/20261004-042541-utcp11-taobe-gpt-5.md",
+      "sha256": "58d96d1348ff700952e9e9227963bb7cd750611968ded11a1ee15aa992b06e03",
+      "bytes": 5066,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "39cb45bcfe7d9df2b9ee6224857e47e4948c460c"
+    },
+    {
+      "path": "agent-log/system/20261006-143108-utcp8-taobe-gpt-5.md",
+      "sha256": "d42cd99ccbb8bb613f11b4e3aeed2f9eebdfcbc7c59a27f52aa2c16b08faf311",
+      "bytes": 3576,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3f3a57e15d824ba1d21795a537c33f00db70f4c5"
+    },
+    {
+      "path": "agent-log/system/20261006-143538-utcp8-taobe-gpt-5.md",
+      "sha256": "b36a2f2abd9e74d9051c2d01d3f442789b4341c11b354d0ea2f89959e0fc2cc8",
+      "bytes": 2895,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3bf7dc000cdc03abc0146b4a0aaac40ffbd0d673"
+    },
+    {
+      "path": "agent-log/system/20261006-150617-utcp8-taobe-gpt-5.md",
+      "sha256": "a1aabf75eeef494218f4309cc3541450771f34fda6c7e1d5e50ee7d1ac10b3ef",
+      "bytes": 5588,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6449612b40938540aa17171ca7dc8efa4177ff39"
+    },
+    {
+      "path": "agent-log/system/20261006-152603-utcp8-taobe-gpt-5.md",
+      "sha256": "c9dea3b06c45393cb2d4deb007cf60ea4ce55a009753038691d867a640203aa2",
+      "bytes": 2754,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d3ae8b0ce4cbe57665fd56326be5946ea821596f"
+    },
+    {
+      "path": "agent-log/system/20261006-153105-utcp8-taobe-gpt-5.md",
+      "sha256": "1c58fff69c095db1fb681d701b2a1f3683e000a91bf8f98cf6e9d948a6ce5d59",
+      "bytes": 3175,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9784236502d0ea0f3c7f912531f193a91b48dc8e"
+    },
+    {
+      "path": "agent-log/system/20261006-154926-utcp8-taobe-gpt-5.md",
+      "sha256": "9fc209a25989b91a9aa009ec4a6162b5ebeb25cdd37e08e7ea65042d2a7cfd27",
+      "bytes": 4951,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "0c8b32d42969c7ca9b4fc8361813d8f8df045845"
+    },
+    {
+      "path": "agent-log/system/20261006-155642-utcp8-taobe-gpt-5.md",
+      "sha256": "59feb75e67f9de35e32a79920d5eea30d0db4beb5b72f64556676bec93842e6f",
+      "bytes": 3917,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8e2ac7b486e4ceeb97bfac2b3d2da28433120069"
+    },
+    {
+      "path": "agent-log/system/20261006-160426-utcp8-taobe-gpt-6.md",
+      "sha256": "d2fa200692b37b8ef88c27a427919f67459b4e0912fad63e01ccd84c60186fa1",
+      "bytes": 5735,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4ecd6965eacdacdc22a00d6a22c1131d05a1327d"
+    },
+    {
+      "path": "agent-log/system/20261006-161200-utcp8-taobe-gpt-6.md",
+      "sha256": "c4a5ebde69c9e352adbc26c34ebce2ec4346e56d5e8aa7e1e890eaf512f06674",
+      "bytes": 3193,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3e77bab3bfd8e94582982a29d9248ce167646b1a"
+    },
+    {
+      "path": "agent-log/system/20261006-161436-utcp8-taobe-gpt-5.md",
+      "sha256": "f33b07fa67e1423e040a74f9b6a959ecac8240fe59c29a9d3dbc9634a4fffe53",
+      "bytes": 6310,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "0a49548b78dd412c0fb4410331a470575345eaf3"
+    },
+    {
+      "path": "agent-log/system/20261006-161823-utcp8-taobe-gpt-5.md",
+      "sha256": "241167243e6af2f9e7581dcea9fe409ab8d1501223b1d4b3681ac7ec3cbb8f12",
+      "bytes": 3743,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "922e58d13db1e6663769c3ebd8e1334a9ba8fa09"
+    },
+    {
+      "path": "agent-log/system/20261006-163529-utcp8-taobe-gpt-6.md",
+      "sha256": "1e9af50e69138a2c9855a5f9d2c1dbcae811b4d3cee8946f940b112c8051ec62",
+      "bytes": 4411,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "ed0b74c7d55ddc4761adf58b3f94e0b00e33794f"
+    },
+    {
+      "path": "agent-log/system/20261006-165427-utcp8-taobe-gpt-5.md",
+      "sha256": "202d9243414420eb1ee663c1e054d584871f87072c68c827bf723d35fb63df7b",
+      "bytes": 5857,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "991464bbecf13eeb41236787209c00e16518e320"
+    },
+    {
+      "path": "agent-log/system/20261006-170650-utcp8-taobe-gpt-5.md",
+      "sha256": "229fe2539f91628456be32909c9cc8fe99eb73607fdb491ff78c5ec052f95fe2",
+      "bytes": 5204,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "737c8a5b73ad013ac207c5e49e28f0626a3271d5"
+    },
+    {
+      "path": "agent-log/system/20261006-171633-utcp8-taobe-gpt-5.md",
+      "sha256": "e346dd01788500994ad0a13b168fb69ecbc3b4cab75cb98443e544ba366ded62",
+      "bytes": 3677,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8f27babea82496f1062529639bea7a85aa7b362d"
+    },
+    {
+      "path": "agent-log/system/20261006-180016-utcp8-taobe-gpt-5.md",
+      "sha256": "48eb0332342ac71fb6c5ef0c138c6a9ddb6d88fe1f5de587776acf1ab006375a",
+      "bytes": 7037,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "966139539208dc0ba491ec0a58d38f49df5c5f6f"
+    },
+    {
+      "path": "agent-log/system/20261006-183445-utcp8-taobe-gpt-5.md",
+      "sha256": "68847ae697f8ba2915da5c4094fbd09d0a001c66f07eca48a385838b8f65e7dc",
+      "bytes": 5266,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "550ad9cc2236c05b199943bbc6ae1fee96de88a3"
+    },
+    {
+      "path": "agent-log/system/20261006-195522-utcp8-taobe-gpt-5.md",
+      "sha256": "d220d48f1d5017deb925e0d313d119b2565b1901eeea7119898704095960ff7d",
+      "bytes": 4034,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "96b52b2f364735840b219b7c0322b7180e5619b8"
+    },
+    {
+      "path": "agent-log/system/20261006-201418-utcp8-taobe-gpt-5.md",
+      "sha256": "2ba11818249bf155d549f29f4bc790f22939b180a2179c535cf08f1319e635d9",
+      "bytes": 5076,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "df53ac735ff7a5d2b9c5385232cada61188d6bed"
+    },
+    {
+      "path": "agent-log/system/20261006-201456-utcp8-taobe-gpt-5.md",
+      "sha256": "8581e682198d5e51afcd002f0876b1913089c9822ca0419623b5eb0c8da83cae",
+      "bytes": 3873,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "2f3576f14ae55ee6ab2533f8fbba1fb2cfa2efad"
+    },
+    {
+      "path": "agent-log/system/20261006-204311-utcp8-taobe-gpt-5.md",
+      "sha256": "3f1e1ba1143ed521e6049e038db5833972ecbd18c777d79fd41faeb4a942efa3",
+      "bytes": 4926,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1df99697b96abc7ea7990a5043968b5ddc517dc2"
+    },
+    {
+      "path": "agent-log/system/20261006-204539-utcp8-taobe-gpt-6.md",
+      "sha256": "67c01de706f24c75186297b5d5ab98dea83ad782c1beb03ab0451779b4fff6a0",
+      "bytes": 2870,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f2325582beba4c0d0edd80e23fa0d88260a39cee"
+    },
+    {
+      "path": "agent-log/system/20261006-204639-utcp8-taobe-gpt-5.md",
+      "sha256": "3b4af3a8ad5d22d4e72aa6ea37e8b1c2d71c1623574746b964f7f08f4a65af93",
+      "bytes": 5678,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4fb4438492a82e78711408ade66efc7453277b13"
+    },
+    {
+      "path": "agent-log/system/20261006-210108-utcp8-taobe-gpt-5.md",
+      "sha256": "e45b108b5b46f4a7fd77289ea54f746af7bcca7d576e38eda15732086bcaae51",
+      "bytes": 4723,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "98edf669c7c5c96a4aeca03667a43b6b19913f0d"
+    },
+    {
+      "path": "agent-log/system/20261006-211124-utcp8-taobe-gpt-5.md",
+      "sha256": "590d71380149313b0354e0ed8af89485752db4f51b56deeb3a7565979ecd8f89",
+      "bytes": 5656,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d06ac3ca3258389b0708b9733acaa8be28f05251"
+    },
+    {
+      "path": "agent-log/system/20261006-222720-utcp8-taobe-gpt-5.md",
+      "sha256": "beee59870486b9b4d2b56dbe7ac150202840ffb199b5258e38b030a6d15b94f6",
+      "bytes": 4431,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a325135d08f3a329b5ad9ffbaa0599703fd9844d"
+    },
+    {
+      "path": "agent-log/system/20261006-224047-utcp8-taobe-gpt-5.md",
+      "sha256": "421f3ec36f47ea4b99bef1a9439a33f472968108c940aa5befcdbe6ec9b56dc0",
+      "bytes": 5007,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d1e490a7f65694932f4ce1900130b4e367294029"
+    },
+    {
+      "path": "agent-log/system/20261006-230240-utcp8-taobe-gpt-5.md",
+      "sha256": "f196b2e6f7defb2b03f5bc722869222848c1e3fc9b66f461650255b3ff5a50ef",
+      "bytes": 5044,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "297bbf7d846f1c319b0fa343d23a681a40f3878c"
+    },
+    {
+      "path": "agent-log/system/20261006-235717-utcp8-taobe-gpt-5.md",
+      "sha256": "9ff2088e2d68ec2310fc033a4f7538dab89d3ed580745c88407881b511fcd2de",
+      "bytes": 5800,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d277542ae811c8a0b99f5d65ad310a6318ff3e84"
+    },
+    {
+      "path": "agent-log/system/20261007-001118-utcp8-taobe-gpt-5.md",
+      "sha256": "25eb1c96bac5dcdee1419d7cd2ae64b204878ad6a336584b48b51f09014b7af2",
+      "bytes": 3323,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "123228c5a6bae0102119ee356d71005efaa868d4"
+    },
+    {
+      "path": "agent-log/system/20261007-004735-utcp8-taobe-gpt-5.md",
+      "sha256": "46b452c267eccfc36654267682ec36138836dcf5dedaef5e6b100217c36defcc",
+      "bytes": 6346,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "dab2b80619ad6b14442527628f7c472b9b65fb58"
+    },
+    {
+      "path": "agent-log/system/20261007-010616-utcp8-taobe-gpt-5.md",
+      "sha256": "bc604560538e061391c9f818938be8e128087f50a3936a81e4169c620f000f3d",
+      "bytes": 6154,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9145fce30f75e22774322e59549a088c42c7a29c"
+    },
+    {
+      "path": "agent-log/system/20261007-015049-utcp8-taobe-gpt-5.md",
+      "sha256": "935602d172a6ea800702ec2cfb3c9d6d574b2ff57c110dd8f1f8a70d61c20c96",
+      "bytes": 4002,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "34a3ba2826840bf230c1d8875779a9e65f641c56"
+    },
+    {
+      "path": "agent-log/system/20261007-020229-utcp8-taobe-gpt-5.md",
+      "sha256": "3756d2bff91e163e66e4d416bc81779f626caac02c318677a2df2de4f9c070bd",
+      "bytes": 3868,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9de68cf282a3067102f66d11decfff25cbfffa5b"
+    },
+    {
+      "path": "agent-log/system/20261007-022524-utcp8-taobe-gpt-5.md",
+      "sha256": "ce14cb0078d03122a0295396605a4751692707920ab13567be7fd77374098da3",
+      "bytes": 5195,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4b1a5904fbaa31d17badb75b4439bd8651c9cac7"
+    },
+    {
+      "path": "agent-log/system/20261007-024407-utcp8-taobe-gpt-5.md",
+      "sha256": "d54bbcad6a5dc1fe9b2bd18d9f5ee9bc08f266666563c606c74f01f4400e6338",
+      "bytes": 4067,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "dd1c67a6b39e111fd42bedfd961f8004f8151d38"
+    },
+    {
+      "path": "agent-log/system/20261007-025032-utcp8-taobe-gpt-5.md",
+      "sha256": "76c20d60b1e5fbe0a99e38303d699f5c054974a238e0890fae22d4f3cbe3b1ec",
+      "bytes": 5009,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "36d567c3a9ad2908982891614c574171f54c14e6"
+    },
+    {
+      "path": "agent-log/system/20261007-030606-utcp8-taobe-gpt-5.md",
+      "sha256": "c3f0e98fb402d242eb29448426272e18d31ca00a7e94a60fa51afe4b2f765f52",
+      "bytes": 4558,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4f44b644e000bd39ba02a4858ffe7f1cb20a0f24"
+    },
+    {
+      "path": "agent-log/system/20261007-030626-utcp8-taobe-gpt-5.md",
+      "sha256": "02c9e5599f838e75b83419180ffcb7810a937ee9d4ab32bc97759d97ad538127",
+      "bytes": 4886,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "36633b3e8553dc41658c1a70978f1193f2ed6ddf"
+    },
+    {
+      "path": "agent-log/system/20261007-032901-utcp8-taobe-gpt-5.md",
+      "sha256": "0a8c9eb751b1ef629beb25412f591826fb93b55f75aa488613585ee97a933fd4",
+      "bytes": 5757,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8a7e722ce29992774042608109f0201d3256b464"
+    },
+    {
+      "path": "agent-log/system/20261007-130041-utcp8-taobe-gpt-5.md",
+      "sha256": "b1751693a06bdb527c3c29bd2f56051bbb80639ff75e154a000ea538f01b871d",
+      "bytes": 5028,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1819639efd59ef4720e52067ed179cb5e4ee9ccb"
+    },
+    {
+      "path": "agent-log/system/20261007-130956-utcp8-taobe-gpt-5.md",
+      "sha256": "f1c34edbd7d43958e9230affc6df02a8b9f6abfb9bb53c85be4083f7fc29b840",
+      "bytes": 3684,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6ca55a556a017b91ac83005c4cffdceffbe6b8dc"
+    },
+    {
+      "path": "agent-log/system/20261007-132548-utcp8-taobe-gpt-5.md",
+      "sha256": "2b3925b9ef9bbda1e0226009b46924070c34e472b20bcd6847fb9c2fced77ca5",
+      "bytes": 4559,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "cc30772d251d226c0664d7e87b5ef7f117635640"
+    },
+    {
+      "path": "agent-log/system/20261007-140308-utcp8-taobe-gpt-5.md",
+      "sha256": "e39ec395b2b6603c4f94a58ce607e27a9d1e86584a1c9f1946f45003a5c8639e",
+      "bytes": 6652,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4933c7618844654419e93c786f0c309d74c331a1"
+    },
+    {
+      "path": "agent-log/system/20261007-141444-utcp8-taobe-gpt-5.md",
+      "sha256": "c2674a7505d41f9d2fba95a5b6b71b55a13cc6088f1eebf8eaba22eab95a0c4b",
+      "bytes": 4255,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "325747dbb3b7efb6617f82106579e142a106128f"
+    },
+    {
+      "path": "agent-log/system/20261007-142136-utcp8-taobe-gpt-5.md",
+      "sha256": "690b5e580d61df6a795e9bb634aaf7c36eff812a6753cdb52886cbf90c9c7ae5",
+      "bytes": 3499,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "68591ad7d925171c474a1a79da23eca1d83cd7a0"
+    },
+    {
+      "path": "agent-log/system/20261007-213242-utcp8-taobe-gpt-5.md",
+      "sha256": "0f53b6a4ceb3dcacfaa1165681aaeeb6ebb0420b55f283cb6a9a090888b41774",
+      "bytes": 5443,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b45bc272dbc8bf78b2124ebe870b43e5890bce53"
+    },
+    {
+      "path": "agent-log/system/20261007-221626-utcp8-taobe-gpt-5.md",
+      "sha256": "77dad8332a899599f19ae9ea42663b34375623d38f4bb31069366b4346a405f2",
+      "bytes": 7096,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "970152e4fec0f00ef05d474569d84d7541a6585b"
+    },
+    {
+      "path": "agent-log/system/20261007-224844-utcp8-taobe-gpt-5.md",
+      "sha256": "0509d3ab0b5389ee6836e7b22c310d9efd7bd787c4aeb73a5869206a54af5993",
+      "bytes": 4896,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9f1fe6d315332795ad476c2f0e5f35d74df0da48"
+    },
+    {
+      "path": "agent-log/system/20261007-232259-utcp8-taobe-gpt-5.md",
+      "sha256": "59ce483a02cc81e96f2f009595effb0b0e6128f4d2fc37f71ce6276d688620e4",
+      "bytes": 5651,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "42b4b0d9e4fb8d6f8d4ab468ede715428fb99d07"
+    },
+    {
+      "path": "agent-log/system/20261007-235547-utcp8-taobe-gpt-5.md",
+      "sha256": "8e08a6c548e62b41b20b4d41e643d4ebec8ca63b367723450be6c1b268cc6ab3",
+      "bytes": 4621,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "519eb1e5d927087304ff6d0c8ddbdaed5a4ab355"
+    },
+    {
+      "path": "agent-log/system/20261007-graph-header-removed.jpg",
+      "sha256": "2ff366afcf3c926c506e3b6ce4a8fe7536abdabe6a083d76f15b2f3ba933a1a4",
+      "bytes": 86612,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c3aaa795763cedf934915b69ce81cf8a0e3f4313"
+    },
+    {
+      "path": "agent-log/system/20261007-oauth-persistence-setup.jpg",
+      "sha256": "bc201a9bd3963ecd006a32a2cdd0452f5d9be37e55c12e457cbaf930bbde6277",
+      "bytes": 38191,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4fe5aa2ba1a0d6b00b699edf4b11eca96c5e94c0"
+    },
+    {
+      "path": "agent-log/system/20261007-remote-metadata-removed.jpg",
+      "sha256": "d5e1d0af0a4d4a0523a5af288597dde0ab09f2cf310a95d0e8a27ed893a3c790",
+      "bytes": 83394,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "24b8aace9d2665b74234b0f9570f148eb7c97080"
+    },
+    {
+      "path": "agent-log/system/20261007-remote-preview-removed.jpg",
+      "sha256": "9f301627b2e7ca27c710110dab73a60e4b2e9e22c40762bb12a7d229f4b24841",
+      "bytes": 85560,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9c0a2da5a80da2f94a7cfb92adb1c82c2c05d8c3"
+    },
+    {
+      "path": "agent-log/system/20261008-001242-utcp8-taobe-gpt-5.md",
+      "sha256": "70a5ecd92315291ccf5e4366e43a0bd513c0adb258f4b86e6b348c39888f5634",
+      "bytes": 4922,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1554d2cb2682a11152043f2568b13b2f1389bc13"
+    },
+    {
+      "path": "agent-log/system/20261008-002602-utcp8-taobe-gpt-5.md",
+      "sha256": "c2b08509c8f05db642f520745320a407e479268a0a93eede2658ad2c29cb8066",
+      "bytes": 3151,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "99c0db2e3027e17ebe5f0b29c07109fe13298a28"
+    },
+    {
+      "path": "agent-log/system/20261008-004052-utcp8-taobe-gpt-5.md",
+      "sha256": "25fc2f4dde70e052161b096b18aab339170545ad46a4fd4960a1dc0d8f875e65",
+      "bytes": 3388,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a4262fd38b450de0eae9b8ee8a144586e09c8edd"
+    },
+    {
+      "path": "agent-log/system/20261008-223026-utcp8-taobe-gpt-5.md",
+      "sha256": "b932822ea93787a5a9ce374f425143721232c69abbadaa85ccda6e9093c15e8d",
+      "bytes": 2290,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "23484107d224956d04e2eac020dd5fe0e302dd3b"
+    },
+    {
+      "path": "agent-log/system/20261009-002232-utcp8-taobe-gpt-5.md",
+      "sha256": "1e7392fae521a9f3cf2c9a7026e9a00ed162ff8f5c129af35ead299f1a9ec270",
+      "bytes": 5914,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "dcdd919ad3887eaf2d39c7070777de14757fba72"
+    },
+    {
+      "path": "agent-log/system/20261009-091244-utcp8-taobe-gpt-5.md",
+      "sha256": "55959edc7dc83ba3c352424661e234d15f9745bcb77c3dc0de95c3055f894b25",
+      "bytes": 6066,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "577f77a5bca950cddd7571cf52aa568a2c56a322"
+    },
+    {
+      "path": "agent-log/system/20261009-091906-utcp8-taobe-gpt-5.md",
+      "sha256": "a409a5897645e0d01f27a2993e0f911f63ac06d4f2d5480817bc88fbfb6d57b6",
+      "bytes": 3788,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "e34527c24ad78918ab728d6e23cb6fb21d6fb9a4"
+    },
+    {
+      "path": "agent-log/system/20261009-092430-utcp8-taobe-gpt-5.md",
+      "sha256": "9f4356a981fdc7b22da9b6b83ab6884fd3b34adac80c621405993402f72b9fcf",
+      "bytes": 3793,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "fed7f963285b3a07752718f9e68f7f8387f5ca36"
+    },
+    {
+      "path": "agent-log/system/20261009-092832-utcp8-taobe-gpt-5.md",
+      "sha256": "6a437d440bd1f8a0e1e11419a35c90053ee117e8565adceafef86c1eae016163",
+      "bytes": 5400,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "211dafe37c6ec2da68517197d38ce8e2f8c75c19"
+    },
+    {
+      "path": "agent-log/system/20261009-095803-utcp8-taobe-gpt-5.md",
+      "sha256": "23557cba5541aaf3e4091866d8a7bcfe5c975176847eac0d5c0895aa0ff6de5b",
+      "bytes": 3462,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "914f1f352be5e92bae4d21652a8174ef09061c37"
+    },
+    {
+      "path": "agent-log/system/20261009-104757-utcp8-taobe-gpt-5.md",
+      "sha256": "d707b0e28e88c4f98a295dcfad0742a99af6069d24c100d2a4db3fa7371cb33b",
+      "bytes": 5976,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5cf2488d96f472f1676c5802114f81a42c4bf816"
+    },
+    {
+      "path": "agent-log/system/20261009-132907-utcp8-taobe-gpt-5.md",
+      "sha256": "ea5de0e1826d38b22d9eb1a8708dc5b95f93b285d69ef299176c6e148e612dec",
+      "bytes": 4598,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f26372d87c233564073a19793bd5b111b6db8883"
+    },
+    {
+      "path": "agent-log/system/20261009-140016-utcp8-taobe-gpt-5.md",
+      "sha256": "9ee09cd67c1b07022dfcc5e556a4f0ee18eb236abf7bf60481a28fcf738cb012",
+      "bytes": 4658,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "bf7096d17e21b0333f1270097d1f3548d363bf27"
+    },
+    {
+      "path": "agent-log/system/20261009-142701-utcp8-taobe-gpt-5.md",
+      "sha256": "dbab83ff656c93ad4e3f68e53ec20b36849f01133f8f0aff090be065d22162ea",
+      "bytes": 6221,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "43f0ae9647cafdec4bdde12b1fb08040096902a5"
+    },
+    {
+      "path": "agent-log/system/20261009-152701-utcp8-taobe-gpt-5.md",
+      "sha256": "984dfd698323c6076cc00319b82763421bb0fe80dc0c81ad3989629273d505fb",
+      "bytes": 4893,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3f3b3fb434f0d0176a6f47f02a5261076e88b6b0"
+    },
+    {
+      "path": "agent-log/system/20261009-161742-utcp8-taobe-gpt-5.md",
+      "sha256": "d835897a49ed9a70d4eebef44095758b92d3dc713b516cc54c1a379e92adb7cc",
+      "bytes": 5799,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "39bf2823e61fc06fc24ae18dffc243485170ef49"
+    },
+    {
+      "path": "agent-log/system/20261009-165913-utcp8-taobe-gpt-5.md",
+      "sha256": "1da32d775e2c19cd08df98a9975c788916ccd9351a48e741e6c1c1d36c72ad9b",
+      "bytes": 7747,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d6a8c0add3a848239f3ab60592b1e1f40a8fc11e"
+    },
+    {
+      "path": "agent-log/system/20261009-175749-utcp8-taobe-gpt-5.md",
+      "sha256": "d7eb81178377ddf627486430dcbd2464bd3a82e303d7ad2473cd4e0e0ab785b0",
+      "bytes": 6481,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "42c76ca833a195bbd3d61d7ddf74d0f61b4d49d2"
+    },
+    {
+      "path": "agent-log/system/20261009-195641-utcp8-taobe-gpt-5.md",
+      "sha256": "91f1a14e0b71779cbdf69d2f92f4103dc94ecb1df7da4924cffd634e9f0697cc",
+      "bytes": 4685,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8663eb52d82fa86c2040f9fe3c82ef6038f98e47"
+    },
+    {
+      "path": "agent-log/system/20261009-202040-utcp8-taobe-gpt-5.md",
+      "sha256": "ca6000ec5045d0f4357160a1f910a9d31646cb7d31e15cc0cde6dd8462a6c18c",
+      "bytes": 4095,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "62c22e8eb1767ec5995b3f42015f680f0f7f8d18"
+    },
+    {
+      "path": "agent-log/system/20261009-232200-utcp8-taobe-gpt-5.md",
+      "sha256": "297a4622fb4aefdba0ead82b6d792e5529d03d53301f8359874207d3ea70cab7",
+      "bytes": 6225,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "e5603cd547c4abc5ede86bcc3b32ded769384a08"
+    },
+    {
+      "path": "agent-log/system/20261009-234330-utcp8-taobe-gpt-6.md",
+      "sha256": "b226fe44273213140b0ea10af9163346d8f0e295ca3ef82567eacd678f22da95",
+      "bytes": 3164,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "aa8ca2cca7110e70c87556109169276ba628a846"
+    },
+    {
+      "path": "agent-log/system/20261009-234946-utcp8-taobe-gpt-5.md",
+      "sha256": "6c8cd3eb7822600255d2438619fc0573a55d8235dca2092b2eaba13cce276c08",
+      "bytes": 4512,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "12d9df69cad8789487c5e48f45a96a98a1e206d3"
+    },
+    {
+      "path": "agent-log/system/20261009-235711-utcp8-taobe-gpt-6-native-github.md",
+      "sha256": "91debda61775bb8f3a45a0ca83075dc5d817bfa55069ecc281d7850c8f905b21",
+      "bytes": 3298,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b669ce4dfcaec402e123f64669d9acd90b824340"
+    },
+    {
+      "path": "agent-log/system/20261010-000913-utcp8-taobe-gpt-6.md",
+      "sha256": "463e89e0574e1178bcb35fb88a553195376723e391085a43769fb095132d0017",
+      "bytes": 3327,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f1718be8ffbbff489e93399a70bb723309fc1a3b"
+    },
+    {
+      "path": "agent-log/system/20261010-000928-utcp8-taobe-gpt-6.md",
+      "sha256": "b6fbcfe63db95011badc89ff1a4ca3e66fe576867045dd2de81bbbbe5870de53",
+      "bytes": 5725,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b471010696af98f5583559cc73384df77fbff524"
+    },
+    {
+      "path": "agent-log/system/20261010-001447-utcp8-taobe-gpt-5.md",
+      "sha256": "2048503b5d77e8b88fb2a7601caca0e0229847266fdae41bc68bfa5d466158c4",
+      "bytes": 5382,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9c9b036515e0813ec6566a2fb24652d7a384d6ce"
+    },
+    {
+      "path": "agent-log/system/20261010-001618-utcp8-taobe-gpt-6.md",
+      "sha256": "a273357402ff7bef798be913fff2fa5e18d4ded25e30614e27ee3ed506d27b80",
+      "bytes": 5226,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4a213b1766727382e175338f2fb1da08d48cd005"
+    },
+    {
+      "path": "agent-log/system/20261010-004232-utcp8-taobe-gpt-6.md",
+      "sha256": "21a59150e2d17e52329a6b3e5b4ea978d8add4d8e46f2cb4a7a41f7d2d540b2d",
+      "bytes": 2169,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "ccc56e063d6ec93d84a0652c055d3a37013881d3"
+    },
+    {
+      "path": "agent-log/system/20261010-004404-utcp8-taobe-gpt-6-sidebar-spacing.md",
+      "sha256": "709fe71fcea381f6fd88d7da379963e560f4465d569bad355814b229dea5f95d",
+      "bytes": 2094,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7706be03b64fcebbf8319201f97dda02e0492285"
+    },
+    {
+      "path": "agent-log/system/20261010-005736-utcp8-taobe-gpt-6-package-commit.md",
+      "sha256": "7192772c1b2849a0fb6ade47875c4c5bd70457e6979717ea1bc14815d6732d28",
+      "bytes": 1819,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f2e5555ad2f9f06ff38c4f18677af6b4d8f17f7e"
+    },
+    {
+      "path": "agent-log/system/20261010-010511-utcp8-taobe-gpt-6-sidebar-repository-spacing.md",
+      "sha256": "bd93432bff5b8e9029b0e707bb615fa936e6d08b219c5c625b1e2c784eb571ca",
+      "bytes": 2254,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3de61aae3714bb26b9171bc3f0a7e586377d1579"
+    },
+    {
+      "path": "agent-log/system/20261010-010747-utcp8-taobe-gpt-6.md",
+      "sha256": "09771a4947d2097e13a03d613f55a5827d40a289bb6a51e04e040726952af512",
+      "bytes": 6406,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "70efd2159ecabd0ff1b01925654160a0eaf1abaf"
+    },
+    {
+      "path": "agent-log/system/20261010-013501-utcp8-taobe-gpt-5.md",
+      "sha256": "38af2c64e499f228fd099982a931b361826cffc21afef11cdbcbe76639f786ce",
+      "bytes": 6254,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "61e1105c89503fcc4f0c70dcd6f5d88ed1aafaae"
+    },
+    {
+      "path": "agent-log/system/20261010-022248-utcp8-taobe-gpt-5.md",
+      "sha256": "e9037d5f9f4b7f264607b92d953ec4fee6d99e290850a9b80c06895ec12d827d",
+      "bytes": 5795,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f78e6397116281b9a65eb75ced836c698313c9e6"
+    },
+    {
+      "path": "agent-log/system/20261010-090755-utcp8-taobe-gpt-6-settings-update-logs.md",
+      "sha256": "bc1baf48b2674b1026ad6b4fa441f00675777a20a462dead4b1ed3672247b460",
+      "bytes": 4021,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "96799e7de96261607139d98e985074b8980c467d"
+    },
+    {
+      "path": "agent-log/system/20261010-091845-utcp8-taobe-gpt-5.md",
+      "sha256": "a1cdc4fa8e8c64e5b2813c4d2be684ab9ab9972e30811ef70c09851a62c88a3f",
+      "bytes": 4977,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "61b3189bc9b2402bc3c5ee7339a872c263e47ba7"
+    },
+    {
+      "path": "agent-log/system/20261010-092350-utcp8-taobe-gpt-6.md",
+      "sha256": "6bad62b21111dbb58f65a74bc5999ce6573e25596a312886ffc298d35b92e09b",
+      "bytes": 4145,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8ee9f77f40528e82052703c0668bdaeb129c8528"
+    },
+    {
+      "path": "agent-log/system/20261010-092351-utcp8-taobe-gpt-6.md",
+      "sha256": "b5a132dedc72b7dcd704baf2ec27f5072c8afacf01f1717010a93040a080d3ae",
+      "bytes": 4703,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "da3af261efe5dc554e5d7749f9bf33a168aaf41d"
+    },
+    {
+      "path": "agent-log/system/20261010-092539-utcp8-taobe-gpt-6.md",
+      "sha256": "cdbf52ccbf10f4503714ea099a0f1d8fea71fb1bc52e83889e1530734a107a91",
+      "bytes": 6852,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9f7417a7147390ca7e86bfa8d34749cc01cafda3"
+    },
+    {
+      "path": "agent-log/system/20261010-093625-utcp8-taobe-gpt-6-local-history-diff.md",
+      "sha256": "49a5dfdc5d2fb6051564e135d0aacbede8b2e7d8b91fcf9191d2fb75ed3040be",
+      "bytes": 6253,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f9b4756dc6e259a26061b42045472cee782a3bf6"
+    },
+    {
+      "path": "agent-log/system/20261010-094342-utcp8-taobe-gpt-6-grouped-files-padding.md",
+      "sha256": "e0bc2d7aa8b262f4cca0e0fdd57b7c2ba3e55021cc74ca27be57a9682bb8ff98",
+      "bytes": 4209,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "185d616189b40b27dd4db64ec1b01debaa450bd6"
+    },
+    {
+      "path": "agent-log/system/20261010-094822-utcp8-taobe-gpt-6-local-preview-removal.md",
+      "sha256": "e8fd0cab31c649093977fa9d7ec8e48404663e2320fb1676e90561ace327200f",
+      "bytes": 3387,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "077761ed288e616767ed1fa509799f045027e7bc"
+    },
+    {
+      "path": "agent-log/system/20261010-094956-utcp8-taobe-gpt-6.md",
+      "sha256": "f763234da5f4639c114c89add1757c838c251795dadd6be5b76bcab6abe3d45a",
+      "bytes": 6640,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "65a7cbd8d577cf1bc99ac0b0ae162527abf653aa"
+    },
+    {
+      "path": "agent-log/system/20261010-100520-utcp8-taobe-gpt-6.md",
+      "sha256": "69a240e4e3a92a1748a44938050547501ee36e812136032f574b1aaca2be9cbc",
+      "bytes": 5659,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8f8be0b62db837beba6f8a4b63db081c131b5437"
+    },
+    {
+      "path": "agent-log/system/20261010-103010-utcp8-taobe-gpt-6.md",
+      "sha256": "93bebcea812c4b827ffc782abfb2bfb8fed9ecc115e216f158aa9f84f19ad7ee",
+      "bytes": 5599,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "fbda8f1042870eb1d56b6cfa254fb22ebedb83db"
+    },
+    {
+      "path": "agent-log/system/20261010-122651-utcp8-taobe-gpt-6.md",
+      "sha256": "e6b5829f3143f39a2156ed8baf24408d5be016b8bb162d67432c6c5fc4340cf9",
+      "bytes": 7854,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "193c4b0ae603457771772ddb4266e92810d471de"
+    },
+    {
+      "path": "agent-log/system/20261010-145454-utcp8-taobe-gpt-6-hide-counts.md",
+      "sha256": "61b55ca4e4df6567e420269e8f76ae6f7e9c06110b03ba0fdda2884b0e1d0f2d",
+      "bytes": 5618,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4bb7edf6f66423b312b8d1f1b1b8b68663412d7e"
+    },
+    {
+      "path": "agent-log/system/20261010-150412-utcp8-taobe-gpt-6-tree-open-spacing.md",
+      "sha256": "7a331f114c737c26df2498c560b248a58f6a281d2f0cb343f0356102a3a7d370",
+      "bytes": 3194,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6b9751ddd4261b87a1150fbc2be3a20a55768a24"
+    },
+    {
+      "path": "agent-log/system/20261010-150828-utcp8-taobe-gpt-6-action-groups-h5.md",
+      "sha256": "b74cd107b2789ca2c365161d81e8807576520d383e6610b075970b780a21b625",
+      "bytes": 5782,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "cc2656f16a088d743b9fd9f93e2152429e0a6c1c"
+    },
+    {
+      "path": "agent-log/system/20261010-151508-utcp8-taobe-gpt-5.md",
+      "sha256": "36afc64bdc130a877a0c6b8b0807d3d6a4e00de1fac69e53ddd10897b856f7c4",
+      "bytes": 5044,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "75a958a9c44ea80e626fd6b4b5fd1266be8f8739"
+    },
+    {
+      "path": "agent-log/system/20261010-152214-utcp8-taobe-gpt-5.md",
+      "sha256": "4650597e5cc0b4fe0e898cf5bf6c3b98929739cfe14bd5370d8634f36bb3ca77",
+      "bytes": 2359,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "256dc86ea6e6893011b738f882d886b2839a7b9f"
+    },
+    {
+      "path": "agent-log/system/20261010-152609-utcp8-taobe-gpt-6-action-groups-refinement.md",
+      "sha256": "2c4d81d1020756f54a2c17fc5c38776e3311e138e4fde29c8fcbaa962edd099f",
+      "bytes": 5853,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "31cc426ff4b354e360a7b2eb669bf2699069c380"
+    },
+    {
+      "path": "agent-log/system/20261010-152916-utcp8-taobe-gpt-6-paired-action-icons.md",
+      "sha256": "797c99b37a995f4117bdf87074aa7a3014990d98ff952866a6f653c863c43808",
+      "bytes": 1988,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "fcf596b59dae7635edecb3a3aaf173e9182dbfcd"
+    },
+    {
+      "path": "agent-log/system/20261010-153153-utcp8-taobe-gpt-6-download-icon.md",
+      "sha256": "6b40228bfb2704a4449167b4a77a4a2766e168378ffcfd09baa71135ba378356",
+      "bytes": 1688,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1ef73e80efce7747b0cabbea3f776cb5c0d5401e"
+    },
+    {
+      "path": "agent-log/system/20261010-153708-utcp8-taobe-gpt-6-text-count-headers.md",
+      "sha256": "a557da6cbd9e44e0c96f042aafb7216ccafcb19c21919988a65105286bc8401f",
+      "bytes": 3036,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c6f1d3af7113cd1eca02f788278708e6f5029243"
+    },
+    {
+      "path": "agent-log/system/20261010-154027-utcp8-taobe-gpt-6-repository-header-actions.md",
+      "sha256": "d0274c39a1aab77aedf104704f0779cd686d089351f3cdbb7c7a91745bdaf6f1",
+      "bytes": 5094,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6e4f855107fe8a4238d04533a5252a0c878d849e"
+    },
+    {
+      "path": "agent-log/system/20261010-154036-utcp8-taobe-gpt-6-submit-ai-contract.md",
+      "sha256": "3e2915b48dc8804bcbd8bda398f5ca07f3a9d5fe579be8ab3d18b06c4d900e65",
+      "bytes": 2649,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5c15caad434edd2d2131d00f64e9f58a496b0ded"
+    },
+    {
+      "path": "agent-log/system/20261010-154805-utcp8-taobe-gpt-5-column-resize.md",
+      "sha256": "e92434c5de5a25e3c8189b7ade066e597413fb1dae6663ac4b0ff506f34d6d74",
+      "bytes": 4427,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8e34e98b27b73c223b515f848614a2034464b878"
+    },
+    {
+      "path": "agent-log/system/20261010-155603-utcp8-taobe-gpt-6.md",
+      "sha256": "bd68c8f83ffb2380390fd388d2d0ac1fc8886520ff2d346237c137871c40d4b7",
+      "bytes": 6292,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "03f1c909ca5b2f191cdd76dffc9be959b7a97c4d"
+    },
+    {
+      "path": "agent-log/system/20261010-155909-utcp8-taobe-gpt-6-submit-popup.md",
+      "sha256": "6e4bd971a9e4877abd2d483e75885b69dd4cc81ad984ef617dbdaf21a2fc8d06",
+      "bytes": 3675,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c969f56e89d19831e399fa5bafecfa2824eb1d78"
+    },
+    {
+      "path": "agent-log/system/20261010-160834-utcp8-taobe-gpt-6-input-outline.md",
+      "sha256": "8b203af10820416dbb435724f73088eeb08aeacc915742823c8aaf689da9a2f2",
+      "bytes": 2735,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "e98afdbb3c70f75b784379e1c6a249a17586633e"
+    },
+    {
+      "path": "agent-log/system/20261010-160838-utcp8-taobe-gpt-6-submit-popup-simple.md",
+      "sha256": "411a044d03343965a7bc98c50534a85f27fde705675a4912eafccba401602f22",
+      "bytes": 3496,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "e9973efadcdb751ebd439c2c7bcd95ea9d8b6d66"
+    },
+    {
+      "path": "agent-log/system/20261010-161551-utcp8-taobe-gpt-6-graph-row-padding.md",
+      "sha256": "f51ba1d603934941d14e5ea138025e9b3403a9fbb77c71e753bb96bf9531267b",
+      "bytes": 2937,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "edce1f4df8ff1c2c1e06213c42830fe3a124c211"
+    },
+    {
+      "path": "agent-log/system/20261010-162043-utcp8-taobe-gpt-6-submit-branch-messages.md",
+      "sha256": "0aaadd399010bf40f3ab33d5fc7178197884c080f7a2fe1d5b05b2e5ec8f3e2c",
+      "bytes": 3446,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "0b053dad6948e03862e794400345f4a6611da3be"
+    },
+    {
+      "path": "agent-log/system/20261010-165347-utcp8-taobe-gpt-6-submit-editable-messages.md",
+      "sha256": "66051083a32a453a48251c84332ade2aa39de29b89ab4bef86afbe1da44c1093",
+      "bytes": 3708,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8bde01ddb37f2d516a1026bf9b0e297268d9a335"
+    },
+    {
+      "path": "agent-log/system/20261010-165549-utcp8-taobe-gpt-6-production-submit.md",
+      "sha256": "97fa20bb469f89d0d9317473b6c5601937c6aad25a9d29cdc2a371c038bff29a",
+      "bytes": 7328,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "916edbf9a841f9b0c8e9f0b893a46b18c67e9f3a"
+    },
+    {
+      "path": "agent-log/system/20261010-170025-utcp8-taobe-gpt-6-submit-editable-production.md",
+      "sha256": "a9cad18e01f2a69b9f45066f18bbc43e960564eb38c20d376495caab038abbd8",
+      "bytes": 3840,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "aa652b8b4deabfb683e4af138f8ec1e068263fd7"
+    },
+    {
+      "path": "agent-log/system/20261010-172201-utcp8-taobe-gpt-6-dashboard-header-alignment.md",
+      "sha256": "1023bbe9df23070a4e85f30f8fcde0a2ea3da609d3dc3633f78e8b639f40130a",
+      "bytes": 4832,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c1fc98f2f814824fe7fda04a4285e992b440729e"
+    },
+    {
+      "path": "agent-log/system/20261010-190544-utcp8-taobe-gpt-6-official-m3-inputs.md",
+      "sha256": "48a950672aed3501a449751cdea80019b8639bac16dde769b40dc288beb219e3",
+      "bytes": 5742,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c2434152c83f63781d7cc38571ff8ec42d371902"
+    },
+    {
+      "path": "agent-log/system/20261010-215715-utcp8-taobe-gpt-6-recent-delivery.md",
+      "sha256": "ddc574a0f846bba61bd5d3e36f0c61046fa42f407d5ad1a3664b8c5ce6ffa840",
+      "bytes": 9007,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "85ffd5530791b11f02f6891199f125539147a15b"
+    },
+    {
+      "path": "agent-log/system/20261010-230931-utcp8-taobe-gpt-6-release-policy.md",
+      "sha256": "14185f152a8d473f29f987e9720e1768747668579a908bd7fd52e8b3f055dbee",
+      "bytes": 2597,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "97bbe309e6b62793194294e803530f7dae351cb1"
+    },
+    {
+      "path": "agent-log/system/20261010-231048-utcp8-taobe-gpt-6-header-count-corner.md",
+      "sha256": "cbe11fe6d3fb2af5e11563653c4653858818fc974929015e1221e90253d71cc7",
+      "bytes": 2879,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "15f17bb7d6c3f780f8db28e9000901b8ec292981"
+    },
+    {
+      "path": "agent-log/system/20261010-234021-utcp8-taobe-gpt-6-commit-field-type.md",
+      "sha256": "6d16080b48843890165b61ffdee23a2424929b4045272cdb7a91a5bf5626d68a",
+      "bytes": 6884,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "73aa426528469f6ca6f1c5a15a1c3d082f80487f"
+    },
+    {
+      "path": "agent-log/system/20261010-234757-utcp8-taobe-gpt-6-git-lfs-push.md",
+      "sha256": "4253b87e00b821e724ad8eca73d7d1df47442bf33e2612115d727d2975e4069a",
+      "bytes": 6913,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7445535901e68e55289a495997f63bdff0e8a7fa"
+    },
+    {
+      "path": "agent-log/system/20261011-014056-utcp8-taobe-gpt-6-tauri-rust.md",
+      "sha256": "d0fadbad07f71c5aa591fe1f7f2b21513bc6769539e0b5b39f48fbfad0aeff1b",
+      "bytes": 6054,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d3f187079bb41ec680417994fad15942d6d2f238"
+    },
+    {
+      "path": "agent-log/system/20261011-131725-utcp8-taobe-gpt-6-tauri-git-read.md",
+      "sha256": "561f53fe02b13b0ff95a5f0c5fc2e0ab516beed1ee9d0b8790b2b081cc1f706b",
+      "bytes": 5839,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6e00bf1ebc04feba488a28ecdd2041b9d90ec8c6"
+    },
+    {
+      "path": "agent-log/system/20261011-131835-utcp8-taobe-gpt-6-hidden-header-count.md",
+      "sha256": "c6347244506ad0b8da1d4bd334a245dd324c5e869843666f5014aab009a14d82",
+      "bytes": 6359,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1b5f183c4d4908d4b2ff7e21644ca900e3e505c0"
+    },
+    {
+      "path": "agent-log/system/20261011-131853-utcp8-taobe-gpt-6-read-health-scope.md",
+      "sha256": "4a8759702e1b9bfe2778c736978e5c9082efd02f26f780f84db55799fe54229e",
+      "bytes": 6956,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1dbc63c65a35062550e0cf2492f50bdd0ac78012"
+    },
+    {
+      "path": "agent-log/system/20261011-132045-utcp8-taobe-gpt-6-search-disclosure.md",
+      "sha256": "5ee8c24c7ac43c62d87951f7531173541bf8a1a079b649b76afddf354d53cf96",
+      "bytes": 5097,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9f836a060791549264146a2c166b7616283fa69c"
+    },
+    {
+      "path": "agent-log/system/20261011-141443-utcp8-taobe-gpt-6-update-quiesce.md",
+      "sha256": "9e6ed9b3f97ed883917aa7f861551bee97228c1abdd8e9fd58cbf72987cba88c",
+      "bytes": 5777,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b174f38c36a78bcec97f5f1d775b44a7bffce229"
+    },
+    {
+      "path": "agent-log/system/20261011-143539-utcp8-taobe-gpt-6-tauri-parity.md",
+      "sha256": "3d5790fa2373834d765b5dfeb27132608828147b9e3ba2e318f74b35d7b17804",
+      "bytes": 7067,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "00f75a82ac6369ec2b08f3db5a3d0c927b8ba60a"
+    },
+    {
+      "path": "agent-log/system/20261011-211326-utcp8-taobe-gpt-6-repository-browser-link.md",
+      "sha256": "2ba0750aa8df0d7bc4c1bba52ef7af1364a0e93ffb8130f7239d61c5ea2c128d",
+      "bytes": 3763,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f9190992f8583c63d60f0ef4ae7213ef3a92de48"
+    },
+    {
+      "path": "agent-log/system/20261011-214124-utcp8-taobe-gpt-6-mass-git-read.md",
+      "sha256": "d9fd4ddd532fd14cdcb9d15487aa3ac771f5d64909f75bcf35c0aa951fa679da",
+      "bytes": 6146,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "56224e893abb315384ec98efcff980aa9c2621d8"
+    },
+    {
+      "path": "agent-log/system/20261011-221703-utcp8-taobe-gpt-6.md",
+      "sha256": "f562c579f20074594ebdf5bd9937f802e6255967869fbdc7968c0c5cd1f8d939",
+      "bytes": 5795,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5622b56b253becfee5fec3128f687fd46a8a8531"
+    },
+    {
+      "path": "agent-log/system/20261011-225211-utcp8-taobe-gpt-6-update-immediate.md",
+      "sha256": "d2ca19f167e1296bc0c6f4c9244477939bffe4cd3f9c95363ad655ff6928dc01",
+      "bytes": 6518,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a5a1055324f26c1eb729d6e4eee5600fac2a36f7"
+    },
+    {
+      "path": "agent-log/system/20261011-233423-utcp8-taobe-gpt-6.md",
+      "sha256": "881f05bf3055086c092b59e2b4dd63fca376ecb2d1ce593b70cffb8661f26461",
+      "bytes": 6763,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "48e70b05afad8bad61dc4d7abab6d490296834c7"
+    },
+    {
+      "path": "agent-log/system/20261012-000236-utcp8-taobe-gpt-6-update-restart-proof.md",
+      "sha256": "466ab01bfed2bee12ce3279954b8eb4893def7d10ac4051a449606770a627e1a",
+      "bytes": 4571,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "41232495ac33e13a18c5774eaee902ab276fb8e5"
+    },
+    {
+      "path": "agent-log/system/20261012-001234-utcp8-taobe-gpt-6-push-feedback-selection.md",
+      "sha256": "b652e2e8803caf40f8fdd40b814962dca2fcc80516647ea1b57b3ad67e979b43",
+      "bytes": 7687,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8cbf2f7f76166d05f066758d9f3276d0d61ea55c"
+    },
+    {
+      "path": "agent-log/system/20261012-003214-utcp8-taobe-gpt-6-remote-control-discussion.md",
+      "sha256": "ba35f5f4b5b1d60ce91c5bdd0253a8307c8a2209f10387b4972ee6f9e331b1e6",
+      "bytes": 6386,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d211cc55e91eda2315cdb7b3bb6dc6d70e86072d"
+    },
+    {
+      "path": "agent-log/system/20261012-011146-utcp8-taobe-gpt-6-windows-release-policy.md",
+      "sha256": "555606941d8cc0e05855a66d03bb8aeb63afd4750587a1a311100a598ff38e3c",
+      "bytes": 4135,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "ed3cff11d261f4ecaa8c4a8b66239390fae27575"
+    },
+    {
+      "path": "agent-log/system/20261012-011611-utcp8-taobe-gpt-6-presence-integration.md",
+      "sha256": "99464fc3070c15c10d9c6d5da49dd4b5352dc5a4f56e0e5529357ce331d07e45",
+      "bytes": 7473,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d32378bbe6dee25ffd0b0778e96e59613fb38c68"
+    },
+    {
+      "path": "agent-log/system/20261012-081724-utcp8-taobe-gpt-6-remote-control-decisions.md",
+      "sha256": "1b7c3a62c763cb3b727a058c56f274c4116be90e0a675ab2ba293ebe25f5a9ec",
+      "bytes": 2575,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d9cb49a5dd9e2c1b30d7a7841345cfb95910ab4f"
+    },
+    {
+      "path": "agent-log/system/20261012-085158-utcp8-taobe-gpt-6-providers.md",
+      "sha256": "ebdd5c65b0950d42316bedc26c5b10f00bcd5efdd45e331ab14eb477b6d79828",
+      "bytes": 5940,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "7113b48d036bfed154fe3ee0dfd23653aed80316"
+    },
+    {
+      "path": "agent-log/system/20261012-090437-utcp8-taobe-gpt-5-dashboard-status-header.md",
+      "sha256": "2efa626324bb9595154b18d97f45b0b045cff1df5c924e9a089270cd49de0e0f",
+      "bytes": 5176,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a885c94dc655708a66051e3d9e1bfbdd78b21409"
+    },
+    {
+      "path": "agent-log/system/20261012-092453-utcp8-taobe-gpt-6-branch-behavior.md",
+      "sha256": "d35b911e59ca886a0afb83357a9cc18e6c7c104deb9ea60eb8651d433106df97",
+      "bytes": 5678,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c62254f17b3825c494d70ea7ff0eabe41bca031c"
+    },
+    {
+      "path": "agent-log/system/20261012-093030-utcp8-taobe-gpt-6-main-only-cleanup.md",
+      "sha256": "2969eaec41714f6cdd8e17e1d112cda816969e43ed0919d0a1261d61ad0fdd9a",
+      "bytes": 4359,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "72a3c3711fd7fad2698b1d4a36c12aa510d10615"
+    },
+    {
+      "path": "agent-log/system/20261012-093706-utcp8-taobe-gpt-5-provider-quota-diagnosis.md",
+      "sha256": "9d8380ccaf52dd4850ba2602a4c661c46d33a971f05772f096184e867841ebcb",
+      "bytes": 8221,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "921a32ceed8c2c56795b3f0fdcb377390e9c1c10"
+    },
+    {
+      "path": "agent-log/system/20261012-100840-utcp8-taobe-gpt-6-presence-avatars-client.md",
+      "sha256": "c0c96de02d9f41f6b19c1bbfacbf241324564d6f753b6874de5c95bfa83d7d1c",
+      "bytes": 7766,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a360a4b9bffb7712a1d2fd37a805da983e83a325"
+    },
+    {
+      "path": "agent-log/system/20261012-102225-utcp8-taobe-gpt-6-remote-control.md",
+      "sha256": "016ecaf8fdd1939f73f5a98a42585c5d04ee4a591c7c9912ca94a85d84d4f458",
+      "bytes": 4867,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "0f58368c7ae983b2282336b5a87cbd99cfc3e1eb"
+    },
+    {
+      "path": "agent-log/system/20261012-102339-utcp8-taobe-gpt-5-performance-recording.md",
+      "sha256": "7d65df0850b3404a428987a89312017866d2a8fc99a329dddedc6654b5cf97a9",
+      "bytes": 7052,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f97d52e09071b9886916196e89a55013359fec15"
+    },
+    {
+      "path": "agent-log/system/20261012-110919-utcp8-taobe-gpt-6.md",
+      "sha256": "b54b2eadb771a1109bb879f1ec10a216b0812c32815df34d533cbae2894ae534",
+      "bytes": 4584,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "540f1db753d3c362a0500edf9652fd0ed7606609"
+    },
+    {
+      "path": "agent-log/system/20261012-112554-utcp8-taobe-gpt-6.md",
+      "sha256": "cb2cc2bed529362966727402e2821fe40e27d7efa5bcbee0c0b35991678a7240",
+      "bytes": 2708,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b18bdf3410a6145dbf16cf8a10f514890f59f88b"
+    },
+    {
+      "path": "agent-log/system/20261012-113504-utcp8-taobe-gpt-6-windows-packaging.md",
+      "sha256": "c0ddb6d2c490a70f20f33c8326f957a46bcf2c938786f1ae1103c3d9e69f30db",
+      "bytes": 14395,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f7c499cb6e8279a06c82ef477923e2108e0fe69c"
+    },
+    {
+      "path": "agent-log/system/20261012-114536-utcp8-taobe-gpt-6-icon-install.md",
+      "sha256": "4248e274e8fb40cb17524443dfbaf0442658ac4e3ec98a5513ccffe6f603fbf1",
+      "bytes": 8852,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5b64f4520455140b9ebae4889da98bf3870305ba"
+    },
+    {
+      "path": "agent-log/system/20261012-121038-utcp8-taobe-gpt-6-presence-accounts.md",
+      "sha256": "d741c8cd96b5ef68d7d8090b7946c34600ed72c5a18fbc23dbf1aa2e64b5957c",
+      "bytes": 3514,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "af83f4c2e97869f0dd7c6615419478d2f30ec13c"
+    },
+    {
+      "path": "agent-log/system/20261012-131851-utcp8-taobe-gpt-6-presence-organization-boundary.md",
+      "sha256": "30d269f4335f7583dd1a2c77c3b7ecdca6752a78b3e1fd9149a3988ccadaf7bf",
+      "bytes": 2402,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "79912c8b919dbb8c9feee760e5ec546ed6b00eae"
+    },
+    {
+      "path": "agent-log/system/20261012-133742-utcp8-taobe-gpt-6-presence-password-length.md",
+      "sha256": "7835ecf11592984b767dbc756c10a7e4431d989195f8e40926fbdcbed2a1c693",
+      "bytes": 1853,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8fb0678f19adb9474973a4b0c54192b721ac89f8"
+    },
+    {
+      "path": "agent-log/system/20261012-134040-utcp8-taobe-gpt-6-icon-sidebar.md",
+      "sha256": "bced3f78a310f77069721972a3d037b768678cb1fdc3c402acad13b1294d1081",
+      "bytes": 4740,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "94647a2fafeca2699bb216a9c0f25305abf47229"
+    },
+    {
+      "path": "agent-log/system/20261012-151704-utcp8-taobe-gpt-6-gitea-participation.md",
+      "sha256": "2c6361b62cca0392b9c2d1527d35f18e678749c82f83b352cb93ded42526d70f",
+      "bytes": 7103,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3e41a255631647ffecdc13b6f5259f32e1bb91a3"
+    },
+    {
+      "path": "agent-log/system/20261012-165453-utcp8-taobe-gpt-6.md",
+      "sha256": "bd8bde9ff00e4ff0ade8e2d5c1102a95f9ff89436aae9538206e4e960ea090c5",
+      "bytes": 4095,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a380c90ceecaf85fe5a106993c57d4843f50b803"
+    },
+    {
+      "path": "agent-log/system/20261012-170031-utcp8-taobe-gpt-6-graph-fetch-consistency.md",
+      "sha256": "2b8547b1e0139e7eaf258e85428038b41dbdadaafa1049eebd3ef446ee96a217",
+      "bytes": 6137,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f217306e1a7e6b180925dde6c4b41f7804c155d9"
+    },
+    {
+      "path": "agent-log/system/20261012-173322-utcp8-taobe-gpt-6-directory-discovery.md",
+      "sha256": "92314d8e2004131eb2b1b7b6329d354a5a712fcdca9e5169c71cdb49b9127512",
+      "bytes": 6745,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "0f3687ea61699a715751d708d7a055e368e4f575"
+    },
+    {
+      "path": "agent-log/system/20261012-182139-utcp8-taobe-gpt-6.md",
+      "sha256": "fa0c187064c1779b2e8be1eb5df5dc392e60bd138e1ad1d55eafc6bf57804275",
+      "bytes": 6050,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "42c623dce19bbcf555b8e0789a2b421768fb0ae4"
+    },
+    {
+      "path": "agent-log/system/20261012-184708-utcp8-taobe-gpt-6-presence-management-model.md",
+      "sha256": "114cae04e3038963e22bb8bf6f13aa0255c3992c91906cd763b7d79602cbff12",
+      "bytes": 6465,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b6bd5a8a5c8cb7d673fc66dadde2a82011deef9d"
+    },
+    {
+      "path": "agent-log/system/20261012-205256-utcp8-taobe-gpt-6.md",
+      "sha256": "799dd4eba9758ee8f8dc99c97ae8f29bde913f4c04b75502eb509c2d8cd0cd37",
+      "bytes": 4068,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "fb0260dda6ff8393410ceeca08d324805a38848d"
+    },
+    {
+      "path": "agent-log/system/20261012-222804-utcp8-taobe-gpt-6-graph-author-filter.md",
+      "sha256": "bf08717861b612598e14e9dd28ea2e3ca3d1285927ae94f682ee1e5172972f98",
+      "bytes": 3548,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "aefe33d9bc79c9aaa8715e60c42f78e9bb96cce1"
+    },
+    {
+      "path": "agent-log/system/20261012-224430-utcp8-taobe-gpt-6-shared-diff-file-design.md",
+      "sha256": "a4c48aa21db70633ac594296778e439fdc5213fbe16bcb9b157c7ad2162763c2",
+      "bytes": 4195,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c2e06e8ef0d62b8eadf90feb149145f3a3915c16"
+    },
+    {
+      "path": "agent-log/system/20261012-225800-utcp8-taobe-gpt-5.md",
+      "sha256": "0b5a5e7bdcef9058a53f0fe1778da0e13745c9150f8ec7eb224bda521c0c4e4a",
+      "bytes": 5135,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "bd96b4589f9bac7cfa5f4165209408b9571bb0ea"
+    },
+    {
+      "path": "agent-log/system/20261013-004606-utcp8-taobe-gpt-6-file-row-state-inset.md",
+      "sha256": "86ad7f6ec7b7c2f2b34beb9b130bb81d87b355695c6bef611a94790021448627",
+      "bytes": 3891,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "fa695a2f47245e8d39c0d6504e57b684617ccc49"
+    },
+    {
+      "path": "agent-log/system/20261013-020028-utcp8-taobe-gpt-6.md",
+      "sha256": "2932a48fc708fc78862e3e4a3206a94411924cddbe4b9b2d30b597f4c3e00384",
+      "bytes": 8614,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "9159d3d757d2ace8ca2231b33ed2255d077e9b50"
+    },
+    {
+      "path": "agent-log/system/20261013-154732-utcp8-taobe-gpt-6-github-token-refresh.md",
+      "sha256": "cfd2e706639434c0b809427bb1fa7e5e8f3b8380864b01e5a158ee956e78a56e",
+      "bytes": 8066,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "4f951ec48cd0513db59f08c4d522105b12d7816a"
+    },
+    {
+      "path": "agent-log/system/20261013-172631-utcp8-taobe-gpt-6-association-refresh.md",
+      "sha256": "74597646ba94b74fae988442f685056fb7f8121e9a1aaddf73ac32f6aa936854",
+      "bytes": 4112,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d281daae131cbfc1887417fefda4b3a0606ce754"
+    },
+    {
+      "path": "agent-log/system/20261013-175445-utcp8-taobe-gpt-6-branch-created.md",
+      "sha256": "b4954e73317e4bec01bdc385d563155ca75c76688a445c75af5c03838cbcf578",
+      "bytes": 6894,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "499057b5bfff3ad02af579e02abb54d4bc7f3ce9"
+    },
+    {
+      "path": "agent-log/system/20261013-194528-utcp8-taobe-gpt-6.md",
+      "sha256": "e13e1099345a7fa48b53b1472e3f0484ea97d0b149eff73a827be248d11a7942",
+      "bytes": 6570,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d47614c518237aedaea5dcd40b378d71ad3ee76e"
+    },
+    {
+      "path": "agent-log/system/20261013-195836-utcp8-taobe-gpt-6.md",
+      "sha256": "a5ac2252bb21d6e17568e9cbbe32254693ed7bce320c03d9805202dd1e91acf1",
+      "bytes": 4568,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8cab39c1ebfdf7fc35815bacf13b9f852cbcb768"
+    },
+    {
+      "path": "agent-log/system/20261013-202143-utcp8-taobe-gpt-6.md",
+      "sha256": "b418987e436199b965864f8f56fb7ca8dbf14280dd6e8b578cde48f8ee67aac6",
+      "bytes": 9318,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3ccd8a0f8843c971628c49d8347c74c73ed18cae"
+    },
+    {
+      "path": "agent-log/system/20261013-204956-utcp8-taobe-gpt-6.md",
+      "sha256": "a8b6761cc3ad8512606df4b35f9c6877d7f49fc22a26e111c636e845306d8502",
+      "bytes": 6614,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3e1ba516ff4842c6712e54e67e296b5f1b578533"
+    },
+    {
+      "path": "agent-log/system/20261013-230834-utcp8-taobe-gpt-6.md",
+      "sha256": "40ca743dc091a59e796fd4109a2db511c85a6207cb6a759380d56dd7145a64d3",
+      "bytes": 4022,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1732c63e4e44b6f3e8e17109bd9032996297ce76"
+    },
+    {
+      "path": "agent-log/system/20261013-232558-utcp8-taobe-gpt-6.md",
+      "sha256": "a9e7a873a7aab90c94c40c64c0eacbcb1f3084079f3d6525ccfa6b6925c723e3",
+      "bytes": 8625,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "8dcf931a8f634f6ac6f54b61f6addf35380a1ffd"
+    },
+    {
+      "path": "agent-log/system/20261013-232751-utcp8-taobe-gpt-6.md",
+      "sha256": "60a55eb877fed1e814e9930a14d3631e6f68f9900ff4a869f547221ff79b6d66",
+      "bytes": 6827,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d1aca5f4ad50f0c047b3ce24b1de0378b7d624b6"
+    },
+    {
+      "path": "agent-log/system/20261014-005307-utcp8-taobe-gpt-6.md",
+      "sha256": "9774486842832434d9c6953c3b53724dc25302b9d8411909d23d1b9ecdaacd26",
+      "bytes": 5066,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "939e34c27a71e57a382d911145b77cb89568f97e"
+    },
+    {
+      "path": "agent-log/system/20261014-010840-utcp8-taobe-gpt-6.md",
+      "sha256": "fe445398f2ee54aebd7878be7c149b3fcf7252937a27e375be5ce248c8f66c85",
+      "bytes": 5550,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "c13240a8ee6ac89c85f7dd016699394e8383015d"
+    },
+    {
+      "path": "agent-log/system/20261014-011933-utcp8-taobe-gpt-6.md",
+      "sha256": "89050e3ab5b8ad7bd6c82e2c3bad65dddf6f1cc1121fb5e7c50e4b850a5c57af",
+      "bytes": 9215,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "db758ec16d65f177879782825df27b6e5a41e7c4"
+    },
+    {
+      "path": "agent-log/system/20261014-012251-utcp8-taobe-gpt-6.md",
+      "sha256": "1465adcd02e834ebb66a5e24c63f7d6170621035f3c4666d5c796ce4f718104f",
+      "bytes": 6608,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "dace9ec6c18a8af4f2fd1fb2fe12a6a3fffd799a"
+    },
+    {
+      "path": "agent-log/system/20261014-012507-utcp8-taobe-gpt-6.md",
+      "sha256": "73943e62747f0a4aab7b06f8868ab840e609ae2e9e5c60b6187ec253c615dbfd",
+      "bytes": 5410,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d3dc17e5da66e83af4a44292f9069502d5dc15d8"
+    },
+    {
+      "path": "agent-log/system/20261014-013305-utcp8-taobe-gpt-6-presence-device-name.md",
+      "sha256": "c9fbafa88a9480d22040c645bb93e55992eb66fa7d57186e9ab6154c7f1b7ae2",
+      "bytes": 4339,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "b29a0a54de4506c5d844be1e10ec610e24aa1272"
+    },
+    {
+      "path": "agent-log/system/20261014-023041-utcp8-taobe-gpt-6-operation-collapse.md",
+      "sha256": "88f58d8fe1689701ce52f4412e2839866fd8b0087e64a2599e800cd698630f81",
+      "bytes": 5495,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "e89806ac032b7b89b6d0ad15e158e7bb0b2f701c"
+    },
+    {
+      "path": "agent-log/system/20261014-024949-utcp8-taobe-gpt-5.md",
+      "sha256": "affe6ff8f2b57a6eabb826f10e1f307b8a24e4e3db825b522808074fde6ee522",
+      "bytes": 6745,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "31dc5e367b326c0518508ce10e26a0f892351090"
+    },
+    {
+      "path": "agent-log/system/20261014-025117-utcp8-taobe-gpt-6-presence-remote-actions.md",
+      "sha256": "43d756a2524cea8902e125aaaca414fc7d9381e69134ec7c4162d45157880c38",
+      "bytes": 6860,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "db5d0f7362383fa3f0c5221688c3475c6925c5a6"
+    },
+    {
+      "path": "agent-log/system/20261014-032800-utcp8-taobe-gpt-5.md",
+      "sha256": "b4d3793647d37cb5462a97f3e36dde280d218ee248a69ed3b93ea4349e9fbbf0",
+      "bytes": 2079,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d1e77efc50650935c3b9d3f3feafcc2861c43c5f"
+    },
+    {
+      "path": "agent-log/system/20261014-100733-utcp8-taobe-gpt-6-operation-icons.md",
+      "sha256": "ffab77f930c3a3086cf283c2967ca4dc0a6c8d699a7e6f3b7604e7c8a9d76b9d",
+      "bytes": 4810,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "88368b6617fecdfd3a98a6e417bf4cab8b3190d0"
+    },
+    {
+      "path": "agent-log/system/20261014-100832-utcp8-taobe-gpt-6.md",
+      "sha256": "aaa3c42eec866a6ad825158136c91732e398999d490909d2ec7b7ce0e18232b4",
+      "bytes": 8880,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a0f6ed1a68431ee077eedf08fb280781e083aeab"
+    },
+    {
+      "path": "agent-log/system/20261014-110852-utcp8-taobe-gpt-6-graph-actions.md",
+      "sha256": "41ffd532d3193980bc8f2221cbff7b80ebefbc41e751c533f1a66aec1964fc2a",
+      "bytes": 5128,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5643194c9ba065f96b836bde11f15f7a7870907a"
+    },
+    {
+      "path": "agent-log/system/20261014-144245-utcp8-taobe-gpt-6-file-tree.md",
+      "sha256": "fd8daa0002bcf3ced27f874045141ae8911ffe19699030128ae6476c67cc3f67",
+      "bytes": 1709,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "58d4d133a3a3c1532d3655b1d232fd2b74410abd"
+    },
+    {
+      "path": "agent-log/system/20261014-144636-utcp8-taobe-gpt-6-presence-device-rows.md",
+      "sha256": "818f577e9873fa782bd230b2dfc14f1ebfb83209111c9627c0c53c61495bb505",
+      "bytes": 3500,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "1088050f4d66e5341e83f22bc5e7a1a7935c81be"
+    },
+    {
+      "path": "agent-log/system/20261014-144804-utcp8-taobe-gpt-5-workspace-history-note.md",
+      "sha256": "e75356926cad9b90343a41742025e100c9cf04d149db9bb38a6ff11c85de651d",
+      "bytes": 1991,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "81ade21eab7c006490a3799477a593a2692ba7ee"
+    },
+    {
+      "path": "agent-log/system/20261014-151207-utcp8-taobe-gpt-6.md",
+      "sha256": "dd8286bc15c8f6ed980a42f8c932b079788d1fe62df837171b7902453fe719bd",
+      "bytes": 4134,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "52aac85e47b1dfe826d53a0d9aa810470c4eaa79"
+    },
+    {
+      "path": "agent-log/system/20261014-155311-utcp8-taobe-gpt-6-path-hover.md",
+      "sha256": "7b58bd05c9de4f853208f2f0ed5826913a03ca8f3d710d88299ec9b7f5c7d13f",
+      "bytes": 4595,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "56ca93dfc000946d78a82ab74e02c1471728ef57"
+    },
+    {
+      "path": "agent-log/system/20261014-160045-utcp8-taobe-gpt-6.md",
+      "sha256": "311216bb4bd9220bda0a53599d5ff42d52fbc932ac0f9d707c017557b5ccefcc",
+      "bytes": 9672,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "bcff26df04167d3a0e2a443cf57671ea289cde1a"
+    },
+    {
+      "path": "agent-log/system/20261015-001829-utcp8-taobe-gpt-6.md",
+      "sha256": "7509cb68431450ce6ca3e4a91b2e93ec1f2342ade8c5ce4cbca3fd1ef6dc63d0",
+      "bytes": 7375,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "cc81ab8d41adccb3fafa0e0c2131c95245fbb3c0"
+    },
+    {
+      "path": "agent-log/system/20261015-012013-utcp8-taobe-gpt-6-commit-description-fast-model.md",
+      "sha256": "cb4b0f77bfbdedc5ffad16e2d520b56cba00afcc9972690235a5334caa0c2a28",
+      "bytes": 3691,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "52850421f16b3491a1f9c1a5a3dac476e0b493ae"
+    },
+    {
+      "path": "agent-log/system/20261015-013926-utcp8-taobe-gpt-6-repository-auth.md",
+      "sha256": "dcaf03a74b932995bc7a599df19d53f9ca54f7bd0e8c482ba42f06abf026b995",
+      "bytes": 4271,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "956f588280d21b7f19f41194e693c7ef368200f7"
+    },
+    {
+      "path": "agent-log/system/20261015-032329-utcp8-taobe-gpt-5-daily-maintenance.md",
+      "sha256": "c084c8e44fa784044142866581dafb8c11792492fcca36948438a9c3fa47c1d7",
+      "bytes": 1402,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "161cb601f236c36071bc8468c4bfda918415e475"
+    },
+    {
+      "path": "agent-log/system/20261016-160351-utcp8-taobe-gpt-6.md",
+      "sha256": "2b15d047c05d84d8323bce2f9776db761ee2c89f21a62f62fcef665a380f35c4",
+      "bytes": 7846,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d93234f0897d9a33e63cc789d1c1e23fd51bbc9c"
+    },
+    {
+      "path": "agent-log/system/20261016-165739-utcp8-taobe-gpt-6.md",
+      "sha256": "da4879e4ea5cdce9ab6bc5023a9ac9d3db797c69d16170323b05e3b6104f611c",
+      "bytes": 4192,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "6c09c7d3d607825a580fef5c8c775931c7875dbe"
+    },
+    {
+      "path": "agent-log/system/20261018-210349-utcp8-taobe-gpt-6.md",
+      "sha256": "3dab5fac13e0061a47194b355acd1a184d8bb9a3bcbf0e5598de2b48b2885e9d",
+      "bytes": 10022,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "a9dc0790dc3565cf1a7809638c2c141773a373a7"
+    },
+    {
+      "path": "agent-log/system/20261018-232347-utcp8-taobe-gpt-6.md",
+      "sha256": "e1507bb05a551e2da5b7eaf9bf3e3b3f9b5d3beae39f75bd6fe1233d84892b19",
+      "bytes": 3361,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "27d6993ee3422f57e6659f5892f270d1c193fbb7"
+    },
+    {
+      "path": "agent-log/system/20261019-002029-utcp8-taobe-gpt-6.md",
+      "sha256": "5ec82ce489775265988a441251799711db3b7a08b19a1ecb2dca7187e5575e31",
+      "bytes": 5315,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "f4920ff1ed2b4ce7c4f1155cefb7919ba08cb5a4"
+    },
+    {
+      "path": "agent-log/system/20261019-005321-utcp8-taobe-gpt-6.md",
+      "sha256": "6d3e51b1e9c466f4f379c5856f6cadf7952775da43bc158d0920ea0484ec2fa5",
+      "bytes": 5220,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "5ea5612d2125655644f09b38b4e920a621805d97"
+    },
+    {
+      "path": "agent-log/system/20261019-084159-utcp8-taobe-gpt-6.md",
+      "sha256": "a069e31dddc8d42706e3ab40650f7a6c05d198f37e93818420e4b6f09c2693df",
+      "bytes": 2211,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "141b42242bbb658fd4b2d69d75b2f65cbe08d631"
+    },
+    {
+      "path": "agent-log/system/20261019-085919-utcp8-taobe-gpt-6.md",
+      "sha256": "70b887dbd0cef4302ae8451b86fd7e0967a0e3524463425fdda38eb42c3f41d6",
+      "bytes": 5652,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "45c9444e3fe869b0a1575c056465e9edb0857b70"
+    },
+    {
+      "path": "agent-log/system/20261019-090009-utcp8-taobe-gpt-6.md",
+      "sha256": "61d205786b9fe1d038279e4f9a10ae13e32972e0fb17b777352ff18991c108ec",
+      "bytes": 6122,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "061d5b4e1bcc249df026daf09f20d924760fb9ca"
+    },
+    {
+      "path": "agent-log/system/20261019-093707-utcp8-taobe-gpt-6.md",
+      "sha256": "46495ce4dd9c6050992f4e39fa515aa2cc03bd093beddfa286b77f1dd57cc1a2",
+      "bytes": 4021,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "bbd47bcb4969c6055a59a493b03325a39307af7a"
+    },
+    {
+      "path": "agent-log/system/20261019-094626-utcp8-taobe-gpt-6.md",
+      "sha256": "beb31cfadcbe4c469412c02308adc46108ee32152782d640e4e4a904e2724601",
+      "bytes": 5920,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "d64104e916027154ce55080737f32a483b388bfa"
+    },
+    {
+      "path": "agent-log/system/20261019-142146-utcp8-taobe-gpt-6.md",
+      "sha256": "aa2a77ae784dd933be9f7f09631841d5092d3f3abff0c5788f082d183a371ac5",
+      "bytes": 3768,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3365f9e67f8d4c1ed7e957dfef064659398c33be"
+    },
+    {
+      "path": "agent-log/system/20261019-143029-utcp8-taobe-gpt-6.md",
+      "sha256": "6d7007cadf7eadb24d31eee86fd23a3236c8af4d58d5ca273c1bff8f960a9cb0",
+      "bytes": 1125,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "19ba30669f02d250201d398b6610bde0d8db2d43"
+    },
+    {
+      "path": "agent-log/system/20261019-144132-utcp8-taobe-gpt-6.md",
+      "sha256": "e94beb6d96b398f1adf97200e92efbeab94241ddc4a1e04409e99932ec8a708b",
+      "bytes": 5114,
+      "head": "433ae99073a125b03f45bd5ebe0153c37db95671",
+      "tracked": true,
+      "status_before": "",
+      "blob": "3568c2eb7a4b9b88eafc8f1a2a12a7ded2b57906"
+    }
+  ],
+  "requirements": [
+    {
+      "path": "REQUIREMENTS.md",
+      "issues": [
+        "issue/issue-DESKTOP-01-UI-github-desktop-foundation-versioncontrolid.md",
+        "issue/issue-COLLAB-03-automatic-management-UI-presence-account-business-versioncontrolid.md",
+        "issue/issue-IMPORT-19-providers-SEC-project-goal-versioncontrolid.md",
+        "issue/issue-R-05-history-pagination-QA-repository-experience-versioncontrolid.md",
+        "issue/issue-PRESENCE-05-avatars-DOC-presence-avatar-branches-versioncontrolid.md",
+        "issue/issue-PRESENCE-01-plugin-DOC-team-collaboration-state-versioncontrolid.md",
+        "issue/issue-R-05-graph-actions-CONTENT-repository-files-commit-versioncontrolid.md",
+        "issue/issue-IMPORT-native-browser-UI-account-repository-import-versioncontrolid.md"
+      ],
+      "legacy_ids": [
+        "DESKTOP-01",
+        "DESKTOP-01-engine",
+        "DESKTOP-01-ui",
+        "DESKTOP-01-local-discovery",
+        "DESKTOP-01-local-discovery-test",
+        "DESKTOP-01-ui-complete",
+        "DESKTOP-01-crash-layout",
+        "DESKTOP-01-actions",
+        "DESKTOP-01-commit-generation",
+        "DESKTOP-01-commit-generation-test",
+        "DESKTOP-01-commit-generation-stop",
+        "DESKTOP-01-macos-test-app-0363",
+        "DESKTOP-01-presence",
+        "DESKTOP-01-presence-storage",
+        "DESKTOP-01-validation",
+        "DESKTOP-01-macos-test-app",
+        "DESKTOP-01-account-entries",
+        "DESKTOP-01-account-entries-validation",
+        "DESKTOP-01-account-entries-tls",
+        "DESKTOP-01-account-entries-tls-server",
+        "COLLAB-03-automatic-management",
+        "COLLAB-03-settings",
+        "COLLAB-03-settings-spacing",
+        "COLLAB-03-settings-spacing-test",
+        "COLLAB-03-settings-spacing-release",
+        "COLLAB-03-identity",
+        "COLLAB-03-repository-ui",
+        "COLLAB-03-repository-icon",
+        "COLLAB-03-repository-icon-test",
+        "COLLAB-03-repository-icon-release",
+        "COLLAB-03-control",
+        "COLLAB-03-source",
+        "COLLAB-03-runtime",
+        "COLLAB-02-presence-account",
+        "COLLAB-02-source",
+        "COLLAB-02-password-length",
+        "COLLAB-02-commercial",
+        "COLLAB-02-organization-boundary",
+        "IMPORT-19-providers",
+        "IMPORT-19-authorization",
+        "R-05-history-pagination",
+        "IMPORT-20-navigation-refresh",
+        "PRESENCE-05-avatars",
+        "PRESENCE-05-name-placement",
+        "PRESENCE-05-avatar-hover",
+        "PRESENCE-05-device-name",
+        "PRESENCE-05-remote-actions",
+        "PRESENCE-05-remote-actions-source",
+        "PRESENCE-05-remote-actions-release",
+        "PRESENCE-06-avatar-state",
+        "PRESENCE-01-plugin",
+        "PRESENCE-02-state",
+        "PRESENCE-03-nas",
+        "PRESENCE-04-release",
+        "R-05-graph-actions",
+        "R-05-ai-sync",
+        "CONTENT-01-icon-candidates",
+        "CONTENT-01-icon-install",
+        "CONTENT-01-icon-sidebar-text",
+        "CONTENT-01-icon-install-release",
+        "CONTENT-01-icon-fusion-black",
+        "CONTENT-01-icon-fusion-black-clean",
+        "CONTENT-01-icon-fusion-black-joins",
+        "CONTENT-01-icon-fusion-black-junctions",
+        "CONTENT-01-icon-selected-exports",
+        "COLLAB-01-remote-control",
+        "COLLAB-01-source",
+        "COLLAB-01-runtime",
+        "COLLAB-01-release",
+        "COLLAB-01-personal",
+        "COLLAB-01-team",
+        "COLLAB-01-identity",
+        "COLLAB-01-device-grant",
+        "COLLAB-01-platform-login",
+        "COLLAB-01-dispatch",
+        "COLLAB-01-abort-operation",
+        "COLLAB-01-discard-changes",
+        "D-01",
+        "D-02",
+        "D-03",
+        "R-01",
+        "R-02",
+        "R-02-file-row-state-inset",
+        "R-02-shared-file-design",
+        "R-02-submit-selection",
+        "R-02-submit-selection-collapse",
+        "R-02-submit-selection-collapse-test",
+        "R-02-push-feedback",
+        "R-03",
+        "R-04",
+        "R-05",
+        "R-05-repository-browser-link",
+        "R-05-header-actions",
+        "R-05-local-submit",
+        "R-05-local-submit-test",
+        "R-05-commit-composer",
+        "R-05-commit-composer-ai-loading",
+        "R-05-commit-composer-ai-loading-test",
+        "R-05-commit-composer-windows-cli",
+        "R-05-commit-composer-ai-fast-context",
+        "R-05-commit-composer-windows-cli-test",
+        "R-05-commit-composer-windows-cli-local-update",
+        "R-05-commit-composer-official-m3",
+        "R-05-search-compact",
+        "R-05-commit-composer-compact-type",
+        "R-05-commit-composer-thin-outline",
+        "R-05-graph-local-states",
+        "R-05-graph-local-states-vertical-padding",
+        "R-05-local-preview-removal",
+        "R-05-local-file-operations",
+        "R-05-local-preview-removal-test",
+        "R-05-local-history-diff",
+        "R-05-local-history-diff-test",
+        "R-05-column-insets",
+        "R-05-column-insets-test",
+        "R-05-tree-identity-row",
+        "R-05-tree-identity-footer-test",
+        "R-05-tree-directory-open",
+        "R-05-tree-directory-open-test",
+        "R-05-tree-identity-row-test",
+        "R-05-branch-title",
+        "R-05-branch-title-test",
+        "R-05-column-footers",
+        "R-05-column-footers-test",
+        "R-05-tree-open",
+        "R-05-tree-open-spacing",
+        "R-05-tree-open-test",
+        "R-05-change-context",
+        "R-05-change-context-spacing",
+        "R-05-change-context-test",
+        "R-05-global-tree",
+        "R-05-global-tree-test",
+        "R-05-remote-focus-control",
+        "R-05-remote-focus-control-test",
+        "R-05-gitlens-graph",
+        "R-05-gitlens-graph-history-note",
+        "R-05-gitlens-graph-scroll",
+        "R-05-gitlens-graph-scroll-test",
+        "R-05-gitlens-graph-sync",
+        "R-05-gitlens-graph-local",
+        "R-05-gitlens-graph-shallow",
+        "R-05-gitlens-graph-filter",
+        "R-05-gitlens-graph-author-filter",
+        "R-05-gitlens-graph-local-test",
+        "R-05-gitlens-graph-test",
+        "R-05-graph-header",
+        "R-05-graph-header-test",
+        "R-05-remote-inline-preview",
+        "R-05-remote-inline-preview-test",
+        "R-05-remote-metadata",
+        "R-05-remote-metadata-test",
+        "R-05-remote",
+        "R-05-remote-integration",
+        "R-05-remote-test",
+        "R-05-layout",
+        "R-05-history-details",
+        "R-05-history-body",
+        "R-05-history-body-test",
+        "R-05-history-details-test",
+        "R-05-column-collapse",
+        "R-05-column-collapse-horizontal",
+        "R-05-column-resize",
+        "R-05-column-resize-test",
+        "R-05-column-collapse-test",
+        "R-05-overview",
+        "R-05-overview-test",
+        "R-05-data",
+        "R-05-test",
+        "R-05-tree-source",
+        "R-05-tree-source-radius",
+        "R-05-tree-source-radius-test",
+        "R-05-tree-source-test",
+        "UI-01",
+        "UI-02",
+        "UI-03",
+        "UI-04",
+        "UI-04-hidden-scrollbars",
+        "UI-04-hidden-scrollbars-test",
+        "UI-04-sidebar-collapse",
+        "UI-04-sidebar-collapse-test",
+        "UI-04-sidebar-collapse-rail",
+        "UI-04-sidebar-collapse-rail-test",
+        "UI-04-sidebar-header-icon-only",
+        "UI-04-sidebar-header-icon-only-test",
+        "UI-04-sidebar-vertical-spacing",
+        "UI-04-sidebar-repository-spacing",
+        "UI-04-sidebar-icon-buttons",
+        "UI-04-sidebar-icon-buttons-test",
+        "UI-04-sidebar-icon-buttons-hit-area",
+        "UI-04-sidebar-icon-buttons-hit-area-test",
+        "UI-04-sidebar-icon-buttons-shared-size",
+        "UI-04-sidebar-icon-buttons-shared-size-test",
+        "UI-04-sidebar-icon-buttons-no-indent",
+        "UI-04-sidebar-icon-buttons-no-indent-test",
+        "UI-04-traffic-light-size",
+        "UI-04-traffic-light-size-test",
+        "UI-04-settings-width",
+        "UI-05",
+        "UI-05-test",
+        "UI-06",
+        "UI-07",
+        "UI-07-test",
+        "UI-06-test",
+        "UI-07-tile",
+        "UI-07-tile-test",
+        "UI-08",
+        "UI-08-static-check",
+        "UI-08-sidebar",
+        "UI-08-visual-qa",
+        "UI-09",
+        "UI-09-tree-graph-padding",
+        "UI-09-control-padding",
+        "UI-09-control-padding-validation",
+        "UI-09-sidebar-feedback",
+        "UI-09-sidebar-feedback-test",
+        "UI-09-sidebar-feedback-visual",
+        "UI-09-version-corner",
+        "UI-09-version-corner-test",
+        "UI-09-version-corner-visual",
+        "UI-09-filter-details",
+        "UI-09-test",
+        "UI-09-details",
+        "UI-09-details-test",
+        "RUN-01",
+        "RUN-01-remote-first",
+        "RUN-01-tauri-git-network",
+        "RUN-01-tauri-git-network-read",
+        "RUN-01-tauri-git-network-release",
+        "RUN-01-tauri-parity",
+        "RUN-01-tauri-parity-read",
+        "RUN-01-tauri-parity-release",
+        "RUN-01-tauri-rust",
+        "RUN-01-tauri-git-read",
+        "RUN-01-main-delivery",
+        "RUN-01-main-only",
+        "RUN-01-recent-delivery",
+        "RUN-01-update",
+        "RUN-01-submit-fix-release",
+        "RUN-01-update-diagnostics",
+        "RUN-01-update-quiesce",
+        "RUN-01-update-immediate",
+        "RUN-01-update-immediate-release",
+        "RUN-01-update-restart-proof",
+        "RUN-01-release-policy",
+        "RUN-01-notary-reuse",
+        "RUN-01-notary-reuse-recovery",
+        "RUN-01-recent-installed-check",
+        "RUN-01-windows-policy",
+        "RUN-01-windows-packaging",
+        "RUN-01-update-pipeline",
+        "RUN-01-update-test",
+        "RUN-01-update-release",
+        "RUN-01-update-errors",
+        "RUN-01-identity",
+        "RUN-01-identity-settings",
+        "RUN-01-identity-fork",
+        "RUN-01-identity-main",
+        "RUN-01-identity-test",
+        "RUN-01-identity-readme",
+        "RUN-01-identity-readme-test",
+        "IMPORT-native-browser",
+        "IMPORT-native-browser-live",
+        "IMPORT-01",
+        "IMPORT-02",
+        "IMPORT-02-repository-authentication",
+        "IMPORT-02-repository-access",
+        "IMPORT-02-git-auth-lifecycle",
+        "IMPORT-02-git-auth-lifecycle-source",
+        "IMPORT-02-git-native-remote",
+        "IMPORT-02-git-auth-lifecycle-runtime",
+        "IMPORT-02-edit",
+        "IMPORT-02-edit-remove",
+        "IMPORT-02-edit-remove-test",
+        "IMPORT-02-edit-test",
+        "IMPORT-03",
+        "IMPORT-04",
+        "IMPORT-04-worktrees",
+        "IMPORT-04-directory-display",
+        "IMPORT-04-directory-display-test",
+        "IMPORT-04-worktrees-test",
+        "IMPORT-04-account-batch",
+        "IMPORT-04-account-batch-feedback",
+        "IMPORT-04-account-batch-performance",
+        "IMPORT-04-account-batch-test",
+        "IMPORT-04-inline",
+        "IMPORT-04-path-hover",
+        "IMPORT-04-association-refresh",
+        "IMPORT-04-open-folder",
+        "IMPORT-04-discovery-boundary",
+        "IMPORT-04-discovery-boundary-release",
+        "IMPORT-04-picker",
+        "IMPORT-04-picker-test",
+        "IMPORT-05",
+        "IMPORT-06",
+        "IMPORT-08",
+        "IMPORT-08-test",
+        "IMPORT-09",
+        "IMPORT-09-test",
+        "IMPORT-10",
+        "IMPORT-10-test",
+        "IMPORT-11",
+        "IMPORT-11-token-refresh",
+        "IMPORT-11-windows-oauth-port",
+        "IMPORT-11-connect",
+        "IMPORT-11-browser",
+        "IMPORT-11-native-keychain",
+        "IMPORT-11-native-keychain-test",
+        "IMPORT-11-native-keychain-live",
+        "IMPORT-11-browser-local",
+        "IMPORT-11-browser-local-code",
+        "IMPORT-11-browser-local-csp",
+        "IMPORT-11-browser-local-csp-test",
+        "IMPORT-11-browser-network",
+        "IMPORT-11-browser-network-test",
+        "IMPORT-11-browser-progress",
+        "IMPORT-11-browser-progress-test",
+        "IMPORT-11-browser-return",
+        "IMPORT-11-browser-live",
+        "IMPORT-11-secret",
+        "IMPORT-11-secret-persistence",
+        "IMPORT-11-secret-persistence-test",
+        "IMPORT-11-secret-persistence-live",
+        "IMPORT-11-browser-rebind",
+        "IMPORT-11-browser-rebind-test",
+        "IMPORT-11-ready",
+        "IMPORT-11-ready-test",
+        "IMPORT-11-callback-document",
+        "IMPORT-11-callback-document-test",
+        "IMPORT-11-callback-document-live",
+        "IMPORT-11-callback-feedback",
+        "IMPORT-11-callback-feedback-test",
+        "IMPORT-11-callback-feedback-live",
+        "IMPORT-11-secret-entry",
+        "IMPORT-11-secret-rotation",
+        "IMPORT-11-test",
+        "IMPORT-12",
+        "IMPORT-12-branch-behavior",
+        "IMPORT-12-branch-behavior-gitea",
+        "IMPORT-12-branch-behavior-created",
+        "IMPORT-12-branch-behavior-import",
+        "IMPORT-12-branch-behavior-import-test",
+        "IMPORT-12-branch-behavior-account",
+        "IMPORT-12-branch-behavior-account-test",
+        "IMPORT-12-update-settings",
+        "IMPORT-12-test",
+        "IMPORT-13",
+        "IMPORT-13-repository-pin",
+        "IMPORT-13-status-header",
+        "IMPORT-13-branches",
+        "IMPORT-13-branches-test",
+        "IMPORT-13-branches-folder",
+        "IMPORT-13-branches-folder-test",
+        "IMPORT-13-branches-motion",
+        "IMPORT-13-main",
+        "IMPORT-13-test",
+        "IMPORT-13-owner",
+        "IMPORT-13-owner-test",
+        "IMPORT-14",
+        "IMPORT-14-last-divider",
+        "IMPORT-14-last-divider-test",
+        "IMPORT-14-grouped-actions",
+        "IMPORT-14-header-alignment",
+        "IMPORT-14-header-alignment-runtime",
+        "IMPORT-14-header-count-corner",
+        "IMPORT-14-production-submit",
+        "IMPORT-14-production-submit-runtime",
+        "IMPORT-14-push-lfs-errors",
+        "IMPORT-14-submit-popup",
+        "IMPORT-14-submit-summary-only",
+        "IMPORT-14-submit-popup-width",
+        "IMPORT-14-windows-lfs-commit",
+        "IMPORT-14-commit-timeout-headless",
+        "IMPORT-14-submit-popup-production",
+        "IMPORT-14-submit-popup-h5",
+        "IMPORT-14-submit-ai",
+        "IMPORT-14-header-text",
+        "IMPORT-14-download-icon",
+        "IMPORT-14-grouped-icons",
+        "IMPORT-14-grouped-refinement",
+        "IMPORT-14-grouped-h5",
+        "IMPORT-14-branch-name-alignment",
+        "UI-04-repository-reveal",
+        "IMPORT-14-inline",
+        "IMPORT-14-number-ignore",
+        "IMPORT-14-read-badges",
+        "IMPORT-14-read-health-scope",
+        "IMPORT-14-read-badges-test",
+        "IMPORT-14-read-failure-live",
+        "IMPORT-14-check-cycle",
+        "IMPORT-14-change-trigger",
+        "IMPORT-14-zero-badges",
+        "IMPORT-14-diagnostics",
+        "IMPORT-14-performance",
+        "IMPORT-14-performance-source",
+        "IMPORT-14-performance-runtime",
+        "IMPORT-14-diagnostics-copy",
+        "IMPORT-14-diagnostics-test",
+        "IMPORT-14-operation-semantics",
+        "IMPORT-14-branch-download",
+        "IMPORT-14-branch-download-layout",
+        "IMPORT-14-branch-download-layout-test",
+        "IMPORT-14-operation-semantics-test",
+        "IMPORT-14-visible",
+        "IMPORT-14-hide",
+        "IMPORT-14-hide-counts",
+        "IMPORT-14-hide-header-count",
+        "IMPORT-14-operation-execution",
+        "IMPORT-14-operation-collapse",
+        "IMPORT-14-operation-collapse-icons",
+        "IMPORT-14-feedback",
+        "IMPORT-14-action-names",
+        "IMPORT-14-action-names-test",
+        "IMPORT-14-feedback-test",
+        "IMPORT-14-number-ignore-test",
+        "IMPORT-14-test",
+        "IMPORT-15",
+        "IMPORT-15-test",
+        "IMPORT-16",
+        "IMPORT-16-provider-budget",
+        "IMPORT-16-provider-budget-diagnosis",
+        "IMPORT-16-provider-budget-validation",
+        "IMPORT-16-test",
+        "IMPORT-17",
+        "IMPORT-17-completeness",
+        "IMPORT-17-completeness-test",
+        "IMPORT-17-completeness-live",
+        "IMPORT-17-consistency",
+        "IMPORT-17-metadata",
+        "IMPORT-17-test",
+        "IMPORT-17-visibility",
+        "IMPORT-17-visibility-test",
+        "IMPORT-17-live",
+        "IMPORT-18",
+        "IMPORT-18-shell",
+        "IMPORT-18-shell-test",
+        "IMPORT-18-test",
+        "IMPORT-18-revert",
+        "IMPORT-18-revert-test",
+        "IMPORT-07",
+        "IMPORT-07-package",
+        "IMPORT-07-package-test"
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "path": "agent-log/20261008-234042-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-225816-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-151819-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-171655-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-234814-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261015-010156-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-223125-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/20261008-233000-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-082227-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-010024-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-000106-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-085412-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-002253-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/content/20261012-092024-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-131725-utcp8-taobe-gpt-6-tauri-git-read.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-232200-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-150828-utcp8-taobe-gpt-6-action-groups-h5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-000928-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-032901-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-230834-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-143108-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-154027-utcp8-taobe-gpt-6-repository-header-actions.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-235717-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-161742-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-182139-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-131835-utcp8-taobe-gpt-6-hidden-header-count.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-202143-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-224047-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-195641-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-144636-utcp8-taobe-gpt-6-presence-device-rows.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-142701-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-175749-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-154926-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-142136-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261008-223026-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-214124-utcp8-taobe-gpt-6-mass-git-read.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-000236-utcp8-taobe-gpt-6-update-restart-proof.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-084159-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-025117-utcp8-taobe-gpt-6-presence-remote-actions.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261015-032329-utcp8-taobe-gpt-5-daily-maintenance.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-020028-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-150412-utcp8-taobe-gpt-6-tree-open-spacing.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-184708-utcp8-taobe-gpt-6-presence-management-model.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-204639-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-030626-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-234757-utcp8-taobe-gpt-6-git-lfs-push.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-160834-utcp8-taobe-gpt-6-input-outline.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-092539-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-131851-utcp8-taobe-gpt-6-presence-organization-boundary.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-022524-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-222720-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-225211-utcp8-taobe-gpt-6-update-immediate.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-004404-utcp8-taobe-gpt-6-sidebar-spacing.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-155909-utcp8-taobe-gpt-6-submit-popup.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-132548-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-001447-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-095803-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261008-002602-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-094342-utcp8-taobe-gpt-6-grouped-files-padding.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261008-001242-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-100520-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-093030-utcp8-taobe-gpt-6-main-only-cleanup.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-172201-utcp8-taobe-gpt-6-dashboard-header-alignment.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-010747-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-151207-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-194528-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-030606-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-032800-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-100733-utcp8-taobe-gpt-6-operation-icons.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-204956-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-190544-utcp8-taobe-gpt-6-official-m3-inputs.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-154805-utcp8-taobe-gpt-5-column-resize.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-102339-utcp8-taobe-gpt-5-performance-recording.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-155603-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-102225-utcp8-taobe-gpt-6-remote-control.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-143029-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-221703-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-234946-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-232259-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-100840-utcp8-taobe-gpt-6-presence-avatars-client.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-161823-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-110852-utcp8-taobe-gpt-6-graph-actions.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-011933-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-025032-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-235711-utcp8-taobe-gpt-6-native-github.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-100832-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-195836-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-162043-utcp8-taobe-gpt-6-submit-branch-messages.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-215715-utcp8-taobe-gpt-6-recent-delivery.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-232558-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-020229-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-130041-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-130956-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-004606-utcp8-taobe-gpt-6-file-row-state-inset.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261015-013926-utcp8-taobe-gpt-6-repository-auth.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-013501-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-160838-utcp8-taobe-gpt-6-submit-popup-simple.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-001618-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-145454-utcp8-taobe-gpt-6-hide-counts.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-003214-utcp8-taobe-gpt-6-remote-control-discussion.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-015049-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-165427-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-092430-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-140308-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-152701-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-023041-utcp8-taobe-gpt-6-operation-collapse.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261008-004052-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-133742-utcp8-taobe-gpt-6-presence-password-length.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-132907-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261015-012013-utcp8-taobe-gpt-6-commit-description-fast-model.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-151704-utcp8-taobe-gpt-6-gitea-participation.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-144245-utcp8-taobe-gpt-6-file-tree.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-024407-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-163529-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-153708-utcp8-taobe-gpt-6-text-count-headers.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-155311-utcp8-taobe-gpt-6-path-hover.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-092453-utcp8-taobe-gpt-6-branch-behavior.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-002029-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-091906-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-161200-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261004-011756-utcp10-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-141444-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-010616-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-024949-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-172631-utcp8-taobe-gpt-6-association-refresh.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-160426-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-094822-utcp8-taobe-gpt-6-local-preview-removal.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-233423-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-230931-utcp8-taobe-gpt-6-release-policy.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-195522-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261015-001829-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-151508-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-093706-utcp8-taobe-gpt-5-provider-quota-diagnosis.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-221626-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-152603-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-170031-utcp8-taobe-gpt-6-graph-fetch-consistency.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-165347-utcp8-taobe-gpt-6-submit-editable-messages.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-090437-utcp8-taobe-gpt-5-dashboard-status-header.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-152609-utcp8-taobe-gpt-6-action-groups-refinement.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-150617-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261018-210349-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-010840-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-165913-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-091845-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-004735-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-143538-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-160045-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-134040-utcp8-taobe-gpt-6-icon-sidebar.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-154732-utcp8-taobe-gpt-6-github-token-refresh.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-152214-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-142146-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-012251-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-094626-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-092832-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-171633-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-112554-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-011611-utcp8-taobe-gpt-6-presence-integration.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-081724-utcp8-taobe-gpt-6-remote-control-decisions.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-222804-utcp8-taobe-gpt-6-graph-author-filter.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-201456-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-225800-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-005321-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-165453-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-170650-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-230240-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-210108-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-202040-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-183445-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-205256-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-092351-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-175445-utcp8-taobe-gpt-6-branch-created.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-122651-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-014056-utcp8-taobe-gpt-6-tauri-rust.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-152916-utcp8-taobe-gpt-6-paired-action-icons.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-090755-utcp8-taobe-gpt-6-settings-update-logs.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-161436-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-085919-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-103010-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261016-165739-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-201418-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-114536-utcp8-taobe-gpt-6-icon-install.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-012507-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-161551-utcp8-taobe-gpt-6-graph-row-padding.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-093707-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-180016-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-132045-utcp8-taobe-gpt-6-search-disclosure.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-170025-utcp8-taobe-gpt-6-submit-editable-production.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-234330-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261016-160351-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-010511-utcp8-taobe-gpt-6-sidebar-repository-spacing.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-113504-utcp8-taobe-gpt-6-windows-packaging.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-144132-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-165549-utcp8-taobe-gpt-6-production-submit.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261002-225419-utcp10-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-005736-utcp8-taobe-gpt-6-package-commit.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-204539-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-001234-utcp8-taobe-gpt-6-push-feedback-selection.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-204311-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-211124-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-004232-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-153105-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261006-155642-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-104757-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261018-232347-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-235547-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-141443-utcp8-taobe-gpt-6-update-quiesce.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-110919-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261004-042541-utcp11-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-093625-utcp8-taobe-gpt-6-local-history-diff.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-002232-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-140016-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-173322-utcp8-taobe-gpt-6-directory-discovery.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-153153-utcp8-taobe-gpt-6-download-icon.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-131853-utcp8-taobe-gpt-6-read-health-scope.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-211326-utcp8-taobe-gpt-6-repository-browser-link.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-092350-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-121038-utcp8-taobe-gpt-6-presence-accounts.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-005307-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "R-05-graph-actions"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-224844-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-154036-utcp8-taobe-gpt-6-submit-ai-contract.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261013-232751-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261019-090009-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-224430-utcp8-taobe-gpt-6-shared-diff-file-design.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-013305-utcp8-taobe-gpt-6-presence-device-name.md",
+      "role": "historical-evidence",
+      "issues": [
+        "COLLAB-03-automatic-management"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-001118-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-085158-utcp8-taobe-gpt-6-providers.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DESKTOP-01"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261009-091244-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "PRESENCE-01-plugin"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261012-011146-utcp8-taobe-gpt-6-windows-release-policy.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-094956-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261014-144804-utcp8-taobe-gpt-5-workspace-history-note.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-231048-utcp8-taobe-gpt-6-header-count-corner.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261007-213242-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-234021-utcp8-taobe-gpt-6-commit-field-type.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-022248-utcp8-taobe-gpt-5.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261011-143539-utcp8-taobe-gpt-6-tauri-parity.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    },
+    {
+      "path": "agent-log/system/20261010-000913-utcp8-taobe-gpt-6.md",
+      "role": "historical-evidence",
+      "issues": [
+        "DOC-migration-20261023"
+      ],
+      "matched_legacy_ids": []
+    }
+  ],
+  "issues": [
+    {
+      "id": "DESKTOP-01",
+      "type": "UI",
+      "file": "issue-DESKTOP-01-UI-github-desktop-foundation-versioncontrolid.md",
+      "title": "GitHub Desktop 执行基础替换（2026-10-18）",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "DESKTOP-01",
+        "DESKTOP-01-engine",
+        "DESKTOP-01-ui",
+        "DESKTOP-01-local-discovery",
+        "DESKTOP-01-local-discovery-test",
+        "DESKTOP-01-ui-complete",
+        "DESKTOP-01-crash-layout",
+        "DESKTOP-01-actions",
+        "DESKTOP-01-commit-generation",
+        "DESKTOP-01-commit-generation-test",
+        "DESKTOP-01-commit-generation-stop",
+        "DESKTOP-01-macos-test-app-0363",
+        "DESKTOP-01-presence",
+        "DESKTOP-01-presence-storage",
+        "DESKTOP-01-validation",
+        "DESKTOP-01-macos-test-app",
+        "DESKTOP-01-account-entries",
+        "DESKTOP-01-account-entries-validation",
+        "DESKTOP-01-account-entries-tls",
+        "DESKTOP-01-account-entries-tls-server"
+      ],
+      "state": "进行中（原文同时包含已完成与未完成项）"
+    },
+    {
+      "id": "COLLAB-03-automatic-management",
+      "type": "UI",
+      "file": "issue-COLLAB-03-automatic-management-UI-presence-account-business-versioncontrolid.md",
+      "title": "Presence账号与商业边界（2026-10-12）",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "COLLAB-03-automatic-management",
+        "COLLAB-03-settings",
+        "COLLAB-03-settings-spacing",
+        "COLLAB-03-settings-spacing-test",
+        "COLLAB-03-settings-spacing-release",
+        "COLLAB-03-identity",
+        "COLLAB-03-repository-ui",
+        "COLLAB-03-repository-icon",
+        "COLLAB-03-repository-icon-test",
+        "COLLAB-03-repository-icon-release",
+        "COLLAB-03-control",
+        "COLLAB-03-source",
+        "COLLAB-03-runtime",
+        "COLLAB-02-presence-account",
+        "COLLAB-02-source",
+        "COLLAB-02-password-length",
+        "COLLAB-02-commercial",
+        "COLLAB-02-organization-boundary"
+      ],
+      "state": "阻塞（沿用原需求记录）"
+    },
+    {
+      "id": "IMPORT-19-providers",
+      "type": "SEC",
+      "file": "issue-IMPORT-19-providers-SEC-project-goal-versioncontrolid.md",
+      "title": "代码托管平台扩展（2026-10-12）",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "IMPORT-19-providers",
+        "IMPORT-19-authorization"
+      ],
+      "state": "已完成（沿用原需求记录；本轮未重新执行产品验收）"
+    },
+    {
+      "id": "R-05-history-pagination",
+      "type": "QA",
+      "file": "issue-R-05-history-pagination-QA-repository-experience-versioncontrolid.md",
+      "title": "仓库浏览体验（2026-10-12）",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "R-05-history-pagination",
+        "IMPORT-20-navigation-refresh"
+      ],
+      "state": "已完成（沿用原需求记录；本轮未重新执行产品验收）"
+    },
+    {
+      "id": "PRESENCE-05-avatars",
+      "type": "DOC",
+      "file": "issue-PRESENCE-05-avatars-DOC-presence-avatar-branches-versioncontrolid.md",
+      "title": "Phase - v0.24.0 - Presence 头像与分支人员",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "PRESENCE-05-avatars",
+        "PRESENCE-05-name-placement",
+        "PRESENCE-05-avatar-hover",
+        "PRESENCE-05-device-name",
+        "PRESENCE-05-remote-actions",
+        "PRESENCE-05-remote-actions-source",
+        "PRESENCE-05-remote-actions-release",
+        "PRESENCE-06-avatar-state"
+      ],
+      "state": "进行中（原文同时包含已完成与未完成项）"
+    },
+    {
+      "id": "PRESENCE-01-plugin",
+      "type": "DOC",
+      "file": "issue-PRESENCE-01-plugin-DOC-team-collaboration-state-versioncontrolid.md",
+      "title": "presence/main: 接入真实团队协作状态",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "PRESENCE-01-plugin",
+        "PRESENCE-02-state",
+        "PRESENCE-03-nas",
+        "PRESENCE-04-release"
+      ],
+      "state": "进行中（原文同时包含已完成与未完成项）"
+    },
+    {
+      "id": "R-05-graph-actions",
+      "type": "CONTENT",
+      "file": "issue-R-05-graph-actions-CONTENT-repository-files-commit-versioncontrolid.md",
+      "title": "codex/standalone-ts: 多仓库与文件提交工作台",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "R-05-graph-actions",
+        "R-05-ai-sync",
+        "CONTENT-01-icon-candidates",
+        "CONTENT-01-icon-install",
+        "CONTENT-01-icon-sidebar-text",
+        "CONTENT-01-icon-install-release",
+        "CONTENT-01-icon-fusion-black",
+        "CONTENT-01-icon-fusion-black-clean",
+        "CONTENT-01-icon-fusion-black-joins",
+        "CONTENT-01-icon-fusion-black-junctions",
+        "CONTENT-01-icon-selected-exports",
+        "COLLAB-01-remote-control",
+        "COLLAB-01-source",
+        "COLLAB-01-runtime",
+        "COLLAB-01-release",
+        "COLLAB-01-personal",
+        "COLLAB-01-team",
+        "COLLAB-01-identity",
+        "COLLAB-01-device-grant",
+        "COLLAB-01-platform-login",
+        "COLLAB-01-dispatch",
+        "COLLAB-01-abort-operation",
+        "COLLAB-01-discard-changes",
+        "D-01",
+        "D-02",
+        "D-03",
+        "R-01",
+        "R-02",
+        "R-02-file-row-state-inset",
+        "R-02-shared-file-design",
+        "R-02-submit-selection",
+        "R-02-submit-selection-collapse",
+        "R-02-submit-selection-collapse-test",
+        "R-02-push-feedback",
+        "R-03",
+        "R-04",
+        "R-05",
+        "R-05-repository-browser-link",
+        "R-05-header-actions",
+        "R-05-local-submit",
+        "R-05-local-submit-test",
+        "R-05-commit-composer",
+        "R-05-commit-composer-ai-loading",
+        "R-05-commit-composer-ai-loading-test",
+        "R-05-commit-composer-windows-cli",
+        "R-05-commit-composer-ai-fast-context",
+        "R-05-commit-composer-windows-cli-test",
+        "R-05-commit-composer-windows-cli-local-update",
+        "R-05-commit-composer-official-m3",
+        "R-05-search-compact",
+        "R-05-commit-composer-compact-type",
+        "R-05-commit-composer-thin-outline",
+        "R-05-graph-local-states",
+        "R-05-graph-local-states-vertical-padding",
+        "R-05-local-preview-removal",
+        "R-05-local-file-operations",
+        "R-05-local-preview-removal-test",
+        "R-05-local-history-diff",
+        "R-05-local-history-diff-test",
+        "R-05-column-insets",
+        "R-05-column-insets-test",
+        "R-05-tree-identity-row",
+        "R-05-tree-identity-footer-test",
+        "R-05-tree-directory-open",
+        "R-05-tree-directory-open-test",
+        "R-05-tree-identity-row-test",
+        "R-05-branch-title",
+        "R-05-branch-title-test",
+        "R-05-column-footers",
+        "R-05-column-footers-test",
+        "R-05-tree-open",
+        "R-05-tree-open-spacing",
+        "R-05-tree-open-test",
+        "R-05-change-context",
+        "R-05-change-context-spacing",
+        "R-05-change-context-test",
+        "R-05-global-tree",
+        "R-05-global-tree-test",
+        "R-05-remote-focus-control",
+        "R-05-remote-focus-control-test",
+        "R-05-gitlens-graph",
+        "R-05-gitlens-graph-history-note",
+        "R-05-gitlens-graph-scroll",
+        "R-05-gitlens-graph-scroll-test",
+        "R-05-gitlens-graph-sync",
+        "R-05-gitlens-graph-local",
+        "R-05-gitlens-graph-shallow",
+        "R-05-gitlens-graph-filter",
+        "R-05-gitlens-graph-author-filter",
+        "R-05-gitlens-graph-local-test",
+        "R-05-gitlens-graph-test",
+        "R-05-graph-header",
+        "R-05-graph-header-test",
+        "R-05-remote-inline-preview",
+        "R-05-remote-inline-preview-test",
+        "R-05-remote-metadata",
+        "R-05-remote-metadata-test",
+        "R-05-remote",
+        "R-05-remote-integration",
+        "R-05-remote-test",
+        "R-05-layout",
+        "R-05-history-details",
+        "R-05-history-body",
+        "R-05-history-body-test",
+        "R-05-history-details-test",
+        "R-05-column-collapse",
+        "R-05-column-collapse-horizontal",
+        "R-05-column-resize",
+        "R-05-column-resize-test",
+        "R-05-column-collapse-test",
+        "R-05-overview",
+        "R-05-overview-test",
+        "R-05-data",
+        "R-05-test",
+        "R-05-tree-source",
+        "R-05-tree-source-radius",
+        "R-05-tree-source-radius-test",
+        "R-05-tree-source-test",
+        "UI-01",
+        "UI-02",
+        "UI-03",
+        "UI-04",
+        "UI-04-hidden-scrollbars",
+        "UI-04-hidden-scrollbars-test",
+        "UI-04-sidebar-collapse",
+        "UI-04-sidebar-collapse-test",
+        "UI-04-sidebar-collapse-rail",
+        "UI-04-sidebar-collapse-rail-test",
+        "UI-04-sidebar-header-icon-only",
+        "UI-04-sidebar-header-icon-only-test",
+        "UI-04-sidebar-vertical-spacing",
+        "UI-04-sidebar-repository-spacing",
+        "UI-04-sidebar-icon-buttons",
+        "UI-04-sidebar-icon-buttons-test",
+        "UI-04-sidebar-icon-buttons-hit-area",
+        "UI-04-sidebar-icon-buttons-hit-area-test",
+        "UI-04-sidebar-icon-buttons-shared-size",
+        "UI-04-sidebar-icon-buttons-shared-size-test",
+        "UI-04-sidebar-icon-buttons-no-indent",
+        "UI-04-sidebar-icon-buttons-no-indent-test",
+        "UI-04-traffic-light-size",
+        "UI-04-traffic-light-size-test",
+        "UI-04-settings-width",
+        "UI-05",
+        "UI-05-test",
+        "UI-06",
+        "UI-07",
+        "UI-07-test",
+        "UI-06-test",
+        "UI-07-tile",
+        "UI-07-tile-test",
+        "UI-08",
+        "UI-08-static-check",
+        "UI-08-sidebar",
+        "UI-08-visual-qa",
+        "UI-09",
+        "UI-09-tree-graph-padding",
+        "UI-09-control-padding",
+        "UI-09-control-padding-validation",
+        "UI-09-sidebar-feedback",
+        "UI-09-sidebar-feedback-test",
+        "UI-09-sidebar-feedback-visual",
+        "UI-09-version-corner",
+        "UI-09-version-corner-test",
+        "UI-09-version-corner-visual",
+        "UI-09-filter-details",
+        "UI-09-test",
+        "UI-09-details",
+        "UI-09-details-test",
+        "RUN-01",
+        "RUN-01-remote-first",
+        "RUN-01-tauri-git-network",
+        "RUN-01-tauri-git-network-read",
+        "RUN-01-tauri-git-network-release",
+        "RUN-01-tauri-parity",
+        "RUN-01-tauri-parity-read",
+        "RUN-01-tauri-parity-release",
+        "RUN-01-tauri-rust",
+        "RUN-01-tauri-git-read",
+        "RUN-01-main-delivery",
+        "RUN-01-main-only",
+        "RUN-01-recent-delivery",
+        "RUN-01-update",
+        "RUN-01-submit-fix-release",
+        "RUN-01-update-diagnostics",
+        "RUN-01-update-quiesce",
+        "RUN-01-update-immediate",
+        "RUN-01-update-immediate-release",
+        "RUN-01-update-restart-proof",
+        "RUN-01-release-policy",
+        "RUN-01-notary-reuse",
+        "RUN-01-notary-reuse-recovery",
+        "RUN-01-recent-installed-check",
+        "RUN-01-windows-policy",
+        "RUN-01-windows-packaging",
+        "RUN-01-update-pipeline",
+        "RUN-01-update-test",
+        "RUN-01-update-release",
+        "RUN-01-update-errors",
+        "RUN-01-identity",
+        "RUN-01-identity-settings",
+        "RUN-01-identity-fork",
+        "RUN-01-identity-main",
+        "RUN-01-identity-test",
+        "RUN-01-identity-readme",
+        "RUN-01-identity-readme-test"
+      ],
+      "state": "阻塞（沿用原需求记录）"
+    },
+    {
+      "id": "IMPORT-native-browser",
+      "type": "UI",
+      "file": "issue-IMPORT-native-browser-UI-account-repository-import-versioncontrolid.md",
+      "title": "codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）",
+      "source": "REQUIREMENTS.md",
+      "legacy_ids": [
+        "IMPORT-native-browser",
+        "IMPORT-native-browser-live",
+        "IMPORT-01",
+        "IMPORT-02",
+        "IMPORT-02-repository-authentication",
+        "IMPORT-02-repository-access",
+        "IMPORT-02-git-auth-lifecycle",
+        "IMPORT-02-git-auth-lifecycle-source",
+        "IMPORT-02-git-native-remote",
+        "IMPORT-02-git-auth-lifecycle-runtime",
+        "IMPORT-02-edit",
+        "IMPORT-02-edit-remove",
+        "IMPORT-02-edit-remove-test",
+        "IMPORT-02-edit-test",
+        "IMPORT-03",
+        "IMPORT-04",
+        "IMPORT-04-worktrees",
+        "IMPORT-04-directory-display",
+        "IMPORT-04-directory-display-test",
+        "IMPORT-04-worktrees-test",
+        "IMPORT-04-account-batch",
+        "IMPORT-04-account-batch-feedback",
+        "IMPORT-04-account-batch-performance",
+        "IMPORT-04-account-batch-test",
+        "IMPORT-04-inline",
+        "IMPORT-04-path-hover",
+        "IMPORT-04-association-refresh",
+        "IMPORT-04-open-folder",
+        "IMPORT-04-discovery-boundary",
+        "IMPORT-04-discovery-boundary-release",
+        "IMPORT-04-picker",
+        "IMPORT-04-picker-test",
+        "IMPORT-05",
+        "IMPORT-06",
+        "IMPORT-08",
+        "IMPORT-08-test",
+        "IMPORT-09",
+        "IMPORT-09-test",
+        "IMPORT-10",
+        "IMPORT-10-test",
+        "IMPORT-11",
+        "IMPORT-11-token-refresh",
+        "IMPORT-11-windows-oauth-port",
+        "IMPORT-11-connect",
+        "IMPORT-11-browser",
+        "IMPORT-11-native-keychain",
+        "IMPORT-11-native-keychain-test",
+        "IMPORT-11-native-keychain-live",
+        "IMPORT-11-browser-local",
+        "IMPORT-11-browser-local-code",
+        "IMPORT-11-browser-local-csp",
+        "IMPORT-11-browser-local-csp-test",
+        "IMPORT-11-browser-network",
+        "IMPORT-11-browser-network-test",
+        "IMPORT-11-browser-progress",
+        "IMPORT-11-browser-progress-test",
+        "IMPORT-11-browser-return",
+        "IMPORT-11-browser-live",
+        "IMPORT-11-secret",
+        "IMPORT-11-secret-persistence",
+        "IMPORT-11-secret-persistence-test",
+        "IMPORT-11-secret-persistence-live",
+        "IMPORT-11-browser-rebind",
+        "IMPORT-11-browser-rebind-test",
+        "IMPORT-11-ready",
+        "IMPORT-11-ready-test",
+        "IMPORT-11-callback-document",
+        "IMPORT-11-callback-document-test",
+        "IMPORT-11-callback-document-live",
+        "IMPORT-11-callback-feedback",
+        "IMPORT-11-callback-feedback-test",
+        "IMPORT-11-callback-feedback-live",
+        "IMPORT-11-secret-entry",
+        "IMPORT-11-secret-rotation",
+        "IMPORT-11-test",
+        "IMPORT-12",
+        "IMPORT-12-branch-behavior",
+        "IMPORT-12-branch-behavior-gitea",
+        "IMPORT-12-branch-behavior-created",
+        "IMPORT-12-branch-behavior-import",
+        "IMPORT-12-branch-behavior-import-test",
+        "IMPORT-12-branch-behavior-account",
+        "IMPORT-12-branch-behavior-account-test",
+        "IMPORT-12-update-settings",
+        "IMPORT-12-test",
+        "IMPORT-13",
+        "IMPORT-13-repository-pin",
+        "IMPORT-13-status-header",
+        "IMPORT-13-branches",
+        "IMPORT-13-branches-test",
+        "IMPORT-13-branches-folder",
+        "IMPORT-13-branches-folder-test",
+        "IMPORT-13-branches-motion",
+        "IMPORT-13-main",
+        "IMPORT-13-test",
+        "IMPORT-13-owner",
+        "IMPORT-13-owner-test",
+        "IMPORT-14",
+        "IMPORT-14-last-divider",
+        "IMPORT-14-last-divider-test",
+        "IMPORT-14-grouped-actions",
+        "IMPORT-14-header-alignment",
+        "IMPORT-14-header-alignment-runtime",
+        "IMPORT-14-header-count-corner",
+        "IMPORT-14-production-submit",
+        "IMPORT-14-production-submit-runtime",
+        "IMPORT-14-push-lfs-errors",
+        "IMPORT-14-submit-popup",
+        "IMPORT-14-submit-summary-only",
+        "IMPORT-14-submit-popup-width",
+        "IMPORT-14-windows-lfs-commit",
+        "IMPORT-14-commit-timeout-headless",
+        "IMPORT-14-submit-popup-production",
+        "IMPORT-14-submit-popup-h5",
+        "IMPORT-14-submit-ai",
+        "IMPORT-14-header-text",
+        "IMPORT-14-download-icon",
+        "IMPORT-14-grouped-icons",
+        "IMPORT-14-grouped-refinement",
+        "IMPORT-14-grouped-h5",
+        "IMPORT-14-branch-name-alignment",
+        "UI-04-repository-reveal",
+        "IMPORT-14-inline",
+        "IMPORT-14-number-ignore",
+        "IMPORT-14-read-badges",
+        "IMPORT-14-read-health-scope",
+        "IMPORT-14-read-badges-test",
+        "IMPORT-14-read-failure-live",
+        "IMPORT-14-check-cycle",
+        "IMPORT-14-change-trigger",
+        "IMPORT-14-zero-badges",
+        "IMPORT-14-diagnostics",
+        "IMPORT-14-performance",
+        "IMPORT-14-performance-source",
+        "IMPORT-14-performance-runtime",
+        "IMPORT-14-diagnostics-copy",
+        "IMPORT-14-diagnostics-test",
+        "IMPORT-14-operation-semantics",
+        "IMPORT-14-branch-download",
+        "IMPORT-14-branch-download-layout",
+        "IMPORT-14-branch-download-layout-test",
+        "IMPORT-14-operation-semantics-test",
+        "IMPORT-14-visible",
+        "IMPORT-14-hide",
+        "IMPORT-14-hide-counts",
+        "IMPORT-14-hide-header-count",
+        "IMPORT-14-operation-execution",
+        "IMPORT-14-operation-collapse",
+        "IMPORT-14-operation-collapse-icons",
+        "IMPORT-14-feedback",
+        "IMPORT-14-action-names",
+        "IMPORT-14-action-names-test",
+        "IMPORT-14-feedback-test",
+        "IMPORT-14-number-ignore-test",
+        "IMPORT-14-test",
+        "IMPORT-15",
+        "IMPORT-15-test",
+        "IMPORT-16",
+        "IMPORT-16-provider-budget",
+        "IMPORT-16-provider-budget-diagnosis",
+        "IMPORT-16-provider-budget-validation",
+        "IMPORT-16-test",
+        "IMPORT-17",
+        "IMPORT-17-completeness",
+        "IMPORT-17-completeness-test",
+        "IMPORT-17-completeness-live",
+        "IMPORT-17-consistency",
+        "IMPORT-17-metadata",
+        "IMPORT-17-test",
+        "IMPORT-17-visibility",
+        "IMPORT-17-visibility-test",
+        "IMPORT-17-live",
+        "IMPORT-18",
+        "IMPORT-18-shell",
+        "IMPORT-18-shell-test",
+        "IMPORT-18-test",
+        "IMPORT-18-revert",
+        "IMPORT-18-revert-test",
+        "IMPORT-07",
+        "IMPORT-07-package",
+        "IMPORT-07-package-test"
+      ],
+      "state": "阻塞（沿用原需求记录）"
+    }
+  ],
+  "note": "Original states retained; historical log evidence does not complete current tasks."
+}
