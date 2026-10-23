@@ -11,7 +11,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 
 const root = resolve(import.meta.dirname, '..');
-const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
+const version = process.env.GITTOGETHER_RELEASE_VERSION || JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 const destination = join(root, 'artifacts/releases', version);
 const report = JSON.parse(await readFile(join(destination, 'package-darwin-arm64.json'), 'utf8'));
 const production = join(report.directory, 'GitTogether.app');

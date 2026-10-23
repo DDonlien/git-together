@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 assert.equal(process.platform, 'win32');
 const root = resolve(process.env.GITTOGETHER_SOURCE_ROOT || resolve(import.meta.dirname, '..'));
-const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const version = process.env.GITTOGETHER_RELEASE_VERSION || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const destination = join(root, 'artifacts/releases', version);
 const packageReport = JSON.parse(readFileSync(join(destination, `package-win32-${process.arch}.json`), 'utf8'));
 const fixture = mkdtempSync(join(tmpdir(), 'gittogether-installed-smoke-'));

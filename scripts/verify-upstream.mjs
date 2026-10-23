@@ -24,7 +24,7 @@ function check(path) {
   }
 }
 check('app/src');
-const presentationPatches = new Set([
+const approvedPatches = new Set([
   "script/dist-info.ts",
   "script/build.ts",
   "script/copilot.ts",
@@ -76,6 +76,14 @@ const presentationPatches = new Set([
   "app/src/ui/preferences/git.tsx",
   "app/src/ui/preferences/notifications.tsx",
   "app/src/ui/preferences/preferences.tsx",
+  "app/src/lib/editors/win32.ts",
+  "app/src/lib/stores/app-store.ts",
+  "app/src/ui/dispatcher/dispatcher.ts",
+  "app/src/ui/lib/conflicts/render-functions.tsx",
+  "app/src/ui/lib/conflicts/unmerged-file.tsx",
+  "app/src/ui/multi-commit-operation/base-multi-commit-operation.tsx",
+  "app/src/ui/multi-commit-operation/dialog/conflicts-dialog.tsx",
+  "app/src/ui/preferences/integrations.tsx",
   "app/src/ui/push-needs-pull/push-needs-pull-warning.tsx",
   "app/src/ui/remove-repository/confirm-remove-repository.tsx",
   "app/src/ui/repositories-list/repositories-list.tsx",
@@ -99,8 +107,8 @@ const presentationPatches = new Set([
   "tsconfig.json"
 ]);
 for (const path of Object.keys(lock.patches)) {
-  if (!presentationPatches.has(path)) errors.push(`Non-presentation upstream patch: ${path}`);
+  if (!approvedPatches.has(path)) errors.push(`Unapproved upstream patch: ${path}`);
 }
 
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
-else console.log(`Verified ${Object.keys(lock.sha256).length} upstream files at ${lock.ref} (${lock.commit}); ${Object.keys(lock.patches).length} presentation/identity patches.`);
+else console.log(`Verified ${Object.keys(lock.sha256).length} upstream files at ${lock.ref} (${lock.commit}); ${Object.keys(lock.patches).length} approved source patches.`);

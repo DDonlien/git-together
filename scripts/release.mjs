@@ -10,7 +10,8 @@ import { downloadWindowsArtifacts, downloadPublicAssets } from './release-downlo
 
 const root = resolve(import.meta.dirname, '..');
 const repository = 'DDonlien/git-together';
-const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const version = process.env.GITTOGETHER_RELEASE_VERSION || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+assert.match(version, /^\d+\.\d+\.\d+$/);
 const tag = `v${version}`;
 const destination = join(root, 'artifacts/releases', version);
 mkdirSync(destination, { recursive: true });
@@ -19,13 +20,16 @@ const capture = (cmd, args) => run(cmd, args, { stdio: ['ignore', 'pipe', 'inher
 const gh = args => capture('gh', [...args, '--repo', repository]);
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
-run(process.execPath, ['--test', 'scripts/notarization.test.mjs']);
+const assertSourceOnMain = () => {
+  run('git', ['fetch', 'origin', 'main', '--no-tags']);
+  run('git', ['merge-base', '--is-ancestor', head, 'FETCH_HEAD']);
+};
 assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
 assert.equal(capture('git', ['branch', '--show-current']), 'main');
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Commit the intended changes before release.');
 const head = capture('git', ['rev-parse', 'HEAD']);
-assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head, 'Push main before release.');
+assertSourceOnMain();
 let commit = head;
 const macReport = join(destination, 'package-darwin-arm64.json');
 const outBuild = join(root, 'desktop/out/build-info.json');
@@ -41,6 +45,16 @@ for (const previous of [existsSync(macReport) ? json(macReport).build : undefine
     }
   }
 }
+const existingTag = JSON.parse(gh(['release', 'list', '--limit', '100', '--json', 'tagName,isDraft'])).find(item => item.tagName === tag);
+if (existingTag && !existingTag.isDraft) {
+  const released = JSON.parse(gh(['release', 'view', tag, '--json', 'targetCommitish']));
+  assert.equal(released.targetCommitish, commit, 'A published version tag belongs to a different source commit.');
+  if (JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName === tag) {
+    run(process.execPath, ['scripts/publish-release-metadata.mjs']);
+  } else console.log(`Release ${tag} is already published and superseded; no release state changed.`);
+  process.exit(0);
+}
+run(process.execPath, ['--test', 'scripts/notarization.test.mjs']);
 const latest = JSON.parse(gh(['release', 'view', '--json', 'tagName']));
 assert.notEqual(latest.tagName, tag, 'Never replace an already published version.');
 const key = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
@@ -72,17 +86,18 @@ if (!previousNative || previousNative.sourceCommit !== mac.build.sourceCommit ||
   writeFileSync(nativeReceipt, JSON.stringify({ sourceCommit: mac.build.sourceCommit, sourceSha256: mac.build.sourceSha256, executableSha256, resourcesSha256, checks: 31 }, null, 2) + '\n');
 }
 const runFile = join(destination, 'windows-run.json');
-let runId = existsSync(runFile) && json(runFile).commit === commit ? json(runFile).id : undefined;
+let runId = existsSync(runFile) && json(runFile).commit === commit && json(runFile).version === version ? json(runFile).id : undefined;
 if (!runId) {
   const started = Date.now();
+  const windowsRunTitle = `Windows release ${version} (${commit})`;
   gh(['workflow', 'run', 'desktop-release-windows.yml', '--ref', 'main', '-f', `source_commit=${commit}`, '-f', `version=${version}`]);
   for (let attempt = 0; attempt < 12 && !runId; attempt++) {
     await pause(5000);
-    const runs = JSON.parse(gh(['run', 'list', '--workflow', 'desktop-release-windows.yml', '--event', 'workflow_dispatch', '--limit', '8', '--json', 'databaseId,headSha,createdAt']));
-    runId = runs.find(item => item.headSha === head && Date.parse(item.createdAt) >= started - 5000)?.databaseId;
+    const runs = JSON.parse(gh(['run', 'list', '--workflow', 'desktop-release-windows.yml', '--event', 'workflow_dispatch', '--limit', '20', '--json', 'databaseId,displayTitle,createdAt']));
+    runId = runs.find(item => item.displayTitle === windowsRunTitle && Date.parse(item.createdAt) >= started - 5000)?.databaseId;
   }
   assert.ok(runId, 'Could not locate the dispatched Windows release build.');
-  writeFileSync(runFile, JSON.stringify({ commit, id: runId }) + '\n');
+  writeFileSync(runFile, JSON.stringify({ commit, version, id: runId }) + '\n');
 }
 console.log(`Waiting for Windows release packages: https://github.com/${repository}/actions/runs/${runId}`);
 for (let attempt = 0; ; attempt++) {
@@ -144,33 +159,11 @@ const remoteAssets = JSON.parse(gh(['release', 'view', tag, '--json', 'assets'])
 for (const item of integrity) assert.ok(remoteAssets.some(asset => asset.name === item.name && asset.size === item.size), 'Draft asset missing or incomplete: ' + item.name);
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
 assert.equal(capture('git', ['rev-parse', 'HEAD']), head);
-assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head);
+assertSourceOnMain();
 gh(['release', 'edit', tag, '--draft=false', '--latest']);
-// Squirrel.Windows requires one architecture per RELEASES feed. Keep these
-// tiny public feeds on main; payloads and tag still reference the release source.
-assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
-assert.equal(capture('git', ['rev-parse', 'HEAD']), head);
-assert.equal(capture('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s/)[0], head);
-const feeds = [];
-for (const arch of ['ia32', 'x64']) {
-  const name = `GitTogether-${version}-win32-${arch}-full.nupkg`;
-  const bytes = readFileSync(join(destination, name));
-  const relative = `updates/win32-${arch}/RELEASES`;
-  mkdirSync(join(root, 'updates', `win32-${arch}`), { recursive: true });
-  writeFileSync(join(root, relative), `${createHash('sha1').update(bytes).digest('hex').toUpperCase()} https://github.com/${repository}/releases/download/${tag}/${name} ${bytes.length}\n`);
-  feeds.push(relative);
-}
-run('git', ['add', '--', ...feeds]);
-run('git', ['commit', '-m', `chore(DESKTOP-01-updates): publish ${version} Windows feeds [skip ci]`]);
-run('git', ['push', 'origin', 'main']);
-for (const relative of feeds) {
-  for (let attempt = 0; ; attempt++) {
-    const response = capture('curl', ['--location', '--silent', '--show-error', `https://raw.githubusercontent.com/${repository}/main/${relative}`]);
-    if (response === readFileSync(join(root, relative), 'utf8').trim()) break;
-    assert.ok(attempt < 32, 'Public Windows feed is stale: ' + relative);
-    await pause(15000);
-  }
-}
+// Publish the Windows update feeds and advance package metadata on the newest
+// main commit; the helper retries fast-forward races and verifies public bytes.
+run(process.execPath, ['scripts/publish-release-metadata.mjs']);
 assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag);
 const publicFiles = [...integrity, ...['release-integrity.json', 'SHA256SUMS'].map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }))];
 const temporary = mkdtempSync(join(tmpdir(), 'gittogether-public-release-'));

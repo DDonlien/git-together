@@ -15,6 +15,8 @@ const desktop = join(root, 'desktop');
 const require = createRequire(join(desktop, 'package.json'));
 const { packager } = await import(pathToFileURL(require.resolve('@electron/packager')).href);
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+pkg.version = process.env.GITTOGETHER_RELEASE_VERSION || pkg.version;
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
 const build = JSON.parse(readFileSync(join(desktop, 'out/build-info.json'), 'utf8'));
 assert.equal(build.version, pkg.version);
 assert.equal(build.channel, 'production');

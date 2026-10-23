@@ -1,0 +1,108 @@
+name: Desktop automatic release
+run-name: Desktop release ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: desktop-automatic-release-main
+  queue: max
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: macos-15
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Select the next release version
+        id: release-version
+        run: node scripts/next-release-version.mjs "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Set the release version
+        run: echo "GITTOGETHER_RELEASE_VERSION=${{ steps.release-version.outputs.version }}" >> "$GITHUB_ENV"
+      - name: Prepare build dependencies
+        run: npm run setup
+      - name: Check required release secrets
+        if: steps.release-version.outputs.already_published != 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.GITTOGETHER_MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.GITTOGETHER_MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.GITTOGETHER_APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.GITTOGETHER_APPLE_API_ISSUER_ID }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.GITTOGETHER_APPLE_API_PRIVATE_KEY_P8 }}
+          TAURI_SIGNING_KEY: ${{ secrets.GITTOGETHER_TAURI_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "$MACOS_CERTIFICATE" ]] || missing+=(GITTOGETHER_MACOS_CERTIFICATE_P12_BASE64)
+          [[ -n "$MACOS_CERTIFICATE_PASSWORD" ]] || missing+=(GITTOGETHER_MACOS_CERTIFICATE_PASSWORD)
+          [[ -n "$APPLE_API_KEY_ID" ]] || missing+=(GITTOGETHER_APPLE_API_KEY_ID)
+          [[ -n "$APPLE_API_ISSUER_ID" ]] || missing+=(GITTOGETHER_APPLE_API_ISSUER_ID)
+          [[ -n "$APPLE_API_PRIVATE_KEY" ]] || missing+=(GITTOGETHER_APPLE_API_PRIVATE_KEY_P8)
+          [[ -n "$TAURI_SIGNING_KEY" ]] || missing+=(GITTOGETHER_TAURI_SIGNING_KEY)
+          if (( ${#missing[@]} )); then
+            printf '::error::Add these repository Actions secrets before automatic releases can run: %s\n' "${missing[*]}"
+            exit 1
+          fi
+      - name: Configure Developer ID, Apple notarization, and updater signing
+        if: steps.release-version.outputs.already_published != 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.GITTOGETHER_MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.GITTOGETHER_MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.GITTOGETHER_APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.GITTOGETHER_APPLE_API_ISSUER_ID }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.GITTOGETHER_APPLE_API_PRIVATE_KEY_P8 }}
+          TAURI_SIGNING_KEY: ${{ secrets.GITTOGETHER_TAURI_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/gittogether-release.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          certificate="$RUNNER_TEMP/developer-id.p12"
+          notary_key="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 -D > "$certificate"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$notary_key"
+          chmod 600 "$certificate" "$notary_key"
+          security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security default-keychain -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain" | grep -F 'Developer ID Application: ZHENGTAO GONG (86J7X3KZ5Z)'
+          xcrun notarytool store-credentials gittogether-notary --key "$notary_key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" --keychain "$keychain"
+          mkdir -p "$HOME/.config/gittogether/release"
+          printf '%s' "$TAURI_SIGNING_KEY" > "$HOME/.config/gittogether/release/tauri-updater.key"
+          chmod 600 "$HOME/.config/gittogether/release/tauri-updater.key"
+          node -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync("docs/release-updater.json","utf8")).plugins.updater.pubkey;process.stdout.write(v+"\n")' > "$HOME/.config/gittogether/release/tauri-updater.key.pub"
+          chmod 600 "$HOME/.config/gittogether/release/tauri-updater.key.pub"
+          printf 'GITTOGETHER_TAURI_SIGNING_KEY=%s\n' "$HOME/.config/gittogether/release/tauri-updater.key" >> "$GITHUB_ENV"
+          printf 'GITTOGETHER_NOTARY_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
+          printf 'GITTOGETHER_RELEASE_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
+          rm -f "$certificate" "$notary_key"
+      - name: Prepare the exact source branch
+        run: |
+          git fetch origin main --no-tags
+          git checkout -B main "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD
+      - name: Build, sign, notarize, and publish
+        run: node scripts/release.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITTOGETHER_SOURCE_COMMIT: ${{ github.sha }}
+      - name: Remove temporary signing material
+        if: always() && steps.release-version.outputs.already_published != 'true'
+        run: |
+          set +e
+          if [[ -n "${GITTOGETHER_RELEASE_KEYCHAIN:-}" ]]; then security delete-keychain "$GITTOGETHER_RELEASE_KEYCHAIN"; fi
+          rm -f "$HOME/.config/gittogether/release/tauri-updater.key" "$HOME/.config/gittogether/release/tauri-updater.key.pub" "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/AuthKey_"*.p8

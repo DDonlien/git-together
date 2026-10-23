@@ -6,7 +6,9 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync, 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = join(root, 'desktop');
 const ui = join(root, 'macos');
-const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+const version = process.env.GITTOGETHER_RELEASE_VERSION || packageVersion;
+if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Invalid product version: ${version}`);
 const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
 if (sha.status !== 0) throw new Error('Cannot determine the source commit.');
 const production = process.argv[2] === 'release-build';

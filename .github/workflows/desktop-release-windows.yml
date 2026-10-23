@@ -1,4 +1,5 @@
 name: Desktop Windows release packages
+run-name: Windows release ${{ inputs.version }} (${{ inputs.source_commit }})
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +14,8 @@ permissions:
 jobs:
   package:
     runs-on: windows-2022
+    env:
+      GITTOGETHER_RELEASE_VERSION: ${{ inputs.version }}
     strategy:
       fail-fast: false
       matrix:
