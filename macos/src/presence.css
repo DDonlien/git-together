@@ -105,7 +105,7 @@
 .presence-action-boundary { display: contents; }
 .presence-avatar-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
 .presence-avatar-legend > span { display: inline-flex; align-items: center; gap: 5px; }
-.presence-avatar-legend i { width: 10px; height: 10px; border: 1.5px solid var(--presence-color); border-radius: 50%; }
+.presence-avatar-legend i { width: 10px; height: 10px; border: 1.5px solid var(--muted); border-radius: 50%; }
 .presence-avatar-legend i.changed { border-style: dashed; }
 .presence-avatar-legend i.editing { animation: presence-editing-ring 1.2s ease-in-out infinite; }
 @keyframes presence-editing-ring { 50% { opacity: .2; } }

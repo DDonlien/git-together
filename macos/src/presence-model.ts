@@ -94,8 +94,11 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
   return [...people.values()].sort((a, b) => a.userId.localeCompare(b.userId)).map(person => ({ ...person, branches: person.branches.sort((a, b) => (a.branch || '').localeCompare(b.branch || '')) }));
 }
 
-export function presenceRepositoryColor(repositoryId: string): string {
+export function presencePersonColor(person: PresencePerson): string {
+  const source = person.branches[0].sources[0];
+  const identity = JSON.stringify([source.serverId || '', source.identityId || source.userId, source.deviceId]);
   let hash = 2166136261;
-  for (const char of repositoryId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  // Repository and organization scope change between views; the account/device object does not.
+  for (const char of identity) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return `hsl(${(hash >>> 0) % 360} 62% 52%)`;
 }
