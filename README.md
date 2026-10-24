@@ -133,7 +133,7 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 
 ## 进一步了解
 
-[产品范围与进展](issue/issue-DESKTOP-01-UI-github-desktop-foundation-versioncontrolid.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
+[产品范围与进展](issue/issue_%E4%BB%A5%E5%9B%BA%E5%AE%9A%E7%89%88%E6%9C%ACGitHub%20Desktop%E5%8E%9F%E5%A7%8B%E4%BB%A3%E7%A0%81%E6%9B%BF%E6%8D%A2Git%E4%B8%8E%E6%8E%88%E6%9D%83%E6%89%A7%E8%A1%8C%E5%9F%BA%E7%A1%80.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
 
