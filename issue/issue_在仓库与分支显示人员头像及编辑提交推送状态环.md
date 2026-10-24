@@ -3,7 +3,8 @@
 - ID：`PRESENCE-05-avatars`。
 - 类型：`DOC`。
 - 状态：进行中（原文同时包含已完成与未完成项）。
-- 版本管理标识：`versioncontrolid`（含义待定义，不推断为 commit、branch 或 change）。
+- 版本管理：Git。
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
 - 来源：`REQUIREMENTS.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`；标题路径：任务清单 / Phase - v0.24.0 - Presence 头像与分支人员。
 - 原稳定 ID：`PRESENCE-05-avatars`, `PRESENCE-05-name-placement`, `PRESENCE-05-avatar-hover`, `PRESENCE-05-device-name`, `PRESENCE-05-popover-layout`, `PRESENCE-05-local-visibility`, `PRESENCE-05-local-visibility-test`, `PRESENCE-05-status-semantics`, `PRESENCE-05-remote-actions`, `PRESENCE-05-remote-file-pages`, `PRESENCE-05-remote-dialog-layout`, `PRESENCE-05-remote-actions-source`, `PRESENCE-05-remote-actions-release`, `PRESENCE-06-avatar-state`；不改写或重编号这些既有 ID。
 
@@ -33,3 +34,7 @@
 ### 2026-10-23 17:44:33 UTC — Agent（文档迁移）
 
 按原有功能 / 工作目标标题拆分需求，保留原 ID、勾选、依赖、最新补充及来源。没有稳定根 ID或旧 ID 在不同上下文重用时，采用由来源路径和标题确定的迁移 Issue ID，原 ID 仍在正文保留。完整旧内容可从来源版本读取；独有未提交内容的版本化副本见迁移映射。
+
+### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+
+按任务原语言改为 `issue_在仓库与分支显示人员头像及编辑提交推送状态环.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。

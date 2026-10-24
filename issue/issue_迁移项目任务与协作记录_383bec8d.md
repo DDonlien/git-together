@@ -3,7 +3,8 @@
 - ID：`DOC-migration-20261023`。
 - 类型：`DOC`。
 - 状态：文档迁移已完成；产品验证与用户验收未在本轮重做。
-- 版本管理标识：`versioncontrolid`（待定义，不使用本次 commit hash 代填）。
+- 版本管理：Git。
+- 实施提交：`383bec8daa4e2d540b4af09c6ee9b831a86a5183`（本文件所述文档任务的实际提交；不代表业务功能实现）。
 
 ## 本轮范围
 
@@ -17,6 +18,7 @@
 - [x] Issue 结构、来源映射、相关引用与限定 diff 检查通过。
 
 ## Comments
+
 
 ### 2026-10-23 17:44:33 UTC — Agent
 
@@ -3778,3 +3780,7 @@ npm run check、npm run build及git diff --check通过。构建保留既有约77
 - 首次CI 39781272800在Xcode26.6/Swift6.3.3执行时发现URLSessionWebSocketTask.sendPing只有回调接口；改用内联checked continuation保留错误传播，继续实际编译，未把静态解析当编译通过。
 - 第二次CI 39781622367的iOS Simulator完整编译已通过；16项回归中的14项通过，另两项因URLSession将POST body转换为InputStream，测试替身仅查看httpBody而失败。替身改为读取实际body stream后再检查发送内容，不修改生产请求或放宽断言，继续回归。
 - 最终回归和构建全部通过。Simulator运行、真机、实际账号与双设备远程操作、Liquid Glass视觉和App Store/TestFlight仍未执行；Mac验收保留未完成。源码交付入口为git-together.xcodeproj，共享scheme为git-together。
+
+### 2026-10-24 06:30:10 UTC — Agent（纠正迁移命名）
+
+依据用户最新确认，保留源任务中文名称并采用 issue_任务描述[_实际版本编号].md，类型与旧 ID 留在 properties。此处关联的是本文件所述文档任务的实际提交，不作为业务代码实施提交。历史原文保持不变；本轮修正未暂存、未提交。

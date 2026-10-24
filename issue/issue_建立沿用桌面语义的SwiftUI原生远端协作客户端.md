@@ -3,13 +3,14 @@
 - ID：`0.1.0-FE-A-001`。
 - 类型：`FE`。
 - 状态：进行中（原文同时包含已完成与未完成项）。
-- 版本管理标识：`versioncontrolid`（含义待定义，不推断为 commit、branch 或 change）。
+- 版本管理：Git。
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
 - 来源：`REQUIREMENTS.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`；标题路径：任务清单 / Phase - v0.1.0 - 独立 TypeScript 客户端 / ios/main: 原生远端仓库与桌面协作客户端。
 - 原稳定 ID：`0.1.0-FE-A-001`, `0.1.0-FE-A-001-worktrees`, `0.1.0-FE-A-001-source`；不改写或重编号这些既有 ID。
 
 ## 当前需求与范围
 
-- [ ] \[0.1.0-FE-A-001] 增加 SwiftUI iOS App，沿用现有客户端的界面文案、功能与组件语义；底栏和搜索采用系统 Liquid Glass，正文继续采用 GitTogether Material 3。iOS 只浏览远端，通过 Presence 控制拥有本地仓库的桌面设备，不在手机上创建或操作本地 Git 仓库。具体实现与验收见 [iOS 需求](issue-migration-94a736c6da61-QA-native-customer-versioncontrolid.md)。
+- [ ] \[0.1.0-FE-A-001] 增加 SwiftUI iOS App，沿用现有客户端的界面文案、功能与组件语义；底栏和搜索采用系统 Liquid Glass，正文继续采用 GitTogether Material 3。iOS 只浏览远端，通过 Presence 控制拥有本地仓库的桌面设备，不在手机上创建或操作本地 Git 仓库。具体实现与验收见 [iOS 需求](issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
   - [ ] \[0.1.0-FE-A-001-worktrees] 在每个仓库中按服务器、设备和组织范围展示各个 worktree 的分支、HEAD、Git 修改、编辑器状态、未推送提交及可用远程操作；同分支的多个目录分别展示，离线保留上次记录并明确标注未知，不把目录哈希伪装成本地路径。
   - [x] \[0.1.0-FE-A-001-source] 交付可在 Mac 打开的 Xcode 工程、Swift 源码与接口回归，完成当前 Windows 环境可执行的检查后提交并推送。源码63470557ac已推送main；macOS CI 39782016144在Xcode26.6/Swift6.3.3下通过16项核心回归及iOS Simulator完整编译。Simulator交互、真机、真实账号、双设备操作和Liquid Glass视觉仍由后续Mac测试确认；父项与worktree实际运行验收继续保留未完成。
 
@@ -22,3 +23,7 @@
 ### 2026-10-23 17:44:33 UTC — Agent（文档迁移）
 
 按原有功能 / 工作目标标题拆分需求，保留原 ID、勾选、依赖、最新补充及来源。没有稳定根 ID或旧 ID 在不同上下文重用时，采用由来源路径和标题确定的迁移 Issue ID，原 ID 仍在正文保留。完整旧内容可从来源版本读取；独有未提交内容的版本化副本见迁移映射。
+
+### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+
+按任务原语言改为 `issue_建立沿用桌面语义的SwiftUI原生远端协作客户端.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。

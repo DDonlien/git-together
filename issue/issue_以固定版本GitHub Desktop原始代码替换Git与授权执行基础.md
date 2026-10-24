@@ -3,7 +3,8 @@
 - ID：`DESKTOP-01`。
 - 类型：`UI`。
 - 状态：进行中（原文同时包含已完成与未完成项）。
-- 版本管理标识：`versioncontrolid`（含义待定义，不推断为 commit、branch 或 change）。
+- 版本管理：Git。
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
 - 来源：`REQUIREMENTS.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`；标题路径：GitTogether 独立实现需求 / GitHub Desktop 执行基础替换（2026-10-18）。
 - 原稳定 ID：`DESKTOP-01`, `DESKTOP-01-engine`, `DESKTOP-01-ui`, `DESKTOP-01-local-discovery`, `DESKTOP-01-local-discovery-test`, `DESKTOP-01-ui-complete`, `DESKTOP-01-crash-layout`, `DESKTOP-01-actions`, `DESKTOP-01-auto-fetch-signals`, `DESKTOP-01-pull-progress`, `DESKTOP-01-commit-generation`, `DESKTOP-01-commit-generation-test`, `DESKTOP-01-commit-generation-stop`, `DESKTOP-01-macos-test-app-0363`, `DESKTOP-01-main-promotion`, `DESKTOP-01-main-package-0364`, `DESKTOP-01-main-package-setup`, `DESKTOP-01-main-package-windows`, `DESKTOP-01-presence`, `DESKTOP-01-presence-storage`, `DESKTOP-01-validation`, `DESKTOP-01-macos-test-app`, `DESKTOP-01-account-entries`, `DESKTOP-01-account-entries-validation`, `DESKTOP-01-account-entries-tls`, `DESKTOP-01-account-entries-tls-server`, `DESKTOP-01-updates`, `DESKTOP-01-updates-pipeline`；不改写或重编号这些既有 ID。
 
@@ -739,3 +740,7 @@ https://github.com/DDonlien/git-together/releases/tag/v0.29.2 正式非预发布
 - 回调登记边界补充：GitHub OAuth App的loopback端口例外不能套用于GitHub App。公开GitHub App须登记开发4176回调，既有桌面4174保持；本轮未修改远端登记，未执行用户GitHub最终同意，也未据configured=true声称注册已完成。参考https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/about-the-user-authorization-callback-url 。
 - 本轮不额外生成新安装包（AGENTS「默认只做本次任务需要的修改和验证……不要额外生成安装包」）；源码未执行commit/push，保留共享工作区和索引的其他任务。当前未提交实现需纳入下一次正式版本的同源跨平台发布，未宣称正式版或安装版已支持。
 - SDK核对所用隔离临时目录、构建缓存及fixture已清理；未新增正式测试文件。
+
+### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+
+按任务原语言改为 `issue_以固定版本GitHub Desktop原始代码替换Git与授权执行基础.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。

@@ -35,4 +35,4 @@ Dashboard 支持账号、组织/用户、类型、公开/私有筛选、排序�
 - `core/`：提供方API、Presence协议、worktree归并和提交图。
 - `tests/`：隔离JSON与HTTP回归，不登录真实账号或操作真实仓库。
 - `config/version.xcconfig`：iOS版本唯一来源，独立于桌面版本。
-- [需求与验收](../issue/issue-migration-94a736c6da61-QA-native-customer-versioncontrolid.md)、[视觉规范](DESIGN.md)、[协作约束](AGENTS.md)。
+- [需求与验收](../issue/issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)、[视觉规范](DESIGN.md)、[协作约束](AGENTS.md)。

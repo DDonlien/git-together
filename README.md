@@ -1,6 +1,6 @@
 # GitTogether
 
-新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue-migration-94a736c6da61-QA-native-customer-versioncontrolid.md)。
+新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
 
 0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
 
@@ -155,7 +155,7 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 
 ## 进一步了解
 
-[产品范围与进展](issue/issue-DESKTOP-01-UI-github-desktop-foundation-versioncontrolid.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
+[产品范围与进展](issue/issue_%E4%BB%A5%E5%9B%BA%E5%AE%9A%E7%89%88%E6%9C%ACGitHub%20Desktop%E5%8E%9F%E5%A7%8B%E4%BB%A3%E7%A0%81%E6%9B%BF%E6%8D%A2Git%E4%B8%8E%E6%8E%88%E6%9D%83%E6%89%A7%E8%A1%8C%E5%9F%BA%E7%A1%80.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
 
