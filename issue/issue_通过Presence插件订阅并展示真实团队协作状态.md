@@ -1,17 +1,19 @@
-# 通过Presence插件订阅并展示真实团队协作状态
+---
+title: 通过Presence插件订阅并展示真实团队协作状态
+id: PRESENCE-01-plugin
+原聚合 ID: '`PRESENCE-01-plugin`。'
+type: DOC
+status: 进行中（原文同时包含已完成与未完成项）。
+版本管理: Git。
+来源: '`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.23.0 - Presence 插件与首个服务器 / presence/main: 接入真实团队协作状态。'
+拆分前原稳定 ID: '`PRESENCE-01-plugin`, `PRESENCE-02-state`, `PRESENCE-03-nas`, `PRESENCE-04-release`；不改写或重编号这些既有 ID。'
+拆分前标题: 'presence/main: 接入真实团队协作状态。'
+原稳定 ID: '`x`、`PRESENCE-01-plugin`、`PRESENCE-02-state`；保留既有编号与完成状态。'
+拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
+updated-time: '2026-10-24T16:22:34+00:00'
+---
 
-- ID：`PRESENCE-01-plugin`。
-- 原聚合 ID：`PRESENCE-01-plugin`。
-- 类型：`DOC`。
-- 状态：进行中（原文同时包含已完成与未完成项）。
-- 版本管理：Git。
-- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
-- 来源：`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.23.0 - Presence 插件与首个服务器 / presence/main: 接入真实团队协作状态。
-- 拆分前原稳定 ID：`PRESENCE-01-plugin`, `PRESENCE-02-state`, `PRESENCE-03-nas`, `PRESENCE-04-release`；不改写或重编号这些既有 ID。
-- 拆分前标题：presence/main: 接入真实团队协作状态。
-- 原稳定 ID：`x`、`PRESENCE-01-plugin`、`PRESENCE-02-state`；保留既有编号与完成状态。
-- 拆分状态说明：状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-
+# Description
 
 ## 当前需求与范围
 
@@ -31,13 +33,19 @@
 - [在NAS部署独立GitPresence服务并验证Bridge通信](issue_%E5%9C%A8NAS%E9%83%A8%E7%BD%B2%E7%8B%AC%E7%AB%8BGitPresence%E6%9C%8D%E5%8A%A1%E5%B9%B6%E9%AA%8C%E8%AF%81Bridge%E9%80%9A%E4%BF%A1.md)
 - [发布包含Presence的GitTogether桌面更新并保留跨平台要求](issue_%E5%8F%91%E5%B8%83%E5%8C%85%E5%90%ABPresence%E7%9A%84GitTogether%E6%A1%8C%E9%9D%A2%E6%9B%B4%E6%96%B0%E5%B9%B6%E4%BF%9D%E7%95%99%E8%B7%A8%E5%B9%B3%E5%8F%B0%E8%A6%81%E6%B1%82.md)
 
-## Comments
+# Comments
 
-### 2026-10-23 17:44:33 UTC — Agent（文档迁移）
+## 20261023-174433_Agent
+
+原记录标题：2026-10-23 17:44:33 UTC — Agent（文档迁移）
 
 按原有功能 / 工作目标标题拆分需求，保留原 ID、勾选、依赖、最新补充及来源。没有稳定根 ID或旧 ID 在不同上下文重用时，采用由来源路径和标题确定的迁移 Issue ID，原 ID 仍在正文保留。完整旧内容可从来源版本读取；独有未提交内容的版本化副本见迁移映射。
 
-### 20261007-032901-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261007-032901-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261007-032901-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -59,11 +67,15 @@
 
 结论：两处指定重复展示已移除并完成自动/真实页面验收。React规范只用于约束最小组件删改与可访问聚焦入口，没有新增状态或依赖。大型提交反复切换中的开发渲染内存/调度异常保留为独立未解决限制，不声称桌面包或无错误浏览器验收。
 
-### 20261014-025117-utcp8-taobe-gpt-6-presence-remote-actions.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-025117-utcp8-taobe-gpt-6-presence-remote-actions.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-025117-utcp8-taobe-gpt-6-presence-remote-actions.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# Presence人员卡片的远程操作
+### Presence人员卡片的远程操作
 
 - 用户原始prompt：「这里应该显示可执行的远程操作」。附件为协作人员姓名、main分支和未Commit状态的卡片。
 - 模型：gpt-6，环境提供的最具体标识。
@@ -87,7 +99,7 @@
 
 最终客户端类型、前端生产构建及locked Cargo检查均实际通过，未运行测试。React技能审阅：所有hooks在早退之前调用，动作/结果共用组件，无新网络读取层；使用精确来源键及既有语义按钮、禁用状态、独立Modal和焦点返回。弹窗和Modal阻止点击穿透，保留三人堆叠、状态优先级及每分支筛选。
 
-## 候选包及发布阻塞
+### 候选包及发布阻塞
 
 客户端源码f935173c4df9db382d05a84f76df8b988d7032a2已提交推送main。NAS 9eee311708cc422854130e64b9ab90b6b22f8e63已部署0.6.2 healthy，imageId sha256:3a981ae87042cb09c30822a8d4e20958f8855360d46b82021a4847fcc6d2a038，配置/数据库挂载、UID/GID及只读root不变，正常TLS健康、Gitea和Ink均200。部署文档及最终记录另由GitPresence提交。
 
@@ -109,7 +121,11 @@ Windows工作流38446052848使用同一f935173c源码，x86/x64实际构建、�
 
 收尾推送遇到另一对话正常推进main：398a6358/e429aaee实现操作收起，已包含本次f935173c并将minor递增0.31.0。只重放本任务尚未公开的文档提交到最新main，保留两边源码与记录，没有force push或触及共享WIP。0.30.12同源候选作为历史保留，未来正式发布使用包含本修复的0.31.0主线；另一任务也独立观察到相同公证读取错误。全局发布锁仅在确认属于本任务后移除，不继续阻挡其他交付。
 
-### 20261007-030626-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261007-030626-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261007-030626-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -135,7 +151,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 03:03:37 +0800 只读核对 4173 / 4174 PID 仍为 23078 / 31840；HTTP 200/ok，实例 c24d4f14-3f2a-4504-a9e5-32ec0a0f25d1、0.5.0 不变，目录 revision 73（正常自动刷新）、1 账号 / 38 仓库 / 0 关联。未重启服务、未改授权/凭据/包版本、未打原生包、未提交/推送/发布。README、REQUIREMENTS、DESIGN、ARCHITECTURE、子 AGENTS 已同步局部范围和验收边界；截图与日志是本轮新增资料。
 
-### 20261012-093030-utcp8-taobe-gpt-6-main-only-cleanup.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-093030-utcp8-taobe-gpt-6-main-only-cleanup.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-093030-utcp8-taobe-gpt-6-main-only-cleanup.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -151,11 +171,15 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 主工作区最终核对时有54条未提交/未跟踪记录，包含其他任务持续编辑和本任务治理记录，均保留在main工作区，不能当作已推送。没有提交这些进行中内容或操作其应用逻辑。
 - 更新当前AGENTS的工作区说明及RUN-01-main-only完成状态。此次为Git元数据维护，未更改应用版本、构建/安装包或公开Release；未运行应用测试，不操作用户安装版。没有向第三方来源仓库发送写入。
 
-### 20261011-221703-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261011-221703-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261011-221703-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# 远端分支等待和权限提示诊断
+### 远端分支等待和权限提示诊断
 
 - 结束：2026-10-11 22:17:03 UTC+8；代码已提交并推送，完成记录单独提交/推送。
 - 开始：2026-10-11 21:52:49 UTC+8；模型可确认gpt-6，执行者taobe；main/b1486c42c5，源码0.22.7。
@@ -176,7 +200,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 清理：本轮临时浏览器标签、4268前端服务、两项隔离入口及独立发布副本均已清理；安装包/更新元数据及artifacts/remote-first截图保留。没有启动、替换、更新或重启已安装应用，未改变用户目录权限、代理、安全策略或真实仓库文件。
 - 完成文档：RUN-01-remote-first标记本轮范围完成；README当前公共版本与并行读取说明、ARCHITECTURE读取边界已更新。本轮交付不包含另一会话的即时安装功能，也未声称逐私有账号联网性能或安装版更新后运行通过。
 
-### 20261014-110852-utcp8-taobe-gpt-6-graph-actions.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-110852-utcp8-taobe-gpt-6-graph-actions.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-110852-utcp8-taobe-gpt-6-graph-actions.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -190,7 +218,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 - 本轮最早可核对的预检记录时间：2026-10-14T09:08:01.290471+08:00；此前对话开始时刻未单独记录。
 
-### 20261014-011933-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-011933-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-011933-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -208,7 +240,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 五次无GUI实测与内容/范围/暂存保护核验已完成，最具体需求已完成。核心卡点与有效的缓存保留方式已通过隔离对照定位；正式修复、进度界面、安装包更新及GUI验收尚未实施。本轮只更新自己的需求条目和执行日志，保留全部其他任务差异。
 
-### 20261007-130956-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261007-130956-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261007-130956-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -232,7 +268,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 结束读取主服务仍为0.6.0、同一instanceId和0账号/0仓库/0关联；无账号/授权服务重启、Git切换、commit/push或原生包更新。下一次获许可的版本/发布更新再递增patch。
 
-### 20261009-132907-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261009-132907-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261009-132907-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -254,7 +294,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 13:29主预览/授权助手分别HTTP200、0.8.7、实例fead0bc8-c050-4969-a84e-46b9b8491305和configured=true，Catalog1账号/38仓库/0关联/失败账号0保持，没有重启。diff --check通过；仅README、需求和本日志进入收尾提交，不重新运行/声称应用或原生包测试。
 - 交付核对：解除已经完成并验证；此前应用改动已提交/推送main；本轮只同步身份说明，最终文档SHA以push后的远端回读为准。既有GitHub标签保留，不把解除关系说成删除全部历史资产，不额外改变许可或产品代码。
 
-### 20261013-172631-utcp8-taobe-gpt-6-association-refresh.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261013-172631-utcp8-taobe-gpt-6-association-refresh.md — 历史证据迁移
 
 来源：`agent-log/system/20261013-172631-utcp8-taobe-gpt-6-association-refresh.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -266,11 +310,15 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 需求IMPORT-04-association-refresh、DESIGN关联状态显示与ARCHITECTURE验证缓存边界同步。实际绑定与隐藏/统计/操作范围继续使用原模型，仅修正关联标签及其验证时效。
 
-### 20261019-142146-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261019-142146-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261019-142146-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# 重新打包0.36.3开发测试版
+### 重新打包0.36.3开发测试版
 
 - 用户原始prompt：「重新打包」。模型GPT-6，环境提供的最具体标识。
 - 开始2026-10-19 14:18:47 +08:00；结束2026-10-19 14:21:46 +08:00。分支github-desktop-based，HEAD a270e6d49a066c13c7ada6d9948bb1b87ab22ed1。保留全部已有修改，不改main，不提交或推送。
@@ -279,7 +327,7 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 成功标准：同源重新构建、包内版本/架构/资源正确、严格签名校验、从临时目录启动实际包并通过隔离Git、提交说明与仓库发现检查；不操作用户已安装应用或真实仓库/账号。
 - 本次只生成Apple Silicon开发测试包，使用既有ad-hoc开发身份；不做正式签名公证或发布。真实Copilot账号、Windows仍各自验收。
 
-## 执行记录
+### 执行记录
 
 - 根npm run package:mac成功，重新完成Vite/Rust/上游Webpack及运行资源构建，再生成Electron 42.0.1的darwin-arm64测试.app；源摘要仍为47040c428ed300473ebace1406f70dc32f93828859fd403ac8b1117b6d23a365。3895个上游来源文件及68项展示/身份差异校验通过。
 - 应用路径：artifacts/macos/0.36.3/GitTogether-dev-darwin-arm64/GitTogether-dev.app。Info.plist、包内package与build-info均为0.36.3；bundle ID com.gittogether.standaloneDev，主程序为arm64。JS/CSS与本次编译结果逐项匹配；Git 2.53.0及Git LFS 3.7.1可执行，Presence资源存在。codesign --verify --deep --strict通过，ad-hoc开发签名，未公证。
@@ -290,7 +338,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 同版本目录保存build-package.log、git-smoke.log、model-smoke.log、discovery-smoke.log、integrity.json、validation.json；签名和包信息另见GitTogether-dev-darwin-arm64/package-info.json。最终git diff --check通过，已在Finder定位新应用。
 - 本轮没有新产品改动，因此保留上一任务已递增的0.36.3；既有0.36.2包保留。没有提交、推送、合并、正式签名、公证、公开发布或操作用户安装版。真实用户账号、Copilot在线服务、Windows及正式发行仍独立验收。
 
-### 20261014-012251-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-012251-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-012251-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -304,7 +356,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 - 收尾：12项运行时结果、23项相关回归、类型/构建和差异检查分别记录；需求/设计/架构/日志链路完整。独立浏览器与4319预览已关闭。本次未提交、推送或打包发布，用户已安装应用保持原样；并行任务新增的hasAccountPush字段与其他修改全部保留。
 
-### 20261013-175445-utcp8-taobe-gpt-6-branch-created.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261013-175445-utcp8-taobe-gpt-6-branch-created.md — 历史证据迁移
 
 来源：`agent-log/system/20261013-175445-utcp8-taobe-gpt-6-branch-created.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -330,7 +386,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 本任务分别只读核对默认与明确login.keychain-db的gittogether-notary profile，两次均exit69、No Keychain password item found；用户keychain列表只包含login。没有创建新公证凭据、修改Keychain、索取/导出密码、绕过公证或请求解锁。
 - 0.30.3未产生新正式安装包、tag、Release或更新源；现有安装版未改动。源码/受控页面完成与生产发布配置阻塞分别记录，不把编译或截图等同私人账号/安装版验收。不重复询问同一个公证配置问题，其他任务正在处理对应缺失。
 
-### 20261010-122651-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261010-122651-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261010-122651-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -340,7 +400,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 
 本次新增自动公证及发布流程，无新的客户端界面功能。源码/包/Apple公证/公开Release/真实App检查分别记录；未来在已提交并推送的main递增版本后运行原桌面打包入口，默认完成全部步骤。任一步失败报错，不覆盖已公开资产。安装与升级验收由用户后续动作决定。保留0.17.2失败产物与空草稿的真实来源，不宣称曾公开。
 
-### 20261010-103010-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261010-103010-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261010-103010-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -358,7 +422,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 6. GITTOGETHER_NOTARY_PROFILE未配置，本包notarized=false，未公证、发布GitHub更新或替换/启动实际安装版。签名打包与单元/隔离Git成功不代替真实私有账号、LFS服务器和原生UI验收。当前任务只推送main源码；正式更新需从该main提交发布同版公证ZIP与清单。
 7. 收尾只更新需求、开发说明和本日志，不改变已签名包的生产输入；作为独立文档提交再次正常推送main，最终本地/远端与工作区状态另行回读。
 
-### 20261014-012507-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-012507-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-012507-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -376,7 +444,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 其他任务的依赖、AI、图滚动、提交文件界面和文档改动保留，版本数字统一到0.30.10；未提交这些未完成内容。
 - 本次仅交付已验证源码，没有新安装包、完整三平台发布或安装版更新。真实账号与原生用户界面验证范围保持前述区别。
 
-### 20261009-104757-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261009-104757-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261009-104757-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -389,11 +461,15 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 10:45复核主/助手HTTP200、版本0.8.7、主实例fead0bc8-c050-4969-a84e-46b9b8491305、1账号/38仓库/0关联/失败账号0、助手configured=true不变。没有重启服务或清空账号。旧0.8.7前端开发例外保持，本次只提交已有源码和文档，不生成新发行或安装包。
 - 与用户说明解除受身份验证阻塞，而本地提交/推送为独立已授权事项继续办理；fork和main各自回读，绝不将push成功写成fork解除。
 
-### 20261011-211326-utcp8-taobe-gpt-6-repository-browser-link.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261011-211326-utcp8-taobe-gpt-6-repository-browser-link.md — 历史证据迁移
 
 来源：`agent-log/system/20261011-211326-utcp8-taobe-gpt-6-repository-browser-link.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# 仓库网址默认浏览器入口
+### 仓库网址默认浏览器入口
 
 - 开始：2026-10-11 20:55:04 UTC+8；模型可确认gpt-6；main/b1060ddb2713595163370400682af5f91b8d2cab，当前源码0.22.5、公开版本0.22.4。
 - 用户原始prompt：「仓库连接的部分需要刻意点击，用默认浏览器打开对应仓库」；随后补充「这里的」，截图指向awesome-mac标题下的https://github.com/DDonlien/awesome-mac文字。
@@ -407,7 +483,11 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 发布完成：0.22.6，GitHub v0.22.6，原profile公证Accepted（5e8d71e7-f5de-4168-bea6-b5dc6e56a498）、Developer ID及deep-strict签名、staple/validate通过；spctl显示Notarized Developer ID，同时报告既有security disabled，不把此当作开启安全策略下的安装实机验收。包内仅gittogether，ZIP4208245字节/SHA256 dff4ec92d4f501d527c2822801d0830b8635ed3a78e9217ba112584224c3a6f3；Tauri tar4206688字节/SHA256 ff78cf9105ce50eff55705e8c7a3938386247ab3cc9b68989ca0baef2b04aa48。原发布器完整下载ZIP/tar并验证latest、Atom及两套更新清单，publicUpdateVerified=true，证据_builds/gittogether-0.22.6-macos-arm64-PSPnpa/build-info.json及notarization.json。此前0.22.5读取修正随此次0.22.6交付，原读取发布待办相应完成。
 - 结束：2026-10-11 21:13:26 UTC+8；正式发布及公共回读完成，已回读更新后的发布说明；临时发布checkout删除。按完成时间重命名记录，最终仅提交本轮文档状态与日志；其他会话正在修改的Git/provider/proxy/Cargo文件和日志保留不纳入本轮，未操作用户安装版。
 
-### 20261009-091244-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261009-091244-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261009-091244-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -436,6 +516,23 @@ RepositoryRemoteChanges 删除整个内嵌文本块、专供其使用的状态�
 - 验证：check/strict、326/326、构建、Sites4/4、实际文件夹click和键盘/导航、主账号真实分支、服务版本/实例/配置以及远端main SHA回读。初次失败及修正均保留，不用编译代替UI或网络证据。
 - 当前源码和浏览器已更新、已提交、已推送main。没有安装包、发布tag、生产部署或原生账号验收；保留0.8.7的本轮热更新例外及原服务会话。后续同授权收尾文档提交正常快进main，最终SHA和工作区清洁状态在工具输出/交付中回读，不自引用本日志尚未生成的提交哈希。
 
-### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-070820_Agent
+
+原记录标题：2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
 
 按任务原语言改为 `issue_通过Presence插件订阅并展示真实团队协作状态.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。 本文件承接原聚合目标中的相关范围；全部拆分目标见“拆分关联”，完整既有 Comments 保存在首个任务。
+
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-162234_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)

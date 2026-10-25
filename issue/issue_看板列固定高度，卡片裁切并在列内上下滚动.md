@@ -1,10 +1,13 @@
-# 看板列固定高度，卡片裁切并在列内上下滚动
+---
+title: 看板列固定高度，卡片裁切并在列内上下滚动
+id: issue-ccec8842-e096-4a84-9064-ea16534cb548
+type: UI
+status: 待处理
+范围 / 关联: 来源项目 MyIssue：`my-issue/issues/issue-ccec8842-e096-4a84-9064-ea16534cb548.md`；按用户要求登记于 GitTogether 当前工作副本。
+updated-time: '2026-10-24T16:29:17+00:00'
+---
 
-- ID：`issue-ccec8842-e096-4a84-9064-ea16534cb548`
-- 类型：UI
-- 状态：待处理
-- 范围 / 关联：来源项目 MyIssue：`my-issue/issues/issue-ccec8842-e096-4a84-9064-ea16534cb548.md`；按用户要求登记于 GitTogether 当前工作副本。
-- 版本管理标识：`versioncontrolid`
+# Description
 
 ## 目标与当前事实
 
@@ -35,8 +38,23 @@
 
 - [ ] 确认卡片不会溢出列背景，且可在列内滚动查看。
 
-## Comments
+# Comments
 
-### 2026-10-23T17:07:43Z · Codex · unknown
+## 20261023-170743_Codex_Unknown
+
+原记录标题：2026-10-23T17:07:43Z · Codex · unknown
 
 按用户要求将来源于 `my-issue` 项目看板的 Issue 登记到 GitTogether 当前工作副本的 `issue/`，保留原稳定 ID 与截图。此次只登记 Issue，未修改实现代码。
+
+原执行会话深度链接未记录，未补造。
+
+## 20261024-162917_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 版本管理标识：`versioncontrolid`
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)

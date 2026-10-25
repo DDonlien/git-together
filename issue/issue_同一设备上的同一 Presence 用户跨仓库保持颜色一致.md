@@ -1,10 +1,13 @@
-# 同一设备上的同一 Presence 用户跨仓库保持颜色一致
+---
+title: 同一设备上的同一 Presence 用户跨仓库保持颜色一致
+id: issue-5f7241d9-9ccd-4b01-9e2f-118d60d3a5be
+type: UI
+status: 待用户验收
+范围 / 关联: '`macos/src/presence-model.ts`、`macos/src/PresenceAvatars.tsx`、`macos/src/presence.css`；来源 MyIssue：`git-together/issues/issue-5f7241d9-9ccd-4b01-9e2f-118d60d3a5be.md`'
+updated-time: '2026-10-24T16:29:17+00:00'
+---
 
-- ID：`issue-5f7241d9-9ccd-4b01-9e2f-118d60d3a5be`
-- 类型：UI
-- 状态：待用户验收
-- 范围 / 关联：`macos/src/presence-model.ts`、`macos/src/PresenceAvatars.tsx`、`macos/src/presence.css`；来源 MyIssue：`git-together/issues/issue-5f7241d9-9ccd-4b01-9e2f-118d60d3a5be.md`
-- 版本管理标识：`versioncontrolid`
+# Description
 
 ## 目标与当前事实
 
@@ -26,9 +29,11 @@
 
 - [ ] 确认不同仓库和分支中的同一用户/设备头像颜色一致；不同设备不要求颜色一致。
 
-## Comments
+# Comments
 
-### 2026-10-23T16:28:21.768Z · Codex · unknown
+## 20261023-162821_Codex_Unknown
+
+原记录标题：2026-10-23T16:28:21.768Z · Codex · unknown
 
 ##### 实现记录
 
@@ -41,7 +46,11 @@
 - `git diff --check` 通过。未运行测试、启动界面或打包应用；未提交或推送。
 - 当前宿主只暴露 GPT-6 家族标识，未提供完整变体，因此按 myIssue 约定记录 actor 为 `unknown`。
 
-### 2026-10-23T16:30:41.527Z · Codex · unknown
+原执行会话深度链接未记录，未补造。
+
+## 20261023-163041_Codex_Unknown
+
+原记录标题：2026-10-23T16:30:41.527Z · Codex · unknown
 
 ##### 需求记录调整
 
@@ -49,6 +58,23 @@
 
 宿主未提供 GPT-6 的完整变体标识，因此本评论 actor 仍按 MyIssue 约定记录为 `unknown`。
 
-### 2026-10-23T17:07:43Z · Codex · unknown
+原执行会话深度链接未记录，未补造。
+
+## 20261023-170743_Codex_Unknown
+
+原记录标题：2026-10-23T17:07:43Z · Codex · unknown
 
 按用户纠正，将本 Issue 与 `issue-ccec8842-e096-4a84-9064-ea16534cb548` 一并登记到 GitTogether 当前工作副本的 `issue/`，并保留原稳定 ID、来源记录和截图。原 MyIssue 看板记录保留为来源。
+
+原执行会话深度链接未记录，未补造。
+
+## 20261024-162917_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 版本管理标识：`versioncontrolid`
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)

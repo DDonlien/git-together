@@ -1,17 +1,19 @@
-# 发布包含Presence的GitTogether桌面更新并保留跨平台要求
+---
+title: 发布包含Presence的GitTogether桌面更新并保留跨平台要求
+id: PRESENCE-04-release
+原聚合 ID: '`PRESENCE-01-plugin`。'
+type: DOC
+status: 进行中（原文同时包含已完成与未完成项）。
+版本管理: Git。
+来源: '`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.23.0 - Presence 插件与首个服务器 / presence/main: 接入真实团队协作状态。'
+拆分前原稳定 ID: '`PRESENCE-01-plugin`, `PRESENCE-02-state`, `PRESENCE-03-nas`, `PRESENCE-04-release`；不改写或重编号这些既有 ID。'
+拆分前标题: 'presence/main: 接入真实团队协作状态。'
+原稳定 ID: '`PRESENCE-04-release`；保留既有编号与完成状态。'
+拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
+updated-time: '2026-10-24T16:22:34+00:00'
+---
 
-- ID：`PRESENCE-04-release`。
-- 原聚合 ID：`PRESENCE-01-plugin`。
-- 类型：`DOC`。
-- 状态：进行中（原文同时包含已完成与未完成项）。
-- 版本管理：Git。
-- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
-- 来源：`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.23.0 - Presence 插件与首个服务器 / presence/main: 接入真实团队协作状态。
-- 拆分前原稳定 ID：`PRESENCE-01-plugin`, `PRESENCE-02-state`, `PRESENCE-03-nas`, `PRESENCE-04-release`；不改写或重编号这些既有 ID。
-- 拆分前标题：presence/main: 接入真实团队协作状态。
-- 原稳定 ID：`PRESENCE-04-release`；保留既有编号与完成状态。
-- 拆分状态说明：状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-
+# Description
 
 ## 当前需求与范围
 - [ ] \[PRESENCE-04-release] 发布包含 Presence 的 GitTogether 0.23.0 桌面更新。2026-10-12 新增 RUN-01-windows-policy 要求下一次正式版同一源码/版本同时交付 macOS、Windows x86 与 x64；当前 Windows 原生适配和双架构安装包尚未完成，因此本轮未运行会直接公开仅 macOS 资产的既有发布入口，0.23.0 尚未正式发布。正式交付仍须复用签名/公证、核验三平台安装包及公共更新源，不操作用户安装版。
@@ -31,8 +33,23 @@
 
 原文件的共用上下文及完整既有 Comments 仅保留在[首个任务](issue_%E9%80%9A%E8%BF%87Presence%E6%8F%92%E4%BB%B6%E8%AE%A2%E9%98%85%E5%B9%B6%E5%B1%95%E7%A4%BA%E7%9C%9F%E5%AE%9E%E5%9B%A2%E9%98%9F%E5%8D%8F%E4%BD%9C%E7%8A%B6%E6%80%81.md)，来源与历史没有删去。
 
-## Comments
+# Comments
 
-### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+## 20261024-070820_Agent
+
+原记录标题：2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
 
 按任务原语言改为 `issue_发布包含Presence的GitTogether桌面更新并保留跨平台要求.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。 本文件承接原聚合目标中的相关范围；全部拆分目标见“拆分关联”，完整既有 Comments 保存在首个任务。
+
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-162234_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)

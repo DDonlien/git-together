@@ -1,17 +1,19 @@
-# 为提交右键菜单区分标准Git非AI与AI操作
+---
+title: 为提交右键菜单区分标准Git非AI与AI操作
+id: R-05-graph-actions
+原聚合 ID: '`R-05-graph-actions`。'
+type: CONTENT
+status: 阻塞（沿用原需求记录）。
+版本管理: Git。
+来源: '`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.1.0 - 独立 TypeScript 客户端 / codex/standalone-ts: 多仓库与文件提交工作台。'
+拆分前原稳定 ID: '`R-05-graph-actions`, `R-05-ai-sync`, `CONTENT-01-icon-candidates`, `CONTENT-01-icon-install`, `CONTENT-01-icon-sidebar-text`, `CONTENT-01-icon-install-release`, `CONTENT-01-icon-fusion-black`, `CONTENT-01-icon-fusion-black-clean`, `CONTENT-01-icon-fusion-black-joins`, `CONTENT-01-icon-fusion-black-junctions`, `CONTENT-01-icon-selected-exports`, `COLLAB-01-remote-control`, `COLLAB-01-source`, `COLLAB-01-runtime`, `COLLAB-01-release`, `COLLAB-01-personal`, `COLLAB-01-team`, `COLLAB-01-identity`, `COLLAB-01-device-grant`, `COLLAB-01-platform-login`, `COLLAB-01-dispatch`, `COLLAB-01-abort-operation`, `COLLAB-01-discard-changes`, `D-01`, `D-02`, `D-03`, `R-01`, `R-02`, `R-02-file-row-state-inset`, `R-02-shared-file-design`, `R-02-submit-selection`, `R-02-submit-selection-collapse`, `R-02-submit-selection-collapse-test`, `R-02-push-feedback`, `R-03`, `R-04`, `R-05`, `R-05-repository-browser-link`, `R-05-header-actions`, `R-05-local-submit`, `R-05-local-submit-test`, `R-05-commit-composer`, `R-05-commit-composer-ai-loading`, `R-05-commit-composer-ai-loading-test`, `R-05-commit-composer-windows-cli`, `R-05-commit-composer-ai-fast-context`, `R-05-commit-composer-windows-cli-test`, `R-05-commit-composer-windows-cli-local-update`, `R-05-commit-composer-official-m3`, `R-05-search-compact`, `R-05-commit-composer-compact-type`, `R-05-commit-composer-thin-outline`, `R-05-graph-local-states`, `R-05-graph-local-states-vertical-padding`, `R-05-local-preview-removal`, `R-05-local-file-operations`, `R-05-local-preview-removal-test`, `R-05-local-history-diff`, `R-05-local-history-diff-test`, `R-05-column-insets`, `R-05-column-insets-test`, `R-05-tree-identity-row`, `R-05-tree-identity-footer-test`, `R-05-tree-directory-open`, `R-05-tree-directory-open-test`, `R-05-tree-identity-row-test`, `R-05-branch-title`, `R-05-branch-title-test`, `R-05-column-footers`, `R-05-column-footers-test`, `R-05-tree-open`, `R-05-tree-open-spacing`, `R-05-tree-open-test`, `R-05-change-context`, `R-05-change-context-spacing`, `R-05-change-context-test`, `R-05-global-tree`, `R-05-global-tree-test`, `R-05-remote-focus-control`, `R-05-remote-focus-control-test`, `R-05-gitlens-graph`, `R-05-gitlens-graph-history-note`, `R-05-gitlens-graph-scroll`, `R-05-gitlens-graph-scroll-test`, `R-05-gitlens-graph-sync`, `R-05-gitlens-graph-local`, `R-05-gitlens-graph-shallow`, `R-05-gitlens-graph-filter`, `R-05-gitlens-graph-author-filter`, `R-05-gitlens-graph-local-test`, `R-05-gitlens-graph-test`, `R-05-graph-header`, `R-05-graph-header-test`, `R-05-remote-inline-preview`, `R-05-remote-inline-preview-test`, `R-05-remote-metadata`, `R-05-remote-metadata-test`, `R-05-remote`, `R-05-remote-integration`, `R-05-remote-test`, `R-05-layout`, `R-05-history-details`, `R-05-history-body`, `R-05-history-body-test`, `R-05-history-details-test`, `R-05-column-collapse`, `R-05-column-collapse-horizontal`, `R-05-column-resize`, `R-05-column-resize-test`, `R-05-column-collapse-test`, `R-05-overview`, `R-05-overview-test`, `R-05-data`, `R-05-test`, `R-05-tree-source`, `R-05-tree-source-radius`, `R-05-tree-source-radius-test`, `R-05-tree-source-test`, `UI-01`, `UI-02`, `UI-03`, `UI-04`, `UI-04-hidden-scrollbars`, `UI-04-hidden-scrollbars-test`, `UI-04-sidebar-collapse`, `UI-04-sidebar-collapse-test`, `UI-04-sidebar-collapse-rail`, `UI-04-sidebar-collapse-rail-test`, `UI-04-sidebar-header-icon-only`, `UI-04-sidebar-header-icon-only-test`, `UI-04-sidebar-vertical-spacing`, `UI-04-sidebar-repository-spacing`, `UI-04-sidebar-icon-buttons`, `UI-04-sidebar-icon-buttons-test`, `UI-04-sidebar-icon-buttons-hit-area`, `UI-04-sidebar-icon-buttons-hit-area-test`, `UI-04-sidebar-icon-buttons-shared-size`, `UI-04-sidebar-icon-buttons-shared-size-test`, `UI-04-sidebar-icon-buttons-no-indent`, `UI-04-sidebar-icon-buttons-no-indent-test`, `UI-04-traffic-light-size`, `UI-04-traffic-light-size-test`, `UI-04-settings-width`, `UI-05`, `UI-05-test`, `UI-06`, `UI-07`, `UI-07-test`, `UI-06-test`, `UI-07-tile`, `UI-07-tile-test`, `UI-08`, `UI-08-static-check`, `UI-08-sidebar`, `UI-08-visual-qa`, `UI-09`, `UI-09-tree-graph-padding`, `UI-09-control-padding`, `UI-09-control-padding-validation`, `UI-09-sidebar-feedback`, `UI-09-sidebar-feedback-test`, `UI-09-sidebar-feedback-visual`, `UI-09-version-corner`, `UI-09-version-corner-test`, `UI-09-version-corner-visual`, `UI-09-filter-details`, `UI-09-test`, `UI-09-details`, `UI-09-details-test`, `RUN-01`, `RUN-01-remote-first`, `RUN-01-tauri-git-network`, `RUN-01-tauri-git-network-read`, `RUN-01-tauri-git-network-release`, `RUN-01-tauri-parity`, `RUN-01-tauri-parity-read`, `RUN-01-tauri-parity-release`, `RUN-01-tauri-rust`, `RUN-01-tauri-git-read`, `RUN-01-main-delivery`, `RUN-01-main-only`, `RUN-01-recent-delivery`, `RUN-01-update`, `RUN-01-submit-fix-release`, `RUN-01-update-diagnostics`, `RUN-01-update-quiesce`, `RUN-01-update-immediate`, `RUN-01-update-immediate-release`, `RUN-01-update-restart-proof`, `RUN-01-release-policy`, `RUN-01-notary-reuse`, `RUN-01-notary-reuse-recovery`, `RUN-01-recent-installed-check`, `RUN-01-windows-policy`, `RUN-01-windows-packaging`, `RUN-01-update-pipeline`, `RUN-01-update-test`, `RUN-01-update-release`, `RUN-01-update-errors`, `RUN-01-identity`, `RUN-01-identity-settings`, `RUN-01-identity-fork`, `RUN-01-identity-main`, `RUN-01-identity-test`, `RUN-01-identity-readme`, `RUN-01-identity-readme-test`；不改写或重编号这些既有 ID。'
+拆分前标题: 'codex/standalone-ts: 多仓库与文件提交工作台。'
+原稳定 ID: '`x`、`R-05-graph-actions`；保留既有编号与完成状态。'
+拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
+updated-time: '2026-10-24T16:22:34+00:00'
+---
 
-- ID：`R-05-graph-actions`。
-- 原聚合 ID：`R-05-graph-actions`。
-- 类型：`CONTENT`。
-- 状态：阻塞（沿用原需求记录）。
-- 版本管理：Git。
-- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
-- 来源：`REQUIREMENTS.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`；标题路径：任务清单 / Phase - v0.1.0 - 独立 TypeScript 客户端 / codex/standalone-ts: 多仓库与文件提交工作台。
-- 拆分前原稳定 ID：`R-05-graph-actions`, `R-05-ai-sync`, `CONTENT-01-icon-candidates`, `CONTENT-01-icon-install`, `CONTENT-01-icon-sidebar-text`, `CONTENT-01-icon-install-release`, `CONTENT-01-icon-fusion-black`, `CONTENT-01-icon-fusion-black-clean`, `CONTENT-01-icon-fusion-black-joins`, `CONTENT-01-icon-fusion-black-junctions`, `CONTENT-01-icon-selected-exports`, `COLLAB-01-remote-control`, `COLLAB-01-source`, `COLLAB-01-runtime`, `COLLAB-01-release`, `COLLAB-01-personal`, `COLLAB-01-team`, `COLLAB-01-identity`, `COLLAB-01-device-grant`, `COLLAB-01-platform-login`, `COLLAB-01-dispatch`, `COLLAB-01-abort-operation`, `COLLAB-01-discard-changes`, `D-01`, `D-02`, `D-03`, `R-01`, `R-02`, `R-02-file-row-state-inset`, `R-02-shared-file-design`, `R-02-submit-selection`, `R-02-submit-selection-collapse`, `R-02-submit-selection-collapse-test`, `R-02-push-feedback`, `R-03`, `R-04`, `R-05`, `R-05-repository-browser-link`, `R-05-header-actions`, `R-05-local-submit`, `R-05-local-submit-test`, `R-05-commit-composer`, `R-05-commit-composer-ai-loading`, `R-05-commit-composer-ai-loading-test`, `R-05-commit-composer-windows-cli`, `R-05-commit-composer-ai-fast-context`, `R-05-commit-composer-windows-cli-test`, `R-05-commit-composer-windows-cli-local-update`, `R-05-commit-composer-official-m3`, `R-05-search-compact`, `R-05-commit-composer-compact-type`, `R-05-commit-composer-thin-outline`, `R-05-graph-local-states`, `R-05-graph-local-states-vertical-padding`, `R-05-local-preview-removal`, `R-05-local-file-operations`, `R-05-local-preview-removal-test`, `R-05-local-history-diff`, `R-05-local-history-diff-test`, `R-05-column-insets`, `R-05-column-insets-test`, `R-05-tree-identity-row`, `R-05-tree-identity-footer-test`, `R-05-tree-directory-open`, `R-05-tree-directory-open-test`, `R-05-tree-identity-row-test`, `R-05-branch-title`, `R-05-branch-title-test`, `R-05-column-footers`, `R-05-column-footers-test`, `R-05-tree-open`, `R-05-tree-open-spacing`, `R-05-tree-open-test`, `R-05-change-context`, `R-05-change-context-spacing`, `R-05-change-context-test`, `R-05-global-tree`, `R-05-global-tree-test`, `R-05-remote-focus-control`, `R-05-remote-focus-control-test`, `R-05-gitlens-graph`, `R-05-gitlens-graph-history-note`, `R-05-gitlens-graph-scroll`, `R-05-gitlens-graph-scroll-test`, `R-05-gitlens-graph-sync`, `R-05-gitlens-graph-local`, `R-05-gitlens-graph-shallow`, `R-05-gitlens-graph-filter`, `R-05-gitlens-graph-author-filter`, `R-05-gitlens-graph-local-test`, `R-05-gitlens-graph-test`, `R-05-graph-header`, `R-05-graph-header-test`, `R-05-remote-inline-preview`, `R-05-remote-inline-preview-test`, `R-05-remote-metadata`, `R-05-remote-metadata-test`, `R-05-remote`, `R-05-remote-integration`, `R-05-remote-test`, `R-05-layout`, `R-05-history-details`, `R-05-history-body`, `R-05-history-body-test`, `R-05-history-details-test`, `R-05-column-collapse`, `R-05-column-collapse-horizontal`, `R-05-column-resize`, `R-05-column-resize-test`, `R-05-column-collapse-test`, `R-05-overview`, `R-05-overview-test`, `R-05-data`, `R-05-test`, `R-05-tree-source`, `R-05-tree-source-radius`, `R-05-tree-source-radius-test`, `R-05-tree-source-test`, `UI-01`, `UI-02`, `UI-03`, `UI-04`, `UI-04-hidden-scrollbars`, `UI-04-hidden-scrollbars-test`, `UI-04-sidebar-collapse`, `UI-04-sidebar-collapse-test`, `UI-04-sidebar-collapse-rail`, `UI-04-sidebar-collapse-rail-test`, `UI-04-sidebar-header-icon-only`, `UI-04-sidebar-header-icon-only-test`, `UI-04-sidebar-vertical-spacing`, `UI-04-sidebar-repository-spacing`, `UI-04-sidebar-icon-buttons`, `UI-04-sidebar-icon-buttons-test`, `UI-04-sidebar-icon-buttons-hit-area`, `UI-04-sidebar-icon-buttons-hit-area-test`, `UI-04-sidebar-icon-buttons-shared-size`, `UI-04-sidebar-icon-buttons-shared-size-test`, `UI-04-sidebar-icon-buttons-no-indent`, `UI-04-sidebar-icon-buttons-no-indent-test`, `UI-04-traffic-light-size`, `UI-04-traffic-light-size-test`, `UI-04-settings-width`, `UI-05`, `UI-05-test`, `UI-06`, `UI-07`, `UI-07-test`, `UI-06-test`, `UI-07-tile`, `UI-07-tile-test`, `UI-08`, `UI-08-static-check`, `UI-08-sidebar`, `UI-08-visual-qa`, `UI-09`, `UI-09-tree-graph-padding`, `UI-09-control-padding`, `UI-09-control-padding-validation`, `UI-09-sidebar-feedback`, `UI-09-sidebar-feedback-test`, `UI-09-sidebar-feedback-visual`, `UI-09-version-corner`, `UI-09-version-corner-test`, `UI-09-version-corner-visual`, `UI-09-filter-details`, `UI-09-test`, `UI-09-details`, `UI-09-details-test`, `RUN-01`, `RUN-01-remote-first`, `RUN-01-tauri-git-network`, `RUN-01-tauri-git-network-read`, `RUN-01-tauri-git-network-release`, `RUN-01-tauri-parity`, `RUN-01-tauri-parity-read`, `RUN-01-tauri-parity-release`, `RUN-01-tauri-rust`, `RUN-01-tauri-git-read`, `RUN-01-main-delivery`, `RUN-01-main-only`, `RUN-01-recent-delivery`, `RUN-01-update`, `RUN-01-submit-fix-release`, `RUN-01-update-diagnostics`, `RUN-01-update-quiesce`, `RUN-01-update-immediate`, `RUN-01-update-immediate-release`, `RUN-01-update-restart-proof`, `RUN-01-release-policy`, `RUN-01-notary-reuse`, `RUN-01-notary-reuse-recovery`, `RUN-01-recent-installed-check`, `RUN-01-windows-policy`, `RUN-01-windows-packaging`, `RUN-01-update-pipeline`, `RUN-01-update-test`, `RUN-01-update-release`, `RUN-01-update-errors`, `RUN-01-identity`, `RUN-01-identity-settings`, `RUN-01-identity-fork`, `RUN-01-identity-main`, `RUN-01-identity-test`, `RUN-01-identity-readme`, `RUN-01-identity-readme-test`；不改写或重编号这些既有 ID。
-- 拆分前标题：codex/standalone-ts: 多仓库与文件提交工作台。
-- 原稳定 ID：`x`、`R-05-graph-actions`；保留既有编号与完成状态。
-- 拆分状态说明：状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-
+# Description
 
 ## 当前需求与范围
 
@@ -38,17 +40,23 @@
 - [制作Material 3与Expressive仓库界面对比样稿](issue_%E5%88%B6%E4%BD%9CMaterial%203%E4%B8%8EExpressive%E4%BB%93%E5%BA%93%E7%95%8C%E9%9D%A2%E5%AF%B9%E6%AF%94%E6%A0%B7%E7%A8%BF.md)
 - [将实际GitTogether客户端统一为Material 3视觉系统](issue_%E5%B0%86%E5%AE%9E%E9%99%85GitTogether%E5%AE%A2%E6%88%B7%E7%AB%AF%E7%BB%9F%E4%B8%80%E4%B8%BAMaterial%203%E8%A7%86%E8%A7%89%E7%B3%BB%E7%BB%9F.md)
 
-## Comments
+# Comments
 
-### 2026-10-23 17:44:33 UTC — Agent（文档迁移）
+## 20261023-174433_Agent
+
+原记录标题：2026-10-23 17:44:33 UTC — Agent（文档迁移）
 
 按原有功能 / 工作目标标题拆分需求，保留原 ID、勾选、依赖、最新补充及来源。没有稳定根 ID或旧 ID 在不同上下文重用时，采用由来源路径和标题确定的迁移 Issue ID，原 ID 仍在正文保留。完整旧内容可从来源版本读取；独有未提交内容的版本化副本见迁移映射。
 
-### 20261008-223026-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261008-223026-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261008-223026-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# H5 侧栏背景与卡片层级
+### H5 侧栏背景与卡片层级
 
 - 用户原始要求：按附件调整首页和仓库页，让侧边栏融入背景、卡片悬浮，并给出 H5 版本快速验证。
 - 参考：`/var/folders/x1/nj8gw6sj3tz36zt026sy8h2m0000gn/T/codex-clipboard-5955f072-0671-4712-8b70-d6af7d05cb77.png`，原始 2660×1540px，Codex 消息缩放预览 2048×1186px。
@@ -63,11 +71,15 @@
 
 final result: blocked
 
-### 20261010-004404-utcp8-taobe-gpt-6-sidebar-spacing.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261010-004404-utcp8-taobe-gpt-6-sidebar-spacing.md — 历史证据迁移
 
 来源：`agent-log/system/20261010-004404-utcp8-taobe-gpt-6-sidebar-spacing.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# 侧栏纵向间距与 M3 对照
+### 侧栏纵向间距与 M3 对照
 
 - 用户原始请求：「纵向 padding 不均匀，看看 m3 的标准是现实怎么样」。
 - 分支/基准：codex/standalone-ts，887bce84d8。保留其他任务已有改动。
@@ -80,7 +92,11 @@ final result: blocked
 - 本项目32px/8px为紧凑桌面适配；M3标准56dp行高与当前实现的尺寸清楚区分。
 - 收尾：0.11.3类型检查、生产构建与差异格式检查通过。仅核对预览已加载样式，未将空账号预览称为截图中真实两账号布局的目视验收。
 
-### 20261012-102339-utcp8-taobe-gpt-5-performance-recording.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-102339-utcp8-taobe-gpt-5-performance-recording.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-102339-utcp8-taobe-gpt-5-performance-recording.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -93,7 +109,11 @@ final result: blocked
 - 全项目类型检查与独立当前修改依赖检查、Cargo --locked、285模块构建及git diff --check通过。早期远端控制任务的branch类型错误在对方修正后消失，本轮未修改该组件。最后Cargo检查无新增警告，Vite大分块建议保留。
 - 结束时恢复统一dev：只停止本轮已确认的UI-only PID36604，安装版PID7774不动。并行provider任务已将开发回调独立为4176，实际Rust/React0.27.0、status/catalog/logs HTTP200、githubWebAuth=true、同实例fb2afe1b-75bd-40f6-926b-8c58f2629593、0账号/0仓库/0关联；日志retention24、queued0、dropped0、error空。开发远端控制为non-persistent且默认停用，未执行用户Git写命令或重放凭据。
 
-### 20261013-232558-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261013-232558-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261013-232558-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -126,11 +146,15 @@ final result: blocked
 
 - 最后状态检查发现其他任务已暂存 provider/设置/需求等内容，当前 HEAD 仍为 b8cafe37ed10ba785ecb5e6c6f60dfe04607daf4。本任务未操作索引，ai.rs/diagnostics.rs 及本任务局部文档仍为工作区内容；不替其他任务的提交做归属声明。
 
-### 20261010-094822-utcp8-taobe-gpt-6-local-preview-removal.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261010-094822-utcp8-taobe-gpt-6-local-preview-removal.md — 历史证据迁移
 
 来源：`agent-log/system/20261010-094822-utcp8-taobe-gpt-6-local-preview-removal.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# R-05-local-preview-removal：取消文件列表下方内容预览
+### R-05-local-preview-removal：取消文件列表下方内容预览
 
 - 用户原始要求：下面不需要显示修改内容的预览，可以预见大部分要修改的内容无法预览。
 - 工作区：codex-standalone-ts，当前分支 codex/standalone-ts。fetch 后 ahead/behind 为0/0；已有多项并行未提交修改，按本轮开始时的临时基线核对局部改动，不回滚其他工作。
@@ -146,7 +170,11 @@ final result: blocked
 - 当前预览：4173页面、受保护status/catalog、热更新RepositoryChanges组件HTTP200；新组件无预览标记或useAutoRefresh，实例52f5f2fd-c7cf-4915-8449-71ca08b5715c与0账号/0仓库/0关联保持，API仍0.15.1。4174受保护状态HTTP200，仍由已安装0.12.0提供且configured=true；本轮纯前端调整不重启用户会话，不能把API/助手版本不匹配记为统一环境完全就绪。
 - 临时验证标签已关闭，服务已退出；真实Git的HEAD/index保持不变并已清理。需求及README/设计/架构说明按最新反馈局部同步，旧补丁验收记录保留为历史。未打包、更新安装版、提交、推送或发布。
 
-### 20261006-180016-utcp8-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261006-180016-utcp8-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261006-180016-utcp8-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -177,7 +205,11 @@ final result: blocked
 - 测试端口和标签页仅隔离使用，结束逐一关闭并清理其mkdtemp目录，回执均headAndIndexUnchanged=true；不会删除用户资料。临时viewport已恢复769×853并reset，4173用户仓库页markDeliverable保留。截图仅在忽略的artifacts/repository-workspace；更新README/需求/设计/架构/QA/macOS AGENTS记录本轮与未接通边界。
 - 原生AppKit/macOS27、Git写操作、既有OAuth/目录选择器未新增验收。未commit/push/deploy，不覆盖无关脏改动或既有日志删除。版本暂不递增：保持已连接内存账号服务，批准重启后再同步版本和扩展只读契约。
 
-### 20261004-042541-utcp11-taobe-gpt-5.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261004-042541-utcp11-taobe-gpt-5.md — 历史证据迁移
 
 来源：`agent-log/system/20261004-042541-utcp11-taobe-gpt-5.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -195,7 +227,11 @@ final result: blocked
 - 交付截图 artifacts/import-settings-clean.jpg 已核对为最新默认视口/新DOM；未复制个人照片或系统图标。
 - 执行期间仓库有外部 WIP checkpoint 32c96362dd、26a0e32e41；未主动执行源码仓库 commit/push，不回滚外部提交。最终文档变更在本地，旧 MAIN 未修改。真实 GitHub/Gitea 授权、组织SSO、macOS27仍未验证；未部署。
 
-### 20261014-005307-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-005307-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-005307-utcp8-taobe-gpt-6.md` @ `433ae99073a125b03f45bd5ebe0153c37db95671`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -217,6 +253,23 @@ final result: blocked
 
 官方版本来源：https://github.com/openai/codex/releases/tag/rust-v0.162.1；更新方式参考 https://learn.chatgpt.com/docs/cli/reference。隔离运行证据写入被忽略的 macos/artifacts/windows-codex-review/local-cli-update-validation.jsonl。
 
-### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-070820_Agent
+
+原记录标题：2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
 
 按任务原语言改为 `issue_为提交右键菜单区分标准Git非AI与AI操作.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。 本文件承接原聚合目标中的相关范围；全部拆分目标见“拆分关联”，完整既有 Comments 保存在首个任务。
+
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-162234_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)
