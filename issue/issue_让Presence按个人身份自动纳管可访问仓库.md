@@ -1,17 +1,19 @@
-# 让Presence按个人身份自动纳管可访问仓库
+---
+title: 让Presence按个人身份自动纳管可访问仓库
+id: COLLAB-03-automatic-management
+原聚合 ID: '`COLLAB-03-automatic-management`。'
+type: UI
+status: 阻塞（沿用原需求记录）。
+版本管理: Git。
+来源: '`REQUIREMENTS.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`；标题路径：GitTogether 独立实现需求 / Presence账号与商业边界（2026-10-12）。'
+拆分前原稳定 ID: '`COLLAB-03-automatic-management`, `COLLAB-03-settings`, `COLLAB-03-settings-spacing`, `COLLAB-03-settings-spacing-test`, `COLLAB-03-settings-spacing-release`, `COLLAB-03-identity`, `COLLAB-03-repository-ui`, `COLLAB-03-repository-icon`, `COLLAB-03-repository-icon-test`, `COLLAB-03-repository-icon-release`, `COLLAB-03-control`, `COLLAB-03-source`, `COLLAB-03-runtime`, `COLLAB-02-presence-account`, `COLLAB-02-source`, `COLLAB-02-password-length`, `COLLAB-02-commercial`, `COLLAB-02-organization-boundary`；不改写或重编号这些既有 ID。'
+拆分前标题: Presence账号与商业边界（2026-10-12）。
+原稳定 ID: '`COLLAB-03-automatic-management`、`COLLAB-03-settings`、`x`、`COLLAB-03-settings-spacing`、`COLLAB-03-settings-spacing-test`、`COLLAB-03-settings-spacing-release`、`COLLAB-03-identity`、`COLLAB-03-repository-ui`、`COLLAB-03-repository-icon`、`COLLAB-03-repository-icon-test`、`COLLAB-03-repository-icon-release`、`COLLAB-03-control`、`COLLAB-03-source`、`COLLAB-03-runtime`；保留既有编号与完成状态。'
+拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
+updated-time: '2026-10-24T16:22:34+00:00'
+---
 
-- ID：`COLLAB-03-automatic-management`。
-- 原聚合 ID：`COLLAB-03-automatic-management`。
-- 类型：`UI`。
-- 状态：阻塞（沿用原需求记录）。
-- 版本管理：Git。
-- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
-- 来源：`REQUIREMENTS.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`；标题路径：GitTogether 独立实现需求 / Presence账号与商业边界（2026-10-12）。
-- 拆分前原稳定 ID：`COLLAB-03-automatic-management`, `COLLAB-03-settings`, `COLLAB-03-settings-spacing`, `COLLAB-03-settings-spacing-test`, `COLLAB-03-settings-spacing-release`, `COLLAB-03-identity`, `COLLAB-03-repository-ui`, `COLLAB-03-repository-icon`, `COLLAB-03-repository-icon-test`, `COLLAB-03-repository-icon-release`, `COLLAB-03-control`, `COLLAB-03-source`, `COLLAB-03-runtime`, `COLLAB-02-presence-account`, `COLLAB-02-source`, `COLLAB-02-password-length`, `COLLAB-02-commercial`, `COLLAB-02-organization-boundary`；不改写或重编号这些既有 ID。
-- 拆分前标题：Presence账号与商业边界（2026-10-12）。
-- 原稳定 ID：`COLLAB-03-automatic-management`、`COLLAB-03-settings`、`x`、`COLLAB-03-settings-spacing`、`COLLAB-03-settings-spacing-test`、`COLLAB-03-settings-spacing-release`、`COLLAB-03-identity`、`COLLAB-03-repository-ui`、`COLLAB-03-repository-icon`、`COLLAB-03-repository-icon-test`、`COLLAB-03-repository-icon-release`、`COLLAB-03-control`、`COLLAB-03-source`、`COLLAB-03-runtime`；保留既有编号与完成状态。
-- 拆分状态说明：状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-
+# Description
 
 ## 当前需求与范围
 
@@ -43,13 +45,19 @@
 - [提供Presence独立账号注册登录与退出重登](issue_%E6%8F%90%E4%BE%9BPresence%E7%8B%AC%E7%AB%8B%E8%B4%A6%E5%8F%B7%E6%B3%A8%E5%86%8C%E7%99%BB%E5%BD%95%E4%B8%8E%E9%80%80%E5%87%BA%E9%87%8D%E7%99%BB.md)
 - [明确GitTogether开源与GitPresence个人部署和组织付费边界](issue_%E6%98%8E%E7%A1%AEGitTogether%E5%BC%80%E6%BA%90%E4%B8%8EGitPresence%E4%B8%AA%E4%BA%BA%E9%83%A8%E7%BD%B2%E5%92%8C%E7%BB%84%E7%BB%87%E4%BB%98%E8%B4%B9%E8%BE%B9%E7%95%8C.md)
 
-## Comments
+# Comments
 
-### 2026-10-23 17:44:33 UTC — Agent（文档迁移）
+## 20261023-174433_Agent
+
+原记录标题：2026-10-23 17:44:33 UTC — Agent（文档迁移）
 
 按原有功能 / 工作目标标题拆分需求，保留原 ID、勾选、依赖、最新补充及来源。没有稳定根 ID或旧 ID 在不同上下文重用时，采用由来源路径和标题确定的迁移 Issue ID，原 ID 仍在正文保留。完整旧内容可从来源版本读取；独有未提交内容的版本化副本见迁移映射。
 
-### 20261014-144636-utcp8-taobe-gpt-6-presence-device-rows.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-144636-utcp8-taobe-gpt-6-presence-device-rows.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-144636-utcp8-taobe-gpt-6-presence-device-rows.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -69,7 +77,11 @@
 - Presence接口connected，但本地预览没有Presence账号及会话；没有以此声称截图中真实双设备弹窗已在运行界面验收。当前源码/开发预览完成，不是已安装应用或正式安装包更新。
 - 本次源文件基线：/var/folders/x1/nj8gw6sj3tz36zt026sy8h2m0000gn/T/presence-device-rows-eczprn60；运行日志：/var/folders/x1/nj8gw6sj3tz36zt026sy8h2m0000gn/T/gittogether-preview-mnxacq90/dev.log。
 
-### 20261012-184708-utcp8-taobe-gpt-6-presence-management-model.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-184708-utcp8-taobe-gpt-6-presence-management-model.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-184708-utcp8-taobe-gpt-6-presence-management-model.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -84,7 +96,11 @@
 - React源码复核：保留稳定身份和作用域key，状态读取失败撤去在线有效性；筛选/托管信息来自服务端，调节UI不执行Git；密码字段不会回传或写诊断，后台状态不生成虚假成功。
 - 边界：没有注册或改动真实用户账号，没有进行实际Git平台授权、跨服务器登录或双设备Git写/丢弃验收；没有发布0.30.0三平台安装包或操作用户安装版，也没有发布官网个人Docker分发/计费服务。上述源码/公开页面/容器证据不能替代这些验收。
 
-### 20261013-194528-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261013-194528-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261013-194528-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -120,7 +136,11 @@
 - 实际账号、真实服务器、用户安装版：未操作。
 - 源码版本0.30.5已提交、推送并完成上述验证；此次没有生成、签名、公证或发布新安装包。先前0.30.4正式包不包含此次布局修复，发布需求保留未完成。
 
-### 20261022-132805-utcp8-taobe-gpt-6-presence-status-semantics.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261022-132805-utcp8-taobe-gpt-6-presence-status-semantics.md — 历史证据迁移
 
 来源：`agent-log/system/20261022-132805-utcp8-taobe-gpt-6-presence-status-semantics.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -144,7 +164,11 @@
 - git diff --check通过。更新PRESENCE-05-status-semantics、README、DESIGN及docs/presence.md；所有非本任务未提交文件保持。
 - 未提交、推送、发布或操作用户安装版；未访问真实账号或远程Git。用户当前已安装版本不会因源码修改自动改变。
 
-### 20261013-204956-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261013-204956-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261013-204956-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -182,11 +206,15 @@
 - 实际账号/服务器、用户安装版：未操作。正式新包仍受此前Mac发布入口限制，源码与发布分别记录。
 - 0.30.6图标源码已验证、提交及推送；没有生成、签名、公证或发布新的三平台安装包。完整图及局部图分别为macos/artifacts/managed-folder-review/managed-folder-dashboard.png和managed-folder-icons.png，原始检查数据为icon-validation.json。
 
-### 20261019-143029-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261019-143029-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261019-143029-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# Presence 本地工作区提示降级
+### Presence 本地工作区提示降级
 
 - 用户原始 prompt：指出 Presence 设置页纵向 padding 不合适，并询问“部分工作区不可读”是否指仓库未匹配到本地文件夹，以及该提示是否应为 M3 warning 而非 error。
 - 当前工作区：`github-desktop-based`，HEAD `a270e6d49a066c13c7ada6d9948bb1b87ab22ed1`。保留已有未提交更改；只修改 Presence 设置组件与样式。
@@ -195,7 +223,11 @@
 - 源码路径显示，未关联本地工作目录、工作目录失效或读取失败都可能导致此类本地工作区提示；它本身不是 Presence 服务器连接错误。
 - 未运行测试、构建或界面预览；没有提交、推送、打包或更新已安装应用。
 
-### 20261012-100840-utcp8-taobe-gpt-6-presence-avatars-client.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-100840-utcp8-taobe-gpt-6-presence-avatars-client.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-100840-utcp8-taobe-gpt-6-presence-avatars-client.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -238,7 +270,11 @@
 
 - 收尾提交211c12b曾误包含README/ARCHITECTURE中同期平台扩展和性能文档；发现后用追加修正提交恢复这些文件的原暂存基线，仅保留权威版本同步，不改写已推送历史。全部工作文件原内容保留，相关并行文本重新处于未暂存状态；已向用户说明。其源代码不在本轮提交中。
 
-### 20261019-143730-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261019-143730-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261019-143730-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -265,7 +301,11 @@
 - 变更均位于 `main/`；生成的构建内容在忽略目录中，没有进入版本差异。
 - 本轮源码构建不代表安装包或正式发布已更新。
 
-### 20261012-133742-utcp8-taobe-gpt-6-presence-password-length.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-133742-utcp8-taobe-gpt-6-presence-password-length.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-133742-utcp8-taobe-gpt-6-presence-password-length.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -277,7 +317,11 @@
 - 检查基线3ad94fd；并行main新增cb60387只修改windows-release工具和其日志，不与本轮组件/版本/文档相交，提交基于当前main。
 - 源码和文档按持续授权提交并推送main。Presence服务端0.5.1源码7a755f8已推送，NAS部署由本任务继续；客户端新安装包不在本轮交付。README/DESIGN没有变化。
 
-### 20261022-083134-utcp8-taobe-gpt-6-presence-local-visibility.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261022-083134-utcp8-taobe-gpt-6-presence-local-visibility.md — 历史证据迁移
 
 来源：`agent-log/system/20261022-083134-utcp8-taobe-gpt-6-presence-local-visibility.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -315,7 +359,11 @@
 
 未访问真实用户凭据、测试用户Git写入、操作安装版、提交、推送、生成安装包或发布。真实多设备服务器、Windows原生运行和已安装版本仍需对应交付验收；合成HTTP/WebSocket与隔离Electron结果不冒充真实账号验收。所有并行工作区改动保留。
 
-### 20261014-154601-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-154601-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-154601-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -326,7 +374,11 @@
 
 - 最终完成：四项需求/验收子项已勾选；7项模型/身份回归、11项Rust Provider、11项隔离UI检查完成。最终重新加载后控制台新错误为0，预览4320和截图/JSON记录保留；未打包、发布、安装或执行真实远程写操作。
 
-### 20261022-010816-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261022-010816-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261022-010816-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -353,7 +405,11 @@
 - `git diff --check`通过；另一github-desktop-based工作区保持干净。本次未新增仓库测试，未提交、推送、打包、发布或操作已安装应用。
 - 更新的需求ID：PRESENCE-05-popover-layout。更新DESIGN的Presence头像弹窗段落；README只同步当前源码状态。
 
-### 20261012-112554-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-112554-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-112554-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -366,11 +422,15 @@
 - 从a3fc3a17a1已提交源码只覆盖本轮CSS/版本的隔离目录，TypeScript检查和生产构建实际通过。构建保留既有大资源提示；git diff --check通过。未新增或运行项目测试，没有安装包发布，也没有操作用户已安装应用。
 - REQUIREMENTS记录PRESENCE-05-avatar-hover，DESIGN的Presence段落补充胶囊边距。共享index曾出现Windows任务暂存内容；在本轮完成记录期间，该任务提交891e6d55d6并清空其暂存区。本轮按当前HEAD局部投影暂存，保留其他对话的工作文件，不纳入本轮提交。
 
-### 20261012-011611-utcp8-taobe-gpt-6-presence-integration.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-011611-utcp8-taobe-gpt-6-presence-integration.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-011611-utcp8-taobe-gpt-6-presence-integration.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# Presence 插件与首个 NAS 服务器
+### Presence 插件与首个 NAS 服务器
 
 - 用户原始 prompt：「把 presence 作为一个插件放到我们的设置选单里面，开始尝试把 presence 系统接入到 git together 第一个 presence 服务器，并在我们的 NAS 上创建一个 Docker 去部署」
 - 模型：gpt-6（当前环境可获得的最具体标识）；执行者：taobe。
@@ -382,7 +442,7 @@
 - 决策：App 使用 Rust 只读观察者，不打包 Node sidecar；Bridge 继续独立检测 Git 与接收编辑器来源。服务器增加兼容 v1 的 observer 握手，禁止观察者发布快照。首轮登记 GitTogether 与 GitPresence 两个真实仓库，不自动共享全部账号仓库。
 - 成功标准：设置可启停且秘密留在本机；NAS 独立容器健康；TLS 与鉴权正确；Bridge 的真实快照可在 Rust 客户端和 UI 读取；断线不变 clean；正式包和公共更新源通过既有验证。
 
-## 实现与真实连接
+### 实现与真实连接
 
 - NAS /vol3/docker/gitpresence 部署 gitpresence:0.2.0；实际构建成功，容器 healthy，UID/GID 1001、只读、移除全部 capabilities、禁止提权、unless-stopped。配置位于 source 外、600 权限，只含 tokenHash。
 - 既有 gitea-caddy 增加 /presence/ handle_path，验证候选后备份原文件并平滑 reload；HTTPS /presence/health 返回协议 1，Gitea / 和 Ink /ink/ 均为 200，未停止其他容器。
@@ -396,7 +456,7 @@
 - GitPresence 服务器源码 ff242f4 已推送 main，并从 git archive 精确更新 NAS；最终镜像 sha256:933b8a99ec1b797aa8a17089edad6b91fbd4e7454d7eff34cb41f8924023f8a0，deployment-info.json 记录 sourceCommit 与源包摘要。更新后实际 healthy，Rust/Bridge 两条读取恢复 connected，仍有两个项目、一个真实上报会话。
 - 同期 0.22.11 已完成公开 stable/latest 回读，全局发布锁已释放。本轮 minor 版本 0.23.0 的所有权威入口同步，类型、Cargo --locked 与276模块构建再次通过，接下来仅提交 Presence 段落并从干净已推送 main 发布。
 
-## 最终核验与发布依赖
+### 最终核验与发布依赖
 
 - 实现 d84730f4df 已推送 GitTogether origin/main；同步 GitPresence ff242f4 已推送。NAS 最终使用 git archive 的精确 ff242f4 源码，源包 SHA256 b83ef4f91e8df6e028bf8c398cc867d310491cee2884f88331478c1c193f0f8c；最终镜像 SHA256 933b8a99ec1b797aa8a17089edad6b91fbd4e7454d7eff34cb41f8924023f8a0。01:14 UTC+8 再次读取 healthy 与正常 TLS health，未重复部署或操作相邻容器。
 - 本轮旧预览已停止并以 0.23.0 重建/启动，未停止其他项目服务。实际浏览器设置开关启用、NAS 已连接、本机服务已连接，Taobe 在线含两个真实仓库，版本不一致提示已消失。截图 macos/artifacts/presence/settings-connected.png 为实际连接界面；final-integration-proof.json 为 Rust 同源接口的只读回读，当前 1 个在线会话、2 个本机项目。变化数量为观察时事实，不作为固定期望。网页预览留作用户输出。
@@ -405,7 +465,11 @@
 - 服务器和客户端的连接/部署部分完成；桌面正式发布仍未完成。后续补齐三平台交付时沿用已配置签名、公证及 GitHub 权限，校验完整安装包和公共更新源，不操作用户已安装应用、不请求解锁。此次没有访问公证凭据、读取更新私钥或写入安装版用户数据。
 - 未新增或运行项目测试套件；先前类型/Cargo/生产构建、角色拒绝和本次真实连接分别作为对应证据。没有对本轮 UE/Godot 接入、其他设备、持久化历史或远端执行作完成声明。
 
-### 20261019-085919-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261019-085919-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261019-085919-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -420,7 +484,11 @@
 - 证据保存于artifacts/presence-storage/0.36.2/，包含报告、恢复截图、隔离构建信息、文件摘要以及当前工作区和隔离检查日志。README/DESIGN无需因内部存储修复调整；ARCHITECTURE和执行基础文档已补充格式与调用边界，REQUIREMENTS的DESKTOP-01-presence-storage已按实际范围完成。
 - 没有生成新的.app、提交、推送、合并或发布；main及安装版不操作。真实用户服务登录、Windows存储运行和多设备业务仍未在本次验收。
 
-### 20261012-110919-utcp8-taobe-gpt-6.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-110919-utcp8-taobe-gpt-6.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-110919-utcp8-taobe-gpt-6.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -433,11 +501,15 @@
 - 没有进行安装包发布或操作用户安装版，交付为已推送源码和可查看的布局预览。线上状态协议、NAS部署、头像同步、成员去重与圆环优先级未改变。
 - PRESENCE-05-name-placement已勾选完成；DESIGN与docs/presence的头像位置说明已同步。收尾第一次使用shell内联Unicode更新日志时解释器报编码错误，未修改日志，随后通过局部patch完成。
 
-### 20261012-121038-utcp8-taobe-gpt-6-presence-accounts.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261012-121038-utcp8-taobe-gpt-6-presence-accounts.md — 历史证据迁移
 
 来源：`agent-log/system/20261012-121038-utcp8-taobe-gpt-6-presence-accounts.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
-# Presence 账号注册、登录与产品部署边界
+### Presence 账号注册、登录与产品部署边界
 
 - 用户原文：补上；另外我们未来的商业模式是：git-together 开源；git-presence 仓库切换为 private，在官网提供 docker 下载，docker 支持创建一个账户绑定多个仓库，但不支持绑定组织空间，组织管理为付费服务，部署在我们的 nas 上一个单独的 presence 服务器，用账号隔离不同组织；你看是否合理。
 - 模型：gpt-6；运行环境仅提供家族标识，无法确认更具体版本。
@@ -448,7 +520,7 @@
 - 初步类型/Rust检查通过；最终版本构建待收尾。没有添加或运行测试，不操作安装版，不代用户注册账号或填写密码。
 - GitPresence当前已private，GitTogether仍public；商业方案记录为后续范围，个人Docker与私有组织执行模块已分开，官网下载和付费组织服务未上线。
 
-## 结束登记与证据
+### 结束登记与证据
 
 - 结束登记：2026-10-12 12:10:38 UTC+8；功能提交66ace84a835031b938e9082de9c95a7ae9e6feca为main。
 - 当前工作区TypeScript、Cargo --locked及生产构建通过。只含本任务改动的隔离源码也通过：286个前端模块构建、Rust 35.32秒完成；仅保留已有大包尺寸警告。未新增或运行测试。
@@ -458,7 +530,11 @@
 - 最后范围复核明确账号会话与后台设备生命周期：已登记设备不因账号会话到期停止无人值守接收，服务端每次操作仍验证独立可撤销设备授权；显式退出、改密码和项目/组织撤销继续生效。此补充只改变客户端身份绑定计算，未运行账号或Git写测试。
 - 多设备解除仓库绑定后，从已验证设备状态同步服务端最新范围，省略已解绑工作区，保留其他仓库控制及状态发布；不以整个announce失败导致其他绑定仓库离线。末次Rust检查通过，运行验收仍待用户双设备操作。
 
-### 20261014-013305-utcp8-taobe-gpt-6-presence-device-name.md — 历史证据迁移
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 历史记录-时间未记录
+
+原记录标题：20261014-013305-utcp8-taobe-gpt-6-presence-device-name.md — 历史证据迁移
 
 来源：`agent-log/system/20261014-013305-utcp8-taobe-gpt-6-presence-device-name.md` @ `28d96a4ecc63fe9e1024151ad3f43630c83a879b`。日期 / 时区沿用原记录；以下摘录不自动改变当前完成状态。
 
@@ -479,6 +555,23 @@
 
 最终包记录：_builds/_builds/gittogether-0.30.11-macos-arm64-sqPFpe/build-info.json，sourceSha256 ef2b7b875dbc914f8ce5111e7f62405dcc1233012e66787024f22e798797880d。未新增或运行测试套件、未创建账号/改密码/改设备名称或执行用户Git写操作，不把源码或包验收当作用户安装版UI已验收。只移除本任务所有的发布锁，保留最终包和报告；共享工作区全部WIP保留。
 
-### 2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-070820_Agent
+
+原记录标题：2026-10-24 07:08:20 UTC — Agent（纠正迁移命名）
 
 按任务原语言改为 `issue_让Presence按个人身份自动纳管可访问仓库.md`；类型、旧 ID、来源、历史与原状态保留。实施提交未核实，省略版本后缀；本轮仅核对文档内容与直接引用。 本文件承接原聚合目标中的相关范围；全部拆分目标见“拆分关联”，完整既有 Comments 保存在首个任务。
+
+原记录未提供完整 Agent / 模型详情及原执行会话链接，未补造。
+
+## 20261024-162234_Codex
+
+按用户最新手写模板迁移属性和正文结构，保留任务语义、来源、原始状态及历史内容；本次未重新执行业务验收。
+
+原版本关联记录（照录来源，不将本次文档迁移提交当作业务实施提交）：
+- 实施提交：未核实（未取得与本文件具体范围直接对应且已核实的实施提交；来源快照、当前 HEAD 与迁移提交不替代业务实施版本，故省略文件名版本后缀）。
+
+本次执行环境未提供具体模型标识，未补造 Model-Detail。
+
+[本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)

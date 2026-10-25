@@ -5,10 +5,10 @@
 
 继承当前工作副本根 [AGENTS.md](../AGENTS.md#通用规则) 的新版通用规则。
 
-<!-- local-agent-template-rollout:v2.0.1-261023-173015 -->
+<!-- local-agent-template-rollout:v2.0.2-261024-162917 -->
 > 通用规则来源于本地 `DDonlien/agent-template` `v2.0.1-261023-173015`。项目自己的范围、命令和技术契约继续有效；旧模板中要求 REQUIREMENTS / agent-log 双写、例行远端同步与提交的通用制度已停用。
 >
-> 项目任务以当前工作副本根 `../issue/` 为唯一工作入口，正文维护当前事实，Comments 追加历史。旧工作文档在有可追溯迁移映射和 Git 历史 / 版本化来源副本后移除；未把历史日志机械创建为新任务。实际实施版本只在核实后填写；尚无提交或未核实则省略文件名后缀，并在 property 说明。
+> 项目任务以当前工作副本根 `../issue/` 为唯一工作入口，正文维护当前事实，Comments 追加历史。旧工作文档在有可追溯迁移映射和 Git 历史 / 版本化来源副本后移除；未把历史日志机械创建为新任务。Issue 使用 Obsidian YAML frontmatter 和 Description / Comments 两个一级标题；文件名仅为 issue_原语言任务描述.md。真实 Git / P4 编号写入对应 Comment，recorded-version 仅记录可选内容发布版本。
 <!-- /local-agent-template-rollout -->
 
 
