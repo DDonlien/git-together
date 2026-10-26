@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-04`、`IMPORT-04-worktrees`、`IMPORT-04-directory-display`、`IMPORT-04-directory-display-test`、`IMPORT-04-worktrees-test`、`IMPORT-04-account-batch`、`IMPORT-04-account-batch-feedback`、`IMPORT-04-account-batch-performance`、`IMPORT-04-account-batch-test`、`IMPORT-04-inline`、`IMPORT-04-path-hover`、`IMPORT-04-association-refresh`、`IMPORT-04-stale-worktrees`、`IMPORT-04-stale-branch-notices`、`IMPORT-04-open-folder`、`IMPORT-04-discovery-boundary`、`IMPORT-04-discovery-boundary-release`、`IMPORT-04-picker`、`IMPORT-04-picker-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-24T16:22:34+00:00'
+updated-time: '2026-10-26T15:33:08+08:00'
 ---
 
 # Description
@@ -89,3 +89,20 @@ updated-time: '2026-10-24T16:22:34+00:00'
 本次执行环境未提供具体模型标识，未补造 Model-Detail。
 
 [本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)
+
+## 20261026-153308_Codex_GPT-6.1-Sol
+
+用户请求：“修改并提交”。本次承接截图中的内部对象库报错，以及用户对六层自动匹配流程的追问；起始分支 main，起始提交 ecbe70bcf8。此前只读 Git 结果已确认，共享 bare 对象库与实际 linked worktree 同时出现在 worktree 列表中。原版解析没有单独保留 bare 标记，而 GitTogether 随后把非 prunable 的全部条目交给普通仓库登记，导致内部对象库触发“isn't a Git repository”错误。
+
+新增 GitTogether 共用筛选 isCheckoutWorktree，按原版解析结果中缺失的 HEAD 字段排除 bare 存储，并继续排除 prunable 条目。工作目录读取、父目录匹配和目录选单共用该筛选；全零 HEAD 的空仓库、真实主目录及 linked worktree 保留。原版 GitHub Desktop 的 Git 解析、数据模型、执行和来源锁均未修改；共享对象库继续保留。
+
+业务修复提交：e71c227482b6e36f534c28aa241df56b47aa43a1（fix: [IMPORT-04] exclude bare stores from working directories）。此次只创建本地提交；未推送、打包或操作用户已安装客户端。任务整体保留待用户验收状态。
+
+检查结果：
+- scripts/worktree-entries.test.mjs 的四项真实临时 Git 回归全部通过：bare 与 linked worktree、无 checkout 的 bare 库、普通及 detached 目录与 prunable 条目、尚无首次提交的空仓库。共享对象库仍可读，工作目录 HEAD 和 Git 状态保持。
+- 四个修改的 TypeScript / TSX 文件通过 esbuild 语法转译；scripts/desktop.mjs 通过 Node 语法检查，暂存差异通过 git diff --check。新回归已加入既有根测试入口。
+- scripts/upstream-boundary.test.mjs 为 4/7 通过、3 项失败；npm run verify:upstream 失败。当前 Windows 工作副本与来源锁有既有差异：1857 份文件原始摘要一致，2030 份仅在 CRLF 转为 LF 后一致，另有 8 份已提交的上游说明文档偏离锁摘要。这个内存对照只用于解释失败，未改写这些文件或放宽正式校验。
+- 独立文件类型检查因导入原版完整依赖及缺少项目全局配置未通过；使用 Desktop 项目配置再次检查，报告 TS2688、缺少 Node 类型库。当前 desktop/node_modules 与 desktop/app/node_modules 未安装，因此完整类型检查未通过；语法转译不替代类型检查。
+- 未进行 GUI、安装版交互或原生构建；原截图场景的用户验收保持未完成。
+
+[本次修复对话](codex://threads/01a16468-eba5-7510-b776-87b458eef9d2)
