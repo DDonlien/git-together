@@ -81,3 +81,13 @@ v0.38.4来源`e3dcedf7e080837df6de0545abe1673f54875662`的[主发布40292250892]
 在本地既有0.37.0正式包的隔离临时副本上实际运行修复后的smoke-updates，完整成功：0.33.0签名升级安装、Squirrel签名桌面替换和重启、等待测试实例退出、生产更新桥、私有profile与测试工作文件保留均为true，进程退出码0。未启动或改动用户安装版，也未构建新产品包；该结果验证检查脚本修复，不能冒称尚未发布的0.38.5升级通过。
 
 [执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
+
+## 20261026-180535_Codex_GPT-6.1-Sol
+
+v0.38.5首次发布在Apple公证Accepted后发生CloudKit网络断线（stapler validate 68），原标签未移动，已重跑同一[主任务40297283671](https://github.com/DDonlien/git-together/actions/runs/40297283671/attempts/2)。第二次公证Accepted（231cb861-16fe-4c01-aa81-869d81477459）、staple/validate及macOS原生检查均通过；[Windows40301574585](https://github.com/DDonlien/git-together/actions/runs/40301574585)的x86/x64真实安装验证均成功。云端0.33.0→0.38.5签名升级、Squirrel替换重启、profile保留与生产更新桥全部通过，确认此前临时档案竞争已解决。
+
+发布停在新建草稿后的列表回读：草稿424082856已由github-actions[bot]创建、目标提交ced10510952f40ca4c2fb7dcc79211c024ef05cf、零资产且未公开，但即时列表中未定位到。改为由gh release view取得该标签草稿的唯一API URL，直接按ID读取，并核对draft、tag和来源提交；实际新代码已对GitHub现有草稿回读成功，同时验证拒绝正式版本、错误标签和错误提交。语法与diff检查通过。新标签v0.38.6继续完整发布。
+
+时间勘误：前一条“20261026-171000”的本地升级记录实际写于17:07:26，标题时间手误；历史正文和检查结果保留。
+
+[执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)

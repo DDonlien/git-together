@@ -153,8 +153,11 @@ if (existing) {
   assert.equal(JSON.parse(gh(['release', 'view', tag, '--json', 'targetCommitish'])).targetCommitish, commit, 'Draft belongs to a different source.');
 }
 else gh(['release', 'create', tag, '--target', commit, '--title', `GitTogether ${version}`, '--notes-file', notes, '--draft']);
-const draft = JSON.parse(capture('gh', ['api', `repos/${repository}/releases?per_page=30`])).find(item => item.tag_name === tag);
+const draftURL = JSON.parse(gh(['release', 'view', tag, '--json', 'apiUrl'])).apiUrl;
+const draft = JSON.parse(capture('gh', ['api', draftURL]));
 assert.equal(draft?.draft, true, 'Only an unpublished draft may be resumed.');
+assert.equal(draft.tag_name, tag, 'The draft must belong to the selected release tag.');
+assert.equal(draft.target_commitish, commit, 'The draft must use the selected source commit.');
 const pending = [...assets, 'release-integrity.json', 'SHA256SUMS'].filter(name => {
   const path = join(destination, name), digest = 'sha256:' + hash(path);
   return !draft.assets.some(asset => asset.name === name && asset.state === 'uploaded' && asset.size === statSync(path).size && asset.digest === digest);
