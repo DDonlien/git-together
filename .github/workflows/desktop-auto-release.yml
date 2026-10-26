@@ -1,37 +1,35 @@
-name: Desktop automatic release
-run-name: Desktop release ${{ github.sha }}
+name: Desktop tag release
+run-name: Desktop release ${{ github.ref_name }}
 on:
   push:
-    branches: [main]
+    tags: ['v*']
 permissions:
   contents: write
   actions: write
 concurrency:
-  group: desktop-automatic-release-main
+  group: desktop-stable-release
   queue: max
 jobs:
   release:
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: macos-15
     timeout-minutes: 360
+    env:
+      GITTOGETHER_RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.ref }}
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Select the next release version
+      - name: Validate the release tag and source
         id: release-version
-        run: node scripts/next-release-version.mjs "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+        run: node scripts/release-tag.mjs "$GITTOGETHER_RELEASE_TAG" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Set the release version
         run: echo "GITTOGETHER_RELEASE_VERSION=${{ steps.release-version.outputs.version }}" >> "$GITHUB_ENV"
-      - name: Prepare build dependencies
-        run: npm run setup
       - name: Check required release secrets
         if: steps.release-version.outputs.already_published != 'true'
         env:
@@ -54,6 +52,9 @@ jobs:
             printf '::error::Add these repository Actions secrets before automatic releases can run: %s\n' "${missing[*]}"
             exit 1
           fi
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prepare build dependencies
+        run: npm run setup
       - name: Configure Developer ID, Apple notarization, and updater signing
         if: steps.release-version.outputs.already_published != 'true'
         env:
@@ -90,16 +91,11 @@ jobs:
           printf 'GITTOGETHER_NOTARY_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
           printf 'GITTOGETHER_RELEASE_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
           rm -f "$certificate" "$notary_key"
-      - name: Prepare the exact source branch
-        run: |
-          git fetch origin main --no-tags
-          git checkout -B main "$GITHUB_SHA"
-          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD
       - name: Build, sign, notarize, and publish
         run: node scripts/release.mjs
         env:
           GH_TOKEN: ${{ github.token }}
-          GITTOGETHER_SOURCE_COMMIT: ${{ github.sha }}
+          GITTOGETHER_SOURCE_COMMIT: ${{ steps.release-version.outputs.source_commit }}
       - name: Remove temporary signing material
         if: always() && steps.release-version.outputs.already_published != 'true'
         run: |

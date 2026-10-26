@@ -7,12 +7,15 @@ import { basename, join, resolve } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 import { sourceState } from './source-state.mjs';
 import { downloadWindowsArtifacts, downloadPublicAssets } from './release-downloads.mjs';
+import { assertReleaseSource, compareReleaseVersions, releaseVersionFromTag } from './release-tag.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const repository = 'DDonlien/git-together';
 const version = process.env.GITTOGETHER_RELEASE_VERSION || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 assert.match(version, /^\d+\.\d+\.\d+$/);
-const tag = `v${version}`;
+const releaseTag = process.env.GITTOGETHER_RELEASE_TAG;
+const tag = releaseTag || `v${version}`;
+if (releaseTag) assert.equal(releaseVersionFromTag(releaseTag), version);
 const destination = join(root, 'artifacts/releases', version);
 mkdirSync(destination, { recursive: true });
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit', env: { ...process.env, GODEBUG: 'http2client=0' }, ...options });
@@ -20,26 +23,27 @@ const capture = (cmd, args) => run(cmd, args, { stdio: ['ignore', 'pipe', 'inher
 const gh = args => capture('gh', [...args, '--repo', repository]);
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
-const assertSourceOnMain = () => {
-  run('git', ['fetch', 'origin', 'main', '--no-tags']);
-  run('git', ['merge-base', '--is-ancestor', head, 'FETCH_HEAD']);
-};
+const assertSource = () => assertReleaseSource(root, head, version, releaseTag);
 assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
-assert.equal(capture('git', ['branch', '--show-current']), 'main');
+if (!releaseTag) assert.equal(capture('git', ['branch', '--show-current']), 'main');
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Commit the intended changes before release.');
 const head = capture('git', ['rev-parse', 'HEAD']);
-assertSourceOnMain();
+if (process.env.GITTOGETHER_SOURCE_COMMIT) assert.equal(process.env.GITTOGETHER_SOURCE_COMMIT, head);
+assertSource();
 let commit = head;
+process.env.GITTOGETHER_SOURCE_COMMIT = head;
+process.env.GITTOGETHER_RELEASE_VERSION = version;
 const macReport = join(destination, 'package-darwin-arm64.json');
 const outBuild = join(root, 'desktop/out/build-info.json');
-for (const previous of [existsSync(macReport) ? json(macReport).build : undefined, existsSync(outBuild) ? json(outBuild) : undefined]) {
+for (const previous of releaseTag ? [] : [existsSync(macReport) ? json(macReport).build : undefined, existsSync(outBuild) ? json(outBuild) : undefined]) {
   if (previous?.version === version && previous.channel === 'production' && previous.sourceSha256 === sourceState(root) && !previous.sourceDirty) {
     const changed = capture('git', ['diff', '--name-only', previous.sourceCommit, head]).split('\n').filter(Boolean);
     const metadataOnly = changed.every(path => /^(?:\.github\/workflows\/|agent-log\/|docs\/|scripts\/smoke-[^/]+\.mjs$)/.test(path) || ['README.md', 'AGENTS.md', 'REQUIREMENTS.md', 'scripts/release.mjs', 'scripts/package-desktop.mjs', 'scripts/release-updates.test.mjs', 'scripts/notarization.mjs', 'scripts/notarization.test.mjs', 'scripts/release-downloads.mjs'].includes(path));
     if (metadataOnly) {
       run('git', ['merge-base', '--is-ancestor', previous.sourceCommit, head]);
       commit = previous.sourceCommit;
+      process.env.GITTOGETHER_SOURCE_COMMIT = commit;
       console.log(`Reusing identical application source ${commit}; pipeline/main is ${head}.`);
       break;
     }
@@ -57,6 +61,7 @@ if (existingTag && !existingTag.isDraft) {
 run(process.execPath, ['--test', 'scripts/notarization.test.mjs']);
 const latest = JSON.parse(gh(['release', 'view', '--json', 'tagName']));
 assert.notEqual(latest.tagName, tag, 'Never replace an already published version.');
+if (/^v\d+\.\d+\.\d+$/.test(latest.tagName)) assert.ok(compareReleaseVersions(version, latest.tagName.slice(1)) > 0, 'A stable release must be newer than the current public version.');
 const key = process.env.GITTOGETHER_TAURI_SIGNING_KEY || join(homedir(), '.config/gittogether/release/tauri-updater.key');
 assert.ok(statSync(key).isFile() && !(statSync(key).mode & 0o077), 'Update signing key must remain private.');
 assert.equal(readFileSync(key + '.pub', 'utf8').trim(), json(join(root, 'docs/release-updater.json')).plugins.updater.pubkey);
@@ -90,7 +95,7 @@ let runId = existsSync(runFile) && json(runFile).commit === commit && json(runFi
 if (!runId) {
   const started = Date.now();
   const windowsRunTitle = `Windows release ${version} (${commit})`;
-  gh(['workflow', 'run', 'desktop-release-windows.yml', '--ref', 'main', '-f', `source_commit=${commit}`, '-f', `version=${version}`]);
+  gh(['workflow', 'run', 'desktop-release-windows.yml', '--ref', releaseTag || 'main', '-f', `source_commit=${commit}`, '-f', `version=${version}`]);
   for (let attempt = 0; attempt < 12 && !runId; attempt++) {
     await pause(5000);
     const runs = JSON.parse(gh(['run', 'list', '--workflow', 'desktop-release-windows.yml', '--event', 'workflow_dispatch', '--limit', '20', '--json', 'databaseId,displayTitle,createdAt']));
@@ -136,10 +141,10 @@ writeFileSync(join(destination, 'latest-mac.yml'), JSON.stringify({ version, fil
 writeFileSync(join(destination, 'changelog.json'), JSON.stringify([{ name: `GitTogether ${version}`, version, pub_date: new Date().toISOString(), notes: ['[New] 使用 GitHub Desktop 原版执行基础和 Material 界面。', '[Fixed] 恢复正式签名、公证发布以及旧版和新版自动更新。'] }], null, 2) + '\n');
 const assets = [...mac.assets.map(item => item.name), ...['ia32', 'x64'].flatMap(arch => json(join(destination, `package-win32-${arch}.json`)).assets.map(item => item.name)), ...legacyAssets.map(([, name]) => name + '.sig'), 'latest.json', 'latest-mac.yml', 'changelog.json'];
 const integrity = assets.map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }));
-writeFileSync(join(destination, 'release-integrity.json'), JSON.stringify({ version, commit, pipelineCommit: head, notarization: mac.notarization, windowsRun: runId, assets: integrity }, null, 2) + '\n');
+writeFileSync(join(destination, 'release-integrity.json'), JSON.stringify({ version, commit, sourceRef: releaseTag || 'refs/heads/main', pipelineCommit: head, notarization: mac.notarization, windowsRun: runId, assets: integrity }, null, 2) + '\n');
 writeFileSync(join(destination, 'SHA256SUMS'), integrity.map(item => `${item.sha256}  ${item.name}`).join('\n') + '\n');
 const notes = join(destination, 'release-notes.md');
-writeFileSync(notes, `GitTogether ${version} 采用 GitHub Desktop 原版 Git、授权、凭据和后台执行基础，保留 GitTogether Material 界面、Submit、Clear、Get Latest 和 Presence。\n\n0.33.0 可在设置中检查、下载并升级；保留旧加密配置，首次启动通过原版存储导入支持的账号和存在的本地目录。无法读取时显示错误并保留原配置。新版继续使用原版自动更新器。\n\nmacOS Apple Silicon 已由 Developer ID 签名、Apple 公证并附加凭证。Windows 提供 x86/x64，旧版升级安装器提供更新签名；Windows 未配置 Authenticode 证书。32 位 Windows 的 Git 可用，供应商未提供该架构的 Copilot/Codex AI 运行时。\n\n源码 main：${commit}。\n`);
+writeFileSync(notes, `GitTogether ${version} 采用 GitHub Desktop 原版 Git、授权、凭据和后台执行基础，保留 GitTogether Material 界面、Submit、Clear、Get Latest 和 Presence。\n\n0.33.0 可在设置中检查、下载并升级；保留旧加密配置，首次启动通过原版存储导入支持的账号和存在的本地目录。无法读取时显示错误并保留原配置。新版继续使用原版自动更新器。\n\nmacOS Apple Silicon 已由 Developer ID 签名、Apple 公证并附加凭证。Windows 提供 x86/x64，旧版升级安装器提供更新签名；Windows 未配置 Authenticode 证书。32 位 Windows 的 Git 可用，供应商未提供该架构的 Copilot/Codex AI 运行时。\n\n发布来源：${releaseTag || 'main'}（${commit}）。\n`);
 // Resume only our own unpublished draft, never overwrite a public release.
 const releases = JSON.parse(gh(['release', 'list', '--limit', '30', '--json', 'tagName,isDraft']));
 const existing = releases.find(item => item.tagName === tag);
@@ -159,10 +164,10 @@ const remoteAssets = JSON.parse(gh(['release', 'view', tag, '--json', 'assets'])
 for (const item of integrity) assert.ok(remoteAssets.some(asset => asset.name === item.name && asset.size === item.size), 'Draft asset missing or incomplete: ' + item.name);
 assert.equal(capture('git', ['status', '--porcelain']), '', 'Unrelated work appeared during release.');
 assert.equal(capture('git', ['rev-parse', 'HEAD']), head);
-assertSourceOnMain();
+assertSource();
 gh(['release', 'edit', tag, '--draft=false', '--latest']);
-// Publish the Windows update feeds and advance package metadata on the newest
-// main commit; the helper retries fast-forward races and verifies public bytes.
+// Publish the Windows feeds on the newest main commit. Tagged branch releases
+// leave main's source versions unchanged; the helper verifies public bytes.
 run(process.execPath, ['scripts/publish-release-metadata.mjs']);
 assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag);
 const publicFiles = [...integrity, ...['release-integrity.json', 'SHA256SUMS'].map(name => ({ name, size: statSync(join(destination, name)).size, sha256: hash(join(destination, name)) }))];

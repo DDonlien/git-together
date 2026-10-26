@@ -5,11 +5,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { downloadPublicAssets } from './release-downloads.mjs';
+import { assertReleaseSource } from './release-tag.mjs';
 
 const root = join(import.meta.dirname, '..');
 const repository = 'DDonlien/git-together';
 const version = process.env.GITTOGETHER_RELEASE_VERSION;
 const sourceCommit = process.env.GITTOGETHER_SOURCE_COMMIT;
+const releaseTag = process.env.GITTOGETHER_RELEASE_TAG;
 assert.match(version || '', /^\d+\.\d+\.\d+$/);
 assert.match(sourceCommit || '', /^[0-9a-f]{40}$/i);
 const tag = `v${version}`;
@@ -17,17 +19,16 @@ const destination = join(root, 'artifacts/releases', version);
 mkdirSync(destination, { recursive: true });
 const run = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, stdio: 'inherit', env: { ...process.env, GODEBUG: 'http2client=0' } });
 const capture = (cmd, args, cwd = root) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: { ...process.env, GODEBUG: 'http2client=0' } }).trim();
-const gh = args => capture('gh', [...args, '--repo', repository]);
+const gh = args => capture('gh', args[0] === 'api' ? args : [...args, '--repo', repository]);
 const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex');
-const assertSourceOnMain = () => {
-  run('git', ['fetch', 'origin', 'main', '--no-tags']);
-  run('git', ['merge-base', '--is-ancestor', sourceCommit, 'FETCH_HEAD']);
-};
+const assertSource = () => assertReleaseSource(root, sourceCommit, version, releaseTag);
+assertSource();
 
 const release = JSON.parse(gh(['api', `repos/${repository}/releases/tags/${tag}`]));
 assert.equal(release.draft, false);
 assert.equal(release.target_commitish, sourceCommit);
+assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag, 'Only the current stable release may update the public feeds.');
 const integrityPath = join(destination, 'release-integrity.json');
 if (!existsSync(integrityPath)) gh(['release', 'download', tag, '--pattern', 'release-integrity.json', '--dir', destination]);
 const integrity = json(integrityPath);
@@ -85,15 +86,17 @@ const publishMetadata = metadataRoot => {
     if (relative === 'macos/package-lock.json' && value.packages?.[''] && compareVersion(value.packages[''].version, version) <= 0) value.packages[''].version = version;
     writeFileSync(path, JSON.stringify(value, null, 2) + '\n');
   };
-  for (const relative of ['package.json', 'macos/package.json', 'desktop/app/package.json', 'macos/package-lock.json']) setJsonVersion(relative);
-  const manifest = join(metadataRoot, 'desktop/gittogether-presence/Cargo.toml');
-  let text = readFileSync(manifest, 'utf8');
-  text = text.replace(/(^\[package\][\s\S]*?^version = ")([^"]+)(")/m, (whole, prefix, current, suffix) => compareVersion(current, version) <= 0 ? prefix + version + suffix : whole);
-  writeFileSync(manifest, text);
-  const cargoLock = join(metadataRoot, 'desktop/gittogether-presence/Cargo.lock');
-  text = readFileSync(cargoLock, 'utf8');
-  text = text.replace(/(\[\[package\]\]\nname = "gittogether-presence"\nversion = ")([^"]+)(")/, (whole, prefix, current, suffix) => compareVersion(current, version) <= 0 ? prefix + version + suffix : whole);
-  writeFileSync(cargoLock, text);
+  if (!releaseTag) {
+    for (const relative of ['package.json', 'macos/package.json', 'desktop/app/package.json', 'macos/package-lock.json']) setJsonVersion(relative);
+    const manifest = join(metadataRoot, 'desktop/gittogether-presence/Cargo.toml');
+    let text = readFileSync(manifest, 'utf8');
+    text = text.replace(/(^\[package\][\s\S]*?^version = ")([^"]+)(")/m, (whole, prefix, current, suffix) => compareVersion(current, version) <= 0 ? prefix + version + suffix : whole);
+    writeFileSync(manifest, text);
+    const cargoLock = join(metadataRoot, 'desktop/gittogether-presence/Cargo.lock');
+    text = readFileSync(cargoLock, 'utf8');
+    text = text.replace(/(\[\[package\]\]\nname = "gittogether-presence"\nversion = ")([^"]+)(")/, (whole, prefix, current, suffix) => compareVersion(current, version) <= 0 ? prefix + version + suffix : whole);
+    writeFileSync(cargoLock, text);
+  }
   for (const [relative, content] of feedContents) {
     const path = join(metadataRoot, relative);
     mkdirSync(join(metadataRoot, 'updates', relative.split('/')[1]), { recursive: true });
@@ -106,12 +109,14 @@ const metadataRoot = join(metadataParent, 'checkout');
 let metadataPublished = false;
 try {
   for (let attempt = 0; attempt < 6 && !metadataPublished; attempt++) {
-    assertSourceOnMain();
+    assertSource();
+    assert.equal(JSON.parse(gh(['release', 'view', '--json', 'tagName'])).tagName, tag, 'The stable release changed before its update feeds were published.');
+    run('git', ['fetch', 'origin', 'main', '--no-tags']);
     const mainCommit = capture('git', ['rev-parse', 'FETCH_HEAD']);
     if (attempt === 0) run('git', ['worktree', 'add', '--detach', metadataRoot, mainCommit]);
     else run('git', ['reset', '--hard', mainCommit], metadataRoot);
     publishMetadata(metadataRoot);
-    run('git', ['add', '--', ...versionFiles, ...feedContents.keys()], metadataRoot);
+    run('git', ['add', '--', ...(releaseTag ? [] : versionFiles), ...feedContents.keys()], metadataRoot);
     const changed = capture('git', ['status', '--porcelain'], metadataRoot);
     if (changed) run('git', ['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', `chore(release): publish ${version} package metadata [skip ci]`], metadataRoot);
     const pushed = spawnSync('git', ['push', 'origin', 'HEAD:refs/heads/main'], { cwd: metadataRoot, encoding: 'utf8', env: { ...process.env, GODEBUG: 'http2client=0' } });
@@ -133,4 +138,4 @@ for (const [relative, content] of feedContents) {
     await new Promise(resolve => setTimeout(resolve, 15000));
   }
 }
-console.log(`Published Windows feeds and ${version} baseline metadata to main.`);
+console.log(`Published Windows feeds for ${tag} to main${releaseTag ? '' : ' with baseline version metadata'}.`);
