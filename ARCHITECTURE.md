@@ -20,6 +20,8 @@ Presence 使用现有账号/身份交换、控制协议与只读observer WebSock
 
 父目录匹配由展示适配层进行有限的文件系统发现，先检查 .git 文件/目录，最多向下六层，仅对还需展开的父目录计算4000个预算，不跟随符号链接、不扫描仓库内容。真实工作目录、远端和登记 worktree 通过原版 getRepositoryType/getRemotes/listWorktrees 核对，完整发现后才调用 Dispatcher.addRepositories/refreshRepository；批量匹配保持已有活动仓库，空活动仓库时选择首个结果启动原版生命周期。Catalog 从原版已保存仓库和只读远端缓存恢复账号归属，缓存随原版 remote 更新失效；不新增关联持久化或后台扫描器。SSH/HTTP端口只在展示身份比较中归一，原版执行始终保留实际远端、凭据和配置。
 
+工作目录读取、父目录匹配和目录选单共用 GitTogether 的 isCheckoutWorktree 筛选。Git 的 bare 存储条目没有 HEAD 字段，原版解析后 head 为空，因此不进入 checkout 登记或选择；尚无首次提交的普通目录具有全零 HEAD，仍保留。原版 Git 解析与执行保持原样，共享对象库及其实际 linked worktree 不因筛选被删除或改写。
+
 0.36.0按用户2026-10-18后续要求补充Gitea账号/仓库目录适配。这是明确恢复的main平台能力：独立模块只进行同源Gitea API GET和账号元数据持久化，没有Git执行器或定时工作器；令牌使用原版TokenStore及generic-git-auth。GitHub/企业版认证、标准Git、SSH、credential helper和后台调度仍保持上游。两个React展示层共享三标签类型目录和样式；原版Preferences只替换Accounts视图导入，原事件回调保持摘要校验。
 
 同次原生账号截图发现系统主题下两层界面可能明暗不同，现由原版Store同时提供已选主题与实际主题。私有桥在初始环境读取和后续主题变化时同步给主界面，界面不再独立猜测iframe的系统配色，也不在渲染期间读取旧DOM主题值。原版主题持久化、系统主题监听及执行回调不变。

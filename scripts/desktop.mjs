@@ -99,5 +99,5 @@ if (mode === 'setup') {
   }
 } else if (mode === 'test') {
   run('cargo', ['build', '--locked', '--manifest-path', 'desktop/gittogether-presence/Cargo.toml']);
-  run(node, ['--test', 'scripts/upstream-boundary.test.mjs', 'scripts/presence-storage.test.mjs', 'scripts/presence-visibility.test.mjs', 'scripts/commit-model.test.mjs', 'scripts/release-updates.test.mjs', 'scripts/remote-file-pages.test.mjs', 'scripts/sync-feedback.test.mjs']);
+  run(node, ['--test', 'scripts/upstream-boundary.test.mjs', 'scripts/presence-storage.test.mjs', 'scripts/presence-visibility.test.mjs', 'scripts/commit-model.test.mjs', 'scripts/release-updates.test.mjs', 'scripts/remote-file-pages.test.mjs', 'scripts/sync-feedback.test.mjs', 'scripts/worktree-entries.test.mjs']);
 } else throw new Error(`Unknown mode: ${mode}`);
