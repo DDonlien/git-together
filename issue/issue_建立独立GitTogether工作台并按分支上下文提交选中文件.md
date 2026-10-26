@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 多仓库与文件提交工作台。'
 原稳定 ID: '`x`、`R-01`、`R-02`、`R-02-file-row-state-inset`、`R-02-shared-file-design`、`R-02-submit-selection`、`R-02-submit-selection-collapse`、`R-02-submit-selection-collapse-test`、`R-02-push-feedback`、`R-03`、`RUN-01`、`RUN-01-remote-first`、`RUN-01-tauri-git-network`、`RUN-01-tauri-git-network-read`、`RUN-01-tauri-git-network-release`、`RUN-01-tauri-parity`、`RUN-01-tauri-parity-read`、`RUN-01-tauri-parity-release`、`RUN-01-tauri-rust`、`RUN-01-tauri-git-read`、`RUN-01-main-delivery`、`RUN-01-main-only`、`RUN-01-recent-delivery`、`RUN-01-update`、`RUN-01-submit-fix-release`、`RUN-01-update-diagnostics`、`RUN-01-update-quiesce`、`RUN-01-update-immediate`、`RUN-01-update-immediate-release`、`RUN-01-update-restart-proof`、`RUN-01-release-policy`、`RUN-01-notary-reuse`、`RUN-01-notary-reuse-recovery`、`RUN-01-recent-installed-check`、`RUN-01-windows-policy`、`RUN-01-windows-packaging`、`RUN-01-update-pipeline`、`RUN-01-update-test`、`RUN-01-update-release`、`RUN-01-update-errors`、`RUN-01-identity`、`RUN-01-identity-settings`、`RUN-01-identity-fork`、`RUN-01-identity-main`、`RUN-01-identity-test`、`RUN-01-identity-readme`、`RUN-01-identity-readme-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-26T15:32:13Z'
+updated-time: '2026-10-26T16:12:39Z'
 ---
 
 # Description
@@ -29,9 +29,9 @@ updated-time: '2026-10-26T15:32:13Z'
   - [x] \[RUN-01-update-progress-metrics-source] Tauri 更新回调接入已下载字节、总容量、百分比与字节每秒；设置卡片按实际数据展示，尚未报告的值保持未知，下载完成后保留最终容量与100%。
   - [x] \[RUN-01-update-progress-metrics-check] 执行相关 TypeScript 类型检查与 Rust Cargo 检查。
   - [ ] \[RUN-01-update-progress-metrics-acceptance] 在实际桌面包中确认更新下载时的容量、进度、速度刷新和完成状态。
-- [ ] \[RUN-01-tauri-only-runtime-2026-10-26] 当前桌面开发、构建、Windows打包、正式发布和应用内更新只使用 Tauri 2/Rust；旧 Electron/GitHub Desktop 源码仅作历史参考，不进入有效命令或安装包。
+- [x] \[RUN-01-tauri-only-runtime-2026-10-26] 当前桌面开发、构建、Windows打包、正式发布和应用内更新只使用 Tauri 2/Rust；旧 Electron/GitHub Desktop 源码仅作历史参考，不进入有效命令或安装包。
   - [x] 根目录命令、macOS package scripts、macOS/Windows发布工作流改为 Tauri 2；macOS活动依赖移除 Electron 工具，发布资产只保留 Tauri 更新清单与包。
-  - [ ] Tauri打包、三平台产物和更新器未在本轮构建或验收；已安装的0.37.0仍是旧Electron应用，未改动。
+  - [x] 0.38.7从a38e7a317e同源发布三平台Tauri包；签名、公证、公开清单及完整下载校验通过。用户安装版未操作，实际用户升级和界面验收另行记录。
 - [ ] \[RUN-01-update-network-interruption-2026-10-26] 调查设置页“网络连接已中断”；区分更新检查与大包下载，检查日志并记录证据边界。
   - [x] 0.37.0生产日志在北京时间21:32:12和21:47:11记下“Error checking for updates”及通用“网络连接已中断”，未包含HTTP状态、系统错误码、代理信息或底层错误链。
   - [x] 两次均发生在检查更新阶段，不能归因于461 MB安装包下载速度；稍后旧更新服务端点返回HTTP 200、耗时约2.52秒，说明检查时段之外可访问，不能反推当时原因。
@@ -189,3 +189,13 @@ GitHub v0.38.6 的 macOS ZIP 为461 MB；此前约89 KB/s的进程级采样通�
 ## 20261026-153213_Codex
 
 用户明确要求推送GitHub并交付Tauri正式更新。本轮产品清单、Cargo及锁文件统一为0.38.7；有效npm/CI/发布命令只走Tauri/Rust。修复容量单位换算、未知容量展示、停流后速度归零，并将更新检查30秒与下载15分钟时限分开。恢复旧合并遗漏的Rust读写任务保护声明，现可编译。21项当前更新/发布测试、13项Rust隔离测试、TypeScript、Cargo --locked及前端生产构建均通过。旧Electron后台测试不作为Tauri验收。正在提交/推送main并启动macOS Apple Silicon、Windows x86/x64同源正式发布，尚未宣称安装包或公开更新源已完成。其他任务的Ignore相关修改留在原工作区。
+
+## 20261026-161121_Codex
+
+已将a38e7a317eeb0d4112b0c3ca21f2b7ea9a6decec推送main及v0.38.7标签，公开Latest现为[0.38.7](https://github.com/DDonlien/git-together/releases/tag/v0.38.7)。有效产品清单、Cargo、锁文件及实际App版本均一致。正式Release仅8项Tauri安装/更新资产，无旧latest-mac.yml、Squirrel/nupkg及Electron运行时。
+
+正式macOS ZIP为6957136字节，SHA-256为02a2766bb594c73f80b5abcf0cbeff2bceb61b8fe6d4707a8a4f7e07803c8310；签名tar为6957009字节，Windows x86/x64安装包分别为5966703/6372370字节。[源码验证](https://github.com/DDonlien/git-together/actions/runs/40350341899)及[Windows双架构原生构建、实际安装和启动](https://github.com/DDonlien/git-together/actions/runs/40350444128)通过。21项更新/发布测试、13项Rust隔离测试及类型/Cargo/生产构建通过。
+
+本机候选macOS包先已完成签名公证；Actions产物回传本机过慢，改由[GitHub Apple Silicon发布任务](https://github.com/DDonlien/git-together/actions/runs/40353529243)完成同源正式发布。云端任务完成签名、Apple公证及公开发布后，匿名GitHub API元数据返回HTTP403，首轮状态因此失败；未覆盖已公开资产。随后独立从无Authorization的公开URL完整下载8项资产，核对大小及SHA-256，以内置公钥验证三平台签名及签名版本；公开latest.json与tag清单一致、Atom包含新tag，ZIP与签名tar逐文件内容一致。公开App实际0.38.7、单一arm64 Rust主程序、无Electron，Developer ID/deep-strict及附加公证凭证均验证通过。证据在项目容器_builds/public-verify-0.38.7/verification.json，publicUpdateVerified=true。本机候选与正式云端包摘要分别记录，未混用签名。
+
+发布校验修复b9942b541f已推送main：来源及资产摘要使用维护者API读取，实际客户端更新清单、签名和完整包仍无凭据下载核对，消除匿名API403造成的误报；修复后的类型检查及21项测试通过。未启动、替换或操作用户已安装应用，实际用户迁移与下载界面未冒称验收。其他Ignore相关未提交改动继续留在原工作区。
