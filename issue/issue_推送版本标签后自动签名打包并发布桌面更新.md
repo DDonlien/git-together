@@ -59,3 +59,11 @@ tags:
 将上游证书准备限制于实际启用上游打包时；GitTogether的独立正式打包继续使用工作流已导入的证书并严格签名、公证。已登记精确来源补丁，实际条件节点在16种环境组合的执行检查、3895份来源校验、7项后台边界检查与diff检查通过。保留失败标签来源不移动，修复后使用新标签v0.38.3继续真实发布。并行忽略文件改动未纳入。
 
 [执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
+
+## 20261026-162528_Codex_GPT-6.1-Sol
+
+修复`ec941da92cd8055abe04a2750649e2125d689b35`的macOS与Windows常规云端检查、测试与构建均通过；标签`v0.38.3`触发[发布40290272166](https://github.com/DDonlien/git-together/actions/runs/40290272166)。真实Developer ID签名、严格校验、Apple公证Accepted（860000c4-ea9d-471d-9f34-cd643b9dfec2）、staple/validate、Gatekeeper和ZIP解压后校验均通过，macOS ZIP与tar已在Runner生成。隔离原生后台12组检查成功，但提交说明检查仍假设打开弹窗就自动生成，等待正文得到空值而停止，尚未触发Windows打包或公开Release。
+
+当前界面和既有commit-draft-store回归明确规定打开草稿不自动请求模型。检查脚本改为点击现有“AI 生成说明”、等待实际生成状态后编辑，退出按钮使用当前“关闭”；保留手工草稿、真实HEAD/index/远端不变等原断言，不修改应用行为。7项草稿模型回归、脚本语法与diff检查通过。使用新标签v0.38.4继续完整发布验证。
+
+[执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)

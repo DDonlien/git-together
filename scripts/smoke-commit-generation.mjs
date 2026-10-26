@@ -108,6 +108,8 @@ try {
   const frame = page.frameLocator('#gittogether-ui');
   await frame.locator('[data-action-name="Submit"] button').first().click();
   const summary = frame.getByRole('textbox', { name: /^Summary：/ }).first(); await summary.waitFor();
+  await frame.getByRole('button', { name: 'AI 生成说明', exact: true }).click();
+  await frame.getByText('正在生成提交说明…', { exact: true }).waitFor({ state: 'visible' });
   await summary.fill('用户手工草稿');
   const description = frame.getByRole('textbox', { name: /^Description：/ }).first();
   for (let i = 0; i < 100 && await description.inputValue() !== '保留可编辑的提交草稿。'; i++) await delay(100);
@@ -119,7 +121,7 @@ try {
   assert.equal(await description.inputValue(), '用户可编辑正文');
   assert.equal(await frame.getByRole('button', { name: '提交', exact: true }).isEnabled(), true);
   await page.screenshot({ path: join(output, 'editable-submit.png') });
-  await frame.getByRole('button', { name: '取消', exact: true }).last().click();
+  await frame.getByRole('button', { name: '关闭', exact: true }).last().click();
   assert.deepEqual(snapshot(repo), before); assert.deepEqual(snapshot(feature), beforeFeature);
   assert.equal(git(['rev-parse', 'main'], join(fixture, 'remote.git')), before.head);
   checks.push('The real Submit form accepts edits during generation, preserves manual drafts and closes without commit, push or staging changes.');
