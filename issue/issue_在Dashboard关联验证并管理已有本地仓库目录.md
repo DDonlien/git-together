@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-04`、`IMPORT-04-worktrees`、`IMPORT-04-directory-display`、`IMPORT-04-directory-display-test`、`IMPORT-04-worktrees-test`、`IMPORT-04-account-batch`、`IMPORT-04-account-batch-feedback`、`IMPORT-04-account-batch-performance`、`IMPORT-04-account-batch-test`、`IMPORT-04-inline`、`IMPORT-04-path-hover`、`IMPORT-04-association-refresh`、`IMPORT-04-stale-worktrees`、`IMPORT-04-stale-branch-notices`、`IMPORT-04-open-folder`、`IMPORT-04-discovery-boundary`、`IMPORT-04-discovery-boundary-release`、`IMPORT-04-picker`、`IMPORT-04-picker-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-26T15:33:08+08:00'
+updated-time: '2026-10-26T15:47:02+08:00'
 ---
 
 # Description
@@ -106,3 +106,13 @@ updated-time: '2026-10-26T15:33:08+08:00'
 - 未进行 GUI、安装版交互或原生构建；原截图场景的用户验收保持未完成。
 
 [本次修复对话](codex://threads/01a16468-eba5-7510-b776-87b458eef9d2)
+
+## 20261026-154702_Codex_GPT-6.1-Sol
+
+用户要求“推送所有本地修改”。第一次推送因远端 main 已新增发布流程提交而被拒绝；检查确认本地两项提交与远端一项提交分叉，唯一冲突位于 scripts/desktop.mjs 的测试入口列表。用户随后明确回复“允许”，授权合并远端 main、保留双方历史后推送。
+
+同步保留本地业务修复 e71c227482b6e36f534c28aa241df56b47aa43a1、记录提交 c354262b22，以及远端发布流程来源 b302ed1cb2e3d0d04c59c0aba233ca3b0350304a。冲突以同时保留 release-tag.test.mjs 和 worktree-entries.test.mjs 解决；其余远端变更按原提交保留。七项相关回归全部通过，合并脚本语法与暂存差异检查通过；没有执行完整构建、安装版交互或发布。
+
+本条随合并提交一并推送至 origin/main，最终远端提交号回读结果记录在本次对话中。
+
+[本次合并与推送对话](codex://threads/01a16468-eba5-7510-b776-87b458eef9d2)

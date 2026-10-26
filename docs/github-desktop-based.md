@@ -44,7 +44,9 @@ Presence的系统存储由宿主通过原版TokenStore管理，开发版及不�
 
 `npm run package:mac` 与 `npm run release` 表示完整正式交付：从干净且已推送的main构建production客户端，macOS使用正式bundle身份和既有Developer ID、公证profile；Windows原生构建x86/x64并验证实际安装后的凭据及Git执行。旧版Tauri更新保留签名的tar/NSIS及latest.json，新版沿用原版Squirrel执行器；macOS使用公开Electron更新服务，Windows从main上的updates目录分别提供两种架构的RELEASES清单，载荷仍来自同一正式Release。资产齐备并通过隔离升级后才公开Release，随后发布两份轻量清单并完整回读。开发包使用显式`package:mac:dev`，不冒充正式交付。
 
-`.github/workflows/desktop-auto-release.yml` 在每次main推送后运行完整发布流程，使用GitHub托管的`macos-15` Apple Silicon runner签名和公证macOS包，并派发Windows x86/x64构建。发布任务串行运行，等待队列最多100个；版本号按根目录版本和已有Release自动递增patch。成功发布后，工作流把各产品版本文件与Windows更新清单作为`[skip ci]`元数据提交回main，不会再次触发发布。每次推送都打正式版本，因此日常试验或未准备公开的改动应留在分支。
+`.github/workflows/desktop-auto-release.yml` 仅在推送 `vMAJOR.MINOR.PATCH` 版本标签时运行完整正式发布，例如 `v0.38.2`。可以在任一包含此工作流的分支提交上打标签，无需先合入main；先提交并推送准备发布的源码，再执行 `git tag -a v0.38.2 -m "GitTogether 0.38.2"` 和 `git push origin refs/tags/v0.38.2`。普通分支推送不会发布。版本号由标签指定，不必为发布改写源文件中的版本；构建、安装包和更新签名统一使用该版本。标签必须比现有正式Release更新，已发布版本不可覆盖；附注标签和轻量标签均解析到精确源码提交，构建后再次核对远端标签，标签被移动则停止。
+
+工作流使用GitHub托管的`macos-15` Apple Silicon runner签名和公证macOS包，并在同一标签上的Windows工作流构建x86/x64。正式发布串行执行，资产与隔离升级检查通过后公开Release，再仅将Windows更新清单提交到main的固定更新路径；不会合并发布分支或改变main的产品源码版本。失败可在Actions重跑同一标签任务，未公开草稿支持续传。要发布新的源码必须创建新版本标签，不移动已经公开的标签。
 
 启用正式发布前，需要在仓库Settings → Secrets and variables → Actions中设置`GITTOGETHER_MACOS_CERTIFICATE_P12_BASE64`、`GITTOGETHER_MACOS_CERTIFICATE_PASSWORD`、`GITTOGETHER_APPLE_API_KEY_ID`、`GITTOGETHER_APPLE_API_ISSUER_ID`、`GITTOGETHER_APPLE_API_PRIVATE_KEY_P8`和`GITTOGETHER_TAURI_SIGNING_KEY`。第一项是Developer ID身份的base64编码P12文件，第二项是P12密码；Apple三项来自App Store Connect API key；最后一项是与`docs/release-updater.json`公钥对应的Tauri updater私钥。Updater私钥可由发布配置预置；其余值必须由仓库管理员提供，不能写入仓库文件。
 

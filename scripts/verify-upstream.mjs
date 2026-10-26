@@ -25,6 +25,14 @@ function check(path) {
 }
 check('app/src');
 const approvedPatches = new Set([
+  "README.md",
+  "docs/contributing/linting.md",
+  "docs/contributing/setup-linux.md",
+  "docs/contributing/setup-macos.md",
+  "docs/contributing/setup-windows.md",
+  "docs/contributing/setup.md",
+  "docs/process/usage-data.md",
+  "app/static/common/gitignore/README.md",
   "script/dist-info.ts",
   "script/build.ts",
   "script/copilot.ts",

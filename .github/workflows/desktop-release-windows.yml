@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_commit:
-        description: Exact pushed main commit
+        description: Exact commit selected by the release tag
         required: true
       version:
         description: Product version
