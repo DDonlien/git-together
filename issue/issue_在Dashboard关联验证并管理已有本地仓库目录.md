@@ -10,13 +10,17 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-04`、`IMPORT-04-worktrees`、`IMPORT-04-directory-display`、`IMPORT-04-directory-display-test`、`IMPORT-04-worktrees-test`、`IMPORT-04-account-batch`、`IMPORT-04-account-batch-feedback`、`IMPORT-04-account-batch-performance`、`IMPORT-04-account-batch-test`、`IMPORT-04-inline`、`IMPORT-04-path-hover`、`IMPORT-04-association-refresh`、`IMPORT-04-stale-worktrees`、`IMPORT-04-stale-branch-notices`、`IMPORT-04-open-folder`、`IMPORT-04-discovery-boundary`、`IMPORT-04-discovery-boundary-release`、`IMPORT-04-picker`、`IMPORT-04-picker-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-24T16:22:34+00:00'
+updated-time: '2026-10-26T15:47:02+08:00'
 ---
 
 # Description
 
 ## 当前需求与范围
 - [x] \[IMPORT-04] Dashboard 逐仓库通过 popup 关联已有本地目录，验证 Git 仓库与远端身份；可修改/移除关联，移除仅解除应用关联，不删除目录或文件。
+  - [ ] 修正共享裸对象库被当作工作目录的问题：读取关联目录、匹配父目录和展示工作目录选单时，排除 Git 列表中的 bare 存储条目，保留实际 linked worktree、普通主目录和空仓库；现有共享对象库继续供工作目录使用。
+    - [x] 在 GitTogether 适配边界统一识别实际 checkout，沿用原版 GitHub Desktop 的 Git 解析和执行。
+    - [x] 通过针对性无界面检查，覆盖 bare 对象库与 linked worktree、普通主目录、空仓库及失效工作目录；四项真实临时 Git 回归通过，完整类型检查与上游基线检查的限制见本次 Comment。
+    - [ ] 用户使用包含修正的客户端复核原截图中的仓库能够正常读取，且工作目录选单不显示内部对象库。
   - [x] \[IMPORT-04-worktrees] 仓库保留本地目录入口及尚未关联、部分关联、完全关联三态；每个真实分支单独显示和配置自己的worktree目录。选择父目录时，有界扫描实际子仓库及Git worktree，按已保存远端身份与真实分支匹配，批量原子关联；不凭文件夹名猜测、不穿越符号链接、不创建/切换/删除Git目录。兼容既有单目录记录与加密存储，读取所有已关联工作目录，失败/缺失明确呈现，不以远端分支或fixture冒充已关联。0.10.0已实现生产服务与UI接入；系统选择器和真实用户目录验收另列。
     - [x] \[IMPORT-04-directory-display] 仓库行根据本仓库已识别的真实工作目录显示路径：默认FOLDER/project-name/project-name_branch-name结构显示project-name容器，即使只有一个工作目录也保留两层显示；单个非默认结构显示工作目录自身；多个工作目录分散在混有其他仓库的目录下时显示这些工作目录的最小公共父目录。分支始终显示真实工作目录，显示范围不受搜索或隐藏分支影响；保留原选择范围和关联记录，不移动已有目录。0.32.1合并源码实现并通过隔离验证，已推送main；本次未更新安装版。
       - [x] \[IMPORT-04-directory-display-test] 20项相关客户端回归通过，覆盖Windows/macOS默认结构、单目录、重复路径、多个容器下的公共父目录、不同驱动器/UNC share无公共父目录、旧单目录记录和健康提示优先级。生产Dashboard隔离页面确认clash-config显示自身、默认结构显示项目层、mixed显示公共父目录；键盘搜索worktree-3后仅余该工作目录，仓库仍显示D:\FOLDER。分支和提示显示真实路径，原关联输入未改；合成账号页面不替代用户目录或安装版验收。
@@ -85,3 +89,30 @@ updated-time: '2026-10-24T16:22:34+00:00'
 本次执行环境未提供具体模型标识，未补造 Model-Detail。
 
 [本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)
+
+## 20261026-153308_Codex_GPT-6.1-Sol
+
+用户请求：“修改并提交”。本次承接截图中的内部对象库报错，以及用户对六层自动匹配流程的追问；起始分支 main，起始提交 ecbe70bcf8。此前只读 Git 结果已确认，共享 bare 对象库与实际 linked worktree 同时出现在 worktree 列表中。原版解析没有单独保留 bare 标记，而 GitTogether 随后把非 prunable 的全部条目交给普通仓库登记，导致内部对象库触发“isn't a Git repository”错误。
+
+新增 GitTogether 共用筛选 isCheckoutWorktree，按原版解析结果中缺失的 HEAD 字段排除 bare 存储，并继续排除 prunable 条目。工作目录读取、父目录匹配和目录选单共用该筛选；全零 HEAD 的空仓库、真实主目录及 linked worktree 保留。原版 GitHub Desktop 的 Git 解析、数据模型、执行和来源锁均未修改；共享对象库继续保留。
+
+业务修复提交：e71c227482b6e36f534c28aa241df56b47aa43a1（fix: [IMPORT-04] exclude bare stores from working directories）。此次只创建本地提交；未推送、打包或操作用户已安装客户端。任务整体保留待用户验收状态。
+
+检查结果：
+- scripts/worktree-entries.test.mjs 的四项真实临时 Git 回归全部通过：bare 与 linked worktree、无 checkout 的 bare 库、普通及 detached 目录与 prunable 条目、尚无首次提交的空仓库。共享对象库仍可读，工作目录 HEAD 和 Git 状态保持。
+- 四个修改的 TypeScript / TSX 文件通过 esbuild 语法转译；scripts/desktop.mjs 通过 Node 语法检查，暂存差异通过 git diff --check。新回归已加入既有根测试入口。
+- scripts/upstream-boundary.test.mjs 为 4/7 通过、3 项失败；npm run verify:upstream 失败。当前 Windows 工作副本与来源锁有既有差异：1857 份文件原始摘要一致，2030 份仅在 CRLF 转为 LF 后一致，另有 8 份已提交的上游说明文档偏离锁摘要。这个内存对照只用于解释失败，未改写这些文件或放宽正式校验。
+- 独立文件类型检查因导入原版完整依赖及缺少项目全局配置未通过；使用 Desktop 项目配置再次检查，报告 TS2688、缺少 Node 类型库。当前 desktop/node_modules 与 desktop/app/node_modules 未安装，因此完整类型检查未通过；语法转译不替代类型检查。
+- 未进行 GUI、安装版交互或原生构建；原截图场景的用户验收保持未完成。
+
+[本次修复对话](codex://threads/01a16468-eba5-7510-b776-87b458eef9d2)
+
+## 20261026-154702_Codex_GPT-6.1-Sol
+
+用户要求“推送所有本地修改”。第一次推送因远端 main 已新增发布流程提交而被拒绝；检查确认本地两项提交与远端一项提交分叉，唯一冲突位于 scripts/desktop.mjs 的测试入口列表。用户随后明确回复“允许”，授权合并远端 main、保留双方历史后推送。
+
+同步保留本地业务修复 e71c227482b6e36f534c28aa241df56b47aa43a1、记录提交 c354262b22，以及远端发布流程来源 b302ed1cb2e3d0d04c59c0aba233ca3b0350304a。冲突以同时保留 release-tag.test.mjs 和 worktree-entries.test.mjs 解决；其余远端变更按原提交保留。七项相关回归全部通过，合并脚本语法与暂存差异检查通过；没有执行完整构建、安装版交互或发布。
+
+本条随合并提交一并推送至 origin/main，最终远端提交号回读结果记录在本次对话中。
+
+[本次合并与推送对话](codex://threads/01a16468-eba5-7510-b776-87b458eef9d2)

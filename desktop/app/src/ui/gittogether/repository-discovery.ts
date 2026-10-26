@@ -4,6 +4,7 @@ import { pathToFileURL } from 'url'
 import { Repository } from '../../models/repository'
 import { getRemotes, getRepositoryType, listWorktrees } from '../../lib/git'
 import type { RemoteRepository } from '../../../../../macos/src/import-model'
+import { isCheckoutWorktree } from './worktree'
 
 /** Transport ports and credentials do not identify a repository in the UI. */
 export function repositoryIdentity(remote: string): string | null {
@@ -72,7 +73,7 @@ export async function discoverRepositories(rootPath: string, targets: ReadonlyAr
       if (!marker.isDirectory() && !marker.isFile()) continue
       if (!(await inspect(path)).length) continue
       for (const tree of await listWorktrees(path)) {
-        if (tree.isPrunable || branch !== undefined && tree.branch !== `refs/heads/${branch}`) continue
+        if (!isCheckoutWorktree(tree) || branch !== undefined && tree.branch !== `refs/heads/${branch}`) continue
         const relative = Path.relative(root, tree.path)
         if (relative === '..' || relative.startsWith('..' + Path.sep) || Path.isAbsolute(relative)) continue
         let parent = root

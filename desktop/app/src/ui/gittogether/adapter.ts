@@ -32,6 +32,7 @@ import { giteaAccounts } from './gitea-accounts'
 import { discoverRepositories, repositoryIdentity, repositoryURL } from './repository-discovery'
 import { CommitMessageGenerator } from './commit-message-generator'
 import { PlatformFetchGate } from './platform-fetch'
+import { isCheckoutWorktree } from './worktree'
 
 export const instanceId = randomUUID()
 export const productVersion = __APP_VERSION__
@@ -358,7 +359,7 @@ export class DesktopAdapter {
     const worktrees = await listWorktrees(first)
     const tasks: RepositoryTask[] = []
     const commits = new Map<string, ReturnType<typeof commitDTO>>()
-    for (const w of worktrees.filter(w => !w.isPrunable)) {
+    for (const w of worktrees.filter(isCheckoutWorktree)) {
       // Desktop registers and maintains each worktree using the upstream store.
       let repo = this.repositories().find(r => r.path === w.path)
       if (!repo) repo = (await this.dispatcher.addRepositories([w.path]))[0]
