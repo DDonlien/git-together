@@ -1,10 +1,11 @@
 ---
 title: 推送版本标签后自动签名打包并发布桌面更新
 type: CI
-status: in-progress
+status: done
 importance: p0
 emergency: p1
 created-time: 2026-10-26
+recorded-version: 0.38.6
 tags:
   - release
   - github-actions
@@ -22,7 +23,7 @@ tags:
 - [x] 必要静态检查与标签来源回归通过：3项标签回归、2份YAML解析、发布脚本语法、3895份上游来源文件校验与diff空白检查。
 - [x] 仓库Actions六项凭据已齐备并按名称回读确认；API私钥已验证可读取既有Accepted公证任务，云端P12导入、Developer ID身份与公证凭据验证均通过。
 - [x] 发布配置提交并推送：`b302ed1cb2e3d0d04c59c0aba233ca3b0350304a`；对应macOS与Windows云端来源/类型/测试/构建均通过。
-- [ ] 真实标签触发、签名公证、三平台发布与公共更新回读通过。
+- [x] 真实标签`v0.38.6`触发、签名公证、三平台发布与公共更新回读通过；完整云端发布任务成功。
 
 不纳入当前工作区其他任务的忽略文件功能改动，不将实验分支自行合并到main；不操作用户安装版。
 
@@ -89,5 +90,15 @@ v0.38.5首次发布在Apple公证Accepted后发生CloudKit网络断线（stapler
 发布停在新建草稿后的列表回读：草稿424082856已由github-actions[bot]创建、目标提交ced10510952f40ca4c2fb7dcc79211c024ef05cf、零资产且未公开，但即时列表中未定位到。改为由gh release view取得该标签草稿的唯一API URL，直接按ID读取，并核对draft、tag和来源提交；实际新代码已对GitHub现有草稿回读成功，同时验证拒绝正式版本、错误标签和错误提交。语法与diff检查通过。新标签v0.38.6继续完整发布。
 
 时间勘误：前一条“20261026-171000”的本地升级记录实际写于17:07:26，标题时间手误；历史正文和检查结果保留。
+
+[执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
+
+## 20261026-185440_Codex_GPT-6.1-Sol
+
+已完整跑通真实标签发布：[v0.38.6](https://github.com/DDonlien/git-together/releases/tag/v0.38.6)，源码提交929ac69a24492686f50df80f8bfac129a6b6a4b4。[主发布任务40304715739](https://github.com/DDonlien/git-together/actions/runs/40304715739)、[Windows双架构40306699195](https://github.com/DDonlien/git-together/actions/runs/40306699195)和同源码常规验证40304697629均成功。macOS Developer ID严格签名、公证Accepted（011fd723-9636-4570-9a63-8837f362cb4b）、staple/validate、Gatekeeper、归档回读及隔离原生检查通过；Windows x86/x64真实打包、安装、加密存储、原版Git及更新配置检查均通过。Windows未配置Authenticode，旧更新格式的更新签名已校验。
+
+云端在公开前完成0.33.0→0.38.6签名升级、Squirrel替换重启、档案保留和生产更新桥检查；公开后再次通过真实公共latest.json升级。18项发布资产完整下载、大小/SHA-256、更新签名、latest、Atom及公共更新回读全部成功，10:51:40 UTC输出“Published and verified”。另从公开端独立核对18项资产元数据/摘要和SHA256SUMS一致、三项旧版更新平台齐备；Windows两个RELEASES与macOS原0.33.0更新地址均已返回0.38.6。Electron公共更新服务等待其缓存刷新后才通过，没有将仍返回0.37.0时冒称发布验收完成。
+
+更新清单由GitHub自动写回main，仅两文件，提交9a4a3fb558de0288e71008a90e10ad450a1a6650已快进同步。本任务失败流程留下的空v0.38.5草稿已删除，标签、提交与Actions失败记录保留。工作区并行忽略文件修改始终未收入本次提交或发布；未合并实验分支、创建新branch/worktree或操作用户安装版。发布说明已将示例改为下一个未使用版本并强调替换示例版本号。
 
 [执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
