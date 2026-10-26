@@ -9,6 +9,19 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as pause } from 'node:timers/promises';
 import { createRequire } from 'node:module';
+import { once } from 'node:events';
+
+async function waitForFixtureExit(pid, milliseconds = 10000) {
+  const deadline = Date.now() + milliseconds;
+  while (Date.now() < deadline) {
+    try { process.kill(pid, 0) } catch (error) {
+      if (error.code === 'ESRCH') return true;
+      throw error;
+    }
+    await pause(100);
+  }
+  return false;
+}
 
 const root = resolve(import.meta.dirname, '..');
 const version = process.env.GITTOGETHER_RELEASE_VERSION || JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
@@ -40,7 +53,7 @@ const server = createServer((request, response) => {
 });
 await new Promise(done => server.listen(0, '127.0.0.1', done));
 const origin = `http://127.0.0.1:${server.address().port}`;
-let child;
+let child, restartedPid;
 try {
   const cached = join(root, 'artifacts/updates-test'); await mkdir(cached, { recursive: true });
   const oldZip = join(cached, 'GitTogether-0.33.0-macOS-arm64.zip');
@@ -74,7 +87,7 @@ try {
       const setup = `const {app,autoUpdater}=require('electron'); const fs=require('node:fs'); app.setPath('userData',${JSON.stringify(profile)}); app.setPath('sessionData',${JSON.stringify(profile)});\n`;
       const content = app === old
         ? setup + `app.whenReady().then(()=>{ autoUpdater.on('error', e=>{fs.writeFileSync(${JSON.stringify(join(fixture, 'failure.txt'))},e.message);app.exit(1)}); autoUpdater.on('update-downloaded',()=>autoUpdater.quitAndInstall()); autoUpdater.setFeedURL({url:${JSON.stringify(origin + '/squirrel')}}); autoUpdater.checkForUpdates(); });`
-        : setup + `app.whenReady().then(()=>{fs.writeFileSync(${JSON.stringify(join(fixture, 'desktop-result.json'))},JSON.stringify({version:app.getVersion(),profile:app.getPath('userData')}));setTimeout(()=>app.exit(0),2000)}); require('./main.js');`;
+        : setup + `app.whenReady().then(()=>{fs.writeFileSync(${JSON.stringify(join(fixture, 'desktop-result.json'))},JSON.stringify({version:app.getVersion(),profile:app.getPath('userData'),pid:process.pid}));setTimeout(()=>app.exit(0),2000)}); require('./main.js');`;
       await writeFile(entry, content);
       await run('codesign', ['--force', '--sign', report.signature, '--options', 'runtime', '--timestamp', '--entitlements', join(root, 'desktop/script/entitlements.plist'), app], { timeout: 120000 });
       await run('codesign', ['--verify', '--deep', '--strict', app]);
@@ -89,7 +102,11 @@ try {
       await pause(1000);
     }
     assert.ok(result, 'Squirrel did not restart the signed fixture: ' + output.slice(-4000));
+    assert.ok(Number.isSafeInteger(result.pid) && result.pid > 0);
+    restartedPid = result.pid;
     assert.equal(result.version, version); assert.equal(result.profile, profile);
+    assert.ok(await waitForFixtureExit(restartedPid), 'The restarted fixture did not release its private profile.');
+    restartedPid = undefined;
   }
   // Launch the result installed by the 0.33 updater with a private, caller-selected profile.
   const require = createRequire(join(root, 'desktop/package.json'));
@@ -113,9 +130,25 @@ try {
   const result = { ...legacyResult, signedDesktopUpdate: !process.argv.includes('--public'), profilePreserved: true, productionBridge: true, publicFeed: process.argv.includes('--public') };
   await writeFile(join(destination, process.argv.includes('--public') ? 'public-upgrade-validation.json' : 'native-upgrade-validation.json'), JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result));
+} catch (error) {
+  console.error('Upgrade validation failed before fixture cleanup:', error);
+  throw error;
 } finally {
-  if (child && child.exitCode === null) child.kill('SIGTERM');
+  if (restartedPid) {
+    try { process.kill(restartedPid, 'SIGTERM') } catch (error) { if (error.code !== 'ESRCH') throw error }
+    if (!await waitForFixtureExit(restartedPid, 5000)) {
+      try { process.kill(restartedPid, 'SIGKILL') } catch (error) { if (error.code !== 'ESRCH') throw error }
+      assert.ok(await waitForFixtureExit(restartedPid), 'The private update fixture could not be stopped.');
+    }
+  }
+  if (child && child.exitCode === null && child.signalCode === null) {
+    const closed = once(child, 'close');
+    child.kill('SIGTERM');
+    const force = setTimeout(() => child.kill('SIGKILL'), 5000);
+    try { await closed } finally { clearTimeout(force) }
+  }
+  server.closeAllConnections();
   await new Promise(done => server.close(done));
-  await rm(join(homedir(), 'Library/Caches', identifier + '.ShipIt'), { recursive: true, force: true });
-  await rm(fixture, { recursive: true, force: true });
+  await rm(join(homedir(), 'Library/Caches', identifier + '.ShipIt'), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  await rm(fixture, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
