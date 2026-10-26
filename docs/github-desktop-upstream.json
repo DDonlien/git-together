@@ -4181,8 +4181,8 @@
       "reason": "Build architecture configuration adds supported Electron and dugite ia32 target"
     },
     "script/build.ts": {
-      "sha256": "d8c99e85fd0417bba94388a5f87bf4597788de809955ef8fe35a0cdd8b8cff79",
-      "reason": "Build configuration locates bundled ia32 Git credential helper"
+      "sha256": "2976129627b24913ac482cffae35a18bf02ad7d8141762577fe846232e323ac3",
+      "reason": "Build configuration locates bundled ia32 Git credential helper and leaves keychain setup to GitTogether packaging when upstream packaging is skipped."
     },
     "script/copilot.ts": {
       "sha256": "4bd7f8b60863a298efa7512c0b60041e26f127d9acc4f14148f8c7d9c418823c",

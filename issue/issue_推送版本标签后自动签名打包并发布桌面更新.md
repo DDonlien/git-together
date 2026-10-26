@@ -20,7 +20,7 @@ tags:
 - [x] 标签发布只在main写入固定Windows更新清单，不合并发布分支或改写main源码版本。
 - [x] 查明旧Actions在准备依赖后失败：八份上游Markdown链接的已有格式化差异未登记来源校验；保留原上游摘要并增加精确文档补丁摘要。
 - [x] 必要静态检查与标签来源回归通过：3项标签回归、2份YAML解析、发布脚本语法、3895份上游来源文件校验与diff空白检查。
-- [x] 仓库Actions六项凭据已齐备并按名称回读确认；API私钥已验证可读取既有Accepted公证任务。P12导入与云端签名结果将在真实标签发布中验证。
+- [x] 仓库Actions六项凭据已齐备并按名称回读确认；API私钥已验证可读取既有Accepted公证任务，云端P12导入、Developer ID身份与公证凭据验证均通过。
 - [x] 发布配置提交并推送：`b302ed1cb2e3d0d04c59c0aba233ca3b0350304a`；对应macOS与Windows云端来源/类型/测试/构建均通过。
 - [ ] 真实标签触发、签名公证、三平台发布与公共更新回读通过。
 
@@ -49,5 +49,13 @@ tags:
 发布触发与来源校验提交`b302ed1cb2e3d0d04c59c0aba233ca3b0350304a`已推送main，云端验证[40286264748](https://github.com/DDonlien/git-together/actions/runs/40286264748)的macOS与Windows来源检查、类型检查、测试和构建均成功。Edge中已保存Apple Key ID、Issuer ID和私钥，新增开发者权限密钥可读取既有0.37.0的Accepted公证记录；P12及导出密码的GitHub保存仍待本人完成。
 
 进一步核对发现旧版本覆盖没有进入Desktop的构建常量、Material版本比对与最终运行时package.json，已补齐同一标签版本在这些位置的传递。保留源码版本供普通开发使用，不修改标签源文件。版本覆盖与更新器回归8项通过、标签来源3项通过、前后端TypeScript通过、3895份来源文件和90处精确补丁校验通过。当前共享adapter中的忽略文件改动仅保留在工作区，提交只包含版本常量这一处修改。
+
+[执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
+
+## 20261026-160822_Codex_GPT-6.1-Sol
+
+真实标签`v0.38.2`指向`7ccffa403b57f630373f77bc3930bbdb78ca3ad9`，已成功触发[云端发布40289155778](https://github.com/DDonlien/git-together/actions/runs/40289155778)。六项凭据检查、P12导入、Developer ID身份与Apple公证凭据验证成功；尚未生成或公开新Release。生产构建失败于上游build.ts在DESKTOP_SKIP_PACKAGE=1时仍执行其专用setup-macos-keychain，尝试导入不存在的上游APPLE_APPLICATION_CERT。
+
+将上游证书准备限制于实际启用上游打包时；GitTogether的独立正式打包继续使用工作流已导入的证书并严格签名、公证。已登记精确来源补丁，实际条件节点在16种环境组合的执行检查、3895份来源校验、7项后台边界检查与diff检查通过。保留失败标签来源不移动，修复后使用新标签v0.38.3继续真实发布。并行忽略文件改动未纳入。
 
 [执行对话](codex://threads/01a1663d-c20c-73c2-a046-f8409db545d7)
