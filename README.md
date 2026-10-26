@@ -14,6 +14,8 @@
 
 Submit 生成提交说明时使用本机已登录的 Codex CLI，只读取选中文件的差异；生成后仍可编辑，不自动提交或推送，并保留现有暂存内容。
 
+当前源码的 Commit / Submit 文件清单支持右键 Ignore：未跟踪文件直接加入忽略规则；已跟踪文件停止跟踪并保留本地副本，再由用户提交相关更改。也可用 Shift+F10 打开文件菜单。
+
 在macOS执行 `npm run package:mac` 或 `npm run release` 完成 Tauri 2 正式构建、签名、公证、三平台原生包及 `latest.json` 更新发布和公共回读；macOS ZIP 与更新 tar 均包含同一个 Tauri 应用。执行前源码须已提交并推送main。显式 `npm run package:mac:dev` 才生成本地 Tauri 测试包；任何入口均不替换用户已安装应用。
 
 此前2026-10-21交付的0.36.5 Apple Silicon开发版及31项成品检查记录保留。独立.app及`GitTogether-0.36.5-mac-arm64-dev.zip`位于`artifacts/macos/0.36.5/`，同目录保留来源、完整性、运行和压缩包校验报告；该开发包未公证，也未发布到正式自动更新源。

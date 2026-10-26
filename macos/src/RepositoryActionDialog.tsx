@@ -6,6 +6,8 @@ import { PushFeedbackProvider, PushProgress, usePushActivity } from './PushFeedb
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import { createCommitDraftStore, generationIdentity, type SavedDraft } from './commit-draft-store';
+import { importAPI } from './import-api';
+import type { LocalFile } from './import-model';
 export type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
 
 type Entry = RepositoryActionTarget & SavedDraft & { paths: string[]; commitOperation: string; pushOperation: string; committed?: LocalSubmitResult; pushed?: boolean };
@@ -56,7 +58,8 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   });
   const current = useRef(entries), running = useRef(false);
   const [busy, setBusy] = useState(false), [actionError, setError] = useState('');
-  const [phase, setPhase] = useState<'commit' | 'push' | null>(null);
+  const [phase, setPhase] = useState<'commit' | 'push' | 'ignore' | null>(null);
+  const [ignoreNotice, setIgnoreNotice] = useState('');
   const [activeTarget, setActiveTarget] = useState('');
   const [finished, setFinished] = useState(false);
   const generatingEntry = entries.find(entry => store.getJob(draftKey(entry), entry)?.status === 'running');
@@ -110,6 +113,22 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   const close = () => { if (running.current) { onCollapse?.(); return; } onClose(); };
   const included = entries.filter(entry => mode === 'push' || entry.paths.length);
   const ready = included.length > 0 && !finished && !busy && included.every(entry => mode === 'push' || entry.committed || !!entry.draft.summary.trim());
+  async function ignore(index: number, file: LocalFile) {
+    const entry = current.current[index];
+    if (running.current || entry.committed) return;
+    running.current = true; setBusy(true); setPhase('ignore'); setError(''); setIgnoreNotice('');
+    store.cancel(draftKey(entry));
+    const resumeRefresh = pauseRefresh?.();
+    try {
+      const result = await importAPI('ignoreFile', { repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, path: file.path, operationId: crypto.randomUUID() });
+      update(index, latest => ({ task: { ...latest.task, files: result.files, changeKey: result.changeKey }, changeKey: result.changeKey,
+        paths: result.files.filter(item => latest.paths.includes(item.path) || item.path === '.gitignore' || item.path === file.path || item.path === file.previousPath).map(item => item.path), generated: false,
+        draft: { summary: latest.edited.summary ? latest.draft.summary : '', description: latest.edited.description ? latest.draft.description : '' }, commitOperation: crypto.randomUUID(),
+      }));
+      setIgnoreNotice(result.stoppedTracking ? `已忽略 ${file.path}，本地文件已保留。请提交 .gitignore 和停止跟踪的更改；清单中的“删除”只表示从版本控制移除。` : `已忽略 ${file.path}，本地文件已保留。请提交 .gitignore 更改。`);
+    } catch (problem) { setError(`${entry.repositoryName} · ${entry.task.branch}：${problem instanceof Error ? problem.message : '忽略未完成，请重新读取提交清单。'}`); }
+    finally { resumeRefresh?.(); running.current = false; setBusy(false); setPhase(null); }
+  }
   async function confirm() {
     if (!ready || running.current) return;
     running.current = true;
@@ -164,15 +183,16 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
               summary: latest.edited.summary ? latest.draft.summary : '',
               description: latest.edited.description ? latest.draft.description : '',
             }, commitOperation: crypto.randomUUID() }));
-          }} />}
+          }} onIgnore={file => { void ignore(index, file); }} />}
           {entry.committed && <p className="repository-submit-result" role="status">已 Commit · {entry.committed.commitId.slice(0, 8)}{entry.pushed ? ' · 已 Push' : mode === 'submit' ? ' · 待 Push' : ''}</p>}
           {mode === 'push' && entry.pushed && <p className="repository-submit-result" role="status">已 Push</p>}
         </section>)}
       </div>
       {!entries.length && <p>当前范围内没有可执行的更改。</p>}
       {error && <Notice kind="error">{error}</Notice>}
+      {ignoreNotice && <Notice kind="info">{ignoreNotice}</Notice>}
       {busy && phase === 'push' && <PushProgress completed={entries.filter(entry => entry.pushed).length} total={included.length} />}
-      <div className="modal-actions">{finished ? <Button type="button" variant="primary" onClick={close}>完成</Button> : <><Button type="button" disabled={busy} onClick={close}>关闭</Button>{mode !== 'push' && <Button type="button" disabled={busy || !included.some(entry => !entry.committed)} aria-busy={generating} onClick={() => { if (generating) { for (const entry of entries) store.cancel(draftKey(entry)); } else void generate(); }} leadingIcon={<Icon name={generating ? 'close' : 'sparkle'} size={14} />}>{generating ? '停止生成' : 'AI 生成说明'}</Button>}<Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{phase === 'push' ? '推送' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></>}</div>
+      <div className="modal-actions">{finished ? <Button type="button" variant="primary" onClick={close}>完成</Button> : <><Button type="button" disabled={busy} onClick={close}>关闭</Button>{mode !== 'push' && <Button type="button" disabled={busy || !included.some(entry => !entry.committed)} aria-busy={generating} onClick={() => { if (generating) { for (const entry of entries) store.cancel(draftKey(entry)); } else void generate(); }} leadingIcon={<Icon name={generating ? 'close' : 'sparkle'} size={14} />}>{generating ? '停止生成' : 'AI 生成说明'}</Button>}<Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{phase === 'push' ? '推送' : phase === 'ignore' ? '忽略' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></>}</div>
     </div>
   </Modal>;
 }

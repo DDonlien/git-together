@@ -1010,6 +1010,7 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .update-feedback { display: flex; flex-direction: column; gap: 8px; padding-block: 14px; color: var(--muted); font-size: 12px; }
 .update-feedback p { margin: 0; }
 .update-feedback progress { display: block; width: 100%; height: 8px; margin: 0; accent-color: var(--blue); }
+.update-feedback .update-transfer { font-variant-numeric: tabular-nums; }
 
 /* Guide retains the supplied page navigation, without ornamental chrome. */
 .guide-view { padding-bottom: 28px; }

@@ -23,6 +23,8 @@ Presence 使用现有账号/身份交换、控制协议与只读observer WebSock
 
 私有 MessagePort 仅发给确切的本地 frame；不开放任意命令、可执行路径或 Git 凭据。界面的自动检查不创建第二套网络调度。
 
+提交清单右键 Ignore 通过有限 `ignoreFile` 请求传入仓库、worktree、expectedHead、changeKey、单个路径及 operationId；适配层复核当前工作目录与更改快照，沿用原版 gitignore 写入和 Git 执行入口。忽略规则锚定仓库根的字面文件路径；已跟踪文件仅从 index 移除，保留工作文件，不强制丢弃独有的暂存内容。返回实际更改清单和新 changeKey 后，弹窗保留手工草稿、失效旧 AI 说明，仅把相关 .gitignore 和停止跟踪更改纳入原选择，不自动纳入其他新文件或执行提交、推送。停止跟踪的删除记录仍可审阅，界面明确其与磁盘删除的区别。
+
 提交说明生成（0.36.3）由展示桥提供纯模型接口。使用原版账号资格选择、同一 CopilotStore/模型偏好及首次/30天免责声明；无法使用或调用失败时，以本机登录的 Codex CLI 替换模型传输。原版提示词构造、随机数据边界、仓库规则清理和JSON解析直接导入。通过原版Git入口在私有index中构造选中patch，避免原版getFilesDiffText暂存/清空真实index的副作用。CLI在临时目录执行只读、无工具、无MCP的短会话，优先最新可用Luna/low，否则CLI推荐模型；generationId、取消信号、工作目录/HEAD/内容复查限制结果回填，不读取仓库规则文件或附加历史上下文，不执行提交或推送。旧Rust/Node服务仍不进入运行链。
 
 父目录匹配由展示适配层进行有限的文件系统发现，先检查 .git 文件/目录，最多向下六层，仅对还需展开的父目录计算4000个预算，不跟随符号链接、不扫描仓库内容。真实工作目录、远端和登记 worktree 通过原版 getRepositoryType/getRemotes/listWorktrees 核对，完整发现后才调用 Dispatcher.addRepositories/refreshRepository；批量匹配保持已有活动仓库，空活动仓库时选择首个结果启动原版生命周期。Catalog 从原版已保存仓库和只读远端缓存恢复账号归属，缓存随原版 remote 更新失效；不新增关联持久化或后台扫描器。SSH/HTTP端口只在展示身份比较中归一，原版执行始终保留实际远端、凭据和配置。

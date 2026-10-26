@@ -119,6 +119,8 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isLocalWorkspace(value)) throw new Error('本地工作目录返回格式无效。');
   } else if (method === 'localCommit') {
     if (!isLocalCommitDetails(value) || !('commitId' in input) || value.commit.id !== input.commitId) throw new Error('本地提交返回格式无效。');
+  } else if (method === 'ignoreFile') {
+    if (!isRecord(value) || !('taskId' in input) || value.taskId !== input.taskId || typeof value.changeKey !== 'string' || !/^[a-f0-9]{64}$/.test(value.changeKey) || typeof value.stoppedTracking !== 'boolean' || !Array.isArray(value.files) || !value.files.every(file => isRecord(file) && typeof file.path === 'string' && typeof file.status === 'string' && typeof file.tracked === 'boolean')) throw new Error('忽略结果返回格式无效，请重新读取提交清单。');
   } else if (method === 'submitCommit') {
     if (!isLocalSubmitResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('提交结果返回格式无效，请检查本地提交历史。');
   } else if (method === 'pushCommit') {

@@ -69,6 +69,7 @@ export type ApiInputs = {
   localWorkspace: { repositoryId: string };
   localCommit: { repositoryId: string; taskId: string; commitId: string };
   submitCommit: LocalSubmitInput;
+  ignoreFile: { repositoryId: string; taskId: string; expectedHead: string; changeKey: string; path: string; operationId: string };
   pushCommit: LocalPushInput;
   fetchRepository: { repositoryId: string };
   dismissBranchIssue: { repositoryId: string; issueId: string };
@@ -117,6 +118,7 @@ export type ApiOutputs = {
   localWorkspace: RepositoryWorkspace;
   localCommit: LocalCommitDetails;
   submitCommit: LocalSubmitResult;
+  ignoreFile: { taskId: string; files: LocalFile[]; changeKey: string; stoppedTracking: boolean };
   pushCommit: LocalPushResult;
   fetchRepository: { branches: number; checkedAt: number; errors?: string[]; retryAt?: number };
   dismissBranchIssue: Catalog;
