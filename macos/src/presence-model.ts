@@ -53,11 +53,24 @@ export type PresenceBranch = {
   sources: ({ serverId?: string; userId: string; identityId?: string; deviceId: string; worktreeId: string; organizationId: string | null } & PresenceWorkCounts)[];
 };
 export type PresencePerson = {
-  userId: string; displayName: string; avatarUrl: string | null; state: PresenceWorkState;
+  userId: string; displayName: string; avatarUrl: string | null; color: string; state: PresenceWorkState;
   branches: PresenceBranch[];
   deviceName: string;
 };
 const workPriority: Record<PresenceWorkState, number> = { editing: 3, changed: 2, committed: 1 };
+// Keep a device's color across filtering, reconnects and component remounts for this app session.
+const deviceColors = new Map<string, string>();
+const firstDeviceHue = Math.random() * 360;
+function presenceDeviceColor(session: PresenceSession): string {
+  const identity = session.identityId || [session.serverId || '', session.userId];
+  const key = JSON.stringify([identity, session.deviceId]);
+  let color = deviceColors.get(key);
+  if (!color) {
+    color = `hsl(${((firstDeviceHue + deviceColors.size * 137.508) % 360).toFixed(3)} 62% 52%)`;
+    deviceColors.set(key, color);
+  }
+  return color;
+}
 
 function projectWorkState(project: PresenceProject): PresenceWorkState | null {
   if (project.files.some(file => file.activity === 'editing')) return 'editing';
@@ -84,7 +97,7 @@ export function presencePeople(status: PresenceStatus | null, repositoryId: stri
       const key = JSON.stringify([session.serverId || '', project.organizationId || null, session.identityId || session.userId, session.deviceId]);
       let person = people.get(key);
       if (!person) {
-        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, state, branches: [], deviceName: session.deviceName?.trim() || '设备未知' };
+        person = { userId: key, displayName: session.displayName, avatarUrl: session.avatarUrl, color: presenceDeviceColor(session), state, branches: [], deviceName: session.deviceName?.trim() || '设备未知' };
         people.set(key, person);
       }
       if (workPriority[state] > workPriority[person.state]) person.state = state;

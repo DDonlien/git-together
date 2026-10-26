@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import type { RemoteRepository } from './import-model';
 import { usePresence } from './PresenceProvider';
 import { presencePeople, presenceRepositoryId, type PresencePerson } from './presence-model';
@@ -9,7 +9,7 @@ import { Button, Icon, Notice, Popover } from './ui';
 
 function PresenceAvatar({ person, large = false }: { person: PresencePerson; large?: boolean }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  return <span className={`presence-avatar ${person.state}${large ? ' is-large' : ''}`} aria-hidden="true">
+  return <span className={`presence-avatar ${person.state}${large ? ' is-large' : ''}`} style={{ '--presence-color': person.color } as CSSProperties} aria-hidden="true">
     {person.avatarUrl && person.avatarUrl !== failedUrl ? <img src={person.avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedUrl(person.avatarUrl)} /> : <span className="presence-avatar-initials">{Array.from(person.displayName.trim()).slice(0, 2).join('').toUpperCase()}</span>}
   </span>;
 }

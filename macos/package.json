@@ -1,6 +1,6 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.38.8",
+  "version": "0.38.9",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "check": "tsc --noEmit",
-    "test": "tsx --test tests/update-model.test.ts tests/desktop-package.test.ts tests/desktop-release.test.ts",
+    "test": "tsx --test tests/update-model.test.ts tests/desktop-package.test.ts tests/desktop-release.test.ts tests/presence-avatar-color.test.ts",
     "desktop": "tauri dev",
     "tauri": "tauri",
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
