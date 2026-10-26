@@ -2,25 +2,25 @@
 
 新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
 
-0.36.1的Gitea连接改用原版同样的Chromium网络和证书处理，连接失败保留输入并显示中文说明。账号设置按需添加条目，用GitHub、GitHub Enterprise、Gitea标签选择连接方式；GitHub及企业版登录和Git读写继续走原版执行基础。自托管服务请填写完整HTTPS地址，包含实际使用的自定义端口。
+历史记录：0.36.1 曾为 Gitea 使用 Chromium 网络与证书处理；该实现属于迁移前版本。当前桌面连接、Git 执行与应用更新由 Tauri 2 和 Rust 负责。
 
-当前 `main` 为0.38.1源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切，并修复Gitea自动Fetch、同步角标和Pull进度；0.37.0已补齐正式发布与旧版升级入口。采用 GitHub Desktop 3.6.7 的原版 Git、授权与后台实现，保留 GitTogether 的 Material 界面、Submit / Clear / Get Latest 和 Presence。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build` 和 `npm run dev`。新运行边界与迁移说明见 [GitHub Desktop 执行基础](docs/github-desktop-based.md)。
+当前 `main` 为0.38.7源码，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切，并修复Gitea自动Fetch、同步角标和Pull进度。正式桌面运行与发布入口统一使用 Tauri 2 和 Rust；旧 `desktop/` GitHub Desktop/Electron 源码只作历史参考，不进入构建或发布。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build`、`npm run dev` 与 `npm run desktop`。
 
-[0.37.0已正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.37.0)，提供macOS Apple Silicon和Windows x86/x64安装包。macOS Developer ID签名、Apple公证及31项成品检查通过；[Windows双架构原生安装与Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)通过。隔离的0.33.0更新器已通过公共更新源检查、下载并安装到0.37.0，配置及本地文件保留；新版Squirrel后续升级也完成隔离验证。三平台完整公开下载、更新签名和清单已核对；可在设置中再次检查更新，自行选择下载和安装。
+历史发布记录：[0.37.0已正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.37.0)，提供macOS Apple Silicon和Windows x86/x64安装包。macOS Developer ID签名、Apple公证及31项成品检查通过；[Windows双架构原生安装与Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)通过。隔离的0.33.0更新器已通过公共更新源检查、下载并安装到0.37.0，配置及本地文件保留；新版Squirrel后续升级也完成隔离验证。三平台完整公开下载、更新签名和清单已核对；可在设置中再次检查更新，自行选择下载和安装。
 
-选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。匹配结果由 GitHub Desktop 原版保存与刷新，重新打开后保留账号关联。
+选择本地父文件夹，可匹配其中多层目录下的仓库和 worktree。Tauri 的 Rust 后台读取本地 Git 与目录状态，账号关联保存在本机。
 
-Submit 生成提交说明时优先使用原版 Copilot；账号没有对应权限或请求失败时，使用本机已登录的 Codex CLI。两者复用 GitHub Desktop 的提示词，只读取选中文件的差异，生成后仍可编辑，不自动提交或推送。生成过程保留现有暂存内容。
+Submit 生成提交说明时使用本机已登录的 Codex CLI，只读取选中文件的差异；生成后仍可编辑，不自动提交或推送，并保留现有暂存内容。
 
-在macOS执行 `npm run package:mac` 或 `npm run release` 完成正式构建、签名、公证、三平台安装包、隔离升级和GitHub更新发布及公共回读；执行前源码须已提交并推送main。显式 `npm run package:mac:dev` 才生成独立开发测试版.app；任何入口均不替换用户已安装应用。
+在macOS执行 `npm run package:mac` 或 `npm run release` 完成 Tauri 2 正式构建、签名、公证、三平台原生包及 `latest.json` 更新发布和公共回读；macOS ZIP 与更新 tar 均包含同一个 Tauri 应用。执行前源码须已提交并推送main。显式 `npm run package:mac:dev` 才生成本地 Tauri 测试包；任何入口均不替换用户已安装应用。
 
 此前2026-10-21交付的0.36.5 Apple Silicon开发版及31项成品检查记录保留。独立.app及`GitTogether-0.36.5-mac-arm64-dev.zip`位于`artifacts/macos/0.36.5/`，同目录保留来源、完整性、运行和压缩包校验报告；该开发包未公证，也未发布到正式自动更新源。
 
 此前0.36.5的[macOS及Windows云端检查和完整构建](https://github.com/DDonlien/git-together/actions/runs/39561030648)均通过；0.37.0的Windows安装与原生功能验证见上方当前发布记录。
 
-2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。当前有效运行、检查和构建入口均在根目录；GitHub Actions 验证同时覆盖 main 和 github-desktop-based。旧 Tauri 发布流程归档保留，正式发布以新的Desktop入口及成品报告为准；合并提交不会自动发布安装包。
+2026-10-21 的 main 合并保留两边提交历史；原 main 与 0.34.5 的失效分支提示修复另有归档引用。2026-10-26用户明确要求恢复 Tauri 2-only 生产入口；根目录 npm 命令和 GitHub Actions 现转到 `macos/` 的 Tauri/Rust 打包流程。历史 GitHub Desktop/Electron 源码与记录不代表当前运行方式。
 
-以下为迁移前稳定版功能记录；涉及独立 Rust 后台、平台 OAuth 和发布包的说明不代表本分支运行方式。
+以下为早期版本功能记录；其中 GitHub Desktop、Electron 和旧更新流程不代表当前运行方式。
 
 <img src="assets/brand/gittogether-app.png" width="96" height="96" alt="GitTogether 图标" />
 
@@ -133,7 +133,7 @@ Pull只快进合入，未提交文件或分叉历史会停止。Clean先展示�
 
 Windows 提供明确标识 `Windows-x86` 和 `Windows-x64` 的当前用户 NSIS 安装包，包含 WebView2 引导程序，Git/Git LFS 沿用本机安装。两个目标已在 Windows 原生环境验证编译、加密存储、Git 选择范围提交和暂存保留、进程取消，以及实际安装、界面启动和卸载。账号保存在当前用户 LocalAppData 中，以系统 DPAPI 加密并限制访问。更新包使用应用内置公钥验签；Windows 安装器当前未配置 Authenticode 代码签名。可选 AI 提交说明使用已登录的本机 Codex CLI，官方 Windows CLI 支持 x64/ARM64，纯32位系统暂不提供该 AI 功能。
 
-发布入口会收集同一 `main` 提交和版本的 macOS、Windows x86/x64 包，验证两个 Windows 原生构建报告并在发布机签署更新包；三个平台一并写入 `latest.json`、上传到同一 Release，再回读公开文件。任一目标失败会停止正式发布，不会退化为只发 macOS。Windows 双架构工作流见 [.github/workflows/windows-package.yml](.github/workflows/desktop-release-windows.yml)。
+发布入口会收集同一 `main` 提交和版本的 macOS、Windows x86/x64 Tauri 包，验证两个 Windows 原生构建报告并在发布机签署更新包；三个平台一并写入 `latest.json`、上传到同一 Release，再回读公开文件。任一目标失败会停止正式发布，不会退化为只发 macOS。Windows 双架构工作流见 [.github/workflows/windows-package.yml](.github/workflows/windows-package.yml)。
 
 ## 本地试用
 

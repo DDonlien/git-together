@@ -209,11 +209,11 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 
 - 2026-10-09（最新反馈）：收起/展开、Dashboard和设置共用悬停、按下、动效和键盘焦点样式，当前页面选中态独立保留；设置版本号在窗口右下角独立底部区域，不随内容滚动，上方内容独立滚动且不被页脚覆盖。保留原尺寸、间距、状态和账号数据；源代码修改不等于安装包更新。
 - 2026-10-09（最新细节）：侧栏32px开关与首页/仓库页首卡片顶边对齐，展开时右侧显示GitTogether名称；开关到Dashboard图标框固定8px，两态纵向位置不变。普通内容卡片亮暗色均无投影，用色调与细边缘区分；菜单/弹窗保留独立层级。保留既有图标尺寸、红绿灯、可访问性与挂载状态；取代顶部无品牌/60px留白方向。
-- 2026-10-09（最新）：实际客户端采用已认可的 Material 3（非 Expressive）样稿，覆盖浏览器与 Electron。侧栏透明、融入共享画布，没有独立悬浮卡片；首页、仓库页和设置语义分组轻微浮起，表格/文件行不各自套卡。统一亮暗色、Roboto/中文系统回退、Material 控件、菜单和弹窗；不透明表面不提供无作用的减少透明度开关。此条取代2026-10-03的悬浮侧栏及后续Ring回滚/H5-only材质方向。保留真实数据、外置系统红绿灯、32px导航框、56px收起列、三栏独立开关、12px内容内缩、隐藏滚动条与所有选择/草稿/安全边界；原生包另行打包。
+- 2026-10-09（最新）：实际客户端采用已认可的 Material 3（非 Expressive）样稿，覆盖浏览器与桌面应用。侧栏透明、融入共享画布，没有独立悬浮卡片；首页、仓库页和设置语义分组轻微浮起，表格/文件行不各自套卡。统一亮暗色、Roboto/中文系统回退、Material 控件、菜单和弹窗；不透明表面不提供无作用的减少透明度开关。此条取代2026-10-03的悬浮侧栏及后续Ring回滚/H5-only材质方向。保留真实数据、外置系统红绿灯、32px导航框、56px收起列、三栏独立开关、12px内容内缩、隐藏滚动条与所有选择/草稿/安全边界；原生包另行打包。
  
 
 
-## Tauri与Rust运行方向（2026-10-11，最新用户要求）
+## 历史：Tauri与Rust迁移方向（2026-10-11）
 
 - 用户明确要求后台也使用Rust。当前桌面入口为macos/src-tauri，React通过有限Tauri命令调用同进程Rust；浏览器开发也使用Rust服务。生产禁止Electron或Node业务sidecar。旧electron/server源码及旧后台测试仅保留历史参考，不能进入生产包或冒称Rust回归。
 - 沿用Material 3、原bundle ID、Developer ID、数据目录及账号/目录关联；兼容旧加密文件和固定偏好键，不将真实用户升级等同于源码编译。Git CLI与Git LFS从Rust调用，保留正常钩子、签名及用户配置。
@@ -241,7 +241,7 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 组织所有者在Web维护成员/仓库；绑定同时要求Git仓库ownership，Git平台角色不自动变成Presence角色。同仓库多组织允许且不合并。密码修改也在Web；客户端只保留开关、唯一账号及服务器地址列表，托管信息归回Dashboard/详情。
 
 
-## GitHub Desktop 执行基础（2026-10-18，当前分支最新用户要求）
+## 历史：GitHub Desktop 执行方向（2026-10-18，已于2026-10-26取代）
 
 - 用户指定分支 `github-desktop-based`，工作区与 main 平级；不得将本分支自行合并回 main。
 - 本分支以 `desktop/` 中固定版本 GitHub Desktop 原版代码为运行基础，取代此前 Tauri/Rust 后台方向。所有标准 Git、授权、凭据和后台行为直接使用原版；扩展严格限于现有 UI、Submit、Clear、Get Latest 和 Presence。
@@ -251,3 +251,10 @@ source: "https://github.com/DDonlien/agent-template/blob/main/app-agent-template
 - 详细边界和命令见 docs/github-desktop-based.md；需求与执行证据统一在根 issue/，正文维护当前事实，Comments 追加历史。未要求提交、推送、合并或发布，不据历史持续授权发布此实验分支。
 - 2026-10-18补充：全部原版视觉界面均须由 GitTogether Material 展示层替代，包括授权、安全确认、错误、冲突、设置、更新与崩溃恢复。原版业务控制器与执行回调保留；允许有来源校验的纯展示代码差异。禁止继续挂载原版主界面或以遮挡/隐藏旧弹窗冒充替换。
 - 2026-10-21用户明确要求：main正式交付须补齐签名、公证、发布和自动更新，保证现有0.33.0可升级；以后“推送打包”均指完整正式发布，不得只交付开发包。沿用原版更新执行器，允许必要的产品更新源和平台打包配置差异；保留旧更新格式兼容，不恢复旧Git/授权后台，不操作用户安装版。
+
+## Tauri 2-only production correction (2026-10-26, latest user request)
+
+- This explicit instruction supersedes the 2026-10-18/10-21 GitHub Desktop runtime and legacy Electron update directions: production development, validation, packaging, releases, and in-app updates use Tauri 2 with the Rust backend only.
+- Root npm entry points must route to `macos/`; `macos/package.json` must not depend on Electron tooling. Release assets contain the Tauri app archive and Tauri-signed packages, with `latest.json` as the updater manifest. Do not generate `latest-mac.yml`, Electron binaries, Squirrel packages, or Electron updater feeds.
+- The old `desktop/` and `macos/electron/` trees may remain as historical source, but never enter setup/build/package/release commands. The macOS ZIP contains the same Tauri app as the signed updater tarball. Its established filename is retained for possible older-client discovery; do not claim automatic Electron-to-Tauri migration until it is accepted.
+- Do not claim the installed 0.37.0 app is Tauri: local production logs identify it as Electron. Keep source changes, package acceptance, public release, and installed-app acceptance separate; do not operate the installed app.

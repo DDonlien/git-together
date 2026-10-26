@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 多仓库与文件提交工作台。'
 原稳定 ID: '`x`、`R-01`、`R-02`、`R-02-file-row-state-inset`、`R-02-shared-file-design`、`R-02-submit-selection`、`R-02-submit-selection-collapse`、`R-02-submit-selection-collapse-test`、`R-02-push-feedback`、`R-03`、`RUN-01`、`RUN-01-remote-first`、`RUN-01-tauri-git-network`、`RUN-01-tauri-git-network-read`、`RUN-01-tauri-git-network-release`、`RUN-01-tauri-parity`、`RUN-01-tauri-parity-read`、`RUN-01-tauri-parity-release`、`RUN-01-tauri-rust`、`RUN-01-tauri-git-read`、`RUN-01-main-delivery`、`RUN-01-main-only`、`RUN-01-recent-delivery`、`RUN-01-update`、`RUN-01-submit-fix-release`、`RUN-01-update-diagnostics`、`RUN-01-update-quiesce`、`RUN-01-update-immediate`、`RUN-01-update-immediate-release`、`RUN-01-update-restart-proof`、`RUN-01-release-policy`、`RUN-01-notary-reuse`、`RUN-01-notary-reuse-recovery`、`RUN-01-recent-installed-check`、`RUN-01-windows-policy`、`RUN-01-windows-packaging`、`RUN-01-update-pipeline`、`RUN-01-update-test`、`RUN-01-update-release`、`RUN-01-update-errors`、`RUN-01-identity`、`RUN-01-identity-settings`、`RUN-01-identity-fork`、`RUN-01-identity-main`、`RUN-01-identity-test`、`RUN-01-identity-readme`、`RUN-01-identity-readme-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-24T16:22:34+00:00'
+updated-time: '2026-10-26T15:32:13Z'
 ---
 
 # Description
@@ -25,6 +25,17 @@ updated-time: '2026-10-24T16:22:34+00:00'
       - [x] \[R-02-submit-selection-collapse-test] 验证独立收起、选择框与展开按钮互不触发、收起期间分组选中和全选仍正确、更新文件数据后保留状态，以及键盘Enter/Space和多个工作目录的控制目标隔离。
   - [x] \[R-02-push-feedback] 推送成功不在Dashboard顶部生成整条提示。对应分支图标显示轻微运动的实线上传箭头，成功变为双勾并短暂保留后消失；仓库按本次推送覆盖全部本地worktree或部分范围分别显示实心箭头/双勾与虚线箭头/单勾。共享状态覆盖Dashboard弹窗、仓库页及Submit内推送，推送时提供不伪造百分比的进度条，失败保留明确错误及重试，不冒充成功。
 - [x] \[R-03] Summary/Description 表单、AI Gen 的可取消生成、编辑确认、提交中、本地模拟提交成功和失败保留输入形成完整流程，提交选中文件后移出 Changes 并加入历史。
+- [ ] \[RUN-01-update-progress-metrics] 设置更新卡片显示更新器真实报告的已下载容量、总容量、百分比和实时速度；未知指标保持未知状态，不把缺失进度显示成0%。
+  - [x] \[RUN-01-update-progress-metrics-source] Tauri 更新回调接入已下载字节、总容量、百分比与字节每秒；设置卡片按实际数据展示，尚未报告的值保持未知，下载完成后保留最终容量与100%。
+  - [x] \[RUN-01-update-progress-metrics-check] 执行相关 TypeScript 类型检查与 Rust Cargo 检查。
+  - [ ] \[RUN-01-update-progress-metrics-acceptance] 在实际桌面包中确认更新下载时的容量、进度、速度刷新和完成状态。
+- [ ] \[RUN-01-tauri-only-runtime-2026-10-26] 当前桌面开发、构建、Windows打包、正式发布和应用内更新只使用 Tauri 2/Rust；旧 Electron/GitHub Desktop 源码仅作历史参考，不进入有效命令或安装包。
+  - [x] 根目录命令、macOS package scripts、macOS/Windows发布工作流改为 Tauri 2；macOS活动依赖移除 Electron 工具，发布资产只保留 Tauri 更新清单与包。
+  - [ ] Tauri打包、三平台产物和更新器未在本轮构建或验收；已安装的0.37.0仍是旧Electron应用，未改动。
+- [ ] \[RUN-01-update-network-interruption-2026-10-26] 调查设置页“网络连接已中断”；区分更新检查与大包下载，检查日志并记录证据边界。
+  - [x] 0.37.0生产日志在北京时间21:32:12和21:47:11记下“Error checking for updates”及通用“网络连接已中断”，未包含HTTP状态、系统错误码、代理信息或底层错误链。
+  - [x] 两次均发生在检查更新阶段，不能归因于461 MB安装包下载速度；稍后旧更新服务端点返回HTTP 200、耗时约2.52秒，说明检查时段之外可访问，不能反推当时原因。
+  - [ ] 历史中断的具体网络原因仍未确定；Tauri源码已有脱敏错误链、阶段、错误类别、系统码/HTTP码日志字段，但新包未构建，尚无该路径的运行日志。
 - [x] \[RUN-01] 新建不含 GitButler 源码的独立分支，类型检查、业务测试、构建、浏览器交互和视觉检查通过，实际启动桌面窗口并留给用户查看。
   - [x] \[RUN-01-remote-first] 按2026-10-11截图检查真实安装日志，区分本地权限、Git Fetch及平台API读取失败；远端分支/工作台读取与后台Fetch并行，先发布已读取的远端内容，Fetch慢或失败不能阻挡展示。保持自动刷新、同资源串行、取消/身份隔离、失败保留与退避，明确远端读取和本地引用更新各自错误；核对类型/Cargo/构建并按持续授权推送、签名公证发布，不操作安装版或更改用户权限。 0.22.8类型/Cargo/生产构建及隔离前端时序/失败保留/切换仓库核对通过；main/ec127862140bfb84c630931c7fd5946a483ca8e2已推送，Developer ID、Apple Accepted/staple及两套公共更新源和完整下载校验通过。真实安装版仍为0.22.4，未作为新版运行验收。
   - [x] \[RUN-01-tauri-git-network] 按2026-10-11最新版本批量仓库读取失败的反馈，检查安装版真实日志并修正Git与账号API的网络路径差异：从Finder启动时，Git子进程继承已配置的macOS静态HTTP/HTTPS/SOCKS代理及按目标地址判断的绕过规则，保留显式Git代理与环境配置，不写全局设置。将真实Git失败分类、退出码、耗时、匿名资源和部分任务失败记录到有限日志，避免把通用Git错误误报为账号权限失效。
@@ -106,3 +117,75 @@ updated-time: '2026-10-24T16:22:34+00:00'
 本次执行环境未提供具体模型标识，未补造 Model-Detail。
 
 [本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)
+
+## 20261026-214019_Codex_Gpt-6
+
+按用户要求将更新器真实的已下载字节、总字节、百分比和字节每秒接入设置卡片；覆盖嵌入桌面的 Electron 更新、独立 Electron 更新和 Tauri 更新。容量或百分比尚未报告时显示等待/不定进度，完成后显示最终容量与100%。
+
+本次未新增或运行测试、类型检查、Cargo 检查、生产构建或安装包；实际包界面验收仍待完成。保留了本工作区其他未提交改动。
+
+[本次实现对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261026-214458_Codex_Gpt-6
+
+纠正前条记录：生产入口是 Tauri 更新器。GitHub Desktop 使用的 Electron 自带更新器没有 `download-progress` 事件，不能据此提供真实进度；已移除该无效事件链和未启用的旧 Electron 链路改动。当前设置卡片通过 Tauri 更新下载回调展示实际已接收容量、HTTP 总容量、百分比与采样速率；容量未知时使用不定进度条，下载完成后保留包大小与100%。
+
+未运行测试、类型检查、Cargo 检查、构建或安装包界面验收；检查和实际包验收条目仍待完成。保留本工作区其他任务的未提交改动。
+
+[本次修正对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261026-215453_Codex_Gpt-6
+
+进一步核实：当前 `/Applications/GitTogether.app` 是 0.37.0 Electron 安装包，其兼容更新路径使用 `MacUpdater` / `electron-updater`，可通过 `download-progress` 事件提供真实容量与速度；已将该数据接入更新状态。此前仅核对了 GitHub Desktop 内建的 Electron `autoUpdater` 类型，不能代表此兼容路径；上一条将本机生产入口概括为 Tauri 也不适用于当前已安装包。
+
+GitHub v0.38.6 的 macOS Apple Silicon 更新 ZIP 为 461 MB（[公开资产列表](https://github.com/DDonlien/git-together/releases/expanded_assets/v0.38.6)）。此前进程级采样约 89 KB/s，连接经本机 `127.0.0.1:7890`；按此速度和完整包体积粗算约需 1 小时 27 分。该采样未隔离更新请求，代理上游限速是可能原因但尚未确认。进度条此前缺数据不表示网络速度为零。
+
+本次未运行测试、类型检查、Cargo 检查、构建或实际包验收；已安装的 0.37.0 二进制未改动。相关验收条目仍待完成。
+
+[本次诊断与修正对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261026-215639_Codex_Gpt-6
+
+再次核对已安装包的 `Resources/app/package.json`：当前版本0.37.0，不含 `electron-updater` 依赖；实际安装版使用 GitHub Desktop 的内建 Electron 更新器。该更新器的 Electron API 不提供 `download-progress`，因此当前安装包无法从它取得真实容量/速度；此前上一条把当前安装版归为 `MacUpdater` / `electron-updater` 是错误的，已撤销相应旧路径代码。Tauri 更新器的数据接入仍保留在源码中。
+
+GitHub v0.38.6 的 macOS ZIP 为461 MB；此前约89 KB/s的进程级采样通过本机代理端口，若该速度对应整包传输约需1小时27分。当前没有可隔离更新请求的活动采样，所以包体大与代理链路是有证据支持的可能原因，代理上游限速尚未证实。当前安装包未改动。
+
+未运行测试、类型/Cargo检查、构建或安装包验收；更新器来源和真实容量展示仍需按相应产品包分别验收。
+
+[本次核正对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261026-215754_Codex_Gpt-6
+
+最终核正：已安装0.37.0包不带 `electron-updater`，使用 Electron `autoUpdater`。官方事件表包含检查、发现更新、下载完成等事件，没有下载进度事件；因此不能从当前更新器取得实时传输指标。此前关于当前包走 `MacUpdater` 的说明错误，旧Electron实验链路未保留改动。Tauri生产源码仍提供下载回调指标；实际安装版和 Tauri 包分别记录。
+
+0.38.6 macOS更新ZIP公开大小为461 MB。约89 KB/s仅是之前 GitTogether 进程网络采样，连接经本机代理，未单独测量更新请求；包体和代理路径足以解释“看起来很慢”的现象，但上游限速未确认。要使0.37.0内建更新器报告实时指标，需要改变或扩展更新实现；本轮未更换更新器，也未改安装包。
+
+未运行测试、类型/Cargo检查、构建或安装包验收。
+
+[本次验收边界核对](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261026-143952_Codex_Gpt-6
+
+按用户最新要求，正式桌面链路只使用 Tauri 2/Rust：根目录 npm 命令、macOS依赖与打包、Windows原生打包工作流、发布和更新清单已切到 Tauri；移除有效构建链的 Electron 工具及 latest-mac.yml/Squirrel 更新资产。旧Electron/GitHub Desktop源码仍在仓库中作历史参考，但不进入当前有效打包入口。当前改动未运行类型/Cargo检查、测试、构建或发布；正式Tauri包和更新器仍待验收。
+
+核对本机生产日志（/Users/taobe/Library/Application Support/GitTogether-Standalone-Demo/logs/2026-10-26.desktop.production.log）：旧0.37.0 Electron应用在北京时间21:32:12和21:47:11各报一次更新检查失败，日志只有“Error checking for updates”及“网络连接已中断。”，没有底层错误链、HTTP状态、系统错误码或代理路线。错误处于更新检查阶段、安装包开始下载之前，因此461 MB包体不能解释这两次中断。随后对旧更新端点的一次独立请求返回HTTP 200、约2.52秒；这只能说明之后端点可达，不能确定先前的DNS、代理/VPN、TLS或连接故障，当前没有证据把原因归于VPN。Tauri更新器源码现记录脱敏错误链及错误阶段、类别、系统码/HTTP状态；实际Tauri运行日志需要新包验收才能验证。
+
+未操作已安装应用，未执行测试、类型/Cargo检查、打包、发布或公共写入。macOS ZIP对旧版的自动迁移也未验收。
+
+## 20261026-150334_Codex_Gpt-6
+
+补查当前本机网络路由：macOS的HTTP/HTTPS/SOCKS系统代理均指向127.0.0.1:7890，监听进程是Clash Party内的mihomo；当前GitTogether进程存在连到该本地代理的活动TCP连接。用显式HTTP代理请求与旧0.37更新器相同的update.electronjs.org端点，返回HTTP 200，约1.31秒。
+
+这能确认GitTogether当前网络流量会连接Clash本地代理，且该代理此刻能访问更新检查端点；但lsof不能把某条活动连接唯一对应到更新请求，也不能显示mihomo对此域名选择了远端节点还是DIRECT。IPv4到该域名解析地址的内核路由为en0；scutil --nc list未列出已配置VPN服务。utun接口存在并不单独证明更新流量使用了VPN。因此目前可确认“经Clash本地代理”，不能确认该更新域名经Clash VPN节点出站。应用在北京时间22:59:03仍记录一次通用更新检查中断，未提供底层错误码。
+
+## 20261026-151522_Codex_Gpt-6
+
+核对GitHub Releases及当前main版本：公开latest为v0.38.6，发布于2026-10-26 10:37 UTC，来源tag提交929ac69a24492686f50df80f8bfac129a6b6a4b4。公开macOS ZIP为461 MB（483468906字节），app.tar.gz为459 MB（481739137字节）；同一Release仍含latest-mac.yml、latest.json及旧Windows安装资产。发布说明明确写的是GitHub Desktop原版Git/授权/凭据/后台执行基础，因此其大包仍是旧正式发布物；本地Tauri源码改动尚未提交/发布，不能改变GitHub上的latest。来源：[release](https://github.com/DDonlien/git-together/releases/tag/v0.38.6)、[assets](https://github.com/DDonlien/git-together/releases/expanded_assets/v0.38.6)。
+
+截图中的v0.17.2是2026-10-10创建的draft，target_commitish为d445d9de5cde29b7a12150f1b5bf51fc6dab944c，GitHub API显示无任何assets；它不是公开latest，也不能安装。它看起来是旧更新发布流程遗留的空草稿，具体中断步骤未核实。
+
+当前main根package.json和macos/package.json均为0.38.1，而macos/src-tauri/Cargo.toml的crate version仍是0.34.5。Tauri配置的产品version指向macos/package.json，build.rs也从该文件注入GITTOGETHER_VERSION，所以Cargo值是过期元数据；应在下一次正式Tauri交付前统一。v0.38.6旧Electron构建通过GITTOGETHER_RELEASE_VERSION从release tag注入包版本，因此旧tag可与源码package.json版本不同。新的Tauri打包入口要求根manifest、macos manifest和发布版本一致，并且正式版本必须高于公开latest；若继续0.38.x，下一正式版本至少应为0.38.7。此次只核查、未改版本、未修改GitHub draft或公开release。
+
+## 20261026-153213_Codex
+
+用户明确要求推送GitHub并交付Tauri正式更新。本轮产品清单、Cargo及锁文件统一为0.38.7；有效npm/CI/发布命令只走Tauri/Rust。修复容量单位换算、未知容量展示、停流后速度归零，并将更新检查30秒与下载15分钟时限分开。恢复旧合并遗漏的Rust读写任务保护声明，现可编译。21项当前更新/发布测试、13项Rust隔离测试、TypeScript、Cargo --locked及前端生产构建均通过。旧Electron后台测试不作为Tauri验收。正在提交/推送main并启动macOS Apple Silicon、Windows x86/x64同源正式发布，尚未宣称安装包或公开更新源已完成。其他任务的Ignore相关修改留在原工作区。

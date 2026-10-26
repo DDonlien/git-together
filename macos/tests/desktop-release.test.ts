@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { notarizationResult, reconcileReleaseMutation, verifyReleaseAssets, verifyUpdateMetadata, type ReleasePackage } from '../scripts/desktop-release';
+import { notarizationResult, reconcileReleaseMutation, verifyReleaseAssets, verifyTauriMetadata, type ReleasePackage } from '../scripts/desktop-release';
 
 const artifact: ReleasePackage = {
-  version: '0.17.2', sourceCommit: 'a'.repeat(40), zipPath: '/build/GitTogether-0.17.2-macOS-arm64.zip',
-  updateMetadataPath: '/build/latest-mac.yml', sha256: 'b'.repeat(64), sha512: 'checksum', size: 123, notarized: true,
+  version: '0.17.2', sourceCommit: 'a'.repeat(40), zipPath: '/build/GitTogether-0.17.2-mac-arm64.zip',
+  sha256: 'b'.repeat(64), sha512: 'checksum', size: 123, notarized: true,
+  tauri: { tarPath: '/build/GitTogether-0.17.2-macOS-arm64.app.tar.gz', signaturePath: '/build/app.tar.gz.sig', manifestPath: '/build/latest.json', signature: 'signature', sha256: 'c'.repeat(64), size: 456 },
 };
-const metadata = () => ({ version: artifact.version, path: 'GitTogether-0.17.2-macOS-arm64.zip', sha512: artifact.sha512,
-  files: [{ url: 'GitTogether-0.17.2-macOS-arm64.zip', sha512: artifact.sha512, size: artifact.size }] });
+const metadata = () => ({ version: artifact.version, pub_date: '2026-10-26T00:00:00.000Z', platforms: {
+  'darwin-aarch64': { url: 'https://github.com/DDonlien/git-together/releases/download/v0.17.2/GitTogether-0.17.2-macOS-arm64.app.tar.gz', signature: artifact.tauri.signature },
+} });
 
 test('notarization must explicitly be Accepted before stapling or publication', () => {
   assert.deepEqual(notarizationResult('{"id":"submission","status":"Accepted"}'), { id: 'submission', status: 'Accepted' });
@@ -28,31 +30,34 @@ test('draft assets require exact names, uploaded state, sizes and SHA-256 digest
   assert.throws(() => verifyReleaseAssets([uploaded, uploaded], expected));
 });
 
-test('public update metadata must identify the exact final notarized ZIP', () => {
-  verifyUpdateMetadata(metadata(), artifact);
-  for (const changed of [{ version: '0.10.1' }, { path: 'other.zip' }, { sha512: 'wrong' }, { files: [] }, { files: [{ ...metadata().files[0], size: 122 }] }, { files: [{ ...metadata().files[0], sha512: 'wrong' }] }]) {
-    assert.throws(() => verifyUpdateMetadata({ ...metadata(), ...changed }, artifact), /更新清单.*不一致/);
+test('the Tauri updater manifest identifies the exact signed macOS package', () => {
+  verifyTauriMetadata(metadata(), artifact);
+  for (const changed of [
+    { version: '0.10.1' },
+    { pub_date: 'invalid' },
+    { platforms: { 'darwin-aarch64': { ...metadata().platforms['darwin-aarch64'], url: 'https://example.invalid/app.tar.gz' } } },
+    { platforms: { 'darwin-aarch64': { ...metadata().platforms['darwin-aarch64'], signature: 'wrong' } } },
+  ]) {
+    assert.throws(() => verifyTauriMetadata({ ...metadata(), ...changed }, artifact), /Tauri 公开更新清单.*不一致/);
   }
-  assert.throws(() => verifyUpdateMetadata(null, artifact));
+  assert.throws(() => verifyTauriMetadata(null, artifact));
 });
 
-test('the existing desktop package entry always validates, notarizes and publishes', () => {
+test('the Tauri package entry validates, notarizes and publishes Tauri assets', () => {
   const source = readFileSync(new URL('../scripts/package-desktop.ts', import.meta.url), 'utf8');
-  assert.match(source, /GITTOGETHER_NOTARY_PROFILE \|\| 'gittogether-notary'/);
-  assert.doesNotMatch(source, /if \(process\.env\.GITTOGETHER_NOTARY_PROFILE\)/);
-  assert.match(source, /prepareDesktopRelease\(clientRoot, manifest.version, sourceCommit\)/);
+  assert.match(source, /prepareDesktopRelease\(clientRoot, version, sourceCommit\)/);
   assert.match(source, /await run\('npm', \['run', 'check'\]/);
-  assert.match(source, /await run\('npm', \['test'\]/);
-  assert.match(source, /notarizationResult\(submission.stdout\)/);
+  assert.match(source, /notarizationResult\(await notary\.submit\(zipPath\)\)/);
   assert.match(source, /'stapler', 'validate'/);
-  assert.match(source, /release.publish\(\{ \.\.\.result, size: bytes.length \}\)/);
+  assert.match(source, /release\.publish\(result\)/);
+  assert.doesNotMatch(source, /latest-mac\.yml|electron-updater/);
   assert.match(source, /await mkdir\(releaseLock\)/);
   assert.match(source, /await rm\(releaseLock/);
 });
 
 test('publication protects main provenance and exposes only verified stable assets', () => {
   const source = readFileSync(new URL('../scripts/desktop-release.ts', import.meta.url), 'utf8');
-  assert.match(source, /main\?\.object.sha !== sourceCommit/);
+  assert.match(source, /main\.object.sha !== sourceCommit/);
   assert.match(source, /existing && \(!existing.draft \|\| existing.target_commitish !== sourceCommit\)/);
   assert.match(source, /tag_name: tag, target_commitish: sourceCommit, draft: true/);
   assert.match(source, /verifyReleaseAssets\(uploaded.assets, expected\)/);

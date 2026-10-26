@@ -1,12 +1,19 @@
-# GitHub Desktop / GitTogether UI / Presence 架构
+# GitTogether 桌面与 iOS 架构
+
+## 当前桌面生产架构（2026-10-26）
+
+当前 main 的桌面应用只使用 Tauri 2 与 Rust，React 界面和 Rust 命令位于 macos/。根目录 npm 入口委派给该 Tauri 客户端；原生打包、更新清单与发布使用 Tauri 签名更新包及 latest.json。Electron 与 GitHub Desktop 相关目录、旧发布说明和迁移记录均为历史材料，不进入当前安装包或活跃发布链。
+
 
 ## 原生 iOS 客户端
 
-`ios/` 是独立 SwiftUI 交付物，不进入桌面 GitHub Desktop 的启动或后台链。`app/` 在 Main Actor 维护界面与账号状态，使用本App Keychain保存访问令牌、Presence会话及独立设备凭证；非凭证目录缓存位于系统 Application Support。`core/` 以 URLSession 直接读取各提供方API，不调用Git、shell或本地仓库。
+`ios/` 是独立 SwiftUI 交付物，不进入桌面应用的启动或后台链。`app/` 在 Main Actor 维护界面与账号状态，使用本App Keychain保存访问令牌、Presence会话及独立设备凭证；非凭证目录缓存位于系统 Application Support。`core/` 以 URLSession 直接读取各提供方API，不调用Git、shell或本地仓库。
 
 Presence 使用现有账号/身份交换、控制协议与只读observer WebSocket。手机始终announce空本地workspaces，catalogue只登记自身Git账号可访问的远端仓库；不复用桌面设备身份。设备清单与协作快照按服务器、设备身份、仓库、组织及worktree标识匹配；旧设备无worktreeId时仅匹配唯一分支目标。没有唯一目标的快照仍可浏览，不能猜测控制目录。
 
 远程动作只发送协议允许的有限请求，不发送Git令牌、shell或文件正文；预览、生成说明、确认执行、重试Push和恢复绑定原服务器/设备/workspace，执行前复核权限与预览有效期。后台/停用取消连接并使缓存失效为未知。Swift Package隔离测试core，Xcode工程将app/core编译到同一App；iOS版本独立存于config/version.xcconfig。
+
+## 历史桌面运行方向（仅作年代记录）
 
 2026-10-21：用户认可的 github-desktop-based 0.36.4 通过保留双亲历史的合并成为本地 main；根 package/scripts 继续作为唯一有效入口。原main历史及0.34.5修复保留，旧Tauri/Git/账号服务仍不进入Desktop运行链。共享界面兼容保留账号显示名称、警告样式、主线Presence展示与可关闭Notice；当前Desktop桥尚未移植旧Tauri的分支消失记录/关闭清理接口，不能把旧路径验证当成Desktop功能验收。正式更新发布也尚未迁移。
 

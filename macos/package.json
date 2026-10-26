@@ -1,23 +1,23 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.38.1",
+  "version": "0.38.7",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/desktop.mjs dev",
-    "dev:ui": "node ../scripts/desktop.mjs dev",
-    "dev:rust": "node ../scripts/desktop.mjs dev",
+    "dev": "tsx scripts/dev.ts",
+    "dev:ui": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "dev:rust": "tsx scripts/dev.ts",
     "build": "vite build",
-    "preview": "node ../scripts/desktop.mjs dev",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "check": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
-    "desktop": "node ../scripts/desktop.mjs dev",
-    "tauri": "node ../scripts/desktop.mjs dev",
-    "check:rust": "cargo check --manifest-path ../desktop/gittogether-presence/Cargo.toml --locked",
+    "test": "tsx --test tests/update-model.test.ts tests/desktop-package.test.ts tests/desktop-release.test.ts",
+    "desktop": "tauri dev",
+    "tauri": "tauri",
+    "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "icons": "tsx scripts/generate-icons.ts",
-    "package:desktop": "node ../scripts/desktop.mjs package",
+    "package:desktop": "tsx scripts/package-desktop.ts",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "package:windows": "node ../scripts/desktop.mjs package"
+    "package:windows": "tsx scripts/package-windows.ts"
   },
   "dependencies": {
     "@fontsource/roboto": "5.3.0",
@@ -33,16 +33,13 @@
     "vite": "6.4.2"
   },
   "devDependencies": {
-    "@electron/osx-sign": "2.7.1",
     "@tauri-apps/cli": "2.12.1",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
-    "electron": "^39.2.7",
     "esbuild": "^0.25.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "electron-updater": "6.8.9"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=22"

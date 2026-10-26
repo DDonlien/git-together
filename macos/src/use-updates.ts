@@ -21,7 +21,7 @@ export function useUpdates() {
         if (!mounted || started !== revision.current || (pending.current && value.phase !== phases[pending.current])) return;
         if (value.phase === 'installing' && !installingRef.current) installationRef.current += 1;
         installingRef.current = value.phase === 'installing';
-        setStatus(current => JSON.stringify(current) === JSON.stringify(value) ? current : value);
+        setStatus(current => value.phase !== 'downloading' && JSON.stringify(current) === JSON.stringify(value) ? current : value);
       }).catch(() => {
         if (mounted && !pending.current && !installingRef.current && started === revision.current) {
           const message = '无法读取应用更新状态，请重启 App 后重试。';

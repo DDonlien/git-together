@@ -1,62 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { isTrustedRendererURL, type RendererSource } from '../electron/renderer-source';
 import { releaseBranch, updateSource } from '../src/update-model';
 
-const packaged: RendererSource = { kind: 'file', path: '/Applications/Git Together.app/Contents/Resources/app/client/index.html' };
-
-test('packaged renderer trusts its exact page and fragment, not all opaque file origins', () => {
-  const url = pathToFileURL(packaged.path).href;
-  assert.equal(isTrustedRendererURL(url, packaged), true);
-  assert.equal(isTrustedRendererURL(`${url}#settings`, packaged), true);
-  for (const invalid of ['file:///tmp/index.html', 'file:///Applications/Git%20Together.app/Contents/Resources/app/client/assets/index.html', 'file://remote-host/Applications/Git%20Together.app/Contents/Resources/app/client/index.html', 'http://127.0.0.1:4173/', 'https://github.com/', 'null', 'not a URL']) {
-    assert.equal(isTrustedRendererURL(invalid, packaged), false, invalid);
-  }
-});
-
-test('development renderer retains the exact preview origin restriction', () => {
-  const source: RendererSource = { kind: 'url', url: 'http://127.0.0.1:4173/' };
-  assert.equal(isTrustedRendererURL('http://127.0.0.1:4173/?scene=08', source), true);
-  for (const invalid of ['http://127.0.0.1:4174/', 'http://localhost:4173/', 'https://127.0.0.1:4173/', 'file:///tmp/index.html', 'javascript:alert(1)', 'http://127.0.0.1:4173.attacker.example/']) {
-    assert.equal(isTrustedRendererURL(invalid, source), false, invalid);
-  }
-});
-
-test('packaged startup bypasses the preview server but keeps all native bridges main-frame-only', () => {
-  const source = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8');
-  assert.match(source, /app\.isPackaged[\s\S]*kind: 'file', path: join\(app\.getAppPath\(\), 'client', 'index\.html'\)/);
-  assert.match(source, /window\.loadFile\(rendererSource\.path\)/);
-  assert.match(source, /event\.senderFrame === window\.webContents\.mainFrame/);
-  assert.match(source, /isTrustedRendererURL\(event\.senderFrame\.url, rendererSource\)/);
-  for (const bridge of ['environment', 'theme', 'import', 'choose-directory', 'github-authorization', 'update-status', 'update-check', 'update-download', 'update-install']) {
-    assert.match(source, new RegExp(`ipcMain\\.handle\\('gittogether:${bridge}',[^]*?if \\(!isMainRenderer\\(event\\)\\)`));
-  }
-  assert.match(source, /contextIsolation: true, nodeIntegration: false, sandbox: true/);
-  assert.match(source, /properties: \['openDirectory'\]/);
-});
-
-test('desktop build uses relative client assets and a finite production-content allowlist', () => {
+test('Tauri build uses relative client assets and excludes Electron runtimes', () => {
   const source = readFileSync(new URL('../scripts/package-desktop.ts', import.meta.url), 'utf8');
-  assert.match(source, /configFile: false, root: source, base: '\.\/', envPrefix: \[\]/);
-  assert.match(source, /version: manifest\.version/);
-  assert.match(source, /main: 'desktop\/main\.cjs'/);
-  assert.match(source, /sourcemap: false/);
-  assert.match(source, /\['src', 'server', 'electron', 'public', 'index\.html', 'package\.json', 'package-lock\.json'\]/);
-  assert.match(source, /sourceDigest\(clientRoot\) !== sourceSha256/);
-  assert.doesNotMatch(source, /cp\(clientRoot,|copyFile\([^\n]*\.env|loadEnv\(|GITHUB_CLIENT_SECRET/);
-  assert.match(source, /await rm\(temporary, \{ recursive: true, force: true \}\)/);
+  assert.ok(source.includes("configFile: false, root: source, base: './', envPrefix: []"));
+  assert.ok(source.includes("version, framework: 'Tauri 2', backend: 'Rust'"));
+  assert.ok(source.includes("'--bundles', 'app'"));
+  assert.ok(source.includes('sourcemap: false'));
+  assert.ok(source.includes("['src', 'src-tauri', 'public', 'index.html', 'package.json', 'package-lock.json']"));
+  assert.ok(source.includes('sourceDigest(clientRoot) !== sourceSha256'));
+  assert.ok(source.includes('Electron Framework|\\.asar'));
+  assert.ok(!source.includes("main: 'desktop/main.cjs'"));
+  assert.ok(!source.includes('latest-mac.yml'));
+  assert.ok(source.includes('await rm(temporary, { recursive: true, force: true })'));
 });
-
-test('release packages require committed main source and retain the public GitHub release feed', () => {
+test('Tauri release packages require committed main source and publish the signed Tauri feed', () => {
   assert.equal(releaseBranch, 'main');
   assert.deepEqual(updateSource, { provider: 'github', owner: 'DDonlien', repo: 'git-together', private: false });
   const source = readFileSync(new URL('../scripts/package-desktop.ts', import.meta.url), 'utf8');
-  assert.match(source, /sourceBranch !== releaseBranch/);
-  assert.match(source, /'status', '--porcelain=v1', '--untracked-files=all', '--', \.\.\.sourceEntries/);
-  assert.match(source, /if \(sourceStatus\) throw/);
-  assert.match(source, /finalStatus \|\| finalBranch !== sourceBranch \|\| finalCommit !== sourceCommit/);
-  assert.match(source, /sourceSha256, sourceBranch, sourceCommit, version: manifest.version/);
-  assert.match(source, /JSON.stringify\(\{ \.\.\.updateSource, updaterCacheDirName:/);
+  assert.ok(source.includes('sourceBranch !== releaseBranch'));
+  assert.ok(source.includes("'status', '--porcelain=v1', '--untracked-files=all', '--', ...inputPaths"));
+  assert.ok(source.includes('sourceDigest(clientRoot) !== sourceSha256'));
+  assert.ok(source.includes("await git(['branch', '--show-current']) !== sourceBranch"));
+  assert.ok(source.includes("version, framework: 'Tauri 2'"));
+  assert.ok(source.includes('latest.json'));
+  assert.ok(!source.includes('latest-mac.yml'));
+  assert.ok(!source.includes('electron-updater'));
 });

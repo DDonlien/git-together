@@ -1,5 +1,5 @@
-name: Desktop tag release
-run-name: Desktop release ${{ github.ref_name }}
+name: Tauri 2 tag release
+run-name: Tauri 2 release ${{ github.ref_name }}
 on:
   push:
     tags: ['v*']
@@ -91,8 +91,9 @@ jobs:
           printf 'GITTOGETHER_NOTARY_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
           printf 'GITTOGETHER_RELEASE_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
           rm -f "$certificate" "$notary_key"
-      - name: Build, sign, notarize, and publish
-        run: node scripts/release.mjs
+      - name: Build, sign, notarize, and publish Tauri packages
+        if: steps.release-version.outputs.already_published != 'true'
+        run: npm run release
         env:
           GH_TOKEN: ${{ github.token }}
           GITTOGETHER_SOURCE_COMMIT: ${{ steps.release-version.outputs.source_commit }}

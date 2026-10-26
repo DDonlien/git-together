@@ -12,9 +12,9 @@ const repository = `${updateSource.owner}/${updateSource.repo}`;
 interface ReleaseAsset { id?: number; name: string; size: number; state: string; digest: string | null }
 interface Release { id: number; tag_name: string; draft: boolean; prerelease: boolean; target_commitish: string; html_url: string; assets: ReleaseAsset[] }
 export interface ReleasePackage {
-  version: string; sourceCommit: string; zipPath: string; updateMetadataPath: string;
+  version: string; sourceCommit: string; zipPath: string;
   sha256: string; sha512: string; size: number; notarized: boolean;
-  tauri?: { tarPath: string; signaturePath: string; manifestPath: string; signature: string; sha256: string; size: number };
+  tauri: { tarPath: string; signaturePath: string; manifestPath: string; signature: string; sha256: string; size: number };
   windows?: WindowsPackage[];
 }
 
@@ -37,18 +37,7 @@ export function verifyReleaseAssets(assets: ReleaseAsset[], expected: { name: st
   }
 }
 
-export function verifyUpdateMetadata(metadata: unknown, artifact: ReleasePackage) {
-  const data = metadata as { version?: string; path?: string; sha512?: string; files?: { url?: string; size?: number; sha512?: string }[] } | null;
-  const name = basename(artifact.zipPath);
-  if (!data || data.version !== artifact.version || data.path !== name || data.sha512 !== artifact.sha512
-    || !Array.isArray(data.files) || data.files.length !== 1 || data.files[0].url !== name
-    || data.files[0].size !== artifact.size || data.files[0].sha512 !== artifact.sha512) {
-    throw new Error('公开更新清单与最终公证安装包不一致。');
-  }
-}
-
 export function verifyTauriMetadata(metadata: unknown, artifact: ReleasePackage) {
-  if (!artifact.tauri) throw new Error('Tauri 更新资产缺失。');
   const data = metadata as { version?: string; pub_date?: string; platforms?: Record<string, { url?: string; signature?: string }> } | null;
   const platform = data?.platforms?.['darwin-aarch64'];
   const url = `https://github.com/${repository}/releases/download/v${artifact.version}/${basename(artifact.tauri.tarPath)}`;
@@ -65,21 +54,16 @@ export function verifyTauriMetadata(metadata: unknown, artifact: ReleasePackage)
   }
 }
 async function releaseFiles(artifact: ReleasePackage) {
-  const metadata = await readFile(artifact.updateMetadataPath);
-  verifyUpdateMetadata(JSON.parse(metadata.toString()), artifact);
   const files = [
     { path: artifact.zipPath, name: basename(artifact.zipPath), size: artifact.size, sha256: artifact.sha256, contentType: 'application/zip' },
-    { path: artifact.updateMetadataPath, name: basename(artifact.updateMetadataPath), size: metadata.length, sha256: createHash('sha256').update(metadata).digest('hex'), contentType: 'application/yaml' },
   ];
-  if (artifact.tauri) {
-    verifyTauriMetadata(JSON.parse(await readFile(artifact.tauri.manifestPath, 'utf8')), artifact);
-    if ((await readFile(artifact.tauri.signaturePath, 'utf8')).trim() !== artifact.tauri.signature) throw new Error('Tauri 签名文件不一致。');
-    for (const [path, contentType] of [[artifact.tauri.tarPath, 'application/gzip'], [artifact.tauri.signaturePath, 'text/plain'], [artifact.tauri.manifestPath, 'application/json']]) {
-      const bytes = await readFile(path);
-      const hash = createHash('sha256').update(bytes).digest('hex');
-      if (path === artifact.tauri.tarPath && (bytes.length !== artifact.tauri.size || hash !== artifact.tauri.sha256)) throw new Error('Tauri 签名包校验值不一致。');
-      files.push({ path, name: basename(path), size: bytes.length, sha256: hash, contentType });
-    }
+  verifyTauriMetadata(JSON.parse(await readFile(artifact.tauri.manifestPath, 'utf8')), artifact);
+  if ((await readFile(artifact.tauri.signaturePath, 'utf8')).trim() !== artifact.tauri.signature) throw new Error('Tauri 签名文件不一致。');
+  for (const [path, contentType] of [[artifact.tauri.tarPath, 'application/gzip'], [artifact.tauri.signaturePath, 'text/plain'], [artifact.tauri.manifestPath, 'application/json']]) {
+    const bytes = await readFile(path);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    if (path === artifact.tauri.tarPath && (bytes.length !== artifact.tauri.size || hash !== artifact.tauri.sha256)) throw new Error('Tauri 签名包校验值不一致。');
+    files.push({ path, name: basename(path), size: bytes.length, sha256: hash, contentType });
   }
   if (artifact.windows) {
     verifyWindowsPackages(artifact.windows, artifact.version, artifact.sourceCommit);
@@ -265,8 +249,8 @@ export async function prepareDesktopRelease(cwd: string, version: string, source
       await assertNewerVersion();
       await assertTag(true);
       const expected = await releaseFiles(artifact);
-      const notes = join(dirname(artifact.updateMetadataPath), 'release-notes.md');
-      await writeFile(notes, `# GitTogether ${version}\n\n同一版本提供 macOS Apple Silicon、Windows x86（32 位）和 Windows x64（64 位）。Windows 两种架构已通过原生构建、系统加密存储、Git 提交范围/暂存保留、进程取消及实际安装包校验；所有平台提供签名更新。macOS 保留 Developer ID 签名、Apple 公证及旧版过渡更新资产。\n\n本版新增本地文件树操作：按需读取目录、类型图标、隐藏项弱化、筛选与排序，以及复制、剪切/粘贴、移动、重命名、回收站删除和外部拖入复制/移动。每项操作先预览来源和目标，重名不会覆盖；远端文件树保持只读。Git Graph 选中行增加上下和两端留白，同时保留42px行高与连续提交连线。\n\nPresence 插件与团队协作状态、推送反馈及可选提交范围等能力继续保留。Windows 安装器使用当前用户范围并包含 WebView2 引导程序；Git/Git LFS 与可选的 Codex CLI 沿用本机安装。官方 Codex CLI 的 Windows 二进制支持 x64/ARM64，纯32位系统不能生成 AI 提交说明，普通 Git 操作可用。Windows 安装器当前未配置 Authenticode 代码签名；更新包签名已验证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
+      const notes = join(dirname(artifact.zipPath), 'release-notes.md');
+      await writeFile(notes, `# GitTogether ${version}\n\nGitTogether 桌面应用统一使用 Tauri 2 与 Rust，macOS Apple Silicon、Windows x86（32 位）和 Windows x64（64 位）均发布原生 Tauri 包。macOS 提供 Developer ID 签名及 Apple 公证；Tauri 更新器通过 latest.json 获取签名更新包。macOS ZIP 包含同一 Tauri 应用，可用于完整安装；旧版应用能否自动迁移尚未验收。安装包不包含 Electron 运行时。\n\nWindows 两种架构已通过原生构建、系统加密存储、Git 提交范围/暂存保留、进程取消及实际安装包校验。Windows 安装器使用当前用户范围并包含 WebView2 引导程序；Git/Git LFS 与可选的 Codex CLI 沿用本机安装。官方 Codex CLI 的 Windows 二进制支持 x64/ARM64，纯32位系统不能生成 AI 提交说明，普通 Git 操作可用。Windows 安装器当前未配置 Authenticode 代码签名；更新包签名已验证。\n\n源码来自 main：${sourceCommit}。\n\n在「设置 → 应用更新」检查、下载，然后选择重启安装。\n\n[查看源码变化](https://github.com/${repository}/compare/${latest?.tag_name ?? sourceCommit}...${sourceCommit})\n`);
       let draft: Release | null = null;
       await reconcileReleaseMutation(
         async () => {
@@ -353,12 +337,9 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
   const feed = await (await publicRead(feedUrl, async response => (await response.text()).includes('/releases/tag/' + tag))).text();
   if (!feed.includes('/releases/tag/' + tag)) throw new Error('应用更新器使用的公开版本列表尚未包含新版。');
   const base = 'https://github.com/' + repository + '/releases/download/' + tag;
-  verifyUpdateMetadata(await (await publicRead(base + '/latest-mac.yml')).json(), artifact);
-  if (artifact.tauri) {
-    verifyTauriMetadata(await (await publicRead(base + '/latest.json')).json(), artifact);
-    verifyTauriMetadata(await (await publicRead('https://github.com/' + repository + '/releases/latest/download/latest.json')).json(), artifact);
-    if ((await (await publicRead(base + '/' + basename(artifact.tauri.signaturePath))).text()).trim() !== artifact.tauri.signature) throw new Error('公共 Tauri 签名文件不一致。');
-  }
+  verifyTauriMetadata(await (await publicRead(base + '/latest.json')).json(), artifact);
+  verifyTauriMetadata(await (await publicRead('https://github.com/' + repository + '/releases/latest/download/latest.json')).json(), artifact);
+  if ((await (await publicRead(base + '/' + basename(artifact.tauri.signaturePath))).text()).trim() !== artifact.tauri.signature) throw new Error('公共 Tauri 签名文件不一致。');
   const temporary = await mkdtemp(join(tmpdir(), 'gittogether-public-check-'));
   try {
     const downloaded = join(temporary, 'app.zip');
@@ -371,12 +352,10 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
     const bytes = await readFile(downloaded);
     if (bytes.length !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256
       || createHash('sha512').update(bytes).digest('base64') !== artifact.sha512) throw new Error('公共安装包的大小或校验值不一致。');
-    if (artifact.tauri) {
-      const downloadedTar = join(temporary, 'app.tar.gz');
-      await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900', '--retry', '2', '--output', downloadedTar, base + '/' + basename(artifact.tauri.tarPath)], { timeout: 2_800_000 });
-      const tar = await readFile(downloadedTar);
-      if (tar.length !== artifact.tauri.size || createHash('sha256').update(tar).digest('hex') !== artifact.tauri.sha256) throw new Error('公共 Tauri 更新包的大小或校验值不一致。');
-    }
+    const downloadedTar = join(temporary, 'app.tar.gz');
+    await promisify(execFile)('/usr/bin/curl', ['--fail', '--location', '--silent', '--show-error', '--proto', '=https', '--proto-redir', '=https', '--connect-timeout', '30', '--max-time', '900', '--retry', '2', '--output', downloadedTar, base + '/' + basename(artifact.tauri.tarPath)], { timeout: 2_800_000 });
+    const tar = await readFile(downloadedTar);
+    if (tar.length !== artifact.tauri.size || createHash('sha256').update(tar).digest('hex') !== artifact.tauri.sha256) throw new Error('公共 Tauri 更新包的大小或校验值不一致。');
     for (const windows of artifact.windows ?? []) {
       if ((await (await publicRead(base + '/' + basename(windows.signaturePath))).text()).trim() !== windows.signature) throw new Error(`公共Windows ${windows.architecture}签名文件不一致。`);
       const path = join(temporary, basename(windows.installerPath));

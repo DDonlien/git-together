@@ -1,10 +1,18 @@
 # 本地开发
 
-## 当前 main 开发入口（2026-10-21）
+## 当前 main 开发入口（Tauri 2，2026-10-26）
 
-main 已采用用户认可的 GitHub Desktop 运行基础；使用 Node.js 22、Rust stable，在仓库根目录执行 `npm run setup`、`npm run check`、`npm test`、`npm run build`、`npm run dev`。根 package.json 是当前产品版本来源。macOS开发包使用根 `npm run package:mac`，它不代表正式签名、公证和自动更新发布。GitHub Actions 同时验证 main 和 github-desktop-based。详细执行边界见 [GitHub Desktop 执行基础](github-desktop-based.md)。
+当前桌面运行时是 macos/src-tauri 中的 Tauri 2 与 Rust。使用 Node.js 22、Rust stable；根目录 npm run setup、npm run check、npm test、npm run build、npm run dev 和 npm run desktop 分别委派给 Tauri 客户端。npm run desktop 启动 Tauri 桌面版；npm run tauri 可把参数转交给 Tauri CLI。
 
-以下记录包含迁移前阶段的验证和旧Tauri发布流程；其中旧server/electron/src-tauri入口不用于当前main开发或交付。
+npm run package:mac:dev 只生成本地 Tauri 包。npm run package:mac 和 npm run release 是正式构建、签名、公证、发布及公共资产回读入口，必须从已提交并推送的 main 运行。Electron 与 GitHub Desktop 不在当前依赖、构建或发布链中。
+
+以下为历史开发和验收记录；其中 GitHub Desktop/Electron 方向及旧的双更新源发布描述已经被 2026-10-26 的 Tauri 2-only 方向取代。
+
+## 历史：main 曾采用 GitHub Desktop 的开发入口（2026-10-21）
+
+历史快照：当时 main 使用 GitHub Desktop 运行基础和仓库根命令；该方案已于 2026-10-26 被 Tauri 2-only 生产入口取代。
+
+后续内容记录各迁移阶段的功能、验证和交付事实；历史结果不能替代当前 Tauri 源码、安装包或升级验收。
 
 ## 0.27.0：企业 GitHub、GitLab 与 Gitee（2026-10-12）
 

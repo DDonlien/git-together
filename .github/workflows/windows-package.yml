@@ -1,0 +1,46 @@
+name: Tauri Windows native packages
+run-name: Windows ${{ inputs.source_commit }}
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact main commit selected for the release
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: macos/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Add native Windows Rust targets
+        run: rustup target add i686-pc-windows-msvc x86_64-pc-windows-msvc
+      - name: Install Tauri client dependencies
+        run: npm ci --prefix macos
+      - name: Build and validate native Tauri installer
+        run: npm --prefix macos run package:windows -- ${{ matrix.arch }}
+        env:
+          GITTOGETHER_SOURCE_COMMIT: ${{ inputs.source_commit }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gittogether-windows-${{ matrix.arch }}
+          path: |
+            macos/artifacts/windows-package/${{ matrix.arch }}/build-info.json
+            macos/artifacts/windows-package/${{ matrix.arch }}/*.exe
+          if-no-files-found: error
+          retention-days: 7

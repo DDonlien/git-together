@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { Button, Modal, Notice } from './ui';
-import { updateDescription } from './update-model';
+import {
+  updateDescription,
+  updateProgressPercent,
+  updateTransferDescription,
+} from './update-model';
 import type { UpdatesController } from './use-updates';
 
 export function UpdateSettings({ busy, updates }: { busy: boolean; updates: UpdatesController }) {
   const { status, supported, action } = updates;
   const [confirm, setConfirm] = useState(false);
   const waiting = ['checking', 'downloading', 'installing'].includes(status.phase);
+  const showProgress =
+    status.phase === 'downloading' ||
+    (status.phase === 'ready' && status.downloadedBytes !== undefined);
+  const percent = updateProgressPercent(status);
   return <section className="settings-section" aria-labelledby="update-settings-title">
     <h2 id="update-settings-title">应用更新</h2>
     <div className="settings-group">
@@ -17,7 +25,10 @@ export function UpdateSettings({ busy, updates }: { busy: boolean; updates: Upda
       </div>
       <div className="update-feedback" aria-live="polite">
         {status.phase === 'error' || (status.phase === 'ready' && status.message) ? <Notice kind="error">{updateDescription(status)}</Notice> : <p>{updateDescription(status)}</p>}
-        {status.phase === 'downloading' && <progress aria-label="更新下载进度" value={status.percent ?? 0} max={100} />}
+        {showProgress && <>
+          <progress aria-label="更新下载进度" max={100} {...(percent === undefined ? {} : { value: percent })} />
+          <small className="update-transfer">{updateTransferDescription(status)}</small>
+        </>}
         {status.checkedAt && !waiting && <small>上次检查：{new Date(status.checkedAt).toLocaleString()}</small>}
       </div>
     </div>

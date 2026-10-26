@@ -1159,7 +1159,9 @@ impl Service {
         let writing = matches!(
             method,
             "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "prepareGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree"
-        ) {
+        );
+        let repository_read = matches!(method, "localWorkspace" | "remoteWorkspace" | "fetchRepository");
+        let _target = if writing || repository_read {
             let id = uuid::Uuid::new_v4().to_string();
             let key = format!(
                 "{}:{}",

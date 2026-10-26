@@ -2,7 +2,10 @@ use crate::{
     diagnostics::Diagnostics, service::Service, update_archive, update_error::UpdateFailure, util,
 };
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 use tauri_plugin_updater::{Update, UpdaterExt};
 pub struct Updates {
     diagnostics: Diagnostics,
@@ -37,9 +40,15 @@ impl Updates {
         self.set(json!({"phase":"error","message":message}))
     }
     fn retry_install(&self, version: &str, message: &str) -> Value {
-        self.set(
-            json!({"phase":"ready","availableVersion":version,"percent":100,"message":message}),
-        )
+        let previous = self.status();
+        let mut status =
+            json!({"phase":"ready","availableVersion":version,"percent":100,"message":message});
+        for key in ["downloadedBytes", "totalBytes"] {
+            if previous[key].is_number() {
+                status[key] = previous[key].clone();
+            }
+        }
+        self.set(status)
     }
     fn record(
         &self,
@@ -80,11 +89,13 @@ impl Updates {
         }
         .await;
         match result {
-            Ok(Some(u)) => {
+            Ok(Some(mut u)) => {
                 if !trusted(&u) {
                     self.record("check", "rejected", started, Some(&u.version), None);
                     return self.error("更新来源身份不匹配，未下载。");
                 }
+                // The check deadline must not cut a slow package transfer off.
+                u.timeout = Some(std::time::Duration::from_secs(15 * 60));
                 let version = u.version.clone();
                 self.record("check", "available", started, Some(&version), None);
                 *self.ready.lock().await = Some((u, None));
@@ -124,17 +135,44 @@ impl Updates {
         let version = update.version.clone();
         let started = util::now();
         self.record("download", "start", started, Some(&version), None);
-        self.set(json!({"phase":"downloading","availableVersion":version,"percent":0}));
+        self.set(json!({"phase":"downloading","availableVersion":version,"downloadedBytes":0,"progressUpdatedAt":util::now()}));
         let state = self.status.clone();
         let mut downloaded = 0u64;
+        let mut sample_started = None;
+        let mut sample_bytes = 0u64;
+        let mut bytes_per_second = None;
         let result = update
             .download(
                 move |n, total| {
                     downloaded += n as u64;
+                    let now = Instant::now();
+                    if let Some(started) = sample_started {
+                        let elapsed = now.duration_since(started).as_secs_f64();
+                        if elapsed >= 0.5 {
+                            bytes_per_second = Some(
+                                (downloaded.saturating_sub(sample_bytes) as f64 / elapsed).round()
+                                    as u64,
+                            );
+                            sample_started = Some(now);
+                            sample_bytes = downloaded;
+                        }
+                    } else {
+                        sample_started = Some(now);
+                        sample_bytes = downloaded;
+                    }
                     let mut status = state.lock().unwrap_or_else(|e| e.into_inner());
+                    status["downloadedBytes"] = json!(downloaded);
+                    status["progressUpdatedAt"] = json!(util::now());
+                    if let Some(bytes_per_second) = bytes_per_second {
+                        status["bytesPerSecond"] = json!(bytes_per_second);
+                    }
                     if let Some(total) = total.filter(|v| *v > 0) {
+                        status["totalBytes"] = json!(total);
                         status["percent"] =
                             json!(((downloaded as f64) / (total as f64) * 100.).min(100.));
+                    } else if let Some(fields) = status.as_object_mut() {
+                        fields.remove("totalBytes");
+                        fields.remove("percent");
                     }
                 },
                 || {},
@@ -143,8 +181,15 @@ impl Updates {
         match result {
             Ok(bytes) => {
                 self.record("download", "ready", started, Some(&version), None);
+                let size = bytes.len() as u64;
                 *self.ready.lock().await = Some((update, Some(bytes)));
-                self.set(json!({"phase":"ready","availableVersion":version,"percent":100}))
+                self.set(json!({
+                    "phase":"ready",
+                    "availableVersion":version,
+                    "percent":100,
+                    "downloadedBytes":size,
+                    "totalBytes":size
+                }))
             }
             Err(e) => {
                 let failure = UpdateFailure::new(&e, "download");
