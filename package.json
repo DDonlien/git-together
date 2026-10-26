@@ -1,6 +1,6 @@
 {
   "name": "git-together",
-  "version": "0.38.7",
+  "version": "0.38.8",
   "private": true,
   "type": "module",
   "description": "GitTogether desktop client built with Tauri 2 and Rust",

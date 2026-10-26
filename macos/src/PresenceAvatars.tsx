@@ -1,7 +1,7 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useRef, useState } from 'react';
 import type { RemoteRepository } from './import-model';
 import { usePresence } from './PresenceProvider';
-import { presencePeople, presenceRepositoryColor, presenceRepositoryId, type PresencePerson } from './presence-model';
+import { presencePeople, presenceRepositoryId, type PresencePerson } from './presence-model';
 import { useRemoteControl } from './RemoteControlProvider';
 import { RemoteActionDialog, RemoteWorkspaceActions } from './RemoteControlProjects';
 import { controlDeviceOnline, presenceDeviceSources, presenceRemoteTargets, type RemoteActionTarget } from './remote-control-model';
@@ -29,7 +29,6 @@ export function PresenceAvatarGroup({ repository, branch, people, className = ''
   const trigger = useRef<HTMLButtonElement>(null);
   const id = presenceRepositoryId(repository);
   const label = `${branch === undefined ? repository.name : branch} · ${people.length} 台协作设备`;
-  const color = { '--presence-color': presenceRepositoryColor(id) } as CSSProperties;
   const rows = people.map(person => ({ person, branches: person.branches.map(entry => ({ ...entry, targets: open && status ? presenceRemoteTargets(status, id, entry).filter(({ device }) => controlDeviceOnline(status, device)).map(target => {
     const source = entry.sources.find(value => value.serverId === target.device.serverId && value.deviceId === target.device.deviceId && value.userId === target.device.userId && (!value.identityId || value.identityId === target.device.identityId) && value.organizationId === target.workspace.teamId && (target.workspace.worktreeId ? value.worktreeId === target.workspace.worktreeId : entry.sources.length === 1));
     const pendingActions = status.jobs.filter(job => job.serverId === target.device.serverId && job.deviceId === target.device.deviceId && job.workspaceId === target.workspace.id && ['queued', 'running'].includes(job.status)).length;
@@ -45,10 +44,10 @@ export function PresenceAvatarGroup({ repository, branch, people, className = ''
     setTarget(null);
     requestAnimationFrame(() => trigger.current?.focus());
   }
-  return <><Popover key={roster} label={label} open={open} onOpenChange={setOpen} placement="start" className={`presence-avatar-popover ${className}`} style={color} trigger={<button ref={trigger} type="button" className="presence-avatar-trigger" aria-haspopup="dialog" title={label} onClick={event => event.stopPropagation()}>
+  return <><Popover key={roster} label={label} open={open} onOpenChange={setOpen} placement="start" className={`presence-avatar-popover ${className}`} trigger={<button ref={trigger} type="button" className="presence-avatar-trigger" aria-haspopup="dialog" title={label} onClick={event => event.stopPropagation()}>
     <span className="presence-avatar-stack">{people.slice(0, 3).map((person, index) => <span key={person.userId} style={{ zIndex: 3 - index }}><PresenceAvatar person={person} /></span>)}</span>
   </button>}>
-    <div className="presence-people-content" style={color} onClick={event => event.stopPropagation()}><div className="presence-people-heading"><strong>{branch === undefined ? repository.name : branch}</strong><Button variant="quiet" aria-label="关闭协作人员" onClick={() => { setOpen(false); trigger.current?.focus(); }}><Icon name="close" size={13} /></Button></div>
+    <div className="presence-people-content" onClick={event => event.stopPropagation()}><div className="presence-people-heading"><strong>{branch === undefined ? repository.name : branch}</strong><Button variant="quiet" aria-label="关闭协作人员" onClick={() => { setOpen(false); trigger.current?.focus(); }}><Icon name="close" size={13} /></Button></div>
     <ul className="presence-people-list">{rows.map(({ person, branches }) => <li key={person.userId}><PresenceAvatar person={person} large /><div><strong>{person.displayName} ({person.deviceName})</strong><ul className="presence-people-branches">{branches.map(entry => <li key={entry.branch || ''}>
       <div className="presence-branch-row"><span className="presence-branch-name" title={entry.branch || undefined}>{entry.branch || '分离 HEAD'}</span>{entry.counts.editingFiles > 0 && <span className="presence-branch-editing-count" title={`${entry.counts.editingFiles} 个文件正在编辑`} aria-label={`${entry.counts.editingFiles} 个文件正在编辑`}>{entry.counts.editingFiles}</span>}<div className="presence-branch-actions">{entry.targets.map(({ device, workspace, actionCounts }, index) => <RemoteWorkspaceActions key={`${device.serverId || ''}:${device.deviceId}:${workspace.id}`} device={device} workspace={workspace} compact label={entry.targets.length > 1 ? `工作目录 ${index + 1}` : undefined} actionCounts={actionCounts} onAction={openAction} />)}</div></div>
     </li>)}</ul></div></li>)}</ul>

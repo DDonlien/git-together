@@ -130,9 +130,3 @@ export function presenceWorkspaces(status: PresenceStatus | null, repositoryId: 
   }
   return workspaces;
 }
-
-export function presenceRepositoryColor(repositoryId: string): string {
-  let hash = 2166136261;
-  for (const char of repositoryId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
-  return `hsl(${(hash >>> 0) % 360} 62% 52%)`;
-}
