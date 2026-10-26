@@ -326,12 +326,17 @@ export async function verifyPublicDesktopRelease(artifact: ReleasePackage): Prom
   const tag = 'v' + artifact.version;
   if (!artifact.notarized) throw new Error('只能核对已完成公证的正式包。');
   const expected = await releaseFiles(artifact);
-  const publicLatest = await (await publicRead('https://api.github.com/repos/' + repository + '/releases/latest', async response => {
-    const current = await response.json() as Release;
-    return current.tag_name === tag && !current.draft && !current.prerelease;
-  })).json() as Release;
+  // The API is used only for provenance and asset digests. Hosted runners share
+  // its anonymous quota; the actual updater manifest and every download below
+  // must still succeed without an Authorization header.
+  const metadata = async <T>(path: string): Promise<T> => {
+    const { stdout } = await promisify(execFile)('gh', ['api', `repos/${repository}/${path}`], { timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
+    return JSON.parse(stdout) as T;
+  };
+  const publicLatest = await metadata<Release>('releases/latest');
+  if (publicLatest.tag_name !== tag || publicLatest.draft || publicLatest.prerelease) throw new Error('GitHub最新正式版本与本次发布不一致。');
   verifyReleaseAssets(publicLatest.assets, expected);
-  const commit = await (await publicRead('https://api.github.com/repos/' + repository + '/commits/' + tag)).json() as { sha: string };
+  const commit = await metadata<{ sha: string }>('commits/' + tag);
   if (commit.sha !== artifact.sourceCommit) throw new Error('公开tag与原始打包源码不一致。');
   const feedUrl = 'https://github.com/' + repository + '/releases.atom';
   const feed = await (await publicRead(feedUrl, async response => (await response.text()).includes('/releases/tag/' + tag))).text();
