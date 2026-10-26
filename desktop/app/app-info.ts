@@ -24,7 +24,7 @@ export function getReplacements() {
     __WIN32__: process.platform === 'win32',
     __LINUX__: process.platform === 'linux',
     __APP_NAME__: s(productName),
-    __APP_VERSION__: s(version),
+    __APP_VERSION__: s(process.env.GITTOGETHER_VERSION || version),
     __DEV__: isDevBuild,
     __DEV_SECRETS__: isDevBuild || !process.env.DESKTOP_OAUTH_CLIENT_SECRET,
     __RELEASE_CHANNEL__: s(channel),

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { UpdateStatus } from './update-model';
-import pkg from '../package.json';
+import { productVersion } from './product-version';
 
 type Action = 'check' | 'download' | 'install';
 const phases = { check: 'checking', download: 'downloading', install: 'installing' } as const;
 
 export function useUpdates() {
   const bridge = typeof window === 'undefined' ? undefined : window.gittogether?.updates;
-  const [status, setStatus] = useState<UpdateStatus>({ phase: bridge ? 'idle' : 'unavailable', currentVersion: pkg.version });
+  const [status, setStatus] = useState<UpdateStatus>({ phase: bridge ? 'idle' : 'unavailable', currentVersion: productVersion });
   const installingRef = useRef(false);
   const installationRef = useRef(0);
   const pending = useRef<Action | null>(null);

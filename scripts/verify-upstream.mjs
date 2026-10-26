@@ -25,6 +25,8 @@ function check(path) {
 }
 check('app/src');
 const approvedPatches = new Set([
+  "app/package-info.ts",
+  "app/app-info.ts",
   "README.md",
   "docs/contributing/linting.md",
   "docs/contributing/setup-linux.md",

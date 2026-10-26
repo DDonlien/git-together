@@ -4251,6 +4251,14 @@
     "app/static/common/gitignore/README.md": {
       "sha256": "e54c7e021fbf01c21d8fb2c5feffbd5399e916d91674ff46d66adebd388f3376",
       "reason": "Documentation-only relative Markdown link normalization from the issue-document migration; original upstream hash retained."
+    },
+    "app/package-info.ts": {
+      "sha256": "055593f9c6c159e8dff79d6d8ae6285f37d725f0b79a94a63108fd7baa5bf2ff",
+      "reason": "Build-time product version override for an exact release tag; original Git and authentication behavior unchanged."
+    },
+    "app/app-info.ts": {
+      "sha256": "9c8d03dbb80a02ca39675ee43090f8a1d40e9bdb7217967b4fda9c997324ff3f",
+      "reason": "Build-time product version override for an exact release tag; original Git and authentication behavior unchanged."
     }
   },
   "submodules": [

@@ -4,7 +4,7 @@ import { emptyCatalog, isCatalog, isRecord, latestCatalog, type ApiInputs, type 
 import { syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
 import { useRemoteRepositories } from './use-remote-repository';
-import pkg from '../package.json';
+import { productVersion } from './product-version';
 import { preserveLocalWorkspace, type RepositoryWorkspace } from './repository-model';
 import { logDiagnostic } from './diagnostics-api';
 import { diagnosticFailure } from './diagnostics-model';
@@ -100,8 +100,8 @@ export function useWorkspace(activeRepositoryId = '') {
       try {
         const info = await importAPI('status', {});
         serviceRef.current = info;
-        if (mounted.current) { setService(info); setNeedsReload(info.version !== pkg.version); }
-        verifyServiceVersion(info.version, pkg.version);
+        if (mounted.current) { setService(info); setNeedsReload(info.version !== productVersion); }
+        verifyServiceVersion(info.version, productVersion);
         if (mounted.current) {
           setError('');
           if (catalogRef.current.instanceId && catalogRef.current.instanceId !== info.instanceId) {

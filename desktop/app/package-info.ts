@@ -11,7 +11,7 @@ export function getCompanyName() {
 }
 
 export function getVersion() {
-  return version
+  return process.env.GITTOGETHER_VERSION || version
 }
 
 export function getBundleID() {

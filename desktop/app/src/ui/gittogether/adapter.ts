@@ -34,8 +34,7 @@ import { CommitMessageGenerator } from './commit-message-generator'
 import { PlatformFetchGate } from './platform-fetch'
 
 export const instanceId = randomUUID()
-import { version as productVersion } from '../../../../../package.json'
-export { productVersion }
+export const productVersion = __APP_VERSION__
 const accountId = (a: Account) => `${a.endpoint}:${a.id}`
 const taskId = (branch: string, path: string) => `worktree:${branch}:${path}`
 export const fileStatus = (file: { status: { kind: AppFileStatusKind; oldPath?: string }; path: string }): LocalFile => ({

@@ -22,6 +22,7 @@ assert.equal(build.version, pkg.version);
 assert.equal(build.channel, 'production');
 assert.equal(build.sourceDirty, false, 'Commit and push before making a release.');
 assert.equal(build.sourceSha256, sourceState(root));
+assert.equal(JSON.parse(readFileSync(join(desktop, 'out/package.json'), 'utf8')).version, pkg.version, 'The packaged runtime must use the release version.');
 const destination = join(root, 'artifacts/releases', pkg.version);
 mkdirSync(destination, { recursive: true });
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { cwd: root, stdio: 'inherit', ...options });
