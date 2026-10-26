@@ -10,11 +10,11 @@ import vm from 'node:vm';
 const root = Path.resolve(import.meta.dirname, '..');
 const require = createRequire(new URL('../desktop/package.json', import.meta.url));
 const ts = require('typescript');
-const fixture = realpathSync(mkdtempSync(Path.join(tmpdir(), 'gittogether-worktrees-')));
+const fixture = realpathSync.native(mkdtempSync(Path.join(tmpdir(), 'gittogether-worktrees-')));
 const hooks = Path.join(fixture, 'hooks');
 mkdirSync(hooks);
 after(() => {
-  assert.equal(Path.dirname(fixture), realpathSync(tmpdir()));
+  assert.equal(Path.dirname(fixture), realpathSync.native(tmpdir()));
   rmSync(fixture, { recursive: true, force: true });
 });
 
