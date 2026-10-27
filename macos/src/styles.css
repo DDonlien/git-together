@@ -361,6 +361,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-column-heading.is-collapsed > .repository-column-disclosure { order: 0; }
 .repository-column-empty { min-height: 160px; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px 14px; color: var(--muted); text-align: center; font-size: 11px; }
 .repository-column-empty > svg { opacity: .6; }
+.repository-unlinked-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .repository-task-stack { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .repository-change-context { overflow: hidden; }
 .repository-change-context > .repository-task-slot { flex: 1 1 0; overflow: hidden; }
