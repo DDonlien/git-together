@@ -1,6 +1,6 @@
 # GitTogether
 
-[当前正式版 GitTogether 0.38.9](https://github.com/DDonlien/git-together/releases/tag/v0.38.9) 修复Presence头像环：同一人员＋设备在本次打开期间固定颜色，跨仓库、分支和弹窗一致。桌面统一使用 Tauri 2/Rust：macOS Apple Silicon ZIP 约 6.96 MB，Windows x86/x64 安装包约 5.97/6.38 MB。更新卡片显示实际已下载容量、总容量、百分比和速度。macOS Developer ID 签名与 Apple 公证、三平台更新签名及公开完整下载均已核对。
+[当前正式版 GitTogether 0.38.10](https://github.com/DDonlien/git-together/releases/tag/v0.38.10) 修复远端文件树的打开按钮：悬停或键盘聚焦文件行后显示，点击在浏览器打开对应文件，触控环境保留可见入口。Presence头像环继续按同一人员＋设备在本次打开期间固定颜色。桌面统一使用 Tauri 2/Rust：macOS Apple Silicon ZIP 约 6.96 MB，Windows x86/x64 安装包约 5.97/6.38 MB。更新卡片显示实际已下载容量、总容量、百分比和速度。macOS Developer ID 签名与 Apple 公证、三平台更新签名及公开完整下载均已核对。
 
 新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
 

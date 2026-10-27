@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 多仓库与文件提交工作台。'
 原稳定 ID: '`x`、`R-04`、`R-05`、`R-05-repository-browser-link`、`R-05-header-actions`、`R-05-local-submit`、`R-05-local-submit-test`、`R-05-commit-composer`、`R-05-commit-composer-ai-loading`、`R-05-commit-composer-ai-loading-test`、`R-05-commit-composer-windows-cli`、`R-05-commit-composer-ai-fast-context`、`R-05-commit-composer-windows-cli-test`、`R-05-commit-composer-windows-cli-local-update`、`R-05-commit-composer-official-m3`、`R-05-search-compact`、`R-05-commit-composer-compact-type`、`R-05-commit-composer-thin-outline`、`R-05-graph-local-states`、`R-05-graph-local-states-vertical-padding`、`R-05-local-preview-removal`、`R-05-local-file-operations`、`R-05-local-preview-removal-test`、`R-05-local-history-diff`、`R-05-local-history-diff-test`、`R-05-column-insets`、`R-05-column-insets-test`、`R-05-tree-identity-row`、`R-05-tree-identity-footer-test`、`R-05-tree-directory-open`、`R-05-tree-directory-open-test`、`R-05-tree-identity-row-test`、`R-05-branch-title`、`R-05-branch-title-test`、`R-05-column-footers`、`R-05-column-footers-test`、`R-05-tree-open`、`R-05-tree-open-spacing`、`R-05-tree-open-test`、`R-05-change-context`、`R-05-change-context-spacing`、`R-05-change-context-test`、`R-05-global-tree`、`R-05-global-tree-test`、`R-05-remote-focus-control`、`R-05-remote-focus-control-test`、`R-05-gitlens-graph`、`R-05-gitlens-graph-history-note`、`R-05-gitlens-graph-scroll`、`R-05-gitlens-graph-scroll-test`、`R-05-gitlens-graph-sync`、`R-05-gitlens-graph-local`、`R-05-gitlens-graph-shallow`、`R-05-gitlens-graph-filter`、`R-05-gitlens-graph-author-filter`、`R-05-gitlens-graph-local-test`、`R-05-gitlens-graph-test`、`R-05-graph-header`、`R-05-graph-header-test`、`R-05-remote-inline-preview`、`R-05-remote-inline-preview-test`、`R-05-remote-metadata`、`R-05-remote-metadata-test`、`R-05-remote`、`R-05-remote-integration`、`R-05-remote-test`、`R-05-layout`、`R-05-history-details`、`R-05-history-body`、`R-05-history-body-test`、`R-05-history-details-test`、`R-05-column-collapse`、`R-05-column-collapse-horizontal`、`R-05-column-resize`、`R-05-column-resize-test`、`R-05-column-collapse-test`、`R-05-overview`、`R-05-overview-test`、`R-05-data`、`R-05-test`、`R-05-tree-source`、`R-05-tree-source-radius`、`R-05-tree-source-radius-test`、`R-05-tree-source-test`、`UI-01`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-27T14:24:04+08:00'
+updated-time: '2026-10-27T14:54:31+08:00'
 ---
 
 # Description
@@ -52,7 +52,7 @@ updated-time: '2026-10-27T14:24:04+08:00'
   - [x] \[R-05-column-footers] 按最新批注移除分支图底部的提交数量、匹配计数和导航状态栏，以及文件树底部的操作栏，不留下空行、分隔线或占位。保留键盘导航、搜索匹配跳转、复制反馈、文件打开、来源切换、独立收起与目录状态；本地配置继续从 Dashboard 访问，不在树底部保留按钮。只调整前端呈现，不改变账号、授权或 Git 行为。
     - [x] \[R-05-column-footers-test] 新增4项回归覆盖空/有提交、搜索、远端/本地及关联/未关联状态；strict、292/292、4/4静态包装、生产构建及差异检查通过。隔离真实Git浏览器确认两处底栏DOM为0、图滚动内容和树内容栈均延伸到栏底700px、原分隔线/占位不存在；菜单匹配跳转后焦点回记录，⌘G、方向键与取消正常，本地/远端来源、文件选择/打开入口、目录折叠、两栏开关和草稿保持。截图为1280×720隔离数据，不替代真实账号或原生包验收。统一入口自动恢复到0.8.1，实例a57fd563-1fa5-4600-904b-69f128e7ff4a，0账号/0仓库/0关联，授权助手同版本且configured=true；设置表单Taobe名称与原收起侧栏恢复，没有重填应用配置、授权同意、Git写入或打包。
   - [x] \[R-05-tree-open] 文件树的文件行右侧在悬停或键盘聚焦时显示独立打开按钮：远端打开对应 provider 的当前树基准文件网页，本地通过系统默认应用打开已关联仓库/工作目录中的实际文件。打开不改变文件/提交选择、目录展开、来源或草稿；目录不添加此按钮，当前目录中不存在的历史条目明确不可打开。保持行高、状态字母、色彩及公共轻量控件，触控环境保留可发现入口。系统打开只接受有限仓库/任务/字面路径身份，不接受任意目录、URL或命令，拒绝越界和不存在的文件。
-    - [x] \[R-05-tree-open-hover] 2026-10-27修复远端文件行已有打开按钮始终不可见的问题：尺寸规则中的隐藏样式优先级高于hover/focus/触控显示规则。把可见性单独放在较低优先级规则中，保留24px按钮占位、12px图标和既有文件打开链路。实际生产组件及完整CSS的无界面功能检查复现旧规则悬停仍隐藏，修复后悬停/Tab聚焦/触控可见，浏览器URL及Tauri有限打开请求正确，点击不改变文件选择或行宽。类型、Cargo --locked、现有27项测试和前端构建通过；0.38.10正式包及更新源另行记录，用户视觉验收待完成。
+    - [x] \[R-05-tree-open-hover] 2026-10-27修复远端文件行已有打开按钮始终不可见的问题：尺寸规则中的隐藏样式优先级高于hover/focus/触控显示规则。把可见性单独放在较低优先级规则中，保留24px按钮占位、12px图标和既有文件打开链路。实际生产组件及完整CSS的无界面功能检查复现旧规则悬停仍隐藏，修复后悬停/Tab聚焦/触控可见，浏览器URL及Tauri有限打开请求正确，点击不改变文件选择或行宽。类型、Cargo --locked、现有27项测试和前端构建通过；已随0.38.10正式发布，三平台签名更新包及公开完整下载/更新源通过，用户视觉验收待完成。
     - [x] \[R-05-tree-open-spacing] 按2026-10-10截图调整文件树行尾打开按钮：保留28px行与24px点击区，将可见悬停背景缩至20px、图标缩至12px，上下及右缘各留4px。打开控件常驻占位，悬停/聚焦不移动名称或状态；整行悬停、选择、打开与键盘语义保持。0.17.5类型检查、生产构建和差异检查通过，开发页面实际读到新样式及版本；未新增或运行测试，当前预览没有账号/仓库，未冒称实际文件行hover验收。4173/4174已同步0.17.5、configured=true；未更新安装包或发布。
     - [x] \[R-05-tree-open-test] 新增12项回归，覆盖两provider安全地址、实际主目录/feature worktree与literal pathspec、缺失/ignored/目录/越界符号链接、失败/解绑/移除、同源HTTP与有限原生入口。strict、288/288、4/4静态包装、生产构建、main/preload内存编译、差异检查通过。隔离生产App实际测得按钮24px/图标14px/行28px，hover与Tab/Enter、当前树HEAD链接、缺失禁用及提交/文件/目录/草稿保持；点击本地txt后系统文本编辑读到精确文稿。远端只观察到正确网页打开事件，不冒充fixture域名真实加载；触控为无hover CSS契约验证，原生安装包和真实账号私有网页未验收。23:21:10恢复4173/4174到0.8.0，实例6d5934cf-bcdf-4f25-8aee-3246afe81df4，0账号/0仓库/0关联，configured=true；设置Taobe名称与可用网页授权入口恢复。测试临时仓库清理，用户Git未改动。
   - [x] \[R-05-change-context] 按最新裁切/默认差异与多任务滚动批注，中栏一次只显示选中提交的完整差异文件列表，底部固定该提交comment/元信息，只有列表内部滚动，不再沿多个远端卡片不断下滚或保留160px裁切。可切换普通列表与Added/Modified/Deleted状态分组，保留全部文件、未知状态、搜索、选择及警告，不恢复已移除的远端文本预览。未选提交不默认读取HEAD差异；有本地目录时显示其真实未提交更改，多本地工作目录可选择；未关联时为空态。远端树保持完整当前目录且仅在显式选择提交时着色，取消后恢复中性；本地树保持真实工作目录标记。保留三栏开关、目录状态、逐任务草稿，不重启账号/授权服务或执行Git写操作。这取代此前默认HEAD差异、取消恢复HEAD着色和中栏多卡片叠放的约定。
@@ -163,5 +163,17 @@ updated-time: '2026-10-27T14:24:04+08:00'
 无界面Chromium使用实际生产组件和完整CSS，重新应用原始规则复现悬停仍隐藏，再移除原规则验证修复。悬停、Tab聚焦、触控可见，真实浏览器处理器生成包含空格/#/?/%文件名的正确编码URL；Tauri桥接入口发送仅含仓库、source=remote、完整SHA与字面路径的openFile请求。打开不触发选择且行宽不变，无页面异常；系统浏览器与真实账号未被打开。首次隔离测试页使用about:blank，缺少安全上下文的crypto.randomUUID，已将隔离页改为路由拦截的HTTPS源后通过，未修改产品代码来迁就测试。
 
 验证脚本及报告位于项目容器_builds/file-tree-hover/verify.mjs和verification.json。TypeScript、Cargo --locked、现有27项测试、前端构建及差异检查通过。产品版本统一递增0.38.10，后续按既有授权完成三平台正式签名/公证、发布及公共下载回读；未操作用户安装版。保留其他会话已提交的main更新和未提交Issue/附件。本次执行环境没有提供具体模型标识。
+
+[本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261027-145431_Codex
+
+0.38.10已从main源码c0fbd472f339c0d3d599129395087b66f935d31a正式发布并成为GitHub Latest。源码检查40460919827、Windows x86/x64原生构建40460925101全部success；Mac发布40460978679第二次尝试success。首次job122045245881已完成编译、签名和公证票据装订，但在调用api.apple-cloudkit.com校验票据时遇到CFNetwork -1005，xcrun stapler validate以68退出，且当时未创建公开Release；只重试失败Mac任务并复用已通过Windows包，没有重复发布或改写tag。
+
+第二次Mac公证1469a61a-8209-413d-a3eb-4d290034d355为Accepted，装订和票据validate通过。独立完整下载8项公开资产，大小与SHA-256和GitHub记录一致；Mac ZIP与签名tar包含同一Tauri应用，bundle版本0.38.10、Developer ID签名及公证票据通过，三平台更新包签名和签名版本通过；公开latest.json、最新下载清单及Atom一致。Mac ZIP为6,957,865字节，SHA-256为f5ddd6553107ed0a63d819701bbe1a1f0a89fc2300c46ef34d413b6af9de9f98；Windows x86/x64为5,967,398 / 6,378,432字节，原生验证涵盖系统加密、Git/LFS选中文件提交及暂存保留、进程取消、安装/启动和卸载。
+
+验收报告及完整公开下载保留在项目容器_builds/public-verify-0.38.10/verification.json。此前无界面生产组件的悬停、键盘、触控、浏览器地址、Tauri打开请求及选择/行宽保留检查通过；没有操作用户安装版或打开真实账号的远端文件，用户视觉和真实账号网页验收仍待用户完成。本次执行环境没有提供具体模型标识。
+
+[正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.38.10)
 
 [本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
