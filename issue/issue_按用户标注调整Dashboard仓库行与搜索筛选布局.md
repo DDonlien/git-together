@@ -10,14 +10,14 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-14`、`IMPORT-14-last-divider`、`IMPORT-14-last-divider-test`、`IMPORT-14-grouped-actions`、`IMPORT-14-header-alignment`、`IMPORT-14-header-alignment-runtime`、`IMPORT-14-header-count-corner`、`IMPORT-14-production-submit`、`IMPORT-14-submit-refresh-pause`、`IMPORT-14-submit-refresh-pause-test`、`IMPORT-14-submit-generation-job`、`IMPORT-14-submit-generation-job-test`、`IMPORT-14-production-submit-runtime`、`IMPORT-14-push-lfs-errors`、`IMPORT-14-submit-popup`、`IMPORT-14-submit-summary-only`、`IMPORT-14-submit-popup-width`、`IMPORT-14-windows-lfs-commit`、`IMPORT-14-commit-timeout-headless`、`IMPORT-14-submit-popup-production`、`IMPORT-14-submit-popup-h5`、`IMPORT-14-submit-ai`、`IMPORT-14-header-text`、`IMPORT-14-download-icon`、`IMPORT-14-grouped-icons`、`IMPORT-14-grouped-refinement`、`IMPORT-14-grouped-h5`、`IMPORT-14-branch-name-alignment`、`UI-04-repository-reveal`、`IMPORT-14-inline`、`IMPORT-14-number-ignore`、`IMPORT-14-read-badges`、`IMPORT-14-read-health-scope`、`IMPORT-14-read-badges-test`、`IMPORT-14-read-failure-live`、`IMPORT-14-check-cycle`、`IMPORT-14-change-trigger`、`IMPORT-14-zero-badges`、`IMPORT-14-diagnostics`、`IMPORT-14-performance`、`IMPORT-14-performance-source`、`IMPORT-14-performance-runtime`、`IMPORT-14-diagnostics-copy`、`IMPORT-14-diagnostics-test`、`IMPORT-14-operation-semantics`、`IMPORT-14-branch-download`、`IMPORT-14-branch-download-layout`、`IMPORT-14-branch-download-layout-test`、`IMPORT-14-operation-semantics-test`、`IMPORT-14-visible`、`IMPORT-14-hide`、`IMPORT-14-hide-counts`、`IMPORT-14-hide-header-count`、`IMPORT-14-operation-execution`、`IMPORT-14-operation-collapse`、`IMPORT-14-operation-collapse-icons`、`IMPORT-14-feedback`、`IMPORT-14-action-names`、`IMPORT-14-action-names-test`、`IMPORT-14-feedback-test`、`IMPORT-14-number-ignore-test`、`IMPORT-14-test`、`IMPORT-15`、`IMPORT-15-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-27T07:25:47+00:00'
+updated-time: '2026-10-27T07:51:04+00:00'
 ---
 
 # Description
 
 ## 当前需求与范围
-- [x] \[IMPORT-14-empty-gitea-branches] 修正 Gitea 空仓库分支读取：日志显示请求 HTTP 200 后被误判为格式无效；只读检查确认目标仓库没有引用，服务端标记为空。Gitea 1.26.2 的空仓库分支接口返回 JSON null；客户端仅在 Gitea 首页面且分页信息一致时将其识别为完整空列表，真正的权限错误、异常数据与后续分页错误仍保留。0.38.11 源码完成，正式发布待验证。
-- [x] \[IMPORT-14-transient-success-feedback] Dashboard 和仓库页完整成功操作及刷新成功提示在 6 秒后消失，连续成功重新计时；部分完成、警告、错误与信息保留，操作提示可手动关闭。0.38.11 源码完成，用户安装版尚待验收。
+- [x] \[IMPORT-14-empty-gitea-branches] 修正 Gitea 空仓库分支读取：日志显示请求 HTTP 200 后被误判为格式无效；只读检查确认目标仓库没有引用，服务端标记为空。Gitea 1.26.2 的空仓库分支接口返回 JSON null；客户端仅在 Gitea 首页面且分页信息一致时将其识别为完整空列表，真正的权限错误、异常数据与后续分页错误仍保留。0.38.11 已正式发布，用户安装版尚待验收。
+- [x] \[IMPORT-14-transient-success-feedback] Dashboard 和仓库页完整成功操作及刷新成功提示在 6 秒后消失，连续成功重新计时；部分完成、警告、错误与信息保留，操作提示可手动关闭。0.38.11 已正式发布，用户安装版尚待验收。
 - [x] \[IMPORT-14] 按 Dashboard 四处标注做局部修改：仅仓库性质文字比原样式小 2px；移除账号列前的图标；分支图标与名称使用和左侧仓库导航相同的间距。行尾菜单分为 Git（Fetch、Pull、Push、提交）与 GitTogether（打开工作台、配置本地目录），本地目录列保留配置入口。用户确认本轮先接入已有操作；尚未实现的 Git 操作禁用并明确标识，不模拟成功或操作用户仓库。
   - [x] \[IMPORT-14-last-divider] Dashboard 仓库列表最下方的可见行不显示底部分割线，收起的分支容器不影响最后一行的判断；保留其他仓库行的分隔和卡片外边框，搜索、排序及展开收起后仍遵循同一规则。0.30.6 已修正末行样式匹配，尚未更新用户安装版。
     - [x] \[IMPORT-14-last-divider-test] 类型检查及生产前端构建通过。隔离浏览器使用生产 CSS 和 Dashboard 的成对 tbody 结构，实际核对亮暗主题下双仓库收起、最后仓库展开、筛选后单仓库和空列表共八种呈现：末行全部单元格底线为 0，前面的仓库分隔及卡片外边框为 1px。此为样式呈现验证，没有运行旧后台测试，不替代真实账号或用户安装版验收。
@@ -139,5 +139,11 @@ updated-time: '2026-10-27T07:25:47+00:00'
 ## 20261027-152547_Codex-GPT-6.1-Terra
 
 排查 Gitea 空仓库的分支误报及持续显示的 Pull 成功提示；只读日志、远端引用与服务端空仓库标记共同支持原因。修复空列表识别和成功提示 6 秒自动关闭；部分完成和警告不自动清除。提供者回归覆盖空列表、异常分页和权限失败；隔离浏览器使用生产组件验证成功超时、重复成功重计时及警告、错误保留，不对用户仓库执行写操作。安装版和真实账号界面验收待用户完成。
+
+[本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261027-155104_Codex-GPT-6.1-Terra
+
+0.38.11 正式发布，来源提交 `9892dcd5edd48524106271e5537bbbe5b2b9659a`；[macOS 与 Windows 自动检查](https://github.com/DDonlien/git-together/actions/runs/40467220678)及 [Windows 双架构原生打包验证](https://github.com/DDonlien/git-together/actions/runs/40467230762)通过，[三平台发布](https://github.com/DDonlien/git-together/actions/runs/40467252763)成功。提供者 15 项、前端 27 项、类型检查、生产构建与隔离生产组件交互验证通过。Apple 公证 Accepted `6d2aa89e-9b1e-45ba-ab52-4b8470e16f45`；8 个公开资产的大小和摘要、三平台更新签名及 latest.json、macOS Developer ID、staple 和 ZIP/tar 应用内容一致性均已复核。公开下载校验中一条连接停滞，另一条连接下载同一文件并通过摘要校验。未操作用户安装版，真实账号界面仍待用户验收。
 
 [本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
