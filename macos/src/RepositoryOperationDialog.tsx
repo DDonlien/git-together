@@ -12,7 +12,7 @@ const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clear' };
 const discard = (plan: RepositorySyncPlan) => importAPI('discardSync', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(() => { console.warn('操作预览清理未完成，服务将在预览到期后再次清理。'); });
 export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
   mode: RepositoryActionMode; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onPush: PushLocalCommit;
-  onGenerate: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string) => void; onClose: () => void;
+  onGenerate: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void; onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
 } & RepositoryOperationControls) {
   return isSync(mode) ? <RepositorySyncDialog mode={mode} targets={targets} onApply={onSync} onComplete={onComplete} onClose={onClose} {...controls} /> :
@@ -20,7 +20,7 @@ export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onG
 }
 export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished }: {
   mode: RepositorySyncMode; targets: RepositoryActionTarget[]; onApply?: ApplyRepositorySync;
-  onComplete?: (message: string) => void; onClose: () => void;
+  onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
 } & RepositoryOperationControls) {
   const [plans, setPlans] = useState<Record<string, RepositorySyncPlan>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -95,7 +95,11 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
     if (!mounted.current) return;
     setWriting(false);
     const count = Object.keys(completed.current).length;
-    if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。`);
+    const warnings = targets.flatMap(target => {
+      const warning = completed.current[key(target)]?.warning;
+      return warning ? [`${target.repositoryName} · ${target.task.branch}：${warning}`] : [];
+    });
+    if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。${warnings.length ? ` ${warnings.join(' ')}` : ''}`, count === targets.length && warnings.length === 0);
     if (count === targets.length) { setFinished(true); onFinished?.(); }
   }
   return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} visible={visible} onCollapse={onCollapse} onClose={() => { if (writing) onCollapse?.(); else onClose(); }}>

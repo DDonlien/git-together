@@ -1367,6 +1367,18 @@ impl Provider {
                     cancel,
                 )
                 .await?;
+            // Gitea returns JSON null, rather than an empty array, for a new empty repository.
+            if self.kind() == "gitea"
+                && page == 1
+                && v.is_null()
+                && !next(&h)
+                && h
+                    .get("x-total-count")
+                    .map(|v| v.to_str().ok().and_then(|v| v.parse::<usize>().ok()) == Some(0))
+                    .unwrap_or(true)
+            {
+                break;
+            }
             let rows = v.as_array().ok_or("远端分支返回格式无效。")?;
             for r in rows {
                 let name = util::field(r, "name", 1024)?;

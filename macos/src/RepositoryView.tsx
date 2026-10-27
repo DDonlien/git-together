@@ -29,6 +29,7 @@ import type { LocalRepositoryState } from './use-workspace';
 import type { ReadRemoteCommit, RemoteRepositoryState } from './remote-repository-model';
 import type { FileTreeChange } from './file-tree';
 import { NavigationControls } from './NavigationControls';
+import { useTransientFeedback } from './use-transient-feedback';
 import { graphOperationScope, type GraphAction, type GraphWrite } from './graph-operation-model';
 
 const noChanges: FileTreeChange[] = [];
@@ -59,7 +60,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const [commitOpenRequest, setCommitOpenRequest] = useState(0);
   const [branchSelection, setBranchSelection] = useState<ReadonlySet<string> | null | undefined>(undefined);
   const operations = useRepositoryOperations();
-  const [actionFeedback, setActionFeedback] = useState('');
+  const [actionFeedback, setActionFeedback] = useTransientFeedback<'success' | 'warning' | 'info' | 'error'>();
   const [repositoryOpenError, setRepositoryOpenError] = useState('');
   const [openingRepository, setOpeningRepository] = useState(false);
   const [treeSourceChoice, setTreeSource] = useState<'remote' | 'local' | null>(null);
@@ -112,22 +113,22 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const push: PushLocalCommit = pushCommit || (input => importAPI('pushCommit', input));
   const generate = generateCommitMessage || generateWithService;
   const openAction = (mode: RepositoryActionMode) => {
-    setActionFeedback('');
-    operations.open({ mode, scope: repositoryOperationScope(repository.id), targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current, localLink), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onComplete: setActionFeedback });
+    setActionFeedback(null);
+    operations.open({ mode, scope: repositoryOperationScope(repository.id), targets: repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current, localLink), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onComplete: (message, complete = true) => setActionFeedback({ kind: complete ? 'success' : 'warning', message }) });
   };
   const graphTargets = workspace.tasks.filter(task => !task.remote && task.path && !task.error && task.changeKey && /^[a-f0-9]{40,64}$/.test(task.head));
   const openGraphAction = (mode: GraphAction, selected: import('./commit-graph').GraphCommit) => {
     const task = graphTargets.find(task => task.id === selected.workingTask?.id) || graphTargets.find(task => task.id === focus || task.id === localTaskChoice) || graphTargets.find(task => task.branch === repository.defaultBranch) || graphTargets[0];
-    if (!task) { setActionFeedback('请先关联一个本地工作目录，再执行图谱操作。'); return; }
-    operations.open({ kind: 'graph', mode, repository, commit: selected.workingTask ? undefined : selected, scope: graphOperationScope(repository.id, mode, task.id, selected.workingTask ? undefined : selected.id), targets: [{ repositoryId: repository.id, repositoryName: repository.fullName, task }], candidates: structuredClone(graphTargets), onWrite: writeGraph, onComplete: setActionFeedback });
+    if (!task) { setActionFeedback({ kind: 'info', message: '请先关联一个本地工作目录，再执行图谱操作。' }); return; }
+    operations.open({ kind: 'graph', mode, repository, commit: selected.workingTask ? undefined : selected, scope: graphOperationScope(repository.id, mode, task.id, selected.workingTask ? undefined : selected.id), targets: [{ repositoryId: repository.id, repositoryName: repository.fullName, task }], candidates: structuredClone(graphTargets), onWrite: writeGraph, onComplete: (message, complete = true) => setActionFeedback({ kind: complete ? 'success' : 'warning', message }) });
   };
   const locateGraphWorktree = (selected: import('./commit-graph').GraphCommit) => {
     const task = selected.workingTask || graphTargets.find(task => reachableCommitIds(workspace.commits, [task.head]).has(selected.id));
-    if (!task) { setActionFeedback('这个提交尚未关联可定位的本地工作目录。'); return; }
+    if (!task) { setActionFeedback({ kind: 'info', message: '这个提交尚未关联可定位的本地工作目录。' }); return; }
     setLocalTaskChoice(task.id); setFocusedTask(task.id); setTreeSource('local');
   };
   const openGraphCommit = (selected: import('./commit-graph').GraphCommit) => {
-    void importAPI('openCommit', { repositoryId: repository.id, commitId: selected.id }).catch(problem => setActionFeedback(problem instanceof Error ? problem.message : '远端提交打开失败。'));
+    void importAPI('openCommit', { repositoryId: repository.id, commitId: selected.id }).catch(problem => setActionFeedback({ kind: 'error', message: problem instanceof Error ? problem.message : '远端提交打开失败。' }));
   };
   const openRepository = async (event: MouseEvent<HTMLAnchorElement>) => {
     if (!window.gittogether) return;
@@ -151,7 +152,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
     </section>
     {repositoryOpenError && <Notice kind="error">{repositoryOpenError}</Notice>}
     {pushState && <div className="repository-push-status"><PushFeedbackIcon state={pushState} />{pushState.phase === 'pushing' && <PushProgress completed={pushRun.reduce((count, run) => count + run.completed.length, 0)} total={pushRun.reduce((count, run) => count + run.targets.length, 0)} />}</div>}
-    {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
+    {actionFeedback && <Notice kind={actionFeedback.kind} onClose={() => setActionFeedback(null)}>{actionFeedback.message}</Notice>}
     {branchIssues.filter(issue => issue.kind !== 'local-missing').map(issue => <BranchIssueNotice key={issue.id} issue={issue} onDismiss={onDismissIssue} />)}
     {current?.error && <Notice kind="error">{current.error}{snapshot && ' 显示上次读取的本地状态。'} 正在自动重试。</Notice>}
     {remoteState?.error && <Notice kind="error">{remoteState.error}{remoteState.workspace && ' 显示上次读取的远端内容。'}</Notice>}

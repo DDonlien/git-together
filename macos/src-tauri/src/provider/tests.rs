@@ -10,6 +10,7 @@ struct Fixture {
     responses: BTreeMap<String, Value>,
     failures: BTreeMap<String, StatusCode>,
     next_pages: BTreeSet<String>,
+    total_counts: BTreeMap<String, String>,
     calls: Mutex<Vec<String>>,
 }
 
@@ -43,6 +44,7 @@ impl Fixture {
             ]),
             failures: BTreeMap::new(),
             next_pages: BTreeSet::new(),
+            total_counts: BTreeMap::new(),
             calls: Mutex::new(vec![]),
         }
     }
@@ -87,6 +89,9 @@ async fn serve(fixture: Fixture) -> TestProvider {
                 "<http://127.0.0.1/next>; rel=\"next\"".parse().unwrap(),
             );
         }
+        if let Some(total) = fixture.total_counts.get(&path) {
+            response.headers_mut().insert("x-total-count", total.parse().unwrap());
+        }
         response
     }
     let fixture = Arc::new(fixture);
@@ -110,6 +115,65 @@ async fn serve(fixture: Fixture) -> TestProvider {
 
 fn repository() -> Value {
     json!({"id":"fixture-account:1","remoteId":1,"fullName":"fixture/imported","defaultBranch":"main"})
+}
+
+#[tokio::test]
+async fn gitea_null_empty_repository_is_a_complete_workspace() {
+    for include_total in [false, true] {
+        let mut fixture = Fixture::new(vec![]);
+        fixture.responses.insert(format!("{BASE}/branches"), Value::Null);
+        if include_total {
+            fixture.total_counts.insert(format!("{BASE}/branches"), "0".into());
+        }
+        let test = serve(fixture).await;
+        let workspace = test.provider.workspace(&repository(), &CancellationToken::new(), false).await.unwrap();
+        assert_eq!(workspace["tasks"], json!([]));
+        assert_eq!(workspace["commits"], json!([]));
+        assert_eq!(workspace["complete"], true);
+        assert_eq!(workspace["branchesComplete"], true);
+        assert_eq!(workspace["warnings"], json!([]));
+        assert_eq!(*test.fixture.calls.lock().await, vec![format!("{BASE}/branches")]);
+    }
+}
+
+#[tokio::test]
+async fn invalid_branch_objects_and_contradictory_null_headers_are_not_empty_repositories() {
+    for (body, has_next, total) in [
+        (json!({"unexpected": true}), false, "0"),
+        (Value::Null, true, "0"),
+        (Value::Null, false, "1"),
+        (Value::Null, false, "invalid"),
+    ] {
+        let mut fixture = Fixture::new(vec![]);
+        let path = format!("{BASE}/branches");
+        fixture.responses.insert(path.clone(), body);
+        if has_next {
+            fixture.next_pages.insert(path.clone());
+        }
+        fixture.total_counts.insert(path, total.into());
+        let test = serve(fixture).await;
+        let error = test.provider.branches(&repository(), &CancellationToken::new()).await.unwrap_err();
+        assert!(error.contains("远端分支返回格式无效"), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn null_on_later_branch_page_does_not_discard_previously_read_branches() {
+    let mut fixture = Fixture::new(vec![]);
+    fixture.next_pages.insert(format!("{BASE}/branches"));
+    fixture.responses.insert(format!("{BASE}/branches?page=2"), Value::Null);
+    let test = serve(fixture).await;
+    let error = test.provider.branches(&repository(), &CancellationToken::new()).await.unwrap_err();
+    assert!(error.contains("远端分支返回格式无效"), "{error}");
+}
+
+#[tokio::test]
+async fn forbidden_branch_reads_still_report_permission_errors() {
+    let mut fixture = Fixture::new(vec![]);
+    fixture.failures.insert(format!("{BASE}/branches"), StatusCode::FORBIDDEN);
+    let test = serve(fixture).await;
+    let error = test.provider.branches(&repository(), &CancellationToken::new()).await.unwrap_err();
+    assert!(error.contains("HTTP 403"), "{error}");
 }
 
 fn commit(id: &str, email: Option<&str>, login: Option<&str>, parents: &[&str]) -> Value {

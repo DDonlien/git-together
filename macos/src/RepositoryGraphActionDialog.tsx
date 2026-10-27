@@ -10,7 +10,7 @@ import { LinearProgress, OutlinedTextField } from './material-inputs';
 import { RepositoryPreparedDiff } from './RepositoryPreparedDiff';
 import { RepositoryFileChangeLabel } from './RepositoryFileChangeLabel';
 
-export type GraphOperationInput = { kind: 'graph'; mode: GraphAction; scope: string; repository: RemoteRepository; commit?: RepositoryCommit; targets: RepositoryActionTarget[]; candidates: RepositoryTask[]; onWrite?: GraphWrite; onComplete?: (message: string) => void };
+export type GraphOperationInput = { kind: 'graph'; mode: GraphAction; scope: string; repository: RemoteRepository; commit?: RepositoryCommit; targets: RepositoryActionTarget[]; candidates: RepositoryTask[]; onWrite?: GraphWrite; onComplete?: (message: string, complete?: boolean) => void };
 const problemMessage = (problem: unknown) => problem instanceof Error ? problem.message : '图谱操作未完成。';
 const discard = (plan: GraphMergePlan) => importAPI('discardGraphMerge', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(problem => console.warn('合并预览清理未完成。', problemMessage(problem)));
 
@@ -128,7 +128,9 @@ function GraphTaskDialog({ mode, repository, commit, task, candidates, onTargetC
     setWriting(true); setError('');
     try {
       const next = isAI && activePlan ? await (onWrite ? onWrite('applyGraphMerge', { repositoryId: repository.id, taskId: task.id, planId: activePlan.id, operationId: operation.current, summary, description }) : importAPI('applyGraphMerge', { repositoryId: repository.id, taskId: task.id, planId: activePlan.id, operationId: operation.current, summary, description })) : await (onWrite ? onWrite(mode === 'worktree' ? 'createGraphWorktree' : 'executeGraph', { ...snapshot, commitId: commit?.id || task.head, action: mode, operationId: operation.current, name, mainline, resetMode, parentPath, folderName }) : importAPI(mode === 'worktree' ? 'createGraphWorktree' : 'executeGraph', { ...snapshot, commitId: commit?.id || task.head, action: mode, operationId: operation.current, name, mainline, resetMode, parentPath, folderName }));
-      savedPlan.current = null; setResult(next); onFinished?.(); onComplete?.(next.unchanged && isAI ? '所选分支已包含在当前分支中。' : `${graphActionLabels[mode]}已完成。`);
+      savedPlan.current = null; setResult(next); onFinished?.();
+      const message = next.unchanged && isAI ? '所选分支已包含在当前分支中。' : `${graphActionLabels[mode]}已完成。`;
+      onComplete?.(next.warning ? `${message} ${next.warning}` : message, !next.warning);
     } catch (problem) { setError(problemMessage(problem)); }
     finally { setWriting(false); }
   }

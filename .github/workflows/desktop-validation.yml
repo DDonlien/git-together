@@ -29,4 +29,5 @@ jobs:
       - run: npm run setup
       - run: npm run check
       - run: npm test
+      - run: cargo test --manifest-path macos/src-tauri/Cargo.toml --lib provider::tests --locked
       - run: npm run build

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTransientFeedback } from './use-transient-feedback';
 import { useWorkspace } from './use-workspace';
 import { useRemoteRepository } from './use-remote-repository';
 import { Dashboard } from './Dashboard';
@@ -31,7 +32,7 @@ export function App() {
   const routeIndex = useRef(0);
   const [navigationState, setNavigationState] = useState({ canGoBack: false, canRedo: false });
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshFeedback, setRefreshFeedback] = useState<{ kind: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [refreshFeedback, setRefreshFeedback] = useTransientFeedback<'success' | 'error' | 'info'>();
   const [configuring, setConfiguring] = useState<{ repository: RemoteRepository; branch?: string } | null>(null);
   const [downloading, setDownloading] = useState<{ repository: RemoteRepository; branch: string } | null>(null);
   const [bridgeError, setBridgeError] = useState('');
