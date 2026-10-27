@@ -6,7 +6,7 @@
 
 历史记录：0.36.1 曾为 Gitea 使用 Chromium 网络与证书处理；该实现属于迁移前版本。当前桌面连接、Git 执行与应用更新由 Tauri 2 和 Rust 负责。
 
-当前 `main` 为0.38.9源码，Presence头像环按“同一人员＋同一设备”在本次打开期间固定颜色，跨仓库、分支及弹窗保持一致，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切，并修复Gitea自动Fetch、同步角标和Pull进度。正式桌面运行与发布入口统一使用 Tauri 2 和 Rust；旧 `desktop/` GitHub Desktop/Electron 源码只作历史参考，不进入构建或发布。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build`、`npm run dev` 与 `npm run desktop`。
+当前 `main` 为0.38.10源码，修复远端文件树的行尾浏览器打开按钮在悬停、键盘聚焦和触控时被隐藏的问题，Presence头像环按“同一人员＋同一设备”在本次打开期间固定颜色，跨仓库、分支及弹窗保持一致，修正Presence人员弹窗的圆形操作图标与远程Commit弹窗裁切，并修复Gitea自动Fetch、同步角标和Pull进度。正式桌面运行与发布入口统一使用 Tauri 2 和 Rust；旧 `desktop/` GitHub Desktop/Electron 源码只作历史参考，不进入构建或发布。使用仓库根目录的 `npm run setup`、`npm run check`、`npm run build`、`npm run dev` 与 `npm run desktop`。
 
 历史发布记录：[0.37.0已正式发布](https://github.com/DDonlien/git-together/releases/tag/v0.37.0)，提供macOS Apple Silicon和Windows x86/x64安装包。macOS Developer ID签名、Apple公证及31项成品检查通过；[Windows双架构原生安装与Git验证](https://github.com/DDonlien/git-together/actions/runs/39587719512)通过。隔离的0.33.0更新器已通过公共更新源检查、下载并安装到0.37.0，配置及本地文件保留；新版Squirrel后续升级也完成隔离验证。三平台完整公开下载、更新签名和清单已核对；可在设置中再次检查更新，自行选择下载和安装。
 
