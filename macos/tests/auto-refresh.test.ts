@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAutoRefresh, syncIntervals, type RefreshClock } from '../src/auto-refresh';
+import { createAutoRefresh, holdRepositoryRefreshes, RefreshInterruptedError, syncIntervals, type RefreshClock } from '../src/auto-refresh';
 
 async function flush() { for (let i = 0; i < 8; i++) await Promise.resolve(); }
 class ManualClock implements RefreshClock {
@@ -166,4 +166,50 @@ test('reading feedback covers only actual requests, not the retry backoff, and c
   const slow = createAutoRefresh({ clock, intervalMs: 5_000, onReading: reading => cancelled.push(reading), run: async () => pending.promise });
   await clock.advance(0); assert.equal(cancelled.at(-1), true); slow.pause(); assert.equal(cancelled.at(-1), false);
   slow.stop(); const length = cancelled.length; pending.resolve(); await flush(); assert.equal(cancelled.length, length);
+});
+
+test('manual refresh checks promptly and coalesces requests made during an active read', async t => {
+  const clock = new ManualClock(); const pending = deferred(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: 300_000, minTriggerIntervalMs: 120_000, run: async () => { calls++; if (calls === 2) await pending.promise; } }); t.after(monitor.stop);
+  await clock.advance(0); assert.equal(calls, 1);
+  monitor.refresh(); await clock.advance(999); assert.equal(calls, 1);
+  await clock.advance(1); assert.equal(calls, 2);
+  for (let i = 0; i < 5; i++) monitor.refresh();
+  await clock.advance(5_000); assert.equal(calls, 2);
+  pending.resolve(); await flush(); await clock.advance(0); assert.equal(calls, 3);
+});
+
+test('interrupted reads recover promptly while explicit provider deadlines remain in force', async t => {
+  const clock = new ManualClock(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: 300_000, minTriggerIntervalMs: 120_000, run: async () => { calls++; if (calls === 1) throw new RefreshInterruptedError('读取已取消', 12_000); } }); t.after(monitor.stop);
+  await clock.advance(0); monitor.refresh();
+  await clock.advance(11_999); assert.equal(calls, 1);
+  await clock.advance(1); assert.equal(calls, 2);
+
+  const another = new ManualClock(); let retries = 0;
+  const retry = createAutoRefresh({ clock: another, intervalMs: 300_000, run: async () => { retries++; if (retries === 1) throw new RefreshInterruptedError('读取已取消'); } }); t.after(retry.stop);
+  await another.advance(29_999); assert.equal(retries, 1);
+  await another.advance(1); assert.equal(retries, 2);
+});
+
+test('manual refresh does not bypass a real failure backoff', async t => {
+  const clock = new ManualClock(); let calls = 0;
+  const monitor = createAutoRefresh({ clock, intervalMs: 5_000, run: async () => { calls++; if (calls === 1) throw new Error('HTTP 503'); } }); t.after(monitor.stop);
+  await clock.advance(0); monitor.refresh();
+  await clock.advance(9_999); assert.equal(calls, 1);
+  await clock.advance(1); assert.equal(calls, 2);
+});
+
+test('overlapping operations pause only their repositories until the last operation finishes', () => {
+  const counts = new Map<string, number>(); const events: string[] = [];
+  const hold = (ids: string[]) => holdRepositoryRefreshes(counts, ids, id => events.push(`pause:${id}`), id => events.push(`resume:${id}`), () => {});
+  const first = hold(['one', 'one', 'two']);
+  const second = hold(['one']);
+  assert.deepEqual(events, ['pause:one', 'pause:two']);
+  first(); first();
+  assert.deepEqual(events, ['pause:one', 'pause:two', 'resume:two']);
+  assert.deepEqual([...counts], [['one', 1]]);
+  second(); second();
+  assert.deepEqual(events, ['pause:one', 'pause:two', 'resume:two', 'resume:one']);
+  assert.equal(counts.size, 0);
 });

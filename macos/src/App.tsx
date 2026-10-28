@@ -33,6 +33,7 @@ export function App() {
   const [navigationState, setNavigationState] = useState({ canGoBack: false, canRedo: false });
   const [refreshing, setRefreshing] = useState(false);
   const [refreshFeedback, setRefreshFeedback] = useTransientFeedback<'success' | 'error' | 'info'>();
+  const refreshNoticeTimer = useRef<number | undefined>(undefined);
   const [configuring, setConfiguring] = useState<{ repository: RemoteRepository; branch?: string } | null>(null);
   const [downloading, setDownloading] = useState<{ repository: RemoteRepository; branch: string } | null>(null);
   const [bridgeError, setBridgeError] = useState('');
@@ -98,6 +99,16 @@ export function App() {
       : { kind: 'success', message: '仓库列表已刷新。' });
     setRefreshing(false);
   };
+  const refreshCurrentRepository = () => {
+    if (refreshNoticeTimer.current !== undefined) window.clearTimeout(refreshNoticeTimer.current);
+    const requested = controller.refreshRepository(repoId);
+    const feedback = requested
+      ? { kind: 'info' as const, message: '已安排检查当前仓库，完成后会更新分支和文件状态。' }
+      : { kind: 'error' as const, message: '当前仓库暂时无法检查，请确认连接状态。' };
+    setRefreshFeedback(feedback);
+    if (requested) refreshNoticeTimer.current = window.setTimeout(() => setRefreshFeedback(current => current === feedback ? null : current), 6000);
+  };
+  useEffect(() => () => { if (refreshNoticeTimer.current !== undefined) window.clearTimeout(refreshNoticeTimer.current); }, []);
   useEffect(() => {
     // Old deep links no longer seed or reset workspace data.
     const url = new URL(location.href);
@@ -141,7 +152,7 @@ export function App() {
     window.addEventListener('gittogether:presentation', listener);
     return () => window.removeEventListener('gittogether:presentation', listener);
   }, []);
-  return <MaterialProvider appearance={desktopTheme || controller.preferences.theme}><PresenceProvider><RemoteControlProvider><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><RepositoryOperationProvider sessionId={controller.catalog.instanceId}><div className="app-frame">
+  return <MaterialProvider appearance={desktopTheme || controller.preferences.theme}><PresenceProvider><RemoteControlProvider><RepositoryActionDraftsProvider sessionId={controller.catalog.instanceId}><RepositoryOperationProvider sessionId={controller.catalog.instanceId} pauseRepositoryRefresh={controller.pauseRepositoryRefresh}><div className="app-frame">
     <WindowChrome native={!!window.gittogether} />
     <div className="app-body">
     <aside id="global-sidebar" className={`global-sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}><SidebarHeader collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(value => !value)} /><nav className="global-nav"><button className={`nav-item sidebar-permanent ${page === 'dashboard' ? 'active' : ''}`} title="Dashboard" aria-label="Dashboard" onClick={showDashboard}><span className="sidebar-button-icon" aria-hidden="true"><Icon name="dashboard" size={19} /></span><span>Dashboard</span></button></nav>
@@ -151,7 +162,7 @@ export function App() {
     <div className="app-content">
       {!controller.updates.installing && controller.error && <Notice kind="error">{controller.error}<Button variant="quiet" disabled={controller.loading} onClick={() => { if (controller.needsReload) location.reload(); else void controller.reload(); }}>{controller.needsReload ? '刷新页面' : controller.loading ? '检查连接…' : '重新连接'}</Button></Notice>}{controller.storageError && <Notice kind="error">{controller.storageError}</Notice>}{bridgeError && <Notice kind="info">{bridgeError}</Notice>}
       {page === 'dashboard' && <Dashboard controller={controller} onOpen={openRepository} onSettings={showSettings} onConfigure={(repository, branch) => setConfiguring({ repository, branch })} onDownload={(repository, branch) => setDownloading({ repository, branch })} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshRepositories} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
-      {page === 'repo' && repository && account && <RepositoryView key={`${controller.catalog.instanceId}:${repoId}:${localPath || ''}`} initialCommitTask={commitTask} repository={repository} account={account} localPath={localPath} localLink={localLink} branchIssues={controller.catalog.branchIssues?.filter(issue => issue.repositoryId === repoId)} onDismissIssue={issueId => controller.dismissBranchIssue(repoId, issueId)} hiddenEntries={hiddenEntries} manualHiddenEntries={new Set(controller.preferences.hiddenEntries || [])} onToggleHidden={() => { const key = hiddenEntryKey(repoId); controller.updatePreferences(toggleBranchVisibility(controller.preferences, key, hiddenEntries.has(key))); }} localState={controller.localStates[repoId]} remoteState={remote.state} readRemoteCommit={remote.readCommit} submitCommit={controller.submitCommit} pushCommit={controller.pushCommit} applySync={controller.applySync} writeGraph={controller.writeGraph} onLocalFilesChanged={() => controller.refreshLocal(repoId)} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} onConfigure={() => setConfiguring({ repository })} onDownload={(target, branch) => setDownloading({ repository: target, branch })} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshRepositories} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
+      {page === 'repo' && repository && account && <RepositoryView key={`${controller.catalog.instanceId}:${repoId}:${localPath || ''}`} initialCommitTask={commitTask} repository={repository} account={account} localPath={localPath} localLink={localLink} branchIssues={controller.catalog.branchIssues?.filter(issue => issue.repositoryId === repoId)} onDismissIssue={issueId => controller.dismissBranchIssue(repoId, issueId)} hiddenEntries={hiddenEntries} manualHiddenEntries={new Set(controller.preferences.hiddenEntries || [])} onToggleHidden={() => { const key = hiddenEntryKey(repoId); controller.updatePreferences(toggleBranchVisibility(controller.preferences, key, hiddenEntries.has(key))); }} localState={controller.localStates[repoId]} remoteState={remote.state} readRemoteCommit={remote.readCommit} submitCommit={controller.submitCommit} pushCommit={controller.pushCommit} applySync={controller.applySync} writeGraph={controller.writeGraph} generateCommitMessage={controller.generateCommitMessage} onLocalFilesChanged={() => controller.refreshLocal(repoId)} globalSearch={globalSearch} onSearchChange={setGlobalSearch} searchRef={searchRef} onConfigure={() => setConfiguring({ repository })} onDownload={(target, branch) => setDownloading({ repository: target, branch })} canGoBack={navigationState.canGoBack} canRedo={navigationState.canRedo} onBack={goBack} onRedo={redoNavigation} onRefresh={refreshCurrentRepository} refreshDisabled={controller.loading || controller.needsReload || controller.updates.installing} refreshing={refreshing} refreshFeedback={refreshFeedback} />}
       {page === 'settings' && <SettingsView controller={controller} onDashboard={showDashboard} />}
     </div></div>{configuring && <LocalRepositoryModal key={`${configuring.repository.id}:${configuring.branch || ''}`} repository={controller.catalog.repositories.find(r => r.id === configuring.repository.id) || configuring.repository} branch={configuring.branch} controller={controller} onClose={() => setConfiguring(null)} />}{downloading && <BranchDownloadModal key={`${downloading.repository.id}:${downloading.branch}`} repository={controller.catalog.repositories.find(r => r.id === downloading.repository.id) || downloading.repository} branch={downloading.branch} controller={controller} onClose={() => setDownloading(null)} />}
   </div></RepositoryOperationProvider></RepositoryActionDraftsProvider></RemoteControlProvider></PresenceProvider></MaterialProvider>;

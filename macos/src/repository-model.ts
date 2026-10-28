@@ -46,6 +46,21 @@ export function reachableCommitIds(history: RepositoryCommit[], heads: string[])
   return reachable;
 }
 
+export function publishedCommitsByBranch(workspace: RepositoryWorkspace, verifiedPushHeads?: ReadonlyMap<string, string>, localWorkspace?: RepositoryWorkspace): Map<string, Set<string>> {
+  const heads = new Map<string, string[]>();
+  for (const task of workspace.tasks) if (task.remote && task.head) heads.set(task.branch, [...(heads.get(task.branch) || []), task.head]);
+  for (const [branch, head] of verifiedPushHeads || []) heads.set(branch, [...(heads.get(branch) || []), head]);
+  for (const task of localWorkspace?.tasks || []) {
+    const upstream = task.tracking?.upstream;
+    if (task.error || !upstream) continue;
+    const fullRef = upstream.startsWith('refs/remotes/') ? upstream : `refs/remotes/${upstream}`;
+    const shortOrigin = fullRef.startsWith('refs/remotes/origin/') ? fullRef.slice('refs/remotes/'.length) : fullRef;
+    const tracked = localWorkspace?.commits.find(commit => commit.refs.includes(fullRef) || commit.refs.includes(shortOrigin));
+    if (tracked) heads.set(task.branch, [...(heads.get(task.branch) || []), tracked.id]);
+  }
+  return new Map([...heads].map(([branch, values]) => [branch, reachableCommitIds(workspace.commits, values)]));
+}
+
 export function taskCommitHistory(workspace: RepositoryWorkspace, taskId: string | null): RepositoryCommit[] {
   const task = workspace.tasks.find(task => task.id === taskId);
   if (!task || (!workspace.complete && !workspace.source && !task.remote)) return workspace.commits;

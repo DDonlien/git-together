@@ -12,6 +12,33 @@ export interface RefreshClock {
   now: () => number;
   schedule: (callback: () => void, delay: number) => () => void;
 }
+
+// A foreground repository operation can interrupt a background read without
+// indicating a network failure. Keep the provider's deadline if one exists.
+export class RefreshInterruptedError extends Error {
+  constructor(message: string, readonly retryAt = 0) { super(message); this.name = 'RefreshInterruptedError'; }
+}
+
+export function holdRepositoryRefreshes(counts: Map<string, number>, repositoryIds: readonly string[], pause: (id: string) => void, resume: (id: string) => void, changed: () => void): () => void {
+  const ids = [...new Set(repositoryIds)];
+  for (const id of ids) {
+    const count = counts.get(id) || 0;
+    counts.set(id, count + 1);
+    if (!count) pause(id);
+  }
+  changed();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    for (const id of ids) {
+      const count = counts.get(id) || 0;
+      if (count > 1) counts.set(id, count - 1);
+      else if (count === 1) { counts.delete(id); resume(id); }
+    }
+    changed();
+  };
+}
 const clock: RefreshClock = {
   now: () => Date.now(),
   schedule: (callback, delay) => { const timer = setTimeout(callback, delay); return () => clearTimeout(timer); },
@@ -74,10 +101,13 @@ export function createAutoRefresh(options: {
   let request: AbortController | undefined;
   let resumePending = false;
   let triggerPending = false;
+  let manualPending = false;
   let failures = 0;
   let lastStart = -Infinity;
   let lastSuccess = -Infinity;
   let retryNotBefore = -Infinity;
+  let providerNotBefore = -Infinity;
+  let interrupted = false;
 
   function schedule(delay: number) {
     cancelTimer?.(); cancelTimer = undefined;
@@ -85,22 +115,26 @@ export function createAutoRefresh(options: {
   }
   async function run() {
     if (stopped || !active() || request) return;
-    let triggered = triggerPending; triggerPending = false;
+    let triggered = triggerPending, manual = manualPending;
+    triggerPending = false; manualPending = false;
     const current = new AbortController(); request = current;
     let release: (() => void) | undefined;
     try {
       release = await options.acquire?.(current.signal);
       current.signal.throwIfAborted();
-      triggered ||= triggerPending; triggerPending = false;
+      triggered ||= triggerPending; manual ||= manualPending;
+      triggerPending = false; manualPending = false;
       lastStart = time.now(); options.onReading?.(true);
       await options.run(current.signal);
-      if (!current.signal.aborted) { failures = 0; lastSuccess = time.now(); retryNotBefore = -Infinity; }
+      if (!current.signal.aborted) { failures = 0; lastSuccess = time.now(); retryNotBefore = -Infinity; providerNotBefore = -Infinity; interrupted = false; }
     }
     catch (problem) {
       if (!current.signal.aborted) {
-        failures = Math.min(failures + 1, 10);
+        interrupted = problem instanceof RefreshInterruptedError;
+        if (!interrupted) failures = Math.min(failures + 1, 10);
         const providerDeadline = typeof problem === 'object' && problem !== null && 'retryAt' in problem && typeof problem.retryAt === 'number' && Number.isFinite(problem.retryAt) ? problem.retryAt : 0;
-        const retryMs = Math.max(retryDelay(), providerDeadline - time.now());
+        providerNotBefore = Math.max(providerNotBefore, providerDeadline);
+        const retryMs = Math.max(interrupted ? Math.min(30_000, interval()) : retryDelay(), providerDeadline - time.now());
         retryNotBefore = time.now() + retryMs;
         options.onRetry?.(failures, retryMs);
         options.onError?.(problem);
@@ -109,18 +143,22 @@ export function createAutoRefresh(options: {
       release?.();
       request = undefined;
       // An interrupted change-triggered read still needs a check on resume.
-      if (current.signal.aborted && triggered) triggerPending = true;
+      if (current.signal.aborted && triggered) { triggerPending = true; manualPending ||= manual; }
       if (!stopped) options.onReading?.(false);
       if (triggerPending) { resumePending = false; schedule(triggerDelay()); }
       else if (resumePending) { resumePending = false; schedule(wakeDelay()); }
-      else schedule(Math.max(retryDelay(), retryNotBefore - time.now()));
+      else schedule(Math.max(interrupted ? Math.min(30_000, interval()) : retryDelay(), retryNotBefore - time.now()));
     }
   }
   function pause() { cancelTimer?.(); cancelTimer = undefined; resumePending = false; if (request) { request.abort(); options.onReading?.(false); } }
   // Focus and online events resume the existing cadence. They do not make a
   // successfully checked resource stale or defeat a failure's retry deadline.
   function wakeDelay() { return Math.max(0, minimumWake() - (time.now() - lastStart), interval() - (time.now() - lastSuccess), retryNotBefore - time.now()); }
-  function triggerDelay() { return Math.max(0, Math.max(minimumWake(), options.minTriggerIntervalMs ?? 0) - (time.now() - lastStart), retryNotBefore - time.now()); }
+  function triggerDelay() {
+    const spacing = manualPending ? minimumWake() : Math.max(minimumWake(), options.minTriggerIntervalMs ?? 0);
+    const deadline = manualPending && interrupted ? providerNotBefore : retryNotBefore;
+    return Math.max(0, spacing - (time.now() - lastStart), deadline - time.now());
+  }
   function wake() {
     if (stopped) return;
     if (!active()) { pause(); return; }
@@ -134,7 +172,14 @@ export function createAutoRefresh(options: {
     triggerPending = true;
     if (active() && !request) schedule(triggerDelay());
   }
+  // A manual refresh or the end of a foreground operation checks promptly,
+  // but never bypasses a provider deadline or a real transport failure.
+  function refresh() {
+    if (stopped) return;
+    triggerPending = true; manualPending = true;
+    if (active() && !request) schedule(triggerDelay());
+  }
   function stop() { stopped = true; pause(); }
   schedule(options.initialDelayMs ?? 0);
-  return { wake, trigger, pause, stop };
+  return { wake, trigger, refresh, pause, stop };
 }

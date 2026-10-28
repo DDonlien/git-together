@@ -16,7 +16,7 @@ export function graphVisibleWindow(length: number, scrollTop: number, viewportHe
   return { start: Math.max(0, firstVisible - overscan), end: Math.min(length, Math.ceil((top + height) / graphRowHeight) + overscan), firstVisible };
 }
 
-export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBranch[] {
+export function repositoryGraphBranches(workspace: RepositoryWorkspace, verifiedPushHeads?: ReadonlyMap<string, string>): GraphBranch[] {
   const branches = new Map<string, GraphBranch>();
   function add(branch: string, head: string, remote: boolean, task?: RepositoryTask) {
     let entry = branches.get(branch);
@@ -31,6 +31,9 @@ export function repositoryGraphBranches(workspace: RepositoryWorkspace): GraphBr
     const branch = ref.replace(/^refs\/heads\//, '').replace(/^(origin\/|refs\/remotes\/[^/]+\/)/, '');
     if (branch !== 'HEAD') add(branch, commit.id, remote);
   }
+  // A successful Push confirms its target even while the remote tree is an
+  // older snapshot. Use that evidence only for graph reachability.
+  for (const [branch, head] of verifiedPushHeads || []) add(branch, head, true);
   return [...branches.values()].sort((a, b) => a.branch.localeCompare(b.branch));
 }
 

@@ -28,6 +28,7 @@ export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, inte
   const cadences = useRef(new Map<string, number>());
   const observed = useRef(new Map<string, number>());
   const paused = useRef(new Set<string>()); paused.current = new Set(pausedResources);
+  const pausedImmediately = useRef(new Set<string>());
   const previousPaused = useRef(new Set<string>());
   const resourceKey = JSON.stringify(resources);
   const pauseKey = JSON.stringify(pausedResources);
@@ -38,12 +39,13 @@ export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, inte
     if (timing.current !== nextTiming) { for (const monitor of monitors.current.values()) monitor.stop(); monitors.current.clear(); observed.current.clear(); cadences.current.clear(); timing.current = nextTiming; }
     const wanted = new Set<string>(JSON.parse(resourceKey));
     for (const [key, monitor] of monitors.current) if (!wanted.has(key)) { monitor.stop(); monitors.current.delete(key); observed.current.delete(key); cadences.current.delete(key); }
+    for (const key of pausedImmediately.current) if (!wanted.has(key)) pausedImmediately.current.delete(key);
     for (const key of wanted) if (!monitors.current.has(key)) monitors.current.set(key, createAutoRefresh({
       intervalMs: () => callbacks.current.intervals[key] ?? callbacks.current.intervalMs,
       retryIntervalMs: intervalMs, maxBackoffMs,
       initialDelayMs: initialDelays[key] ?? initialDelayMs, minTriggerIntervalMs,
       acquire: signal => queue.current!.acquire(key, signal),
-      isActive: () => !paused.current.has(key) && document.visibilityState !== 'hidden' && navigator.onLine !== false,
+      isActive: () => !paused.current.has(key) && !pausedImmediately.current.has(key) && document.visibilityState !== 'hidden' && navigator.onLine !== false,
       run: signal => callbacks.current.run(key, signal),
       onError: problem => callbacks.current.onError?.(key, problem),
       onReading: reading => callbacks.current.onReading?.(key, reading),
@@ -87,4 +89,9 @@ export function useAutoRefresh({ resources, intervalMs, initialDelayMs = 0, inte
       for (const monitor of owned.values()) monitor.stop(); owned.clear(); observed.current.clear(); cadences.current.clear();
     };
   }, []);
+  return {
+    pause: (key: string) => { pausedImmediately.current.add(key); monitors.current.get(key)?.pause(); },
+    resume: (key: string) => { pausedImmediately.current.delete(key); monitors.current.get(key)?.refresh(); },
+    refresh: (key: string) => { const monitor = monitors.current.get(key); if (!monitor) return false; monitor.refresh(); return true; },
+  };
 }
