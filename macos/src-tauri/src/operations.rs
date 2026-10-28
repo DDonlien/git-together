@@ -635,6 +635,7 @@ type Inventory = BTreeMap<String, Entry>;
 fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> {
     let mut entries = BTreeMap::new();
     let mut queue = vec![root.to_owned()];
+    let mut nested_repositories = Vec::new();
     while let Some(dir) = queue.pop() {
         if cancel.is_cancelled() {
             return Err("操作已取消。".into());
@@ -648,7 +649,8 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 .iter()
                 .any(|c| c.file_name().to_string_lossy().eq_ignore_ascii_case(".git"))
         {
-            return Err("目录包含独立 Git 仓库或子模块，已保留；请先移出再清理。".into());
+            nested_repositories.push(dir.clone());
+            continue;
         }
         for child in children {
             if dir == root
@@ -672,6 +674,9 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
             let meta = fs::symlink_metadata(&path).map_err(|_| "文件状态无法读取。")?;
             if meta.is_dir() && !crate::platform::is_link(&meta) {
                 queue.push(path);
+                continue;
+            }
+            if !nested_repositories.is_empty() {
                 continue;
             }
             let (kind, mode, digest) = if crate::platform::is_link(&meta) {
@@ -714,6 +719,17 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 return Err("文件数量超过可预览范围，未修改工作目录。".into());
             }
         }
+    }
+    if !nested_repositories.is_empty() {
+        nested_repositories.sort();
+        let locations = nested_repositories
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join("；");
+        return Err(format!(
+            "目录包含独立 Git 仓库或子模块，已保留。对应位置：{locations}。请先移出这些目录再清理。"
+        ));
     }
     Ok(entries)
 }
@@ -816,9 +832,21 @@ async fn snapshot(
     .await?
     .trim()
     .to_owned();
-    let tree = git::read(destination, &["ls-tree", "-r", &head]).await?;
-    if tree.lines().any(|s| s.starts_with("160000 ")) {
-        return Err("此分支包含子模块；子模块目录已保留，暂不支持快照替换。".into());
+    let tree = git::read(destination, &["ls-tree", "-r", "-z", &head]).await?;
+    let submodule_locations = tree
+        .split('\0')
+        .filter_map(|entry| {
+            let (metadata, path) = entry.split_once('\t')?;
+            metadata
+                .starts_with("160000 ")
+                .then(|| root.join(path).display().to_string())
+        })
+        .collect::<Vec<_>>();
+    if !submodule_locations.is_empty() {
+        return Err(format!(
+            "此分支包含子模块，暂不支持快照替换。子模块位置：{}。",
+            submodule_locations.join("；")
+        ));
     }
     for key in [
         "user.name",
