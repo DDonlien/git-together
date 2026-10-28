@@ -2145,7 +2145,7 @@ impl Network {
         )
         .await
     }
-    async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
+    pub(crate) async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
         let names = git::read(root, &["remote"]).await?;
         let mut remote = if self.system_auth { system_remote(root, &self.url, false).await?.0 } else { String::new() };
         if !self.system_auth {
@@ -2161,6 +2161,13 @@ impl Network {
             return Err("工作目录的远端已经变化，请重新关联。".into());
         }
         Ok(remote)
+    }
+    pub(crate) async fn push_remote(&self, root: &std::path::Path) -> Result<String> {
+        if self.system_auth {
+            Ok(system_remote(root, &self.url, true).await?.0)
+        } else {
+            self.fetch_remote(root).await
+        }
     }
     pub async fn branch_presence(
         &self,

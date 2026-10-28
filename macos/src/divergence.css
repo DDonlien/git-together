@@ -1,0 +1,12 @@
+.divergence-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--outline-variant, #7778); border-radius: 8px; }
+.divergence-panel p, .divergence-panel dl { margin: 0; }
+.divergence-panel code { overflow-wrap: anywhere; }
+.divergence-identities { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; }
+.divergence-identities dt { color: var(--muted); }
+.divergence-identities dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.divergence-panel ul { max-height: 150px; overflow: auto; padding-left: 20px; }
+.divergence-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.divergence-review { display: grid; gap: 10px; min-width: 0; }
+.divergence-review label { display: grid; gap: 4px; }
+.divergence-review select { max-width: 100%; min-width: 0; padding: 7px; color: inherit; background: var(--surface, transparent); border: 1px solid var(--outline-variant, #7778); border-radius: 6px; }
+.divergence-review label:has(input[type="checkbox"]) { display: flex; align-items: start; gap: 8px; }

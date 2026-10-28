@@ -5,6 +5,7 @@ pub mod diagnostics;
 pub mod git;
 pub mod files;
 pub mod graph_operations;
+pub mod history_relationship;
 pub mod github_token;
 pub mod oauth;
 pub mod operations;

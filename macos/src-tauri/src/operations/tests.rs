@@ -3,6 +3,91 @@ use crate::provider::{client, Provider};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
+#[tokio::test]
+async fn divergence_inspection_preserves_index_and_checks_the_actual_push_target() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    let remote_dir = temporary.path().join("remotes/fixture");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir_all(&remote_dir).unwrap();
+    for args in [vec!["init", "--initial-branch=main"], vec!["config", "user.name", "Fixture"], vec!["config", "user.email", "fixture@example.invalid"], vec!["config", "commit.gpgsign", "false"]] { fixture_git(&source, &args).await; }
+    fs::write(source.join("base.txt"), "base\n").unwrap();
+    fixture_git(&source, &["add", "base.txt"]).await;
+    fixture_git(&source, &["commit", "-m", "base"]).await;
+    let remote = remote_dir.join("project.git");
+    let stale = temporary.path().join("stale.git");
+    fixture_git(&source, &["clone", "--bare", source.to_str().unwrap(), remote.to_str().unwrap()]).await;
+    fixture_git(&source, &["clone", "--bare", source.to_str().unwrap(), stale.to_str().unwrap()]).await;
+    let local = temporary.path().join("local");
+    let behind = temporary.path().join("behind");
+    let writer = temporary.path().join("writer");
+    for destination in [&local, &behind, &writer] {
+        fixture_git(&source, &["clone", remote.to_str().unwrap(), destination.to_str().unwrap()]).await;
+        for args in [vec!["config", "user.name", "Fixture"], vec!["config", "user.email", "fixture@example.invalid"], vec!["config", "commit.gpgsign", "false"]] { fixture_git(destination, &args).await; }
+    }
+    let local = dunce::canonicalize(local).unwrap();
+    let behind = dunce::canonicalize(behind).unwrap();
+    let writer = dunce::canonicalize(writer).unwrap();
+    let host = format!("file://{}", temporary.path().join("remotes").display());
+    let provider = Provider::new(json!({"id":"fixture","provider":"gitea","host":host,"login":"fixture"}), "fixture-only".into(), client().unwrap());
+    let repo = json!({"id":"fixture:1","accountId":"fixture","remoteId":1,"name":"project","fullName":"fixture/project","url":format!("{host}/fixture/project")});
+    let network = Network::new(&repo, &provider).unwrap().for_link(&json!({"path":local.to_string_lossy(),"authentication":"system","worktrees":[{"path":local.to_string_lossy()},{"path":behind.to_string_lossy()}]}));
+    let cancel = CancellationToken::new();
+    let request = |task: &Value, mode: &str| json!({"repositoryId":"fixture:1","taskId":task["id"],"mode":mode});
+    let initial = git::task(&local).await.unwrap();
+    assert_eq!(inspect_divergence(&local, &request(&initial, "pull"), &network, &cancel).await.unwrap()["diverged"], false);
+    fs::write(local.join("local.txt"), "local\n").unwrap();
+    fixture_git(&local, &["add", "local.txt"]).await;
+    fixture_git(&local, &["commit", "-m", "local"]).await;
+    let local_task = git::task(&local).await.unwrap();
+    assert_eq!(inspect_divergence(&local, &request(&local_task, "push"), &network, &cancel).await.unwrap()["diverged"], false);
+    fs::write(writer.join("remote.txt"), "remote\n").unwrap();
+    fixture_git(&writer, &["add", "remote.txt"]).await;
+    fixture_git(&writer, &["commit", "-m", "remote"]).await;
+    fixture_git(&writer, &["push", "origin", "main"]).await;
+    let behind_task = git::task(&behind).await.unwrap();
+    assert_eq!(inspect_divergence(&behind, &request(&behind_task, "pull"), &network.for_worktree(&behind), &cancel).await.unwrap()["diverged"], false);
+    let pull_input = request(&local_task, "pull");
+    let pull_error = match prepare(&local, &pull_input, &network, temporary.path(), &cancel).await { Ok(_) => panic!("diverged pull must stop"), Err(error) => error };
+    assert_eq!(pull_error, PULL_DIVERGED);
+    let latest_input = request(&local_task, "latest");
+    let latest_error = match prepare(&local, &latest_input, &network, temporary.path(), &cancel).await { Ok(_) => panic!("diverged Get Latest must stop"), Err(error) => error };
+    assert_eq!(latest_error, LATEST_DIVERGED);
+    fs::write(local.join("base.txt"), "staged\n").unwrap();
+    fixture_git(&local, &["add", "base.txt"]).await;
+    fs::write(local.join("base.txt"), "unstaged\n").unwrap();
+    let task = git::task(&local).await.unwrap();
+    let index = fs::read(local.join(".git/index")).unwrap();
+    let result = inspect_divergence(&local, &request(&task, "push"), &network, &cancel).await.unwrap();
+    assert_eq!(result["diverged"], true);
+    assert_eq!(result["ahead"], 1); assert_eq!(result["behind"], 1); assert_eq!(result["dirty"], true);
+    assert_eq!(result["remote"], "origin"); assert_eq!(result["pushRemote"], "origin");
+    assert_eq!(result["head"], task["head"]); assert_eq!(result["localCommits"].as_array().unwrap().len(), 1);
+    assert_eq!(fs::read(local.join(".git/index")).unwrap(), index);
+    assert_eq!(fs::read_to_string(local.join("base.txt")).unwrap(), "unstaged\n");
+    assert_eq!(git::task(&local).await.unwrap()["head"], task["head"]);
+    fixture_git(&local, &["remote", "add", "alternate", remote.to_str().unwrap()]).await;
+    fixture_git(&local, &["config", "branch.main.pushremote", "alternate"]).await;
+    let alternate = inspect_divergence(&local, &request(&task, "push"), &network, &cancel).await.unwrap();
+    assert_eq!(alternate["remote"], "origin"); assert_eq!(alternate["pushRemote"], "alternate");
+    let service = crate::service::Service::new(temporary.path().join("service"), false, "test").unwrap();
+    let context = crate::service::Context { repository: repo.clone(), link: json!({}), provider: provider.clone(), identity: "fixture".into(), network: network.clone() };
+    let dirty_input = json!({"repositoryId":"fixture:1","taskId":task["id"],"expectedHead":task["head"],"changeKey":task["changeKey"],"requireClean":true,"expectedRemoteHead":result["remoteHead"],"sources":[{"name":"main","kind":"remote","taskId":""}]});
+    let dirty_error = match crate::graph_operations::prepare(&local, &dirty_input, &service, &context, &cancel).await { Ok(_) => panic!("dirty merge preparation must fail"), Err(error) => error };
+    assert!(dirty_error.contains("未提交或暂存"));
+    assert_eq!(fs::read(local.join(".git/index")).unwrap(), index);
+    let stale_context = crate::service::Context { network: network.for_worktree(&behind), ..context };
+    let stale_input = json!({"repositoryId":"fixture:1","taskId":behind_task["id"],"expectedHead":behind_task["head"],"changeKey":behind_task["changeKey"],"requireClean":true,"expectedRemoteHead":behind_task["head"],"sources":[{"name":"main","kind":"remote","taskId":""}]});
+    let stale_error = match crate::graph_operations::prepare(&behind, &stale_input, &service, &stale_context, &cancel).await { Ok(_) => panic!("stale merge preparation must fail"), Err(error) => error };
+    assert!(stale_error.contains("远端分支已变化"), "{stale_error}");
+    assert_eq!(git::task(&behind).await.unwrap()["head"], behind_task["head"]);
+    fixture_git(&local, &["remote", "set-url", "--push", "alternate", stale.to_str().unwrap()]).await;
+    assert!(inspect_divergence(&local, &request(&task, "push"), &network, &cancel).await.unwrap_err().contains("推送目标与获取到的远端状态不一致"));
+    let cancelled = CancellationToken::new(); cancelled.cancel();
+    assert!(inspect_divergence(&local, &request(&task, "pull"), &network, &cancelled).await.is_err());
+    assert_eq!(fs::read(local.join(".git/index")).unwrap(), index);
+}
+
 async fn fixture_git(root: &Path, args: &[&str]) -> String {
     git::run(
         root,

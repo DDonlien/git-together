@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { RepositoryActionDialog } from './RepositoryActionDialog';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
-import { importAPI } from './import-api';
+import { importAPI, RepositoryOperationError } from './import-api';
+import { DivergencePanel } from './DivergencePanel';
 import { isRepositorySyncProgress, type ApplyRepositorySync, type RepositorySyncMode, type RepositorySyncPlan, type RepositorySyncResult, type RepositorySyncProgress } from './repository-sync-model';
 import { Button, Icon, Modal, Notice } from './ui';
 import { LinearProgress } from './material-inputs';
@@ -24,6 +25,10 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
 } & RepositoryOperationControls) {
   const [plans, setPlans] = useState<Record<string, RepositorySyncPlan>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [diverged, setDiverged] = useState<Record<string, boolean>>({});
+  const [busyPanels, setBusyPanels] = useState<Record<string, boolean>>({}), [needsRefresh, setNeedsRefresh] = useState(false);
+  const panelBusy = Object.values(busyPanels).some(Boolean);
+  const onPanelBusy = useCallback((key: string, busy: boolean) => setBusyPanels(current => current[key] === busy || !busy && !current[key] ? current : { ...current, [key]: busy }), []);
   const [results, setResults] = useState<Record<string, RepositorySyncResult>>({});
   const [reading, setReading] = useState(true), [writing, setWriting] = useState(false), [revision, setRevision] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -51,7 +56,7 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
   const key = (target: RepositoryActionTarget) => JSON.stringify([target.repositoryId, target.task.id]);
   useEffect(() => {
     mounted.current = true;
-    const cancellation = new AbortController(); saved.current = {}; setPlans({}); setErrors({}); setReading(true);
+    const cancellation = new AbortController(); saved.current = {}; setPlans({}); setErrors({}); setDiverged({}); setReading(true);
     void (async () => {
       for (const target of targets) {
         const id = key(target); if (completed.current[id] || cancellation.signal.aborted) continue;
@@ -60,7 +65,10 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
           if (cancellation.signal.aborted) { await discard(plan); break; }
           saved.current[id] = plan; setPlans(current => ({ ...current, [id]: plan }));
         } catch (p) {
-          if (!cancellation.signal.aborted) setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '文件预览未完成。' }));
+          if (!cancellation.signal.aborted) {
+            setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '文件预览未完成。' }));
+            if (p instanceof RepositoryOperationError && p.reason === 'diverged') setDiverged(current => ({ ...current, [id]: true }));
+          }
         }
       }
       if (!cancellation.signal.aborted) setReading(false);
@@ -68,7 +76,7 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
     return () => { mounted.current = false; cancellation.abort(); for (const plan of Object.values(saved.current)) void discard(plan); };
   }, [mode, targets, revision]);
   const pending = targets.filter(target => !results[key(target)]);
-  const canApply = pending.length > 0 && pending.every(target => plans[key(target)]) && !reading && !writing && !Object.keys(errors).length;
+  const canApply = pending.length > 0 && pending.every(target => plans[key(target)]) && !reading && !writing && !panelBusy && !needsRefresh && !Object.keys(errors).length;
   async function apply() {
     if (!canApply) return;
     setWriting(true);
@@ -102,7 +110,7 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
     if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。${warnings.length ? ` ${warnings.join(' ')}` : ''}`, count === targets.length && warnings.length === 0);
     if (count === targets.length) { setFinished(true); onFinished?.(); }
   }
-  return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} visible={visible} onCollapse={onCollapse} onClose={() => { if (writing) onCollapse?.(); else onClose(); }}>
+  return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} visible={visible} onCollapse={onCollapse} onClose={() => { if (writing || panelBusy) onCollapse?.(); else onClose(); }}>
     <div className="commit-composer repository-sync-dialog">
       {!targets.length && <Notice kind="info">当前筛选范围没有可操作的已关联工作目录。</Notice>}
       {targets.map(target => {
@@ -118,7 +126,7 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
             <small>工作目录 {targets.findIndex(item => key(item) === id) + 1} / {targets.length} · 已用 {elapsed < 60 ? `${elapsed} 秒` : `${Math.floor(elapsed / 60)} 分 ${elapsed % 60} 秒`}{now - current.updatedAt >= 15_000 ? ' · 等待 Git 返回下一条进度…' : ''}</small>
           </div>}
           {writing && !running && !result && !errors[id] && <p className="muted">等待前一个工作目录完成…</p>}
-          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件${mode === 'latest' ? ` · 回收 ${(result.reclaimedBytes / 1024 / 1024).toFixed(1)} MB${result.protectedHistory ? '，共享历史仍保留' : ''}` : ''}`}</Notice> : errors[id] ? <Notice kind="error">{errors[id]}</Notice> : plan ? <>
+          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件${mode === 'latest' ? ` · 回收 ${(result.reclaimedBytes / 1024 / 1024).toFixed(1)} MB${result.protectedHistory ? '，共享历史仍保留' : ''}` : ''}`}</Notice> : errors[id] ? <><Notice kind="error">{errors[id]}</Notice>{diverged[id] && (mode === 'pull' || mode === 'latest') && <DivergencePanel target={target} mode={mode} onBusy={onPanelBusy} blocked={panelBusy && !busyPanels[id]} onAttempted={() => setNeedsRefresh(true)} />}</> : plan ? <>
             <p>{plan.note}</p>
             {mode === 'latest' && <p>当前分支旧历史：{plan.historyCommits} 个提交；最新目录保留 1 个提交。</p>}
             <details open><summary>{plan.files.length} 个受影响文件</summary><ul>{plan.files.map(file => <li key={file.path}><span>{file.action === 'delete' ? '删除' : file.action === 'add' ? '补齐' : '恢复'} </span><code>{file.path}</code></li>)}</ul></details>
@@ -127,8 +135,8 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
         </section>;
       })}
       <div className="commit-composer-actions">
-        <Button variant="quiet" disabled={writing} onClick={onClose}>关闭</Button>
-        {!!Object.keys(errors).length && <Button disabled={reading || writing} onClick={() => setRevision(value => value + 1)}>重新预览未完成目录</Button>}
+        <Button variant="quiet" disabled={writing || panelBusy} onClick={onClose}>关闭</Button>
+        {!!Object.keys(errors).length && <Button disabled={reading || writing || panelBusy} onClick={() => { setNeedsRefresh(false); setRevision(value => value + 1); }}>重新预览未完成目录</Button>}
         {!!pending.length && <Button variant="primary" disabled={!canApply} onClick={() => void apply()}>{writing ? <><Icon name="spinner" className="spin" /> 正在 {labels[mode]} · {Object.keys(results).length + 1} / {targets.length}</> : `确认 ${labels[mode]}`}</Button>}
       </div>
     </div>

@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 // Four read processes and two fetches bound IO pressure without hiding data.
 static READ_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 static FETCH_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+pub const NON_FAST_FORWARD: &str = "远端已有新的提交，请先检查远端状态；未强制推送。";
 tokio::task_local! { pub(crate) static READ_CONTEXT: Options; }
 
 #[derive(Clone, Default)]
@@ -27,6 +28,8 @@ pub struct Options {
     pub diagnostics: Option<crate::diagnostics::Diagnostics>,
     pub resource: String,
     pub authentication: Option<&'static str>,
+    /// `merge-base --all` exits 1 with no stderr when no common base exists.
+    pub no_merge_base_is_empty: bool,
 }
 fn rejection_reason(out: &str) -> Option<&'static str> {
     if out.contains("refusing to allow") && out.contains("workflow")
@@ -99,7 +102,7 @@ fn failure(out: &str, reason: Option<&str>, system_authentication: bool) -> Stri
         Some("ssh-host-key") => Some("SSH 主机身份验证失败，请先核对并信任服务器主机密钥。".into()),
         Some("remote-policy") => Some("远端规则拒绝推送，请检查分支保护、仓库规则及必需检查；未强制推送。".into()),
         Some("remote-rejected") => Some("远端拒绝推送，请检查服务器接收钩子或仓库规则；未强制推送。".into()),
-        Some("non-fast-forward") => Some("远端已有新的提交，请先检查远端状态；未强制推送。".into()),
+        Some("non-fast-forward") => Some(NON_FAST_FORWARD.into()),
         Some("repository-unavailable") => Some(format!("远端仓库不存在，或当前{connection}凭据无权访问；请核对仓库地址和授权范围。")),
         Some("rate-limit") => Some("Git 远端请求被限流，请稍后重试。".into()),
         _ => None,
@@ -361,7 +364,8 @@ async fn run_process(
         details["exitCode"] = json!(code);
     }
     // check-ignore uses 1 for a successful read with no ignored paths.
-    if !status.success() && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
+    let no_merge_base = options.no_merge_base_is_empty && args.first() == Some(&"merge-base") && args.get(1) == Some(&"--all") && status.code() == Some(1) && error.is_empty() && output.is_empty();
+    if !status.success() && !no_merge_base && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
         // Push --porcelain reports rejection reasons on stdout. Inspect both
         // streams, retaining only a fixed reason in diagnostics.
         let output = format!("{}\n{}", String::from_utf8_lossy(&error), String::from_utf8_lossy(&output)).to_lowercase();
@@ -376,6 +380,11 @@ async fn run_process(
 }
 pub async fn read(root: &Path, args: &[&str]) -> Result<String> {
     run(root, args, READ_CONTEXT.try_with(Clone::clone).unwrap_or_default()).await
+}
+pub async fn merge_bases(root: &Path, local: &str, remote: &str) -> Result<String> {
+    let mut options = READ_CONTEXT.try_with(Clone::clone).unwrap_or_default();
+    options.no_merge_base_is_empty = true;
+    run(root, &["merge-base", "--all", local, remote], options).await
 }
 pub fn changes(status: &str) -> Vec<Value> {
     let records: Vec<&str> = status.split('\0').collect();
