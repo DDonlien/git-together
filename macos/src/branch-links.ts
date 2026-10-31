@@ -135,14 +135,15 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
       return { pull: behind > 0 ? 'warning' as const : 'good' as const, push: ahead > 0 ? 'warning' as const : 'off' as const, pullCount: behind, pushCount: ahead, text: `${task.branch} → ${upstream}：待拉取 ${behind} 个提交，待推送 ${ahead} 个提交${ahead > 0 && behind > 0 ? '；两侧已经分叉，Pull 需要合并或处理冲突' : ''}。` };
     }
     const target = remote.workspace?.tasks.find(remoteTask => remoteTask.branch === task.branch);
-    if (!target || !target.head || !task.head) return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地或远端 HEAD 尚未确认。` };
-    if (task.head === target.head) return { pull: 'good' as const, push: 'off' as const, text: `${task.branch}：本地与远端一致（${task.head.slice(0, 8)}）。` };
+    const targetHead = remote.verifiedPushHeads?.get(task.branch) || target?.head;
+    if (!targetHead || !task.head) return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地或远端 HEAD 尚未确认。` };
+    if (task.head === targetHead) return { pull: 'good' as const, push: 'off' as const, text: `${task.branch}：本地与远端一致（${task.head.slice(0, 8)}）。` };
     const localHistory = history(task.head);
-    const remoteHistory = history(target.head);
-    if (localHistory.has(target.head)) return { pull: 'good' as const, push: 'warning' as const, text: `${task.branch}：本地包含远端最新提交，另有尚未推送的提交。` };
+    const remoteHistory = history(targetHead);
+    if (localHistory.has(targetHead)) return { pull: 'good' as const, push: 'warning' as const, text: `${task.branch}：本地包含远端最新提交，另有尚未推送的提交。` };
     if (remoteHistory.has(task.head)) return { pull: 'warning' as const, push: 'off' as const, text: `${task.branch}：本地落后于已读取的远端 HEAD。` };
     if ([...localHistory].some(id => remoteHistory.has(id))) return { pull: 'warning' as const, push: 'warning' as const, text: `${task.branch}：本地与远端已分叉，两侧都有独立提交；Pull 需要先处理分叉。` };
-    return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地 ${task.head.slice(0, 8)} 与远端 ${target.head.slice(0, 8)} 不同；在已读取范围内无法确认领先、落后或分叉，待同步数量未知。` };
+    return { pull: 'off' as const, push: 'off' as const, text: `${task.branch}：本地 ${task.head.slice(0, 8)} 与远端 ${targetHead.slice(0, 8)} 不同；在已读取范围内无法确认领先、落后或分叉，待同步数量未知。` };
   });
   const detail = [...new Set(comparisons.map(item => item.text))].slice(0, 4).join(' ');
   const pullCount = comparisons.reduce((sum, item) => sum + (item.pullCount ?? Number(item.pull === 'warning')), 0);

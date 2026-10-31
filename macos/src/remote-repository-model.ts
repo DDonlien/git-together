@@ -6,8 +6,29 @@ export type RemoteCommitDetails = { commit: RepositoryCommit; files: RemoteCommi
 export type RemoteHistoryPage = { head: string; page: number; commits: RepositoryCommit[]; hasMore: boolean };
 export type RemoteFileContent = { text: string; binary: boolean; size: number };
 export type RemoteRepositoryWorkspace = RepositoryWorkspace & { source: 'remote'; checkedAt: number; warnings: string[]; branchesComplete?: boolean; retryAt?: number };
-export type RemoteRepositoryState = { workspace: RemoteRepositoryWorkspace | null; loading: boolean; error: string };
+export type RemoteRepositoryState = { workspace: RemoteRepositoryWorkspace | null; loading: boolean; error: string; verifiedPushHeads?: ReadonlyMap<string, string> };
 export type ReadRemoteCommit = (commitId: string, signal: AbortSignal) => Promise<RemoteCommitDetails>;
+
+// Push confirms the remote ref directly. Keep that observation separate from
+// the cached remote tree and history until a later branch read supersedes it.
+export function recordVerifiedPush(state: RemoteRepositoryState, branch: string, head: string): RemoteRepositoryState {
+  const heads = new Map(state.verifiedPushHeads);
+  heads.set(branch, head);
+  return { ...state, verifiedPushHeads: heads };
+}
+
+export function acceptRemoteWorkspace(state: RemoteRepositoryState, workspace: RemoteRepositoryWorkspace, readPredatesPush: boolean): RemoteRepositoryState {
+  let heads = state.verifiedPushHeads;
+  if (heads?.size && !readPredatesPush) {
+    const remaining = new Map(heads);
+    for (const branch of remaining.keys()) {
+      const task = workspace.tasks.find(item => item.branch === branch);
+      if (task ? !task.error && !!task.head : workspace.branchesComplete === true) remaining.delete(branch);
+    }
+    heads = remaining;
+  }
+  return { ...state, workspace: preserveRemoteWorkspace(state.workspace, workspace), loading: true, error: '', verifiedPushHeads: heads };
+}
 
 export function preserveRemoteWorkspace(previous: RemoteRepositoryWorkspace | null, next: RemoteRepositoryWorkspace): RemoteRepositoryWorkspace {
   if (!previous) return next;

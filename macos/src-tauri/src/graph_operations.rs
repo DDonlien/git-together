@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tokio_util::sync::CancellationToken;
+pub mod integration;
 
 #[derive(Clone)]
 pub struct Source {
@@ -663,6 +664,12 @@ pub async fn prepare(
     cancel: &CancellationToken,
 ) -> Result<MergePlan> {
     let before = snapshot(root, input).await?;
+    if input.get("expectedRemoteHead").is_some() && input["requireClean"] != true {
+        return Err("分叉合并必须保护未提交和暂存更改。".into());
+    }
+    if input["requireClean"] == true && !before["files"].as_array().unwrap().is_empty() {
+        return Err("工作目录含未提交或暂存更改；请先处理这些更改，再准备分叉合并。".into());
+    }
     let selected = input["sources"]
         .as_array()
         .filter(|v| !v.is_empty() && v.len() <= 64)
@@ -830,6 +837,12 @@ pub async fn prepare(
             root: source_root,
             head: head.clone(),
         };
+        if let Some(expected) = input.get("expectedRemoteHead") {
+            let expected = util::sha(expected.as_str().ok_or("远端提交无效。")?)?;
+            if selected.len() != 1 || kind != "remote" || head != expected {
+                return Err("远端分支已变化，请重新核验分叉。".into());
+            }
+        }
         if git::read(&scratch, &["merge-base", "--is-ancestor", &head, "HEAD"])
             .await
             .is_err()

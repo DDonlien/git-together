@@ -1,14 +1,17 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Button, Icon, Modal, Notice } from './ui';
 import { OutlinedTextField } from './material-inputs';
 import { RepositoryCommitFiles } from './RepositoryCommitFiles';
 import { PushFeedbackProvider, PushProgress, usePushActivity } from './PushFeedback';
-import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
+import type { CommitDraft, GenerateCommitMessage, GenerateCommitPlan, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import { createCommitDraftStore, generationIdentity, type SavedDraft } from './commit-draft-store';
+import { generateCommitPlan, importAPI, RepositoryOperationError } from './import-api';
+import { DivergencePanel } from './DivergencePanel';
+import type { LocalFile } from './import-model';
 export type { RepositoryActionMode, RepositoryActionTarget } from './repository-action-model';
 
-type Entry = RepositoryActionTarget & SavedDraft & { paths: string[]; commitOperation: string; pushOperation: string; committed?: LocalSubmitResult; pushed?: boolean };
+type Entry = RepositoryActionTarget & SavedDraft & { paths: string[]; commitOperation: string; pushOperation: string; committed?: LocalSubmitResult; pushed?: boolean; batchFailed?: boolean };
 const DraftsContext = createContext<ReturnType<typeof createCommitDraftStore> | null>(null);
 
 export function RepositoryActionDraftsProvider({ sessionId, children }: { sessionId: string; children: ReactNode }) {
@@ -19,11 +22,15 @@ export function RepositoryActionDraftsProvider({ sessionId, children }: { sessio
 function draftKey(target: RepositoryActionTarget): string {
   return JSON.stringify([target.repositoryId, target.task.branch, target.task.path]);
 }
+function CommitGroupFiles({ paths }: { paths: string[] }) {
+  const [open, setOpen] = useState(false);
+  return <details onToggle={event => setOpen(event.currentTarget.open)}><summary>查看本组文件</summary>{open && <ul>{paths.map(path => <li key={path}>{path}</li>)}</ul>}</details>;
+}
 
 // Freeze the reviewed worktrees and file lists when opening. Later filtering or
 // heartbeat reads must not silently widen the operation's scope.
-export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, onPush, onCommitted, onDraftChange, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished, pauseRefresh }: {
-  mode: Extract<RepositoryActionMode, 'commit' | 'submit' | 'push'>; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onGenerate: GenerateCommitMessage; onPush: PushLocalCommit;
+export function RepositoryActionDialog({ mode, targets, onCommit, onGeneratePlan = generateCommitPlan, onPush, onCommitted, onDraftChange, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished, pauseRefresh }: {
+  mode: Extract<RepositoryActionMode, 'commit' | 'submit' | 'push'>; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onGenerate: GenerateCommitMessage; onGeneratePlan?: GenerateCommitPlan; onPush: PushLocalCommit;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void;
   onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
   onComplete?: (message: string) => void; onClose: () => void;
@@ -50,13 +57,17 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
         edited: { summary: !!suppliedDraft?.summary.trim() || !!saved?.edited.summary, description: !!suppliedDraft || !!saved?.edited.description }, generated: !!sameChanges && !!saved?.generated,
         head: target.task.head, changeKey: target.task.changeKey,
         paths: sameChanges && saved?.paths ? [...saved.paths] : target.task.files.map(file => file.path),
+        plan: sameChanges && saved?.plan ? structuredClone(saved.plan) : undefined,
         commitOperation: crypto.randomUUID(), pushOperation: crypto.randomUUID(),
       };
     });
   });
   const current = useRef(entries), running = useRef(false);
   const [busy, setBusy] = useState(false), [actionError, setError] = useState('');
-  const [phase, setPhase] = useState<'commit' | 'push' | null>(null);
+  const [blockedIndex, setBlockedIndex] = useState<number | null>(null), [panelBusy, setPanelBusy] = useState(false), [needsReopen, setNeedsReopen] = useState(false);
+  const onPanelBusy = useCallback((_key: string, value: boolean) => setPanelBusy(value), []);
+  const [phase, setPhase] = useState<'commit' | 'push' | 'ignore' | null>(null);
+  const [ignoreNotice, setIgnoreNotice] = useState('');
   const [activeTarget, setActiveTarget] = useState('');
   const [finished, setFinished] = useState(false);
   const generatingEntry = entries.find(entry => store.getJob(draftKey(entry), entry)?.status === 'running');
@@ -72,7 +83,7 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
       if (mode !== 'push') {
         if (next.committed) drafts.delete(draftKey(next));
         else {
-          drafts.set(draftKey(next), { draft: next.draft, edited: next.edited, generated: next.generated, head: next.head, changeKey: next.changeKey, paths: next.paths });
+          drafts.set(draftKey(next), { draft: next.draft, edited: next.edited, generated: next.generated, head: next.head, changeKey: next.changeKey, paths: next.paths, plan: next.plan });
           onDraftChange?.(next, next.draft);
         }
       }
@@ -81,12 +92,20 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
     setEntries(current.current);
   };
   const edit = (index: number, field: keyof CommitDraft, value: string) => {
-    setError('');
+    setError(''); setBlockedIndex(null);
     update(index, entry => ({ draft: { ...entry.draft, [field]: value }, edited: { ...entry.edited, [field]: true }, commitOperation: crypto.randomUUID() }));
+  };
+  const editGroup = (index: number, groupIndex: number, field: keyof CommitDraft, value: string) => {
+    setError(''); setBlockedIndex(null);
+    update(index, entry => ({ plan: entry.plan?.map((group, item) => item === groupIndex ? { ...group, [field]: value } : group), commitOperation: crypto.randomUUID() }));
   };
   useEffect(() => {
     for (let index = 0; index < current.current.length; index++) {
       const entry = current.current[index], saved = drafts.get(draftKey(entry));
+      if (!entry.committed && saved?.generated && saved.plan && generationIdentity(saved) === generationIdentity(entry) && JSON.stringify(saved.plan) !== JSON.stringify(entry.plan)) {
+        update(index, { plan: saved.plan, generated: true });
+        continue;
+      }
       if (!entry.committed && saved?.generated && generationIdentity(saved) === generationIdentity(entry) && JSON.stringify(saved.draft) !== JSON.stringify(entry.draft)) {
         update(index, { draft: saved.draft, generated: true });
       }
@@ -94,44 +113,65 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
   }, [revision]);
   async function generate() {
     setError('');
-    const pending = current.current.filter(entry => !entry.committed && entry.paths.length);
+    const pending = current.current.filter(entry => !entry.committed && !entry.batchFailed && entry.paths.length);
     const resumeRefresh = pauseRefresh?.();
     try {
       for (const entry of pending) {
-        await store.generate(draftKey(entry), { draft: entry.draft, edited: entry.edited, generated: entry.generated, head: entry.head, changeKey: entry.changeKey, paths: entry.paths },
-          { repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.head, changeKey: entry.changeKey!, paths: entry.paths }, onGenerate);
+        await store.generatePlan(draftKey(entry), { draft: entry.draft, edited: entry.edited, generated: entry.generated, head: entry.head, changeKey: entry.changeKey, paths: entry.paths, plan: entry.plan },
+          { repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.head, changeKey: entry.changeKey!, paths: entry.paths }, onGeneratePlan);
       }
     } catch (problem) {
       const failed = pending.find(entry => store.getJob(draftKey(entry), entry)?.status === 'failed');
-      if (failed) setError(`${failed.repositoryName} · ${failed.task.branch}：${problem instanceof Error ? problem.message : 'AI 说明生成未完成。'}`);
+      if (failed) setError(`${failed.repositoryName} · ${failed.task.branch}：${problem instanceof Error ? problem.message : 'AI 分析未完成。'}`);
     }
     finally { resumeRefresh?.(); }
   }
-  const close = () => { if (running.current) { onCollapse?.(); return; } onClose(); };
+  const close = () => { if (running.current || panelBusy) { onCollapse?.(); return; } onClose(); };
   const included = entries.filter(entry => mode === 'push' || entry.paths.length);
-  const ready = included.length > 0 && !finished && !busy && included.every(entry => mode === 'push' || entry.committed || !!entry.draft.summary.trim());
+  const ready = included.length > 0 && !finished && !busy && !panelBusy && !needsReopen && blockedIndex === null && !generating && included.every(entry => !entry.batchFailed && (mode === 'push' || entry.committed || (entry.plan ? entry.plan.every(group => !!group.summary.trim()) : !!entry.draft.summary.trim())));
+  async function ignore(index: number, file: LocalFile) {
+    const entry = current.current[index];
+    if (running.current || panelBusy || needsReopen || entry.committed || entry.batchFailed) return;
+    running.current = true; setBusy(true); setPhase('ignore'); setError(''); setIgnoreNotice('');
+    store.cancel(draftKey(entry));
+    const resumeRefresh = pauseRefresh?.();
+    try {
+      const result = await importAPI('ignoreFile', { repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, path: file.path, operationId: crypto.randomUUID() });
+      update(index, latest => ({ task: { ...latest.task, files: result.files, changeKey: result.changeKey }, changeKey: result.changeKey,
+        paths: result.files.filter(item => latest.paths.includes(item.path) || item.path === '.gitignore' || item.path === file.path || item.path === file.previousPath).map(item => item.path), generated: false, plan: undefined,
+        draft: { summary: latest.edited.summary ? latest.draft.summary : '', description: latest.edited.description ? latest.draft.description : '' }, commitOperation: crypto.randomUUID(),
+      }));
+      setIgnoreNotice(result.stoppedTracking ? `已忽略 ${file.path}，本地文件已保留。请提交 .gitignore 和停止跟踪的更改；清单中的“删除”只表示从版本控制移除。` : `已忽略 ${file.path}，本地文件已保留。请提交 .gitignore 更改。`);
+    } catch (problem) { setError(`${entry.repositoryName} · ${entry.task.branch}：${problem instanceof Error ? problem.message : '忽略未完成，请重新读取提交清单。'}`); }
+    finally { resumeRefresh?.(); running.current = false; setBusy(false); setPhase(null); }
+  }
   async function confirm() {
     if (!ready || running.current) return;
     running.current = true;
     for (const entry of current.current) store.cancel(draftKey(entry));
-    setBusy(true); setError('');
-    let activeTarget = '';
+    setBusy(true); setError(''); setBlockedIndex(null);
+    let activeTarget = '', activeIndex: number | undefined;
+    let activePhase: 'commit' | 'push' = 'commit';
     let pushBatch: ReturnType<typeof pushActivity.begin> | undefined;
     const resumeRefresh = pauseRefresh?.();
     try {
       for (let index = 0; index < current.current.length; index++) {
+        activeIndex = index;
         let entry = current.current[index];
         if (mode !== 'push' && !entry.paths.length) continue;
         activeTarget = `${entry.repositoryName} · ${entry.task.branch}`;
         setActiveTarget(activeTarget);
         if (mode !== 'push' && !entry.committed) {
+          activePhase = 'commit';
           setPhase('commit');
-          const committed = await onCommit({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, paths: entry.paths, operationId: entry.commitOperation, ...entry.draft });
-          update(index, { committed }); entry = current.current[index];
+          const committed = await onCommit({ repositoryId: entry.repositoryId, taskId: entry.task.id, expectedHead: entry.task.head, changeKey: entry.task.changeKey!, paths: entry.paths, operationId: entry.commitOperation, ...entry.draft, ...(entry.plan ? { groups: entry.plan } : {}) });
+          update(index, { committed, batchFailed: !!committed.incomplete }); entry = current.current[index];
           onCommitted?.(entry, committed);
+          if (committed.incomplete) throw new Error(committed.warning || '部分分组已提交，请检查本地历史并重新分析剩余更改。');
           if (committed.warning) throw new Error(committed.warning);
         }
         if (mode !== 'commit' && !entry.pushed) {
+          activePhase = 'push';
           setPhase('push');
           pushBatch ||= pushActivity.begin(current.current.filter(target => !target.pushed && (mode === 'push' || target.paths.length > 0)));
           const commitId = entry.committed?.commitId || entry.commitId || entry.task.head;
@@ -141,38 +181,58 @@ export function RepositoryActionDialog({ mode, targets, onCommit, onGenerate, on
           if (result.warning) throw new Error(result.warning);
         }
       }
-      if (mode === 'commit') onComplete?.(`已创建 ${included.length} 个本地提交。`);
+      if (mode === 'commit') onComplete?.(`已创建 ${current.current.reduce((count, entry) => count + (entry.committed?.commits?.length || (entry.committed ? 1 : 0)), 0)} 个本地提交。`);
       running.current = false; setFinished(true); (onFinished || onClose)();
-    } catch (problem) { setError(`${activeTarget}：${problem instanceof Error ? problem.message : '操作未完成。'}`); }
+    } catch (problem) {
+      const uncertainPlan = activeIndex !== undefined && !!current.current[activeIndex].plan && !current.current[activeIndex].committed;
+      if (uncertainPlan) update(activeIndex!, { batchFailed: true });
+      setError(`${activeTarget}：${problem instanceof Error ? problem.message : '操作未完成。'}${uncertainPlan ? ' 请检查本地提交历史，刷新后重新分析剩余更改。' : ''}`);
+      if (activePhase === 'push' && activeIndex !== undefined && problem instanceof RepositoryOperationError && problem.reason === 'non-fast-forward') setBlockedIndex(activeIndex);
+    }
     finally { resumeRefresh?.(); if (pushBatch) pushActivity.finish(pushBatch); running.current = false; setBusy(false); setPhase(null); setActiveTarget(''); }
   }
-  const pushOnly = mode === 'push' || mode === 'submit' && included.length > 0 && included.every(entry => entry.committed);
+  const pushOnly = mode === 'push' || mode === 'submit' && included.length > 0 && included.every(entry => entry.committed && !entry.batchFailed);
   return <Modal title={mode === 'commit' ? 'Commit' : mode === 'push' ? 'Push' : 'Submit'} onClose={close} visible={visible} onCollapse={onCollapse}>
     <div className="repository-action-dialog">
       <p className="repository-submit-count">{included.length} 个工作目录{mode !== 'push' && ` · 已选 ${entries.reduce((count, entry) => count + entry.paths.length, 0)} / ${entries.reduce((count, entry) => count + entry.task.files.length, 0)} 个更改`}</p>
-      {generating && <p className="repository-submit-generating" role="status"><Icon name="spinner" className="spin" size={16} />正在生成提交说明…</p>}
+      {generating && <p className="repository-submit-generating" role="status"><Icon name="spinner" className="spin" size={16} />正在分析并拆分提交…</p>}
       <div className="repository-submit-content">
         {entries.map((entry, index) => <section key={`${entry.repositoryId}:${entry.task.id}`} aria-label={`${entry.repositoryName} · ${entry.task.branch}`}>
           <h3><Icon name="branch" size={15} /><span>{entry.repositoryName} · {entry.task.branch}</span></h3>
-          {mode !== 'push' && <div className="repository-batch-draft">
-            <OutlinedTextField label="Summary" aria-label={`Summary：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.summary} onChange={event => edit(index, 'summary', event.target.value)} maxLength={500} required disabled={busy || !!entry.committed} />
-            <OutlinedTextField type="textarea" label="Description（选填）" aria-label={`Description：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.description} onChange={event => edit(index, 'description', event.target.value)} maxLength={20_000} rows={2} disabled={busy || !!entry.committed} />
+          {mode !== 'push' && !entry.plan && <div className="repository-batch-draft">
+            <OutlinedTextField label="Summary" aria-label={`Summary：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.summary} onChange={event => edit(index, 'summary', event.target.value)} maxLength={500} required disabled={busy || panelBusy || needsReopen || !!entry.committed} />
+            <OutlinedTextField type="textarea" label="Description（选填）" aria-label={`Description：${entry.repositoryName} / ${entry.task.branch}`} value={entry.draft.description} onChange={event => edit(index, 'description', event.target.value)} maxLength={20_000} rows={2} disabled={busy || panelBusy || needsReopen || !!entry.committed} />
           </div>}
-          {mode === 'push' ? <code className="repository-submit-sha">{(entry.commitId || entry.task.head).slice(0, 12)}</code> : <RepositoryCommitFiles files={entry.task.files} paths={entry.paths} branch={entry.task.branch} disabled={busy || !!entry.committed} onChange={paths => {
-            setError('');
-            update(index, latest => ({ paths, generated: false, draft: {
+          {mode !== 'push' && entry.plan && <div className="repository-commit-plan" aria-label={`提交分组：${entry.repositoryName} / ${entry.task.branch}`}>
+            <div className="repository-commit-plan-heading"><strong>AI 建议创建 {entry.plan.length} 个提交</strong><Button type="button" disabled={busy || panelBusy || needsReopen || generating || !!entry.committed || !!entry.batchFailed} onClick={() => update(index, { plan: undefined, generated: false, commitOperation: crypto.randomUUID() })}>取消拆分</Button></div>
+            <p className="repository-commit-plan-hint">按路径归组；如需调整范围，可修改下方文件选择后重新分析。</p>
+            {entry.plan.map((group, groupIndex) => <section className="repository-commit-plan-group" key={groupIndex}>
+              <h4>Commit {groupIndex + 1} · {group.paths.length} 个文件{entry.committed?.commits?.[groupIndex] ? ` · 已提交 ${entry.committed.commits[groupIndex].commitId.slice(0, 8)}` : ''}</h4>
+              <div className="repository-batch-draft">
+                <OutlinedTextField label="Summary" aria-label={`第 ${groupIndex + 1} 个提交的 Summary：${entry.task.branch}`} value={group.summary} onChange={event => editGroup(index, groupIndex, 'summary', event.target.value)} maxLength={500} required disabled={busy || panelBusy || needsReopen || generating || !!entry.committed || !!entry.batchFailed} />
+                <OutlinedTextField type="textarea" label="Description（选填）" aria-label={`第 ${groupIndex + 1} 个提交的 Description：${entry.task.branch}`} value={group.description} onChange={event => editGroup(index, groupIndex, 'description', event.target.value)} maxLength={20_000} rows={2} disabled={busy || panelBusy || needsReopen || generating || !!entry.committed || !!entry.batchFailed} />
+              </div>
+              <CommitGroupFiles paths={group.paths} />
+            </section>)}
+          </div>}
+          {mode === 'push' ? <code className="repository-submit-sha">{(entry.commitId || entry.task.head).slice(0, 12)}</code> : <RepositoryCommitFiles files={entry.task.files} paths={entry.paths} branch={entry.task.branch} disabled={busy || panelBusy || needsReopen || !!entry.committed || !!entry.batchFailed} onChange={paths => {
+            setError(''); setBlockedIndex(null);
+            update(index, latest => ({ paths, generated: false, plan: undefined, draft: {
               summary: latest.edited.summary ? latest.draft.summary : '',
               description: latest.edited.description ? latest.draft.description : '',
             }, commitOperation: crypto.randomUUID() }));
-          }} />}
-          {entry.committed && <p className="repository-submit-result" role="status">已 Commit · {entry.committed.commitId.slice(0, 8)}{entry.pushed ? ' · 已 Push' : mode === 'submit' ? ' · 待 Push' : ''}</p>}
+          }} onIgnore={file => { void ignore(index, file); }} />}
+          {entry.committed && <p className="repository-submit-result" role="status">{entry.committed.incomplete ? `已完成 ${entry.committed.commits?.length || 0} / ${entry.plan?.length || 0} 个提交` : `已 Commit${entry.committed.commits ? ` · ${entry.committed.commits.length} 个提交` : ''}`} · {entry.committed.commitId.slice(0, 8)}{entry.pushed ? ' · 已 Push' : mode === 'submit' && !entry.committed.incomplete ? ' · 待 Push' : ''}</p>}
           {mode === 'push' && entry.pushed && <p className="repository-submit-result" role="status">已 Push</p>}
+          {blockedIndex === index && <DivergencePanel target={entry} mode="push" onBusy={onPanelBusy} onAttempted={() => setNeedsReopen(true)} />}
         </section>)}
       </div>
       {!entries.length && <p>当前范围内没有可执行的更改。</p>}
       {error && <Notice kind="error">{error}</Notice>}
+      {needsReopen && <Notice kind="info">请检查当前 Git 状态，关闭后重新打开操作；不会自动重试或推送。</Notice>}
+      {ignoreNotice && <Notice kind="info">{ignoreNotice}</Notice>}
       {busy && phase === 'push' && <PushProgress completed={entries.filter(entry => entry.pushed).length} total={included.length} />}
-      <div className="modal-actions">{finished ? <Button type="button" variant="primary" onClick={close}>完成</Button> : <><Button type="button" disabled={busy} onClick={close}>关闭</Button>{mode !== 'push' && <Button type="button" disabled={busy || !included.some(entry => !entry.committed)} aria-busy={generating} onClick={() => { if (generating) { for (const entry of entries) store.cancel(draftKey(entry)); } else void generate(); }} leadingIcon={<Icon name={generating ? 'close' : 'sparkle'} size={14} />}>{generating ? '停止生成' : 'AI 生成说明'}</Button>}<Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{phase === 'push' ? '推送' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></>}</div>
+      <div className="modal-actions">{finished ? <Button type="button" variant="primary" onClick={close}>完成</Button> : <><Button type="button" disabled={busy || panelBusy} onClick={close}>关闭</Button>{mode !== 'push' && <Button type="button" disabled={busy || panelBusy || needsReopen || !included.some(entry => !entry.committed && !entry.batchFailed)} aria-busy={generating} onClick={() => { if (generating) { for (const entry of entries) store.cancel(draftKey(entry)); } else void generate(); }} leadingIcon={<Icon name={generating ? 'close' : 'sparkle'} size={14} />}>{generating ? '停止分析' : 'AI 分析并拆分'}</Button>}<Button type="button" variant="primary" disabled={!ready} aria-busy={busy} onClick={() => void confirm()}>{busy ? <><Icon name="spinner" className="spin" size={14} />正在{phase === 'push' ? '推送' : phase === 'ignore' ? '忽略' : '提交'}…</> : pushOnly ? 'Push' : mode === 'commit' ? 'Commit' : '提交'}</Button></>}</div>
     </div>
   </Modal>;
 }

@@ -1,4 +1,5 @@
 ---
+uid: '00006'
 title: 按用户标注调整Dashboard仓库行与搜索筛选布局
 id: IMPORT-14
 原聚合 ID: '`IMPORT-native-browser`。'
@@ -10,12 +11,17 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-14`、`IMPORT-14-last-divider`、`IMPORT-14-last-divider-test`、`IMPORT-14-grouped-actions`、`IMPORT-14-header-alignment`、`IMPORT-14-header-alignment-runtime`、`IMPORT-14-header-count-corner`、`IMPORT-14-production-submit`、`IMPORT-14-submit-refresh-pause`、`IMPORT-14-submit-refresh-pause-test`、`IMPORT-14-submit-generation-job`、`IMPORT-14-submit-generation-job-test`、`IMPORT-14-production-submit-runtime`、`IMPORT-14-push-lfs-errors`、`IMPORT-14-submit-popup`、`IMPORT-14-submit-summary-only`、`IMPORT-14-submit-popup-width`、`IMPORT-14-windows-lfs-commit`、`IMPORT-14-commit-timeout-headless`、`IMPORT-14-submit-popup-production`、`IMPORT-14-submit-popup-h5`、`IMPORT-14-submit-ai`、`IMPORT-14-header-text`、`IMPORT-14-download-icon`、`IMPORT-14-grouped-icons`、`IMPORT-14-grouped-refinement`、`IMPORT-14-grouped-h5`、`IMPORT-14-branch-name-alignment`、`UI-04-repository-reveal`、`IMPORT-14-inline`、`IMPORT-14-number-ignore`、`IMPORT-14-read-badges`、`IMPORT-14-read-health-scope`、`IMPORT-14-read-badges-test`、`IMPORT-14-read-failure-live`、`IMPORT-14-check-cycle`、`IMPORT-14-change-trigger`、`IMPORT-14-zero-badges`、`IMPORT-14-diagnostics`、`IMPORT-14-performance`、`IMPORT-14-performance-source`、`IMPORT-14-performance-runtime`、`IMPORT-14-diagnostics-copy`、`IMPORT-14-diagnostics-test`、`IMPORT-14-operation-semantics`、`IMPORT-14-branch-download`、`IMPORT-14-branch-download-layout`、`IMPORT-14-branch-download-layout-test`、`IMPORT-14-operation-semantics-test`、`IMPORT-14-visible`、`IMPORT-14-hide`、`IMPORT-14-hide-counts`、`IMPORT-14-hide-header-count`、`IMPORT-14-operation-execution`、`IMPORT-14-operation-collapse`、`IMPORT-14-operation-collapse-icons`、`IMPORT-14-feedback`、`IMPORT-14-action-names`、`IMPORT-14-action-names-test`、`IMPORT-14-feedback-test`、`IMPORT-14-number-ignore-test`、`IMPORT-14-test`、`IMPORT-15`、`IMPORT-15-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-26T16:03:59+00:00'
+updated-time: '2026-10-28T20:56:54+08:00'
 ---
 
 # Description
 
 ## 当前需求与范围
+- [ ] \[IMPORT-14-push-badge-refresh] 修复 Push 成功后 Dashboard 仓库和分支行仍显示待推送角标：根据已验证的实际推送结果更新对应分支的比较依据，保留仍未推送的提交、其他分支和读取失败状态；较早发出的远端读取不能覆盖结果，后续有效读取继续反映真实远端变化。源码和局部检查完成，用户安装版验收待完成。
+  - [x] Push 已验证的远端提交立即参与对应分支的同步比较；远端文件树与历史不改写，新的有效读取取代该确认结果。类型及 Rust 检查、生产构建、16 项相关回归和项目默认 29 项测试通过。
+  - [ ] 正式更新发布后由用户在安装版中验收实际 Push 和角标。
+- [x] \[IMPORT-14-empty-gitea-branches] 修正 Gitea 空仓库分支读取：日志显示请求 HTTP 200 后被误判为格式无效；只读检查确认目标仓库没有引用，服务端标记为空。Gitea 1.26.2 的空仓库分支接口返回 JSON null；客户端仅在 Gitea 首页面且分页信息一致时将其识别为完整空列表，真正的权限错误、异常数据与后续分页错误仍保留。0.38.11 已正式发布，用户安装版尚待验收。
+- [x] \[IMPORT-14-transient-success-feedback] Dashboard 和仓库页完整成功操作及刷新成功提示在 6 秒后消失，连续成功重新计时；部分完成、警告、错误与信息保留，操作提示可手动关闭。0.38.11 已正式发布，用户安装版尚待验收。
 - [x] \[IMPORT-14] 按 Dashboard 四处标注做局部修改：仅仓库性质文字比原样式小 2px；移除账号列前的图标；分支图标与名称使用和左侧仓库导航相同的间距。行尾菜单分为 Git（Fetch、Pull、Push、提交）与 GitTogether（打开工作台、配置本地目录），本地目录列保留配置入口。用户确认本轮先接入已有操作；尚未实现的 Git 操作禁用并明确标识，不模拟成功或操作用户仓库。
   - [x] \[IMPORT-14-last-divider] Dashboard 仓库列表最下方的可见行不显示底部分割线，收起的分支容器不影响最后一行的判断；保留其他仓库行的分隔和卡片外边框，搜索、排序及展开收起后仍遵循同一规则。0.30.6 已修正末行样式匹配，尚未更新用户安装版。
     - [x] \[IMPORT-14-last-divider-test] 类型检查及生产前端构建通过。隔离浏览器使用生产 CSS 和 Dashboard 的成对 tbody 结构，实际核对亮暗主题下双仓库收起、最后仓库展开、筛选后单仓库和空列表共八种呈现：末行全部单元格底线为 0，前面的仓库分隔及卡片外边框为 1px。此为样式呈现验证，没有运行旧后台测试，不替代真实账号或用户安装版验收。
@@ -62,6 +68,7 @@ updated-time: '2026-10-26T16:03:59+00:00'
       - [x] \[IMPORT-14-diagnostics-test] 验证24小时边界、分钟清理、重启/两独立进程文件隔离、写入与清理失败、残留副本清理、日志关联和敏感输入剔除，覆盖真实临时 Git、合成 provider 503/部分任务故障/恢复、实际 preload/共享原生命令、预览HTTP和设置入口及原生写入异常恢复。14项日志测试、相关88/88、类型/前端构建/原生编译/Sites4/4及独立生产UI验证通过；全量397项386通过11项已有界面断言失败。未读取/复现真实用户凭据故障，未更新已安装App，未打包/提交/推送/发布；源码验收不代替安装包更新。
   - [x] \[IMPORT-14-operation-semantics] 按2026-10-10最新定义，仓库与分支行尾显示Commit、Fetch、Pull、Push、Get Latest、Reconcile、Clear，取代Ignore入口；本项完成入口和规则说明，真实执行由下一子项追踪。前四项采用常规Git语义；Get Latest的定义为下载当前分支最新快照，深度为1，确认下载完整后实际清理超过1层的旧Git历史与历史LFS缓存，目标是释放空间；Reconcile以本地为准，本地多出标记添加，不同内容采用本地版本并创建本地提交，本地缺少忽略；Clear以远端为准，本地多出标记删除，不同内容恢复远端版本，本地缺少下载。Pull承接原Get Latest的落后/同步状态与数量，Get Latest不再代表普通Pull；没有实际历史/缓存/文件内容比较时，不编造三个自定义动作的数量。保留28px按钮、4px间距、已有按下/键盘反馈、无悬停提示和两种日期列；操作列扩展至220px容纳7个入口。类型检查和构建通过，未把源码改动标记为实际Git执行或原生安装包更新。
     - [x] \[IMPORT-14-branch-download] 按2026-10-10最新反馈，尚未关联工作目录的分支行尾仅显示下载和隐藏/恢复，已关联分支保留原有操作。下载选择本地存放位置，创建新的真实Git worktree文件夹并下载所选远端分支，完整完成后自动保存该分支的关联；不覆盖已存在的目录或切换其他工作目录。使用现有账号凭据，检查失败、目录占用、重复下载和保存失败要如实反馈；保留日期、排序、检查呼吸、名称提示与隐藏偏好。0.16.0源码接通depth=1下载、当前版本LFS、真实worktree、v2关联保存与失败回滚，类型检查通过；本轮按持续的源码交付方向完成，没有替用户实际下载仓库、运行新版原生界面或打包，不将源码检查写成实际下载验收。
+    - [x] 仓库详情页切换到“本地”文件树且未关联本地目录时，同时提供“下载并关联”和“关联本地目录”。下载复用既有真实分支下载流程，优先使用聚焦或单分支筛选分支，否则使用仓库默认分支；Dashboard 继续与侧栏共用置顶偏好和切换动作，右侧置顶图标在置顶时保持可见并参与优先排序。
       - [x] \[IMPORT-14-branch-download-layout] 用户选择FOLDER后，默认下载到FOLDER/project-name/project-name_branch-name；项目层以仓库名生成，分支名中的路径分隔符转为安全字符，保留工作目录名称编辑。预览、系统目录字段及下载后的路径按实际Windows盘符或UNC使用反斜杠，macOS使用正斜杠，不混用。真实Rust下载位置与预览一致，已有目标不覆盖，失败沿用实际下载完成后才保存关联的原流程。0.32.1合并源码实现并验证，已推送main；本次未生成或发布安装包。
         - [x] \[IMPORT-14-branch-download-layout-test] 相关客户端20项、隔离真实Rust/Git下载回归、类型检查、locked全目标Cargo检查与生产构建通过。Windows实际下载确认项目容器、main及feature/layout真实分支、深度1、文件、worktree及已有目标/容器文件保护；生产下载弹窗核对Windows/Mac预览、可编辑叶目录、原parentPath参数与取消。macOS路径由客户端和生产页面取样验证，未将Windows运行结果冒称Mac原生下载验收；构建只有既有大chunk提示。
     - [x] \[IMPORT-14-operation-semantics-test] 按最新定义六Git操作及独立隐藏、五组胶囊/文字表头、Pull状态归属、角标保留、无Reconcile/手动Fetch及pointer回归通过；500/500及18项真实Git/LFS回归通过。生产App实际宽列表量测中心一致、侧栏展开32px且纵向padding为0；窄窗口官方输入/键盘/主题由R-05-commit-composer-official-m3追踪，原生安装验收与源码/临时Git分开。
@@ -133,3 +140,31 @@ updated-time: '2026-10-26T16:03:59+00:00'
 将 Dashboard 仓库标题行固定到仓库名的一行高度，并将 Presence 头像按钮设为 24px 点击区域，避免头像行被按钮默认最小高度和内边距撑高。源码与 Issue 已更新；git diff --check 通过。未运行测试、类型检查、构建、打包或视觉验收；实际 Dashboard 行高仍待用户验收。
 
 [本次修正对话](codex://threads/01a178f0-45f3-7721-8804-7c2b65967a46)
+
+## 20261027-140404_Codex-GPT-6
+
+详情页未关联状态新增“下载并关联”和“关联本地目录”两个入口。下载复用现有分支下载弹窗，优先取聚焦或单分支筛选分支，否则取仓库默认分支；原有关联入口保留。Dashboard 的置顶按钮此前已与侧栏共用同一偏好和切换动作，置顶状态在右侧常显并参与排序，因此没有重复创建置顶状态。
+
+`git diff --check` 通过；未运行类型检查、构建或测试。未打包、发布或操作安装版。
+
+[本次执行对话](codex://threads/01a17bf1-7814-7473-b09f-dbecd63aa00b)
+
+## 20261027-152547_Codex-GPT-6.1-Terra
+
+排查 Gitea 空仓库的分支误报及持续显示的 Pull 成功提示；只读日志、远端引用与服务端空仓库标记共同支持原因。修复空列表识别和成功提示 6 秒自动关闭；部分完成和警告不自动清除。提供者回归覆盖空列表、异常分页和权限失败；隔离浏览器使用生产组件验证成功超时、重复成功重计时及警告、错误保留，不对用户仓库执行写操作。安装版和真实账号界面验收待用户完成。
+
+[本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261027-155104_Codex-GPT-6.1-Terra
+
+0.38.11 正式发布，来源提交 `9892dcd5edd48524106271e5537bbbe5b2b9659a`；[macOS 与 Windows 自动检查](https://github.com/DDonlien/git-together/actions/runs/40467220678)及 [Windows 双架构原生打包验证](https://github.com/DDonlien/git-together/actions/runs/40467230762)通过，[三平台发布](https://github.com/DDonlien/git-together/actions/runs/40467252763)成功。提供者 15 项、前端 27 项、类型检查、生产构建与隔离生产组件交互验证通过。Apple 公证 Accepted `6d2aa89e-9b1e-45ba-ab52-4b8470e16f45`；8 个公开资产的大小和摘要、三平台更新签名及 latest.json、macOS Developer ID、staple 和 ZIP/tar 应用内容一致性均已复核。公开下载校验中一条连接停滞，另一条连接下载同一文件并通过摘要校验。未操作用户安装版，真实账号界面仍待用户验收。
+
+[本次执行对话](codex://threads/01a17861-9fd8-7be3-a29e-1444b01bca39)
+
+## 20261028-114623_Codex-GPT-6
+
+用户反馈 Push 成功后仓库及分支行仍显示待推送数字。排查确认 Tauri 的 Push 会直接核对远端分支，但角标沿用 Provider 缓存，变更触发的远端重读有最短间隔；未推断用户现场唯一原因。源码现以推送成功时实际核对的分支和提交作为临时比较依据，保留原远端内容快照，读取开始于 Push 之前时不能覆盖确认结果，之后成功读取该分支或完整确认其不存在时重新使用远端数据。部分推送、本地后续提交、其他分支与读取错误仍各自反映。
+
+类型检查、Rust locked 检查、前端生产构建、16 项角标与刷新回归及 29 项项目默认测试通过；浏览器未操作用户应用或真实仓库。额外执行旧 `dashboard-actions.test.ts` 为 1/8 通过：5 项缺少操作上下文、2 项样式断言失败；使用 Git HEAD 原始源码在临时目录复跑得到相同 7 项失败，属于本次改动前的测试状态。未提交、推送、打包或发布；用户安装版及真实账号交互未验收。
+
+[本次执行对话](codex://threads/01a18099-3e29-7511-b384-4a7a23c9f2de)

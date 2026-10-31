@@ -54,19 +54,21 @@ export function RepositoryOperationProvider({ sessionId, children, pauseReposito
   }, [close, update, save]);
   const value = useMemo(() => ({ open, restore, get, blocked }), [open, restore, get, blocked, operations]);
   return <OperationsContext.Provider value={value}>{children}{operations.map(operation =>
-    <OperationDialog key={operation.id} operation={operation} visible={active === operation.id} onCollapse={collapse} onClose={close} onStateChange={update} onFinished={finish} onTargetChange={changeTarget} />
+    <OperationDialog key={operation.id} operation={operation} visible={active === operation.id} onCollapse={collapse} onClose={close} onStateChange={update} onFinished={finish} onTargetChange={changeTarget} pauseRepositoryRefresh={pauseRepositoryRefresh} />
   )}</OperationsContext.Provider>;
 }
-function OperationDialog({ operation, visible, onCollapse, onClose, onStateChange, onFinished, onTargetChange }: {
+function OperationDialog({ operation, visible, onCollapse, onClose, onStateChange, onFinished, onTargetChange, pauseRepositoryRefresh }: {
   operation: Operation; visible: boolean; onCollapse: () => void; onClose: (id: string) => void;
   onStateChange: (id: string, state: RepositoryOperationState) => void; onFinished: (id: string) => void;
   onTargetChange: (id: string, task: RepositoryActionTarget['task']) => void;
+  pauseRepositoryRefresh?: (repositoryIds: string[]) => () => void;
 }) {
   const close = useCallback(() => onClose(operation.id), [operation.id, onClose]);
   const update = useCallback((state: RepositoryOperationState) => onStateChange(operation.id, state), [operation.id, onStateChange]);
   const finish = useCallback(() => onFinished(operation.id), [operation.id, onFinished]);
   const target = useCallback((task: RepositoryActionTarget['task']) => onTargetChange(operation.id, task), [operation.id, onTargetChange]);
-  return operation.kind === 'graph' ? <RepositoryGraphActionDialog {...operation} working={operation.state === 'working'} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} onTargetChange={target} /> : <RepositoryOperationDialog {...operation} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} />;
+  const pauseRefresh = pauseRepositoryRefresh ? () => pauseRepositoryRefresh(operation.targets.map(item => item.repositoryId)) : undefined;
+  return operation.kind === 'graph' ? <RepositoryGraphActionDialog {...operation} working={operation.state === 'working'} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} onTargetChange={target} pauseRefresh={pauseRefresh} /> : <RepositoryOperationDialog {...operation} visible={visible} onCollapse={onCollapse} onClose={close} onStateChange={update} onFinished={finish} pauseRefresh={pauseRefresh} />;
 }
 export function useRepositoryOperations(): Operations {
   const context = useContext(OperationsContext);

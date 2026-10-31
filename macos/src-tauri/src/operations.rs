@@ -15,6 +15,9 @@ use tokio_util::sync::CancellationToken;
 #[cfg(test)]
 mod tests;
 
+pub const PULL_DIVERGED: &str = "本地与远端历史已分叉，请先合并或变基；Pull 没有修改文件。";
+pub const LATEST_DIVERGED: &str = "本地与远端历史已分叉，已保留历史；请先处理分叉。";
+
 pub async fn idle(root: &Path) -> Result<()> {
     for name in [
         "MERGE_HEAD",
@@ -82,10 +85,11 @@ pub fn selected_files<'a>(task: &'a Value, input: &Value) -> Result<Vec<&'a Valu
     if paths.is_empty() {
         return Err("请至少选择一个更改。".into());
     }
+    let available: BTreeSet<_> = files.iter().map(|file| text(file, "path")).collect();
     let mut selected = BTreeSet::new();
     for path in paths {
         let path = path.as_str().ok_or("提交文件路径无效。")?;
-        if !selected.insert(path) || !files.iter().any(|file| text(file, "path") == path) {
+        if !selected.insert(path) || !available.contains(path) {
             return Err("提交文件范围已变化，请重新检查更改。".into());
         }
     }
@@ -93,6 +97,14 @@ pub fn selected_files<'a>(task: &'a Value, input: &Value) -> Result<Vec<&'a Valu
         .iter()
         .filter(|file| selected.contains(text(file, "path")))
         .collect())
+}
+fn pathspec_input(paths: &[String]) -> Vec<u8> {
+    let mut input = Vec::new();
+    for path in paths {
+        input.extend_from_slice(path.as_bytes());
+        input.push(0);
+    }
+    input
 }
 pub fn selected_paths(files: &[&Value]) -> Vec<String> {
     files
@@ -198,13 +210,12 @@ pub async fn submit(
         },
     )
     .await?;
-    let mut add = vec!["add", "--all", "--"];
-    add.extend(paths.iter().map(String::as_str));
     git::run(
         root,
-        &add,
+        &["add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul"],
         Options {
             environment: env.clone(),
+            stdin: Some(pathspec_input(&paths)),
             cancel: Some(cancel.clone()),
             write: true,
             diagnostics: Some(service.diagnostics.clone()),
@@ -270,18 +281,17 @@ pub async fn submit(
         result["warning"] = json!("提交已创建，但 Git 后续反馈未完成；请检查本机提交钩子。");
     }
     let publication: Result<()> = async {
-        let mut reset = vec!["reset", "--quiet", head, "--"];
-        reset.extend(paths.iter().map(String::as_str));
         // Updating only selected entries preserves the user's staged versions
         // of every excluded file, including partial staging.
         git::run(
             root,
-            &reset,
+            &["reset", "--quiet", "--pathspec-from-file=-", "--pathspec-file-nul", head],
             Options {
                 environment: vec![
                     ("GIT_INDEX_FILE".into(), preserved.to_string_lossy().into()),
                     ("GIT_LITERAL_PATHSPECS".into(), "1".into()),
                 ],
+                stdin: Some(pathspec_input(&paths)),
                 write: true,
                 ..Default::default()
             },
@@ -294,6 +304,112 @@ pub async fn submit(
     if publication.is_err() {
         result["warning"] = json!("提交已创建，但更新暂存状态失败；请检查 Git index 后再提交。");
     }
+    Ok(result)
+}
+
+// Compare only the changes left after a group, so our own commit does not
+// invalidate the next group while outside edits still stop the sequence.
+async fn remaining_key(root: &Path, task: &Value, excluded: &BTreeSet<String>) -> Result<String> {
+    let files = task["files"].as_array().ok_or("工作目录无法读取。")?;
+    let mut paths = BTreeSet::new();
+    let mut entries = BTreeMap::new();
+    for file in files {
+        let path = text(file, "path");
+        if excluded.contains(path) { continue; }
+        let mut metadata = BTreeMap::new();
+        for path in std::iter::once(path).chain(file["previousPath"].as_str()) {
+            let path = util::file_path(path)?;
+            paths.insert(path.clone());
+            let value = match fs::symlink_metadata(root.join(&path)) {
+                Ok(value) => crate::platform::metadata_key(&value),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => "missing".into(),
+                Err(_) => return Err("无法检查剩余文件。".into()),
+            };
+            metadata.insert(path, value);
+        }
+        entries.insert(path.to_owned(), json!({"file":file,"metadata":metadata}));
+    }
+    let index = git::read(root, &["ls-files", "--stage", "--cached", "-z"]).await?;
+    let staged: Vec<_> = index.split('\0').filter(|record| {
+        record.split_once('\t').is_some_and(|(_, path)| paths.contains(path))
+    }).collect();
+    Ok(util::digest(serde_json::to_vec(&json!({"entries":entries,"staged":staged})).map_err(|_| "无法检查剩余更改。")?))
+}
+
+fn partial_groups(commits: &[Value], warning: String) -> Result<Value> {
+    let Some(last) = commits.last() else {
+        return Err(format!("{warning} 请检查本地提交历史后重新分析。"));
+    };
+    let mut result = last.clone();
+    result["commits"] = json!(commits);
+    result["incomplete"] = json!(true);
+    result["warning"] = json!(warning);
+    Ok(result)
+}
+
+pub async fn submit_groups(
+    root: &Path,
+    input: &Value,
+    service: &crate::service::Service,
+    context: &crate::service::Context,
+    cancel: &CancellationToken,
+) -> Result<Value> {
+    let task = current(root, input).await?;
+    let selected: BTreeSet<String> = selected_files(&task, input)?.iter().map(|file| text(file, "path").to_owned()).collect();
+    let groups = input["groups"].as_array().ok_or("提交分组无效。")?;
+    if groups.is_empty() || groups.len() > selected.len() { return Err("提交分组无效。".into()); }
+    let mut covered = BTreeSet::new();
+    for group in groups {
+        util::allowed(group, &["summary", "description", "paths"])?;
+        draft(&json!({"summary":group["summary"],"description":group["description"]}))?;
+        let paths = group["paths"].as_array().ok_or("提交分组文件无效。")?;
+        if paths.is_empty() { return Err("提交分组不能为空。".into()); }
+        for path in paths {
+            let path = path.as_str().ok_or("提交分组文件无效。")?;
+            if !selected.contains(path) || !covered.insert(path.to_owned()) {
+                return Err("提交分组包含重复或未选中的文件，请重新分析。".into());
+            }
+        }
+    }
+    if covered != selected { return Err("提交分组未覆盖全部选中文件，请重新分析。".into()); }
+
+    let mut snapshot = task;
+    let mut commits = Vec::new();
+    for (index, group) in groups.iter().enumerate() {
+        let excluded: BTreeSet<_> = group["paths"].as_array().unwrap().iter().map(|path| path.as_str().unwrap().to_owned()).collect();
+        let expected = if index + 1 < groups.len() {
+            match remaining_key(root, &snapshot, &excluded).await {
+                Ok(value) => Some(value),
+                Err(error) => return partial_groups(&commits, error),
+            }
+        } else { None };
+        let step = json!({"taskId":input["taskId"],"expectedHead":snapshot["head"],"changeKey":snapshot["changeKey"],"summary":group["summary"],"description":group["description"],"paths":group["paths"]});
+        let result = match submit(root, &step, service, context, cancel).await {
+            Ok(result) => result,
+            Err(error) => return partial_groups(&commits, format!("第 {} 组未完成或结果未确认：{error}；未继续后续分组。", index + 1)),
+        };
+        commits.push(result.clone());
+        if let Some(warning) = result["warning"].as_str() {
+            return partial_groups(&commits, format!("第 {} 组已提交：{warning} 未继续后续分组。", index + 1));
+        }
+        if let Some(expected) = expected {
+            let next = match git::task(root).await {
+                Ok(value) => value,
+                Err(error) => return partial_groups(&commits, format!("无法读取剩余更改：{error}；未继续后续分组。")),
+            };
+            let actual = match remaining_key(root, &next, &BTreeSet::new()).await {
+                Ok(value) => value,
+                Err(error) => return partial_groups(&commits, format!("无法核对剩余更改：{error}；未继续后续分组。")),
+            };
+            let unchanged = next["head"] == result["commitId"] && next["branch"] == snapshot["branch"] && actual == expected;
+            if !unchanged {
+                return partial_groups(&commits, "剩余文件、暂存状态或分支发生变化；未继续后续分组，请刷新后重新分析。".into());
+            }
+            snapshot = next;
+        }
+    }
+    let mut result = commits.last().unwrap().clone();
+    result["commits"] = json!(commits);
     Ok(result)
 }
 pub async fn push(
@@ -635,6 +751,7 @@ type Inventory = BTreeMap<String, Entry>;
 fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> {
     let mut entries = BTreeMap::new();
     let mut queue = vec![root.to_owned()];
+    let mut nested_repositories = Vec::new();
     while let Some(dir) = queue.pop() {
         if cancel.is_cancelled() {
             return Err("操作已取消。".into());
@@ -648,7 +765,8 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 .iter()
                 .any(|c| c.file_name().to_string_lossy().eq_ignore_ascii_case(".git"))
         {
-            return Err("目录包含独立 Git 仓库或子模块，已保留；请先移出再清理。".into());
+            nested_repositories.push(dir.clone());
+            continue;
         }
         for child in children {
             if dir == root
@@ -672,6 +790,9 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
             let meta = fs::symlink_metadata(&path).map_err(|_| "文件状态无法读取。")?;
             if meta.is_dir() && !crate::platform::is_link(&meta) {
                 queue.push(path);
+                continue;
+            }
+            if !nested_repositories.is_empty() {
                 continue;
             }
             let (kind, mode, digest) = if crate::platform::is_link(&meta) {
@@ -714,6 +835,17 @@ fn inventory_sync(root: &Path, cancel: &CancellationToken) -> Result<Inventory> 
                 return Err("文件数量超过可预览范围，未修改工作目录。".into());
             }
         }
+    }
+    if !nested_repositories.is_empty() {
+        nested_repositories.sort();
+        let locations = nested_repositories
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join("；");
+        return Err(format!(
+            "目录包含独立 Git 仓库或子模块，已保留。对应位置：{locations}。请先移出这些目录再清理。"
+        ));
     }
     Ok(entries)
 }
@@ -816,9 +948,21 @@ async fn snapshot(
     .await?
     .trim()
     .to_owned();
-    let tree = git::read(destination, &["ls-tree", "-r", &head]).await?;
-    if tree.lines().any(|s| s.starts_with("160000 ")) {
-        return Err("此分支包含子模块；子模块目录已保留，暂不支持快照替换。".into());
+    let tree = git::read(destination, &["ls-tree", "-r", "-z", &head]).await?;
+    let submodule_locations = tree
+        .split('\0')
+        .filter_map(|entry| {
+            let (metadata, path) = entry.split_once('\t')?;
+            metadata
+                .starts_with("160000 ")
+                .then(|| root.join(path).display().to_string())
+        })
+        .collect::<Vec<_>>();
+    if !submodule_locations.is_empty() {
+        return Err(format!(
+            "此分支包含子模块，暂不支持快照替换。子模块位置：{}。",
+            submodule_locations.join("；")
+        ));
     }
     for key in [
         "user.name",
@@ -900,6 +1044,53 @@ pub struct SyncPlan {
     linked: bool,
     reclaim: bool,
     pub created: i64,
+}
+/// Inspect only the same branch and remote used by the interrupted operation.
+/// Fetch updates tracking refs, never the worktree or index.
+pub async fn inspect_divergence(
+    root: &Path,
+    input: &Value,
+    network: &Network,
+    cancel: &CancellationToken,
+) -> Result<Value> {
+    let mode = text(input, "mode");
+    if !matches!(mode, "pull" | "latest" | "push") {
+        return Err("不支持该分叉检查。".into());
+    }
+    let task = git::task(root).await?;
+    if task["id"] != input["taskId"] || task["branch"] == "Detached HEAD" {
+        return Err("工作目录分支已变化，请刷新后重试。".into());
+    }
+    let branch = text(&task, "branch");
+    let local_head = util::sha(text(&task, "head"))?;
+    git::read(root, &["check-ref-format", "--branch", branch]).await?;
+    let fetch_remote = network.fetch_remote(root).await?;
+    let remote_head = network.fetch(root, &[branch.into()], cancel).await?.remove(0);
+    let push_remote = if mode == "push" {
+        let name = network.push_remote(root).await?;
+        let push = network.for_push(root).await?;
+        let reference = format!("refs/heads/{branch}");
+        let result = push.run(root, &["ls-remote", "--", &push.url, &reference], Some(cancel.clone()), false, false, 120).await?;
+        let rows: Vec<_> = result.lines().filter_map(|line| line.split_once('\t')).filter(|(_, name)| *name == reference).collect();
+        if rows.len() != 1 || util::sha(rows[0].0)? != remote_head {
+            return Err("推送目标与获取到的远端状态不一致，请刷新后检查实际目标。".into());
+        }
+        Some(name)
+    } else { None };
+    let current = git::task(root).await?;
+    if current["id"] != task["id"] || current["head"] != task["head"] || current["changeKey"] != task["changeKey"] {
+        return Err("工作目录或提交已变化，请重新核验。".into());
+    }
+    match crate::history_relationship::inspect(root, &local_head, &remote_head).await? {
+        crate::history_relationship::Relationship::Diverged { ahead, behind, bases } => {
+            let range = format!("{remote_head}..{local_head}");
+            let output = git::read(root, &["rev-list", "--reverse", "--max-count=101", &range]).await?;
+            let commits: Vec<_> = output.lines().map(str::trim).filter(|sha| !sha.is_empty()).collect();
+            if commits.iter().any(|sha| !util::valid_sha(sha)) { return Err("本地提交列表格式无效。".into()); }
+            Ok(json!({"diverged":true,"repositoryId":input["repositoryId"],"taskId":task["id"],"path":task["path"],"branch":branch,"head":local_head,"changeKey":task["changeKey"],"dirty":!task["files"].as_array().unwrap().is_empty(),"remote":fetch_remote,"pushRemote":push_remote,"remoteHead":remote_head,"ahead":ahead,"behind":behind,"bases":bases,"localCommits":commits.iter().take(100).collect::<Vec<_>>(),"commitsTruncated":commits.len()>100}))
+        }
+        _ => Ok(json!({"diverged":false})),
+    }
 }
 pub async fn prepare(
     root: &Path,
@@ -1000,7 +1191,15 @@ pub async fn prepare(
         .await
         .is_ok();
         if !behind && !ahead {
-            return Err("本地与远端历史已分叉，请先合并或变基；Pull 没有修改文件。".into());
+            return Err(
+                match crate::history_relationship::inspect(root, text(&task, "head"), &remote_head)
+                    .await?
+                {
+                    crate::history_relationship::Relationship::Diverged { .. } => PULL_DIVERGED,
+                    _ => "无法确认本地与远端的共同祖先；Pull 没有修改文件，请检查历史是否完整。",
+                }
+                .into(),
+            );
         }
         if behind {
             let names = git::read(
@@ -1042,7 +1241,14 @@ pub async fn prepare(
             .is_err()
             {
                 return Err(
-                    "本地还有未推送或分叉的提交，已保留历史；请先 Push 或处理历史。".into(),
+                    match crate::history_relationship::inspect(root, text(&task, "head"), &remote_head)
+                        .await?
+                    {
+                        crate::history_relationship::Relationship::Ahead { .. } => "本地还有未推送的提交，已保留历史；请先 Push。",
+                        crate::history_relationship::Relationship::Diverged { .. } => LATEST_DIVERGED,
+                        _ => "无法确认本地与远端的共同祖先，已保留历史；请检查历史是否完整。",
+                    }
+                    .into(),
                 );
             }
         }

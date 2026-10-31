@@ -65,7 +65,7 @@ function GraphFilter({ label, options, selection, onChange, title }: { label: st
   </Popover>;
 }
 
-export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel, onAction, onOpenCommit, onLocateWorktree, loading = false, historyLoadingBranches = new Set(), historyErrorsByBranch = {}, onLoadMoreHistory }: { workspace: RepositoryWorkspace; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string; onAction?: (action: GraphAction, commit: GraphCommit) => void; onOpenCommit?: (commit: GraphCommit) => void; onLocateWorktree?: (commit: GraphCommit) => void; loading?: boolean; historyLoadingBranches?: ReadonlySet<string>; historyErrorsByBranch?: Record<string, string>; onLoadMoreHistory?: (branches: readonly string[], retry?: boolean) => void }) {
+export function RepositoryGraph({ workspace, verifiedPushHeads, search, focusedTask, onSelectCommit, onSelectWorkingTask, onBranchFilterChange, defaultHiddenBranches, emptyLabel, onAction, onOpenCommit, onLocateWorktree, loading = false, historyLoadingBranches = new Set(), historyErrorsByBranch = {}, onLoadMoreHistory }: { workspace: RepositoryWorkspace; verifiedPushHeads?: ReadonlyMap<string, string>; search: string; focusedTask: string | null; onSelectCommit?: (id: string | null, previousId: string | null) => void; onSelectWorkingTask?: (taskId: string) => void; onBranchFilterChange?: (selection: ReadonlySet<string> | null) => void; defaultHiddenBranches?: ReadonlySet<string>; emptyLabel?: string; onAction?: (action: GraphAction, commit: GraphCommit) => void; onOpenCommit?: (commit: GraphCommit) => void; onLocateWorktree?: (commit: GraphCommit) => void; loading?: boolean; historyLoadingBranches?: ReadonlySet<string>; historyErrorsByBranch?: Record<string, string>; onLoadMoreHistory?: (branches: readonly string[], retry?: boolean) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -77,7 +77,7 @@ export function RepositoryGraph({ workspace, search, focusedTask, onSelectCommit
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const menuFocus = useRef<string | null>(null);
   const requestedFocus = useRef<string | null>(null);
-  const branches = useMemo(() => repositoryGraphBranches(workspace), [workspace]);
+  const branches = useMemo(() => repositoryGraphBranches(workspace, verifiedPushHeads), [workspace, verifiedPushHeads]);
   const authors = useMemo(() => repositoryGraphAuthors(workspace), [workspace]);
   const branchOptions = useMemo(() => branches.map(branch => ({ value: branch.branch, label: branch.branch, title: branch.tasks.map(task => `${task.remote ? '远端' : task.path || '本地分支'} · ${task.head}`).join('\n'), detail: [branch.localHeads.length || branch.tasks.some(task => !task.remote) ? '本地' : '', branch.remoteHeads.length || branch.tasks.some(task => task.remote) ? '远端' : ''].filter(Boolean).join(' · ') })), [branches]);
   const authorOptions = useMemo(() => authors.map(author => ({ value: author, label: author || '未记录提交者' })), [authors]);

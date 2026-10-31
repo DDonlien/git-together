@@ -22,11 +22,41 @@ use tokio::sync::{watch, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, RwLock};
 use tokio_util::sync::CancellationToken;
 
 mod branch_issues;
+#[cfg(test)]
+mod commit_plan_tests;
+#[cfg(test)]
+mod divergence_ai_tests;
+#[cfg(test)]
+mod integration_tests;
 
 struct State {
     value: Value,
     revision: u64,
     error: String,
+}
+fn operation_failure_reason(method: &str, input: &Value, error: &str) -> Option<&'static str> {
+    if method == "prepareSync" && ((input["mode"] == "pull" && error == operations::PULL_DIVERGED) || (input["mode"] == "latest" && error == operations::LATEST_DIVERGED)) {
+        Some("diverged")
+    } else if method == "pushCommit" && error.starts_with(git::NON_FAST_FORWARD) {
+        Some("non-fast-forward")
+    } else { None }
+}
+#[cfg(test)]
+mod divergence_failure_tests {
+    use super::*;
+    #[test]
+    fn only_specific_git_failures_expose_a_resolution_reason() {
+        let pull = json!({"mode":"pull"});
+        let latest = json!({"mode":"latest"});
+        assert_eq!(operation_failure_reason("prepareSync", &pull, "本地与远端历史已分叉，请先合并或变基；Pull 没有修改文件。"), Some("diverged"));
+        assert_eq!(operation_failure_reason("prepareSync", &latest, "本地与远端历史已分叉，已保留历史；请先处理分叉。"), Some("diverged"));
+        assert_eq!(operation_failure_reason("pushCommit", &pull, "远端已有新的提交，请先检查远端状态；未强制推送。 本地提交已保留。"), Some("non-fast-forward"));
+        for error in ["远端拒绝访问：凭据被拒绝。", "远端规则拒绝推送。", "Git操作失败，请检查仓库状态和网络连接。", "无法确认本地与远端的共同祖先。", "本地还有未推送的提交。"] {
+            assert_eq!(operation_failure_reason("prepareSync", &pull, error), None);
+            assert_eq!(operation_failure_reason("pushCommit", &pull, error), None);
+        }
+        assert_eq!(operation_failure_reason("submitCommit", &pull, "远端已有新的提交，请先检查远端状态；未强制推送。"), None);
+    }
 }
 #[derive(Clone, Default)]
 struct TokenRefreshState {
@@ -74,6 +104,7 @@ pub struct Service {
     plans: Mutex<BTreeMap<String, (String, SyncPlan)>>,
     pub file_state: std::sync::Mutex<crate::files::State>,
     merge_plans: Mutex<BTreeMap<String, (String, Arc<graph_operations::MergePlan>)>>,
+    integration_plans: Mutex<BTreeMap<String, (String, Arc<graph_operations::integration::IntegrationPlan>)>>,
     cancelled_graph_preparations: Mutex<VecDeque<(String, i64)>>,
     generations: Mutex<BTreeMap<PathBuf, (String, CancellationToken)>>,
     fetching: Mutex<BTreeMap<String, Arc<PendingFetch>>>,
@@ -215,6 +246,7 @@ impl Service {
             plans: Mutex::new(BTreeMap::new()),
             file_state: std::sync::Mutex::new(crate::files::State::default()),
             merge_plans: Mutex::new(BTreeMap::new()),
+            integration_plans: Mutex::new(BTreeMap::new()),
             cancelled_graph_preparations: Mutex::new(VecDeque::new()),
             generations: Mutex::new(BTreeMap::new()),
             fetching: Mutex::new(BTreeMap::new()),
@@ -1126,7 +1158,11 @@ impl Service {
             if let Some(saved) = saved { self.account_provider(&saved).retry_at().await } else { None }
         } else { None };
         match result {
-            Err(error) => json!({"ok":false,"error":error,"retryAt":retry_at}),
+            Err(error) => {
+                // Only finite operation-specific failures can open the divergence flow.
+                let reason = operation_failure_reason(method, &input, &error);
+                json!({"ok":false,"error":error,"retryAt":retry_at,"reason":reason})
+            },
             Ok(mut value) => {
                 if let Some(retry_at) = retry_at {
                     if method == "remoteWorkspace" { value["retryAt"] = json!(retry_at); }
@@ -1148,8 +1184,13 @@ impl Service {
         input: Value,
         cancel: CancellationToken,
     ) -> Result<Value> {
+        let request_limit = if matches!(method, "submitCommit" | "generateCommitMessage" | "generateCommitPlan") {
+            1_048_576
+        } else {
+            32_768
+        };
         if !input.is_object()
-            || serde_json::to_vec(&input).map_err(|_| "请求无效。")?.len() > 32_768
+            || serde_json::to_vec(&input).map_err(|_| "请求无效。")?.len() > request_limit
         {
             return Err("无效或过大的请求。".into());
         }
@@ -1158,7 +1199,7 @@ impl Service {
         }
         let writing = matches!(
             method,
-            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "prepareGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree"
+            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "generateCommitPlan" | "prepareGraphMerge" | "applyGraphMerge" | "prepareIntegration" | "applyIntegration" | "restoreIntegration" | "integrationCommits" | "executeGraph" | "createGraphWorktree"
         );
         let repository_read = matches!(method, "localWorkspace" | "remoteWorkspace" | "fetchRepository");
         let _target = if writing || repository_read {
@@ -1172,7 +1213,7 @@ impl Service {
                 let prefix = format!("{}:", text(&input, "repositoryId"));
                 let mut jobs = self.running_targets.lock().unwrap_or_else(|e| e.into_inner());
                 if repository_read && jobs.values().any(|(target, method, _)| target.starts_with(&prefix)
-                    && matches!(method.as_str(), "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage")) {
+                    && matches!(method.as_str(), "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "generateCommitPlan")) {
                     cancel.cancel();
                     return Err("仓库正在提交，自动读取已暂停。".into());
                 }
@@ -1195,7 +1236,7 @@ impl Service {
             "submitCommit" => Some("提交"),
             "pushCommit" => Some("推送"),
             "applySync" | "applyFileOperation" => Some("文件变更"),
-            "applyGraphMerge" | "executeGraph" => Some("图谱操作"),
+            "applyGraphMerge" | "applyIntegration" | "restoreIntegration" | "executeGraph" => Some("图谱操作"),
             "createGraphWorktree" => Some("创建工作目录"),
             "downloadBranch" => Some("分支下载"),
             "connect" | "updateAccount" | "removeAccount" => Some("保存账号"),
@@ -1298,6 +1339,12 @@ impl Service {
             return Ok(json!({"opened":true}));
         }
         let task_id=util::field(input,"taskId",4096)?;
+        if method=="discardIntegration" {
+            util::allowed(input,&["repositoryId","taskId","planId"])?;
+            let id=util::field(input,"planId",100)?;let mut plans=self.integration_plans.lock().await;
+            if let Some((identity,plan))=plans.get(&id) {if *identity!=context.identity||plan.public["taskId"]!=task_id||plan.started.load(Ordering::SeqCst){return Err("预览不属于当前工作目录或操作已开始。".into());}}
+            return Ok(json!({"discarded":plans.remove(&id).is_some()}));
+        }
         if method=="discardGraphMerge" {
             util::allowed(input,&["repositoryId","taskId","planId"])?;
             let id=util::field(input,"planId",100)?;let mut plans=self.merge_plans.lock().await;
@@ -1306,6 +1353,8 @@ impl Service {
         }
         let root=self.task_root(context,&task_id).await?;
         match method {
+            "integrationBranches"=>{util::allowed(input,&["repositoryId","taskId"])?;let result=graph_operations::integration::branches(&root,context,cancel).await?;self.validate(context).await?;Ok(result)},
+            "integrationCommits"=>{util::allowed(input,&["repositoryId","taskId","remoteBranch","remoteHead","page"])?;let _guard=self.claim(&root,cancel).await?;let result=graph_operations::integration::commits(&root,input,context,cancel).await?;self.validate(context).await?;Ok(result)},
             "graphSources"=>{util::allowed(input,&["repositoryId","taskId"])?;graph_operations::sources(self,context,&root,cancel).await},
             "graphPreview"=>{util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","commitId","action","mainline"])?;graph_operations::preview(&root,input,self,context,cancel).await},
             "cancelGraphPreparation"=>{
@@ -1320,8 +1369,54 @@ impl Service {
                 if let Some((id,token))=jobs.get(&root){if id==text(input,"generationId"){token.cancel();}}
                 Ok(json!({"cancelled":true}))
             },
+            "prepareIntegration"=>{
+                util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","mode","remoteBranch","remoteHead","targetCommit","generationId"])?;
+                let generation=util::field(input,"generationId",100)?;uuid::Uuid::parse_str(&generation).map_err(|_|"准备标识无效。")?;
+                let token=cancel.child_token();
+                {let mut jobs=self.generations.lock().await;if jobs.contains_key(&root){return Err("此工作目录正在准备 AI 操作，请稍后重试。".into());}jobs.insert(root.clone(),(generation.clone(),token.clone()));}
+                let key=util::digest(format!("{}:{}:{}",text(input,"repositoryId"),task_id,text(input,"generationId")));
+                if self.cancelled_graph_preparations.lock().await.iter().any(|(id,created)|*id==key&&util::now()-created<120_000){token.cancel();}
+                let result=match self.claim(&root,&token).await { Ok(_guard)=>graph_operations::integration::prepare(&root,input,self,context,&token).await, Err(error)=>Err(error) };
+                self.generations.lock().await.remove(&root);
+                let plan=result?;self.validate(context).await?;
+                if token.is_cancelled(){return Err("整合准备已取消。".into());}
+                let public=plan.public.clone();let mut plans=self.integration_plans.lock().await;
+                plans.retain(|_,(_,plan)|util::now()-plan.created<600_000);
+                if plans.len()>=32{return Err("整合预览已达上限，请关闭旧预览。".into());}
+                plans.insert(text(&public,"id").into(),(context.identity.clone(),Arc::new(plan)));Ok(public)
+            },
+            "applyIntegration"=>{
+                util::allowed(input,&["repositoryId","taskId","planId","operationId","summary","description","acknowledgeRewrite"])?;
+                let operation=util::field(input,"operationId",100)?;uuid::Uuid::parse_str(&operation).map_err(|_|"操作标识无效。")?;
+                let identity=util::digest(format!("{method}:{input}"));
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let _guard=self.claim(&root,cancel).await?;self.validate(context).await?;
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let id=util::field(input,"planId",100)?;
+                let plan={let plans=self.integration_plans.lock().await;let (owner,plan)=plans.get(&id).ok_or("预览已过期，请重新准备。")?;if *owner!=context.identity||plan.public["repositoryId"]!=input["repositoryId"]||plan.public["taskId"]!=task_id||util::now()-plan.created>=600_000{return Err("预览已变化或过期，请重新准备。".into());}plan.clone()};
+                if plan.started.swap(true,Ordering::SeqCst) {return Err("此预览已执行或正在执行，请检查实际状态。".into());}
+                let result=graph_operations::integration::apply(&plan,input,self,context,cancel).await;
+                if result.as_ref().is_ok_and(|value| value["status"] == "rebased") { plan.applied.store(true,Ordering::SeqCst); }
+                else { self.integration_plans.lock().await.remove(&id); }
+                let result=result?;self.remember(operation,identity,result.clone()).await;Ok(result)
+            },
+            "restoreIntegration"=>{
+                util::allowed(input,&["repositoryId","taskId","planId","operationId","acknowledgeRestore"])?;
+                let operation=util::field(input,"operationId",100)?;uuid::Uuid::parse_str(&operation).map_err(|_|"操作标识无效。")?;
+                let identity=util::digest(format!("{method}:{input}"));
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let _guard=self.claim(&root,cancel).await?;self.validate(context).await?;
+                if let Some(result)=self.previous(&operation,&identity).await? {return Ok(result);}
+                let id=util::field(input,"planId",100)?;
+                let plan={let plans=self.integration_plans.lock().await;let (owner,plan)=plans.get(&id).ok_or("恢复预览已过期；请检查显示的恢复引用。")?;if *owner!=context.identity||plan.public["repositoryId"]!=input["repositoryId"]||plan.public["taskId"]!=task_id||util::now()-plan.created>=600_000{return Err("恢复预览已过期；请检查显示的恢复引用。".into());}plan.clone()};
+                if !plan.applied.load(Ordering::SeqCst)||plan.restoring.swap(true,Ordering::SeqCst) {return Err("此操作无法重复恢复；请检查实际状态。".into());}
+                let result=graph_operations::integration::restore(&plan,input,self,context,cancel).await;
+                self.integration_plans.lock().await.remove(&id);
+                let result=result?;self.remember(operation,identity,result.clone()).await;Ok(result)
+            },
             "prepareGraphMerge"=>{
-                util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","sources","generationId"])?;
+                util::allowed(input,&["repositoryId","taskId","expectedHead","changeKey","sources","generationId","requireClean","expectedRemoteHead"])?;
+                if input.get("requireClean").is_some_and(|value| !value.is_boolean()) { return Err("工作目录保护选项无效。".into()); }
                 let generation=util::field(input,"generationId",100)?;uuid::Uuid::parse_str(&generation).map_err(|_|"准备标识无效。")?;
                 let token=cancel.child_token();
                 for attempt in 0..=50 {
@@ -1527,7 +1622,7 @@ impl Service {
             return self.fetch(&context, cancel).await;
         }
         let context = self.context(&id).await?;
-        if matches!(method, "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
+        if matches!(method, "integrationBranches" | "integrationCommits" | "prepareIntegration" | "applyIntegration" | "restoreIntegration" | "discardIntegration" | "graphSources" | "graphPreview" | "prepareGraphMerge" | "cancelGraphPreparation" | "discardGraphMerge" | "applyGraphMerge" | "executeGraph" | "createGraphWorktree" | "openCommit") {
             return self.graph_dispatch(method, input, &context, cancel).await;
         }
         match method {
@@ -1843,7 +1938,7 @@ impl Service {
                 open(file.to_str().ok_or("文件路径无法读取。")?).await?;
                 Ok(json!({"opened":true}))
             }
-            "generateCommitMessage" => {
+            "generateCommitMessage" | "generateCommitPlan" => {
                 util::allowed(
                     input,
                     &[
@@ -1871,7 +1966,11 @@ impl Service {
                     }
                     jobs.insert(root.clone(), (id, c.clone()));
                 }
-                let result = ai::generate(&root, input, &c, self, &context).await;
+                let result = if method == "generateCommitPlan" {
+                    ai::generate_plan(&root, input, &c, self, &context).await
+                } else {
+                    ai::generate(&root, input, &c, self, &context).await
+                };
                 self.generations.lock().await.remove(&root);
                 self.validate(&context).await?;
                 result
@@ -1913,6 +2012,14 @@ impl Service {
                 plans.insert(text(&value, "id").into(), (context.identity, plan));
                 Ok(value)
             }
+            "inspectDivergence" => {
+                util::allowed(input, &["repositoryId", "taskId", "mode"])?;
+                let _guard = self.claim(&root, cancel).await?;
+                self.validate(&context).await?;
+                let result = operations::inspect_divergence(&root, input, &context.network, cancel).await?;
+                self.validate(&context).await?;
+                Ok(result)
+            }
             "submitCommit" | "pushCommit" | "applySync" => {
                 let allowed = match method {
                     "submitCommit" => vec![
@@ -1924,6 +2031,7 @@ impl Service {
                         "summary",
                         "description",
                         "paths",
+                        "groups",
                     ],
                     "pushCommit" => vec![
                         "repositoryId",
@@ -1949,7 +2057,11 @@ impl Service {
                         {
                             return Err("工作目录状态无效，请刷新。".into());
                         }
-                        operations::submit(&root, input, self, &context, cancel).await?
+                        if input.get("groups").is_some() {
+                            operations::submit_groups(&root, input, self, &context, cancel).await?
+                        } else {
+                            operations::submit(&root, input, self, &context, cancel).await?
+                        }
                     }
                     "pushCommit" => {
                         if context.link["authentication"] == "account" && context.repository["permissions"]["push"] == false {

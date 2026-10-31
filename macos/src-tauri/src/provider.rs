@@ -1367,6 +1367,18 @@ impl Provider {
                     cancel,
                 )
                 .await?;
+            // Gitea returns JSON null, rather than an empty array, for a new empty repository.
+            if self.kind() == "gitea"
+                && page == 1
+                && v.is_null()
+                && !next(&h)
+                && h
+                    .get("x-total-count")
+                    .map(|v| v.to_str().ok().and_then(|v| v.parse::<usize>().ok()) == Some(0))
+                    .unwrap_or(true)
+            {
+                break;
+            }
             let rows = v.as_array().ok_or("远端分支返回格式无效。")?;
             for r in rows {
                 let name = util::field(r, "name", 1024)?;
@@ -2133,7 +2145,7 @@ impl Network {
         )
         .await
     }
-    async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
+    pub(crate) async fn fetch_remote(&self, root: &std::path::Path) -> Result<String> {
         let names = git::read(root, &["remote"]).await?;
         let mut remote = if self.system_auth { system_remote(root, &self.url, false).await?.0 } else { String::new() };
         if !self.system_auth {
@@ -2149,6 +2161,13 @@ impl Network {
             return Err("工作目录的远端已经变化，请重新关联。".into());
         }
         Ok(remote)
+    }
+    pub(crate) async fn push_remote(&self, root: &std::path::Path) -> Result<String> {
+        if self.system_auth {
+            Ok(system_remote(root, &self.url, true).await?.0)
+        } else {
+            self.fetch_remote(root).await
+        }
     }
     pub async fn branch_presence(
         &self,

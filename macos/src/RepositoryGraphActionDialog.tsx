@@ -10,7 +10,7 @@ import { LinearProgress, OutlinedTextField } from './material-inputs';
 import { RepositoryPreparedDiff } from './RepositoryPreparedDiff';
 import { RepositoryFileChangeLabel } from './RepositoryFileChangeLabel';
 
-export type GraphOperationInput = { kind: 'graph'; mode: GraphAction; scope: string; repository: RemoteRepository; commit?: RepositoryCommit; targets: RepositoryActionTarget[]; candidates: RepositoryTask[]; onWrite?: GraphWrite; onComplete?: (message: string) => void };
+export type GraphOperationInput = { kind: 'graph'; mode: GraphAction; scope: string; repository: RemoteRepository; commit?: RepositoryCommit; targets: RepositoryActionTarget[]; candidates: RepositoryTask[]; onWrite?: GraphWrite; onComplete?: (message: string, complete?: boolean) => void };
 const problemMessage = (problem: unknown) => problem instanceof Error ? problem.message : '图谱操作未完成。';
 const discard = (plan: GraphMergePlan) => importAPI('discardGraphMerge', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(problem => console.warn('合并预览清理未完成。', problemMessage(problem)));
 
@@ -41,7 +41,7 @@ function SourcePicker({ options, selection, onChange, disabled }: { options: Gra
     </label>)}</fieldset>)}{!!unavailable.length && <fieldset className="multi-filter-group"><legend>已不可用的来源</legend>{unavailable.map(source => <label className="multi-filter-option" key={graphSourceKey(source)}><input type="checkbox" checked disabled={disabled} onChange={() => onChange(selection.filter(item => graphSourceKey(item) !== graphSourceKey(source)))} /><span>{source.name}</span></label>)}</fieldset>}</div>
   </Popover>;
 }
-function GraphTaskDialog({ mode, repository, commit, task, candidates, onTargetChange, onWrite, onStateChange, onFinished, onComplete, onClose }: Omit<GraphOperationInput, 'targets' | 'kind' | 'scope'> & { task: RepositoryTask; onTargetChange: (task: RepositoryTask) => void; onClose: () => void } & RepositoryOperationControls) {
+function GraphTaskDialog({ mode, repository, commit, task, candidates, onTargetChange, onWrite, onStateChange, onFinished, onComplete, onClose, pauseRefresh }: Omit<GraphOperationInput, 'targets' | 'kind' | 'scope'> & { task: RepositoryTask; onTargetChange: (task: RepositoryTask) => void; onClose: () => void } & RepositoryOperationControls) {
   const [sourceList, setSourceList] = useState<ApiOutputs['graphSources'] | null>(null);
   const sources = sourceList?.sources ?? null;
   const [sourceRevision, setSourceRevision] = useState(0);
@@ -91,11 +91,14 @@ function GraphTaskDialog({ mode, repository, commit, task, candidates, onTargetC
     controller.signal.addEventListener('abort', cancel, { once: true });
     const pending = serial.current.catch(() => undefined).then(async () => {
       if (controller.signal.aborted) return;
-      const next = await importAPI('prepareGraphMerge', { ...snapshot, sources: selection, generationId }, controller.signal);
-      if (controller.signal.aborted) { await discard(next); return; }
-      savedPlan.current = next; setPlan(next);
-      if (!dirty.current.summary) setSummary(next.summary);
-      if (!dirty.current.description) setDescription(next.description);
+      const resumeRefresh = pauseRefresh?.();
+      try {
+        const next = await importAPI('prepareGraphMerge', { ...snapshot, sources: selection, generationId }, controller.signal);
+        if (controller.signal.aborted) { await discard(next); return; }
+        savedPlan.current = next; setPlan(next);
+        if (!dirty.current.summary) setSummary(next.summary);
+        if (!dirty.current.description) setDescription(next.description);
+      } finally { resumeRefresh?.(); }
     }).catch(problem => { if (!controller.signal.aborted) setError(problemMessage(problem)); }).finally(() => { controller.signal.removeEventListener('abort', cancel); if (!controller.signal.aborted) setReading(false); });
     serial.current = pending;
     return () => { controller.abort(); if (savedPlan.current) { void discard(savedPlan.current); savedPlan.current = null; } };
@@ -128,7 +131,9 @@ function GraphTaskDialog({ mode, repository, commit, task, candidates, onTargetC
     setWriting(true); setError('');
     try {
       const next = isAI && activePlan ? await (onWrite ? onWrite('applyGraphMerge', { repositoryId: repository.id, taskId: task.id, planId: activePlan.id, operationId: operation.current, summary, description }) : importAPI('applyGraphMerge', { repositoryId: repository.id, taskId: task.id, planId: activePlan.id, operationId: operation.current, summary, description })) : await (onWrite ? onWrite(mode === 'worktree' ? 'createGraphWorktree' : 'executeGraph', { ...snapshot, commitId: commit?.id || task.head, action: mode, operationId: operation.current, name, mainline, resetMode, parentPath, folderName }) : importAPI(mode === 'worktree' ? 'createGraphWorktree' : 'executeGraph', { ...snapshot, commitId: commit?.id || task.head, action: mode, operationId: operation.current, name, mainline, resetMode, parentPath, folderName }));
-      savedPlan.current = null; setResult(next); onFinished?.(); onComplete?.(next.unchanged && isAI ? '所选分支已包含在当前分支中。' : `${graphActionLabels[mode]}已完成。`);
+      savedPlan.current = null; setResult(next); onFinished?.();
+      const message = next.unchanged && isAI ? '所选分支已包含在当前分支中。' : `${graphActionLabels[mode]}已完成。`;
+      onComplete?.(next.warning ? `${message} ${next.warning}` : message, !next.warning);
     } catch (problem) { setError(problemMessage(problem)); }
     finally { setWriting(false); }
   }

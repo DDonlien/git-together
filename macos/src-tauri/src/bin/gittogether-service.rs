@@ -155,7 +155,7 @@ async fn run() -> Result<()> {
         .route("/api/import/{method}", post(import))
         .route("/api/authorization/{method}", post(authorization))
         .route("/api/diagnostics/{method}", post(diagnostics))
-        .layer(axum::extract::DefaultBodyLimit::max(32_768))
+        .layer(axum::extract::DefaultBodyLimit::max(1_048_576))
         .with_state(service.clone())
         .merge(
             Router::new()

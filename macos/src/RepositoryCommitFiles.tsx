@@ -1,14 +1,16 @@
 import { useId, useState } from 'react';
 import type { LocalFile } from './import-model';
-import { Checkbox, Icon } from './ui';
+import { Checkbox, Icon, Menu, MenuItem } from './ui';
 import { fileChangeKind } from './file-tree';
 import { RepositoryFileChangeLabel } from './RepositoryFileChangeLabel';
 
-export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange }: {
-  files: LocalFile[]; paths: string[]; branch: string; disabled: boolean; onChange: (paths: string[]) => void;
+export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange, onIgnore }: {
+  files: LocalFile[]; paths: string[]; branch: string; disabled: boolean; onChange: (paths: string[]) => void; onIgnore?: (file: LocalFile) => void;
 }) {
   const id = useId();
   const [collapsed, setCollapsed] = useState({ Tracked: false, Untracked: false });
+  const [context, setContext] = useState<{ path: string; x: number; y: number } | null>(null);
+  const contextFile = !disabled && files.find(file => file.path === context?.path);
   const selected = new Set(paths);
   const toggle = (scope: LocalFile[]) => {
     const remove = scope.every(file => selected.has(file.path)), next = new Set(paths);
@@ -26,8 +28,8 @@ export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange
         <div id={`${id}-${name}`} hidden={collapsed[name]}>
         {group.map(file => {
           const kind = fileChangeKind(file.status) || 'other', name = kind === 'added' ? '新增' : kind === 'deleted' ? '删除' : kind === 'modified' ? '修改' : '其他更改';
-          return <div className={`submit-file-row${selected.has(file.path) ? ' is-included' : ''}`} key={file.path} data-change={kind}>
-            <button type="button" className="submit-file-choice" disabled={disabled} aria-pressed={selected.has(file.path)} aria-label={`${selected.has(file.path) ? '移出' : '加入'}提交范围：${name} ${file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}（${file.status}）`} onClick={() => toggle([file])}>
+          return <div className={`submit-file-row${selected.has(file.path) ? ' is-included' : ''}`} key={file.path} data-change={kind} onContextMenu={onIgnore ? event => { event.preventDefault(); if (!disabled) setContext({ path: file.path, x: event.clientX, y: event.clientY }); } : undefined}>
+            <button type="button" className="submit-file-choice" disabled={disabled} aria-haspopup={onIgnore ? 'menu' : undefined} aria-pressed={selected.has(file.path)} aria-label={`${selected.has(file.path) ? '移出' : '加入'}提交范围：${name} ${file.previousPath ? `${file.previousPath} → ${file.path}` : file.path}（${file.status}）`} onClick={() => toggle([file])} onKeyDown={onIgnore ? event => { if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); setContext({ path: file.path, x: rect.left, y: rect.bottom }); } } : undefined}>
               <RepositoryFileChangeLabel file={file} />
             </button><Checkbox checked={selected.has(file.path)} disabled={disabled} label={`包含文件：${branch} / ${file.path}`} onChange={() => toggle([file])} />
           </div>;
@@ -35,5 +37,6 @@ export function RepositoryCommitFiles({ files, paths, branch, disabled, onChange
         </div>
       </section>;
     })}
+    {context && contextFile && onIgnore && <div className="repository-graph-context" style={{ left: context.x, top: context.y }}><Menu label={`文件操作：${contextFile.path}`} open placement="start" focusOnOpen="first" onOpenChange={open => { if (!open) setContext(null); }} trigger={<button type="button" className="graph-context-anchor" aria-label="文件操作" />}><MenuItem disabled={contextFile.path === '.gitignore' || ['D', 'U'].includes(contextFile.status)} onClick={() => { const file = contextFile; setContext(null); onIgnore(file); }}>{contextFile.tracked ? 'Ignore（停止跟踪，保留本地文件）' : 'Ignore（忽略此文件）'}</MenuItem></Menu></div>}
   </div>;
 }

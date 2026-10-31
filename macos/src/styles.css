@@ -361,6 +361,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-column-heading.is-collapsed > .repository-column-disclosure { order: 0; }
 .repository-column-empty { min-height: 160px; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px 14px; color: var(--muted); text-align: center; font-size: 11px; }
 .repository-column-empty > svg { opacity: .6; }
+.repository-unlinked-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .repository-task-stack { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .repository-change-context { overflow: hidden; }
 .repository-change-context > .repository-task-slot { flex: 1 1 0; overflow: hidden; }
@@ -445,6 +446,14 @@ button.repository-count-action:disabled { opacity: .7; }
 @media (prefers-reduced-motion: reduce) { .push-feedback-icon.is-pushing svg, .push-feedback-icon.is-success { animation: none; } }
 .repository-submit-generating { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--muted); }
 .repository-batch-draft { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.repository-commit-plan { display: grid; gap: 12px; }
+.repository-commit-plan-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.repository-commit-plan-heading strong { font-size: 12px; }
+.repository-commit-plan-hint { margin: 0; color: var(--muted); font-size: 12px; }
+.repository-commit-plan-group { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.repository-commit-plan-group h4 { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.repository-commit-plan-group summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.repository-commit-plan-group ul { margin: 8px 0 0; padding-left: 20px; overflow-wrap: anywhere; font-size: 12px; }
 .repository-action-dialog > :not(.repository-submit-content) { flex-shrink: 0; }
 .repository-submit-sha, .repository-submit-result { font-size: 11px; color: var(--muted); }
 .repository-action-dialog > .notice { margin-top: 12px; }
@@ -540,7 +549,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-tree-row.tree-file { padding: 0; gap: 2px; }
 .repository-tree-select { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; min-height: 28px; padding: 3px 6px; text-align: left; border-radius: 5px; color: inherit; }
 /* Inset the visible state layer while retaining the reserved 24px click target. */
-.repository-tree-row .repository-tree-open.icon-button.ogui-control--small { flex: 0 0 24px; width: 24px; height: 24px; min-width: 24px; min-height: 24px; margin-right: 2px; border: 2px solid transparent; background-clip: padding-box; padding: 3px; opacity: 0; pointer-events: none; color: var(--muted); }
+.repository-tree-row .repository-tree-open.icon-button.ogui-control--small { flex: 0 0 24px; width: 24px; height: 24px; min-width: 24px; min-height: 24px; margin-right: 2px; border: 2px solid transparent; background-clip: padding-box; padding: 3px; color: var(--muted); }
+.repository-tree-row .repository-tree-open { opacity: 0; pointer-events: none; }
 .repository-tree-open.icon-button svg { width: 12px; height: 12px; }
 .repository-tree-row:hover .repository-tree-open, .repository-tree-row:focus-within .repository-tree-open, .repository-tree-open[aria-busy="true"] { opacity: 1; pointer-events: auto; }
 @media (hover: none) { .repository-tree-open.icon-button { opacity: 1; pointer-events: auto; } }
@@ -1010,6 +1020,7 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .update-feedback { display: flex; flex-direction: column; gap: 8px; padding-block: 14px; color: var(--muted); font-size: 12px; }
 .update-feedback p { margin: 0; }
 .update-feedback progress { display: block; width: 100%; height: 8px; margin: 0; accent-color: var(--blue); }
+.update-feedback .update-transfer { font-variant-numeric: tabular-nums; }
 
 /* Guide retains the supplied page navigation, without ornamental chrome. */
 .guide-view { padding-bottom: 28px; }

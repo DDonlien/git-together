@@ -32,6 +32,7 @@ import { giteaAccounts } from './gitea-accounts'
 import { discoverRepositories, repositoryIdentity, repositoryURL } from './repository-discovery'
 import { CommitMessageGenerator } from './commit-message-generator'
 import { PlatformFetchGate } from './platform-fetch'
+import { ignoreChangedFile } from './ignore-file'
 import { isCheckoutWorktree } from './worktree'
 
 export const instanceId = randomUUID()
@@ -654,6 +655,21 @@ export class DesktopAdapter {
         const file = status?.workingDirectory.files.find(f => f.path === path)
         if (!file) return { text: '' }
         return { text: diffText(await getWorkingDirectoryDiff(repo, file)) }
+      }
+      case 'ignoreFile': {
+        const value = input as ApiInputs['ignoreFile']
+        if (!value.changeKey) throw new Error('请重新读取提交清单后再忽略文件。')
+        return this.once(value.operationId, value, async () => {
+          const repo = await this.checked(value)
+          const state = this.cache.get(repo)
+          if (state.isCommitting || state.isPushPullFetchInProgress || this.actions.isApplying(repo.path)) throw new Error('此工作目录正在执行其他操作，请稍后再试。')
+          const stoppedTracking = await ignoreChangedFile(repo, value.path)
+          await this.dispatcher.refreshRepository(repo)
+          const status = await getStatus(repo)
+          if (!status || (status.currentTip || '') !== value.expectedHead) throw new Error('忽略操作后工作目录已变化，请重新读取提交清单。')
+          if (status.workingDirectory.files.some(file => file.path === value.path && file.status.kind !== AppFileStatusKind.Deleted)) throw new Error('忽略规则尚未生效，请检查此目录中其他 .gitignore 规则。')
+          return { taskId: value.taskId, files: status.workingDirectory.files.map(fileStatus), changeKey: await this.changeKey(repo, status.workingDirectory.files), stoppedTracking }
+        })
       }
       case 'submitCommit': return this.commit(input as ApiInputs['submitCommit'])
       case 'pushCommit': return this.push(input as ApiInputs['pushCommit'])

@@ -29,6 +29,7 @@ import { chooseLocalDirectory, displayLocalPath } from './local-directory';
 import { branchHiddenEntries, toggleBranchVisibility } from './branch-behavior';
 import { recordUIRender } from './performance-diagnostics';
 import { NavigationControls } from './NavigationControls';
+import { useTransientFeedback } from './use-transient-feedback';
 
 type DashboardSortKey = 'status' | 'repository' | 'owner' | 'account' | 'managedOrganization' | 'updatedAt' | 'modifiedAt' | 'localPath' | 'pull' | 'push' | 'commit' | 'hidden';
 type DashboardSort = { key: DashboardSortKey; direction: 'asc' | 'desc' };
@@ -100,7 +101,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const [matchingPhase, setMatchingPhase] = useState<'choosing' | 'matching' | null>(null);
   const [directoryMatch, setDirectoryMatch] = useState<DirectoryMatchFeedback | null>(null);
   const operations = useRepositoryOperations();
-  const [actionFeedback, setActionFeedback] = useState('');
+  const [actionFeedback, setActionFeedback] = useTransientFeedback<'success' | 'warning'>();
   useEffect(() => {
     if (!directoryMatch) return;
     const timeout = window.setTimeout(() => setDirectoryMatch(null), 6000);
@@ -137,7 +138,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
   const hiddenCount = (repo: RemoteRepository) => showHidden ? [...hiddenEntries].filter(key => key.startsWith(`[${JSON.stringify(repo.id)},`)).length : 0;
   const actionRepositories = filtered.filter(repo => !hiddenEntries.has(hiddenEntryKey(repo.id)));
   const batchSignals = aggregateGitSignals(actionRepositories.map(rowSignals));
-  const openAction = (mode: RepositoryActionMode, targets: RepositoryActionTarget[], scope: string) => { setActionFeedback(''); operations.open({ mode, targets, scope, onSync: controller.applySync, onCommit: controller.submitCommit, onPush: controller.pushCommit, onGenerate: generateCommitMessage, onComplete: setActionFeedback }); };
+  const openAction = (mode: RepositoryActionMode, targets: RepositoryActionTarget[], scope: string) => { setActionFeedback(null); operations.open({ mode, targets, scope, onSync: controller.applySync, onCommit: controller.submitCommit, onPush: controller.pushCommit, onGenerate: generateCommitMessage, onComplete: (message, complete = true) => setActionFeedback({ kind: complete ? 'success' : 'warning', message }) }); };
   const rows: DashboardRepositoryRow[] = filtered.map(repo => ({
     repo,
     account: accountsById.get(repo.accountId)!,
@@ -215,7 +216,7 @@ export function Dashboard({ controller, globalSearch, onSearchChange, searchRef,
       </div>
       {refreshFeedback && <Notice kind={refreshFeedback.kind}>{refreshFeedback.message}</Notice>}
       {directoryMatch && <Notice kind={directoryMatch.kind}>{directoryMatch.message}</Notice>}
-      {actionFeedback && <Notice kind="success">{actionFeedback}</Notice>}
+      {actionFeedback && <Notice kind={actionFeedback.kind} onClose={() => setActionFeedback(null)}>{actionFeedback.message}</Notice>}
       {visibleAccounts.filter(account => account.error).map(account => <Notice kind="error" key={account.id}>{account.name}：{account.error}{account.updatedAt && ' 已保留上次读取的仓库列表。'} 正在自动重试。</Notice>)}
       {incompleteClassification && <Notice kind="info">分类尚未读全{coverage.unknown > 0 ? `：${coverage.unknown} 个仓库的所选分类未确认` : ''}。当前只显示已确认的匹配项，全选可查看已读取的完整目录。{coverage.errors.length > 0 && ` ${coverage.errors[0]}`}</Notice>}
       <section className="remote-repository-group flat-group" aria-label="仓库列表">
