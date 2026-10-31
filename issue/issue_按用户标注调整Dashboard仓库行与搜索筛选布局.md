@@ -10,7 +10,7 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-14`、`IMPORT-14-last-divider`、`IMPORT-14-last-divider-test`、`IMPORT-14-grouped-actions`、`IMPORT-14-header-alignment`、`IMPORT-14-header-alignment-runtime`、`IMPORT-14-header-count-corner`、`IMPORT-14-production-submit`、`IMPORT-14-submit-refresh-pause`、`IMPORT-14-submit-refresh-pause-test`、`IMPORT-14-submit-generation-job`、`IMPORT-14-submit-generation-job-test`、`IMPORT-14-production-submit-runtime`、`IMPORT-14-push-lfs-errors`、`IMPORT-14-submit-popup`、`IMPORT-14-submit-summary-only`、`IMPORT-14-submit-popup-width`、`IMPORT-14-windows-lfs-commit`、`IMPORT-14-commit-timeout-headless`、`IMPORT-14-submit-popup-production`、`IMPORT-14-submit-popup-h5`、`IMPORT-14-submit-ai`、`IMPORT-14-header-text`、`IMPORT-14-download-icon`、`IMPORT-14-grouped-icons`、`IMPORT-14-grouped-refinement`、`IMPORT-14-grouped-h5`、`IMPORT-14-branch-name-alignment`、`UI-04-repository-reveal`、`IMPORT-14-inline`、`IMPORT-14-number-ignore`、`IMPORT-14-read-badges`、`IMPORT-14-read-health-scope`、`IMPORT-14-read-badges-test`、`IMPORT-14-read-failure-live`、`IMPORT-14-check-cycle`、`IMPORT-14-change-trigger`、`IMPORT-14-zero-badges`、`IMPORT-14-diagnostics`、`IMPORT-14-performance`、`IMPORT-14-performance-source`、`IMPORT-14-performance-runtime`、`IMPORT-14-diagnostics-copy`、`IMPORT-14-diagnostics-test`、`IMPORT-14-operation-semantics`、`IMPORT-14-branch-download`、`IMPORT-14-branch-download-layout`、`IMPORT-14-branch-download-layout-test`、`IMPORT-14-operation-semantics-test`、`IMPORT-14-visible`、`IMPORT-14-hide`、`IMPORT-14-hide-counts`、`IMPORT-14-hide-header-count`、`IMPORT-14-operation-execution`、`IMPORT-14-operation-collapse`、`IMPORT-14-operation-collapse-icons`、`IMPORT-14-feedback`、`IMPORT-14-action-names`、`IMPORT-14-action-names-test`、`IMPORT-14-feedback-test`、`IMPORT-14-number-ignore-test`、`IMPORT-14-test`、`IMPORT-15`、`IMPORT-15-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-24T16:22:34+00:00'
+updated-time: '2026-10-26T16:03:59+00:00'
 ---
 
 # Description
@@ -104,6 +104,9 @@ updated-time: '2026-10-24T16:22:34+00:00'
 
 原文件的共用上下文及完整既有 Comments 仅保留在[首个任务](issue_%E7%BB%9F%E4%B8%80Electron%E4%B8%8EGitHub%E7%BD%91%E9%A1%B5%E6%8E%88%E6%9D%83%E5%85%A5%E5%8F%A3%E5%B9%B6%E5%AE%8C%E5%96%84%E7%AD%89%E5%BE%85%E4%B8%8E%E9%87%8D%E8%AF%95%E6%B5%81%E7%A8%8B.md)，来源与历史没有删去。
 
+- [x] \[IMPORT-14-avatar-row-height] Dashboard 仓库标题行固定为仓库名的一行高度；Presence 头像保留 24px 点击区域，不再撑高仓库行。源码已修正；未运行测试、构建或打包。
+- [ ] \[IMPORT-14-avatar-row-height-acceptance] 用户在实际 Dashboard 视觉验收含头像与不含头像的仓库行高度一致。
+
 # Comments
 
 ## 20261024-070820_Agent
@@ -124,3 +127,9 @@ updated-time: '2026-10-24T16:22:34+00:00'
 本次执行环境未提供具体模型标识，未补造 Model-Detail。
 
 [本次文档迁移对话](codex://threads/01a157b3-610c-73b4-ae06-163c0f8490d3)
+
+## 20261026-160359_Codex-Gpt-6
+
+将 Dashboard 仓库标题行固定到仓库名的一行高度，并将 Presence 头像按钮设为 24px 点击区域，避免头像行被按钮默认最小高度和内边距撑高。源码与 Issue 已更新；git diff --check 通过。未运行测试、类型检查、构建、打包或视觉验收；实际 Dashboard 行高仍待用户验收。
+
+[本次修正对话](codex://threads/01a178f0-45f3-7721-8804-7c2b65967a46)
