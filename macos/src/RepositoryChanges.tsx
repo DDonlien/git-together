@@ -7,14 +7,13 @@ import { RepositoryCommitDetails } from './RepositoryCommitDetails';
 import { RepositoryChangedFiles } from './RepositoryChangedFiles';
 import { PresenceAvatars } from './PresenceAvatars';
 import type { BranchIssue, RemoteRepository } from './import-model';
-import { LocalPathIssue, type DismissBranchIssue } from './BranchIssueNotice';
 import type { RepositoryCommit, RepositoryTask } from './repository-model';
 import type { LocalCommitState } from './local-commit-model';
 
-export function RepositoryChanges({ task, selectedCommit, historyState, selected, onSelect, search, grouped = false, focused, onFocus, loading, linked, showFocus, repository, repositoryId, repositoryName, onSubmit, onGenerate, onPush, onCommitted, published = false, branchIssues = [], onDismissIssue }: {
+export function RepositoryChanges({ task, selectedCommit, historyState, selected, onSelect, search, grouped = false, focused, onFocus, loading, linked, showFocus, repository, repositoryId, repositoryName, onSubmit, onGenerate, onPush, onCommitted, published = false }: {
   task: RepositoryTask; selectedCommit?: RepositoryCommit; selected?: string; onSelect: (path?: string) => void; search: string;
   grouped?: boolean; focused: boolean; onFocus: () => void; loading: boolean; linked: boolean; showFocus: boolean;
-  historyState?: LocalCommitState; branchIssues?: BranchIssue[]; onDismissIssue?: DismissBranchIssue;
+  historyState?: LocalCommitState;
   repository?: RemoteRepository; repositoryId?: string; onSubmit?: SubmitLocalCommit; onGenerate?: GenerateCommitMessage;
   repositoryName?: string; onPush?: PushLocalCommit; onCommitted?: (taskId: string, commitId: string) => void; published?: boolean;
 }) {
@@ -26,7 +25,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
   const details = history?.details;
   return <section className="repository-change-task" aria-label={`更改任务：${task.branch}`}>
     <div className="repository-task-header"><div className="branch-label"><Icon name="branch" size={14} /><strong>{task.branch}</strong>{repository && <PresenceAvatars repository={repository} branch={task.branch} />}</div>{showFocus && <Button variant="quiet" onClick={onFocus} aria-pressed={focused}>{focused ? '退出聚焦' : '聚焦'}</Button>}</div>
-    <div className="repository-task-path local-path-with-issue"><span title={task.path || undefined}>{task.path || (linked ? '未检出 · 分支快照' : '未关联本地目录')}</span>{branchIssues.map(issue => <LocalPathIssue key={issue.id} issue={issue} onDismiss={onDismissIssue} />)}</div>
+    <div className="repository-task-path local-path-with-issue"><span title={task.path || undefined}>{task.path || (linked ? '未检出 · 分支快照' : '未关联本地目录')}</span></div>
     <div className="repository-task-body">
       {selectedCommit && <>
         {task.error && !task.missing && <Notice kind="error">{task.error}</Notice>}
@@ -46,7 +45,7 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
     <RepositoryCommitComposer hidden={!!selectedCommit} task={task} repositoryId={repositoryId} repositoryName={repositoryName} onSubmit={onSubmit} onGenerate={onGenerate} onPush={onPush} onCommitted={onCommitted} />
     {selectedCommit && <>
       <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />
-      <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={!pushPopup && (published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || !onGenerate || operations.blocked(targets))} aria-busy={pushPopup?.state === 'working'} onClick={() => { if (pushPopup) operations.restore(pushPopup.id); else if (repositoryId && onSubmit && onGenerate && onPush) operations.open({ mode: 'push', scope, targets, onCommit: onSubmit, onGenerate, onPush }); }}><Icon name="arrowUp" size={14} />Push</Button></div>
+      <div className="repository-committed-actions"><small>{published ? '已在远端' : '仅推送当前选中的提交及其必要祖先'}</small><Button variant="primary" disabled={!pushPopup && (published || !!task.error || !task.path || !repositoryId || !onPush || !onSubmit || operations.blocked(targets))} aria-busy={pushPopup?.state === 'working'} onClick={() => { if (pushPopup) operations.restore(pushPopup.id); else if (repositoryId && onSubmit && onPush) operations.open({ mode: 'push', scope, targets, onCommit: onSubmit, onGenerate, onPush }); }}><Icon name="arrowUp" size={14} />Push</Button></div>
     </>}
   </section>;
 }

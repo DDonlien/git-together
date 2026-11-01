@@ -4,9 +4,8 @@ import type { WorkspaceController } from './use-workspace';
 import { openGitHubAuthorization, waitForGitHubAuthorization } from './github-auth-flow';
 import { Button, Icon, Modal, Notice } from './ui';
 
-export function GitHubAuthorizationModal({ session, opened, callbackUnavailable = false, controller, onComplete, onClose, onRestart }: {
+export function GitHubAuthorizationModal({ session, opened, controller, onComplete, onClose, onRestart }: {
   session: GitHubAuthorization; opened: boolean; controller: WorkspaceController;
-  callbackUnavailable?: boolean;
   onComplete: (catalog: Catalog) => void; onClose: () => void; onRestart: () => void;
 }) {
   const [error, setError] = useState('');
@@ -54,10 +53,9 @@ export function GitHubAuthorizationModal({ session, opened, callbackUnavailable 
   }
   return <Modal title="通过 GitHub 授权" onClose={() => void finish()}>
     <div className="github-authorization">
-      {callbackUnavailable && <Notice kind="info">本机网页回调不可用，已改用 GitHub 网页验证码授权。</Notice>}
       <p>在 GitHub 网页输入验证码，并确认连接 GitTogether。</p>
       <div className="authorization-code"><code aria-label="GitHub 授权验证码">{session.userCode}</code><Button variant="quiet" leadingIcon={<Icon name="copy" size={16} />} onClick={() => void copyCode()}>复制验证码</Button></div>
-      {copyMessage && <span className="muted" role="status">{copyMessage}</span>}
+      {copyMessage && <Notice kind={copyMessage === '已复制' ? 'success' : 'warning'} onClose={() => setCopyMessage('')}>{copyMessage}</Notice>}
       {!pageOpened && <Notice kind="info">授权网页未能自动打开，请点击下方按钮。</Notice>}
       {error ? <Notice kind="error">{error}</Notice> : <div className="authorization-wait" role="status"><Icon name="spinner" className="spin" size={16} /><span>等待 GitHub 授权，完成后将自动连接…</span></div>}
     </div>

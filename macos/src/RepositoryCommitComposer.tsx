@@ -17,7 +17,6 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
   const operations = useRepositoryOperations();
   const scope = repositoryOperationScope(repositoryId || '', task.branch, task.id);
   const targets = repositoryId ? [{ repositoryId, repositoryName, task, draft: summary || description ? { summary, description } : undefined }] : [];
-  const submitPopup = operations.get('submit', scope, targets);
   const taskBusy = operations.blocked(targets);
   const running = useRef(false), generation = useRef<AbortController | null>(null);
   const intent = useRef<LocalSubmitInput | null>(null);
@@ -62,15 +61,14 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
       <OutlinedTextField label="Summary" aria-label={`Summary：${task.branch}`} placeholder="填写提交摘要…" value={summary} onChange={event => { edit(); setSummary(event.target.value); }} maxLength={500} required disabled={disabled} />
       <OutlinedTextField type="textarea" label="Description（选填）" aria-label={`Description：${task.branch}`} placeholder="填写提交说明…" value={description} onChange={event => { edit(); setDescription(event.target.value); }} maxLength={20_000} rows={2} disabled={disabled} />
       {error && <Notice kind="error">{error}</Notice>}
-      {feedback && <p className="repository-commit-feedback" role="status">{feedback}</p>}
+      {feedback && <Notice kind="success" onClose={() => setFeedback('')}>{feedback}</Notice>}
     </div>
     <div className="repository-commit-actions"><small>{task.path ? `全部 ${task.files.length} 个更改` : '关联本地目录后提交'}</small><div className="repository-commit-buttons">
-      <IconButton type="button" icon={generating ? 'close' : 'sparkle'} label={generating ? '取消 AI 生成' : 'AI 生成提交说明'} title={generating ? '取消 AI 生成' : 'AI 生成提交说明'} className="repository-ai-commit" disabled={!ready || submitting || taskBusy || !onGenerate} aria-busy={generating} onClick={() => void generate()}>{generating && <span className="repository-ai-progress spin" aria-hidden="true" />}</IconButton>
+      {onGenerate && <IconButton type="button" icon={generating ? 'close' : 'sparkle'} label={generating ? '取消 AI 生成' : 'AI 生成提交说明'} title={generating ? '取消 AI 生成' : 'AI 生成提交说明'} className="repository-ai-commit" disabled={!ready || submitting || taskBusy || !onGenerate} aria-busy={generating} onClick={() => void generate()}>{generating && <span className="repository-ai-progress spin" aria-hidden="true" />}</IconButton>}
       <Button type="submit" disabled={!ready || !onSubmit || !summary.trim() || submitting || generating || taskBusy} aria-busy={submitting}>{submitting && <Icon name="spinner" className="spin" size={14} />}{submitting ? '提交中…' : 'Commit'}</Button>
-      <Button type="button" variant="primary" disabled={!submitPopup && (!ready || !onSubmit || !onGenerate || !onPush || submitting || generating || taskBusy)} aria-busy={submitPopup?.state === 'preparing' || submitPopup?.state === 'working'} onClick={() => { if (submitPopup) operations.restore(submitPopup.id); else if (repositoryId && onSubmit && onGenerate && onPush) operations.open({ mode: 'submit', scope, targets, onCommit: onSubmit, onGenerate, onPush, onDraftChange: (_target, draft) => { edit(); setSummary(draft.summary); setDescription(draft.description); }, onCommitted: (_target, result) => { setSummary(''); setDescription(''); setError(result.warning || ''); intent.current = null; onCommitted?.(task.id, result.commitId); }, onComplete: setFeedback }); }}><Icon name={submitPopup?.state === 'preparing' || submitPopup?.state === 'working' ? 'spinner' : submitPopup?.state === 'completed' ? 'check' : 'upload'} className={submitPopup?.state === 'preparing' || submitPopup?.state === 'working' ? 'spin' : undefined} size={14} />Submit</Button>
     </div></div>
   </form>
   {hidden && error && <Notice kind="error">{error}</Notice>}
-  {hidden && feedback && <p className="repository-commit-feedback" role="status">{feedback}</p>}
+  {hidden && feedback && <Notice kind="success" onClose={() => setFeedback('')}>{feedback}</Notice>}
   </>;
 }

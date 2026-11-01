@@ -777,424 +777,6 @@ impl Provider {
         let first = self.history_page(repo, head, 1, cancel).await?;
         Ok(self.remember(key, json!({"commits":first["commits"],"tree":first["tree"],"limited":first["hasMore"]})).await)
     }
-    async fn gitea_verified_emails(
-        &self,
-        cancel: &CancellationToken,
-    ) -> Result<std::collections::BTreeSet<String>> {
-        let key = "participation-emails";
-        let value = if let Some(value) = self.cached(key).await.filter(|value| {
-            value["checkedAt"]
-                .as_i64()
-                .is_some_and(|time| util::now() - time < 300_000)
-        }) {
-            value
-        } else {
-            let (user, _) = self.get("/user", &[], "json", cancel).await?;
-            if !text(&user, "login").eq_ignore_ascii_case(text(&self.account, "login")) {
-                return Err("提交身份与当前登录账号不一致。".into());
-            }
-            // Gitea returns the full email list. Its public profile email can
-            // be masked or unverified, so only use explicitly verified entries.
-            let (value, headers) = self.get("/user/emails", &[], "json", cancel).await?;
-            let rows = value.as_array().ok_or("账号邮箱记录格式无效。")?;
-            if next(&headers) {
-                return Err("账号邮箱记录尚未完整读取。".into());
-            }
-            let emails = rows
-                .iter()
-                .filter(|row| row["verified"] == true)
-                .map(|row| {
-                    row["email"]
-                        .as_str()
-                        .filter(|email| !email.is_empty())
-                        .map(str::to_lowercase)
-                        .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
-                })
-                .collect::<Result<Vec<_>>>()?;
-            if emails.is_empty() {
-                return Err("当前账号没有可用于匹配的已验证邮箱。".into());
-            }
-            self.remember(key.into(), json!({"emails":emails,"checkedAt":util::now()}))
-                .await
-        };
-        value["emails"]
-            .as_array()
-            .ok_or("账号邮箱记录格式无效。")?
-            .iter()
-            .map(|email| {
-                email
-                    .as_str()
-                    .map(str::to_owned)
-                    .ok_or_else(|| "账号邮箱记录格式无效。".to_owned())
-            })
-            .collect()
-    }
-    async fn account_created_repository(
-        &self,
-        repo: &Value,
-        cancel: &CancellationToken,
-    ) -> Result<bool> {
-        if self.kind() != "gitea" {
-            return Err("当前平台未提供可核对的仓库创建记录，继续显示唯一分支。".into());
-        }
-        let key = format!(
-            "participation-creation:{}:{}",
-            text(&self.account, "id"),
-            text(repo, "id")
-        );
-        if let Some(value) = self.cached(&key).await.filter(|value| {
-            value["checkedAt"]
-                .as_i64()
-                .is_some_and(|time| util::now() - time < 300_000)
-        }) {
-            return value["found"]
-                .as_bool()
-                .ok_or("仓库创建记录格式无效。".into());
-        }
-        let remote_id = repo["remoteId"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or("无效的远端仓库身份。")?;
-        let base = repo_path(repo)?;
-        let (metadata, _) = self.get(&base, &[], "json", cancel).await?;
-        if metadata["id"].as_u64() != Some(remote_id) {
-            return Err("仓库创建记录与当前仓库身份不一致。".into());
-        }
-        let date = chrono::DateTime::parse_from_rfc3339(text(&metadata, "created_at"))
-            .map_err(|_| "仓库创建日期无法确认。")?
-            .with_timezone(&chrono::Utc)
-            .date_naive()
-            .to_string();
-        // Activity recipients and organization owners are not the creator.
-        // Query the creation day, and only trust the matching repo's actor.
-        for page in 1..=10 {
-            let page_s = page.to_string();
-            let (value, headers) = self
-                .get(
-                    &format!("{base}/activities/feeds"),
-                    &[("date", &date), ("page", &page_s), ("limit", "100")],
-                    "json",
-                    cancel,
-                )
-                .await?;
-            let rows = value.as_array().ok_or("仓库创建活动格式无效。")?;
-            for activity in rows {
-                if activity["op_type"] != "create_repo" {
-                    continue;
-                }
-                if activity["repo_id"].as_u64() != Some(remote_id) {
-                    return Err("仓库创建活动与当前仓库身份不一致。".into());
-                }
-                let actor = text(&activity["act_user"], "login");
-                if actor.is_empty() {
-                    return Err("仓库创建者身份无法确认。".into());
-                }
-                let found = actor.eq_ignore_ascii_case(text(&self.account, "login"));
-                self.remember(key, json!({"found":found,"checkedAt":util::now()}))
-                    .await;
-                return Ok(found);
-            }
-            if rows.is_empty() || (!next(&headers) && rows.len() < 100) {
-                return Err("未找到可核对的仓库创建活动，继续显示唯一分支。".into());
-            }
-        }
-        Err("仓库创建活动超过读取上限，继续显示唯一分支。".into())
-    }
-    async fn account_pushed_commits(
-        &self,
-        repo: &Value,
-        commits: &std::collections::BTreeSet<String>,
-        cancel: &CancellationToken,
-    ) -> Result<bool> {
-        let remote_id = repo["remoteId"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or("无效的远端仓库身份。")?;
-        let base = repo_path(repo)?;
-        // Git authors and committers are not the authenticated push actor.
-        // A push counts only when its actor and repo match, and its commit is
-        // in this branch's actual ancestry. Never match names or CompareURL.
-        for page in 1..=10 {
-            let page_s = page.to_string();
-            let (value, headers) = self
-                .get(
-                    &format!("{base}/activities/feeds"),
-                    &[("page", &page_s), ("limit", "50")],
-                    "json",
-                    cancel,
-                )
-                .await?;
-            let rows = value.as_array().ok_or("仓库推送活动格式无效。")?;
-            for activity in rows {
-                if activity["op_type"] != "commit_repo" {
-                    continue;
-                }
-                if activity["repo_id"].as_u64() != Some(remote_id) {
-                    return Err("仓库推送活动与当前仓库身份不一致。".into());
-                }
-                let actor = text(&activity["act_user"], "login");
-                if actor.is_empty() {
-                    return Err("仓库推送者身份无法确认。".into());
-                }
-                if !actor.eq_ignore_ascii_case(text(&self.account, "login")) {
-                    continue;
-                }
-                let raw = activity["content"]
-                    .as_str()
-                    .ok_or("仓库推送提交记录格式无效。")?;
-                // Gitea also emits commit_repo for CreateRef, without commit content.
-                // That event has no SHA evidence and must not invalidate real pushes.
-                if raw.is_empty() {
-                    continue;
-                }
-                let content: Value = serde_json::from_str(raw)
-                    .map_err(|_| "仓库推送提交记录格式无效。")?;
-                let pushed = content["Commits"]
-                    .as_array()
-                    .ok_or("仓库推送提交记录格式无效。")?;
-                for commit in pushed.iter().chain(std::iter::once(&content["HeadCommit"])) {
-                    let id = util::sha(text(commit, "Sha1"))?;
-                    if commits.contains(&id) {
-                        return Ok(true);
-                    }
-                }
-            }
-            // Some Gitea servers cap pages at 50 without a Link header.
-            if rows.is_empty() || (!next(&headers) && rows.len() < 50) {
-                return Ok(false);
-            }
-        }
-        Err("仓库推送活动尚未完整读取（最多500条），继续显示该分支。".into())
-    }
-    async fn account_participation(
-        &self,
-        repo: &Value,
-        head: &str,
-        cancel: &CancellationToken,
-    ) -> Result<Value> {
-        let key = format!(
-            "participation:{}:{}:{head}",
-            text(&self.account, "id"),
-            text(repo, "id")
-        );
-        if let Some(value) = self.cached(&key).await {
-            if value["checkedAt"]
-                .as_i64()
-                .is_some_and(|time| util::now() - time < 300_000)
-            {
-                return Ok(value["proof"].clone());
-            }
-        }
-        let kind = self.kind();
-        let login = text(&self.account, "login");
-        let base = if kind == "gitlab" {
-            format!(
-                "/projects/{}",
-                repo["remoteId"]
-                    .as_u64()
-                    .filter(|id| *id > 0)
-                    .ok_or("无效的远端项目身份。")?
-            )
-        } else {
-            repo_path(repo)?
-        };
-        if matches!(kind, "github" | "github-enterprise" | "gitee") {
-            let (value, _) = self
-                .get(
-                    &format!("{base}/commits"),
-                    &[("sha", head), ("author", login), ("per_page", "1")],
-                    "json",
-                    cancel,
-                )
-                .await?;
-            let rows = value.as_array().ok_or("分支参与记录返回格式无效。")?;
-            if rows
-                .iter()
-                .any(|row| !text(&row["author"], "login").eq_ignore_ascii_case(login))
-            {
-                return Err("平台未能确认提交作者的账号身份。".into());
-            }
-            let found = !rows.is_empty();
-            let proof = json!({"hasAccountCommits":found});
-            self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
-                .await;
-            return Ok(proof);
-        }
-        let mut emails = std::collections::BTreeSet::new();
-        if kind == "gitlab" {
-            let email_key = "participation-emails";
-            let identity = if let Some(value) = self.cached(email_key).await.filter(|value| {
-                value["checkedAt"]
-                    .as_i64()
-                    .is_some_and(|time| util::now() - time < 300_000)
-            }) {
-                value["emails"].clone()
-            } else {
-                let (user, _) = self.get("/user", &[], "json", cancel).await?;
-                if !text(&user, "username").eq_ignore_ascii_case(login) {
-                    return Err("提交身份与当前登录账号不一致。".into());
-                }
-                let mut addresses = Vec::new();
-                if let Some(email) = user["email"].as_str().filter(|email| !email.is_empty()) {
-                    addresses.push(email.to_lowercase());
-                }
-                for page in 1..=10 {
-                    let page_s = page.to_string();
-                    let (value, headers) = self
-                        .get(
-                            "/user/emails",
-                            &[("page", &page_s), ("per_page", "100")],
-                            "json",
-                            cancel,
-                        )
-                        .await?;
-                    let rows = value.as_array().ok_or("账号邮箱记录格式无效。")?;
-                    for row in rows {
-                        if row["confirmed_at"].as_str().is_some() {
-                            addresses.push(
-                                row["email"]
-                                    .as_str()
-                                    .ok_or("账号邮箱记录格式无效。")?
-                                    .to_lowercase(),
-                            );
-                        }
-                    }
-                    if !next(&headers) && rows.len() < 100 {
-                        break;
-                    }
-                    if page == 10 {
-                        return Err("账号邮箱记录尚未完整读取。".into());
-                    }
-                }
-                if addresses.is_empty() {
-                    return Err("平台未返回当前账号的已验证邮箱。".into());
-                }
-                self.remember(
-                    email_key.into(),
-                    json!({"emails":addresses,"checkedAt":util::now()}),
-                )
-                .await["emails"]
-                    .clone()
-            };
-            for email in identity.as_array().ok_or("账号邮箱记录格式无效。")? {
-                emails.insert(email.as_str().ok_or("账号邮箱记录格式无效。")?.to_owned());
-            }
-        } else if kind != "gitea" {
-            return Err("平台暂不能确认提交账号身份。".into());
-        }
-        // Gitea has no author query. A negative result requires a closed parent
-        // graph back to every root, rather than the graph's recent 50 records.
-        let mut seen = std::collections::BTreeSet::new();
-        let mut parents = std::collections::BTreeSet::from([head.to_owned()]);
-        let mut gitea_emails = None;
-        let mut incomplete_gitea_identity = false;
-        let mut history_complete = false;
-        for page in 1..=10 {
-            let page_s = page.to_string();
-            let (value, _) = self
-                .get(
-                    &format!(
-                        "{base}{}",
-                        if kind == "gitlab" {
-                            "/repository/commits"
-                        } else {
-                            "/commits"
-                        }
-                    ),
-                    &[
-                        (if kind == "gitlab" { "ref_name" } else { "sha" }, head),
-                        (if kind == "gitea" { "limit" } else { "per_page" }, "100"),
-                        ("page", &page_s),
-                        ("stat", "false"),
-                        ("verification", "false"),
-                        ("files", "false"),
-                    ],
-                    "json",
-                    cancel,
-                )
-                .await?;
-            let rows = value.as_array().ok_or("分支参与记录返回格式无效。")?;
-            for row in rows {
-                let found = if kind == "gitlab" {
-                    emails.contains(&text(row, "author_email").to_lowercase())
-                } else {
-                    let author = text(&row["author"], "login");
-                    if author.eq_ignore_ascii_case(login) {
-                        true
-                    } else if author.is_empty() {
-                        if gitea_emails.is_none() {
-                            gitea_emails = Some(self.gitea_verified_emails(cancel).await);
-                        }
-                        let author_email = text(&row["commit"]["author"], "email");
-                        // Imported authors need no local platform account. A negative
-                        // result only stays unknown when the identity data is missing.
-                        incomplete_gitea_identity |= author_email.is_empty()
-                            || gitea_emails.as_ref().unwrap().is_err();
-                        let matched = gitea_emails.as_ref().is_some_and(|result| {
-                            result.as_ref().is_ok_and(|emails| {
-                                emails.contains(&author_email.to_lowercase())
-                            })
-                        });
-                        matched
-                    } else {
-                        false
-                    }
-                };
-                if found {
-                    let proof = json!({"hasAccountCommits":true});
-                    self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
-                        .await;
-                    return Ok(proof);
-                }
-                let commit = commit_value(row)?;
-                seen.insert(text(&commit, "id").to_owned());
-                parents.extend(
-                    commit["parents"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|id| id.as_str().unwrap().to_owned()),
-                );
-            }
-            if parents.iter().all(|id| seen.contains(id)) {
-                history_complete = true;
-                break;
-            }
-            if rows.is_empty() {
-                break;
-            }
-        }
-        let mut proof = json!({});
-        if kind == "gitea" {
-            let pushed = self
-                .account_pushed_commits(repo, &seen, cancel)
-                .await
-                .map_err(|error| format!("当前账号推送记录核对未完成：{error}"))?;
-            proof["hasAccountPush"] = json!(pushed);
-            if pushed {
-                if history_complete && !incomplete_gitea_identity {
-                    proof["hasAccountCommits"] = json!(false);
-                }
-                self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
-                    .await;
-                return Ok(proof);
-            }
-        }
-        if !history_complete {
-            return Err("分支历史尚未完整确认（最多读取1000条），继续显示该分支。".into());
-        }
-        if incomplete_gitea_identity {
-            let detail = match &gitea_emails {
-                Some(Err(error)) => format!("账号邮箱核对未完成：{error}"),
-                _ => "部分提交缺少作者邮箱。".into(),
-            };
-            return Err(format!("无法判断是否包含当前账号的提交；{detail}继续显示该分支。"));
-        }
-        proof["hasAccountCommits"] = json!(false);
-        self.remember(key, json!({"proof":proof,"checkedAt":util::now()}))
-            .await;
-        Ok(proof)
-    }
     pub async fn tree(&self, repo: &Value, id: &str, cancel: &CancellationToken) -> Result<Value> {
         util::sha(id)?;
         let key = format!("t:{}:{id}", text(repo, "id"));
@@ -1418,11 +1000,21 @@ impl Provider {
         });
         Ok((out, limited))
     }
+    // Dashboard only needs branch names and tips. History and file trees are
+    // loaded when a repository is opened, rather than for every account repo.
+    pub async fn workspace_summary(&self, repo: &Value, cancel: &CancellationToken) -> Result<Value> {
+        let (items, limited) = self.branches(repo, cancel).await?;
+        let tasks: Vec<Value> = items.into_iter().map(|(branch, head)|
+            json!({"id":format!("remote:{branch}"),"branch":branch,"head":head,"path":null,"files":[],"tree":[],"error":"","remote":true,"treeComplete":false})
+        ).collect();
+        let warnings = if limited { vec!["分支超过单次读取上限（1000 个）；当前显示已读取分支。"] } else { vec![] };
+        Ok(json!({"source":"remote","checkedAt":util::now(),"tasks":tasks,"commits":[],"complete":false,"branchesComplete":!limited,"summaryOnly":true,"warnings":warnings}))
+    }
     pub async fn workspace(
         &self,
         repo: &Value,
         cancel: &CancellationToken,
-        check_participation: bool,
+        _check_participation: bool,
     ) -> Result<Value> {
         let (items, limited) = self.branches(repo, cancel).await?;
         let mut tasks = Vec::new();
@@ -1431,7 +1023,6 @@ impl Provider {
         if limited {
             warnings.push("分支超过单次读取上限（1000 个）；当前显示已读取分支。".to_string());
         }
-        let sole_branch = !limited && items.len() == 1;
         let mut pending = VecDeque::from(items.clone());
         let mut jobs = tokio::task::JoinSet::new();
         loop {
@@ -1458,20 +1049,7 @@ impl Provider {
                         Ok(tree) => {
                             task["tree"] = json!(tree_paths(&tree));
                             task["treeComplete"] = tree["complete"].clone();
-                            if check_participation {
-                                match p.account_participation(&r, &head, &c).await {
-                                    Ok(proof) => {
-                                        task.as_object_mut().unwrap().extend(proof.as_object().unwrap().clone());
-                                        if sole_branch && proof["hasAccountCommits"] == false && proof["hasAccountPush"] != true {
-                                            match p.account_created_repository(&r, &c).await {
-                                                Ok(created) => task["hasAccountCreation"] = json!(created),
-                                                Err(error) => task["participationError"] = json!(error),
-                                            }
-                                        }
-                                    }
-                                    Err(error) => task["participationError"] = json!(error),
-                                }
-                            }
+
                         }
                         Err(error) => task["error"] = json!(format!("文件树读取失败：{error}")),
                     }
@@ -1480,9 +1058,6 @@ impl Provider {
             }
             match jobs.join_next().await {
                 Some(Ok((t, c))) => {
-                    if let Some(error) = t["participationError"].as_str() {
-                        warnings.push(format!("分支参与记录：{}：{}", text(&t, "branch"), error));
-                    }
                     if t["treeComplete"] != true && t["error"] == "" {
                         warnings.push(format!("{} 的文件树读取不完整。", text(&t, "branch")));
                     }
@@ -2161,13 +1736,6 @@ impl Network {
             return Err("工作目录的远端已经变化，请重新关联。".into());
         }
         Ok(remote)
-    }
-    pub(crate) async fn push_remote(&self, root: &std::path::Path) -> Result<String> {
-        if self.system_auth {
-            Ok(system_remote(root, &self.url, true).await?.0)
-        } else {
-            self.fetch_remote(root).await
-        }
     }
     pub async fn branch_presence(
         &self,

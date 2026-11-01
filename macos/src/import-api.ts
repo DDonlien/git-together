@@ -1,17 +1,14 @@
-import { isBranches, isCommitPage, isIntegrationPlan, isIntegrationResult } from './integration-model';
-import { isAccountRepositoryAccess } from './repository-auth-model';
 import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMethod, type ApiOutputs } from './import-model';
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteHistoryPage, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
-import { isCommitDraft, isCommitPlan, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage, type GenerateCommitPlan } from './local-submit-model';
+import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
-import { isFileDirectory, isFileOperationPlan, isFileOperationResult } from './file-operation-model';
+import { isFileDirectory } from './file-operation-model';
 import { diagnosticFailure } from './diagnostics-model';
 import { performanceRequestStarted, performanceRequestFinished } from './performance-diagnostics';
 import { isRepositorySyncPlan, isRepositorySyncResult } from './repository-sync-model';
-import { isGraphMergePlan, isGraphPreview, isGraphSource, isGraphWriteResult } from './graph-operation-model';
-import { isDivergence } from './divergence-model';
+import { isGraphPreview, isGraphWriteResult } from './graph-operation-model';
 
 export class RepositoryOperationError extends Error {
   constructor(message: string, readonly reason: 'diverged' | 'non-fast-forward') { super(message); this.name = 'RepositoryOperationError'; }
@@ -40,14 +37,6 @@ export const generateCommitMessage: GenerateCommitMessage = async (input, signal
   try { const result = await importAPI('generateCommitMessage', { ...input, generationId }, signal); signal.throwIfAborted(); return result; }
   finally { signal.removeEventListener('abort', cancel); }
 };
-export const generateCommitPlan: GenerateCommitPlan = async (input, signal) => {
-  signal.throwIfAborted();
-  const generationId = crypto.randomUUID();
-  const cancel = () => { void importAPI('cancelCommitGeneration', { repositoryId: input.repositoryId, taskId: input.taskId, generationId }).catch(() => {}); };
-  signal.addEventListener('abort', cancel, { once: true });
-  try { const result = await importAPI('generateCommitPlan', { ...input, generationId }, signal); signal.throwIfAborted(); return result; }
-  finally { signal.removeEventListener('abort', cancel); }
-};
 export async function importAPI<M extends ApiMethod>(method: M, input: ApiInputs[M], signal?: AbortSignal): Promise<ApiOutputs[M]> {
   const requestId = crypto.randomUUID(); const started = performance.now();
   performanceRequestStarted();
@@ -69,7 +58,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'remoteWorkspace' ? 15 * 60_000 : ['downloadBranch', 'prepareSync', 'applySync', 'prepareGraphMerge', 'applyGraphMerge', 'prepareIntegration', 'applyIntegration', 'restoreIntegration', 'submitCommit'].includes(method) ? 30 * 60_000 : method === 'generateCommitPlan' ? 5 * 60_000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'remoteWorkspace' ? 15 * 60_000 : ['downloadBranch', 'prepareSync', 'applySync', 'submitCommit'].includes(method) ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -100,32 +89,10 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     throw new Error(message);
   }
   const value = envelope.value;
-  if (method === 'accountRepositoryAccess') {
-    if (!isAccountRepositoryAccess(value) || !('accountId' in input) || value.accountId !== input.accountId) throw new Error('仓库授权信息返回格式无效。');
-  } else if (method === 'openAccountAccessSettings') {
-    if (!isRecord(value) || value.opened !== true) throw new Error('授权管理页面没有打开。');
-  } else if (method === 'integrationBranches') {
-    if (!isBranches(value)) throw new Error('远端分支列表格式无效。');
-  } else if (method === 'integrationCommits') {
-    if (!isCommitPage(value) || !('remoteBranch' in input) || value.branch !== input.remoteBranch || !('remoteHead' in input) || value.head !== input.remoteHead || !('page' in input) || value.page !== input.page) throw new Error('远端提交列表格式无效。');
-  } else if (method === 'prepareIntegration') {
-    if (!isIntegrationPlan(value) || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('taskId' in input) || value.taskId !== input.taskId || !('expectedHead' in input) || value.head !== input.expectedHead || !('remoteBranch' in input) || value.remoteBranch !== input.remoteBranch || !('remoteHead' in input) || value.remoteHead !== input.remoteHead || !('targetCommit' in input) || value.targetCommit !== input.targetCommit || !('mode' in input) || value.mode !== input.mode) throw new Error('整合预览返回格式无效。');
-  } else if (method === 'applyIntegration' || method === 'restoreIntegration') {
-    if (!isIntegrationResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('整合结果无效，请检查实际 Git 状态。');
-  } else if (method === 'discardIntegration') {
-    if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('整合预览清理结果无效。');
-  } else if (method === 'graphSources') {
-    if (!isRecord(value) || !Array.isArray(value.sources) || !value.sources.every(isGraphSource) || typeof value.limited !== 'boolean') throw new Error('来源分支返回格式无效。');
-  } else if (method === 'graphPreview') {
+  if (method === 'graphPreview') {
     if (!isGraphPreview(value) || !('commitId' in input) || value.commitId !== input.commitId || !('expectedHead' in input) || value.head !== input.expectedHead) throw new Error('提交差异返回格式无效。');
-  } else if (method === 'prepareGraphMerge') {
-    if (!isGraphMergePlan(value) || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('taskId' in input) || value.taskId !== input.taskId || !('expectedHead' in input) || value.head !== input.expectedHead) throw new Error('合并预览返回格式无效。');
-  } else if (method === 'applyGraphMerge' || method === 'executeGraph' || method === 'createGraphWorktree') {
+  } else if (method === 'executeGraph') {
     if (!isGraphWriteResult(value) || value.catalog !== undefined && !isCatalog(value.catalog)) throw new Error('图谱操作结果无效，请检查实际 Git 状态。');
-  } else if (method === 'cancelGraphPreparation') {
-    if (!isRecord(value) || typeof value.cancelled !== 'boolean') throw new Error('取消准备结果无效。');
-  } else if (method === 'discardGraphMerge') {
-    if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('合并预览清理结果无效。');
   } else if (method === 'openCommit') {
     if (!isRecord(value) || value.opened !== true) throw new Error('远端提交没有打开。');
   } else if (method === 'status') {
@@ -150,8 +117,6 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (!isLocalSubmitResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('提交结果返回格式无效，请检查本地提交历史。');
   } else if (method === 'pushCommit') {
     if (!isLocalPushResult(value) || !('taskId' in input) || value.taskId !== input.taskId || !('commitId' in input) || value.commitId !== input.commitId) throw new Error('推送结果返回格式无效，请检查远端提交。');
-  } else if (method === 'inspectDivergence') {
-    if (!isDivergence(value) || value.diverged && (!('taskId' in input) || value.taskId !== input.taskId || !('repositoryId' in input) || value.repositoryId !== input.repositoryId)) throw new Error('分叉检查返回格式无效。');
   } else if (method === 'prepareSync') {
     if (!isRepositorySyncPlan(value) || !('taskId' in input) || value.taskId !== input.taskId || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('mode' in input) || value.mode !== input.mode) throw new Error('文件预览返回格式无效。');
   } else if (method === 'applySync') {
@@ -161,16 +126,10 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
     if (value.retryAt !== undefined && (typeof value.retryAt !== 'number' || !Number.isSafeInteger(value.retryAt) || value.retryAt < 0)) throw new Error('后台获取冷却时间返回格式无效。');
   } else if (method === 'localDirectory') {
     if (!isFileDirectory(value) || !('path' in input) || value.path !== input.path) throw new Error('本地目录返回格式无效。');
-  } else if (method === 'prepareFileOperation') {
-    if (!isFileOperationPlan(value) || !('operation' in input) || value.operation !== input.operation) throw new Error('文件操作预览返回格式无效。');
-  } else if (method === 'applyFileOperation') {
-    if (!isFileOperationResult(value)) throw new Error('文件操作结果无效，请刷新目录确认。');
-  } else if (method === 'discardSync' || method === 'discardFileOperation') {
+  } else if (method === 'discardSync') {
     if (!isRecord(value) || typeof value.discarded !== 'boolean') throw new Error('预览取消结果返回格式无效。');
   } else if (method === 'generateCommitMessage') {
     if (!isCommitDraft(value)) throw new Error('AI 提交说明返回格式无效。');
-  } else if (method === 'generateCommitPlan') {
-    if (!isCommitPlan(value, 'paths' in input ? input.paths : undefined)) throw new Error('AI 提交分组不完整或包含重复文件，请重新分析。');
   } else if (method === 'cancelCommitGeneration') {
     if (!isRecord(value) || typeof value.cancelled !== 'boolean') throw new Error('AI 取消结果返回格式无效。');
   } else if (method === 'openFile') {

@@ -418,6 +418,12 @@ pub async fn worktrees(root: &Path) -> Result<Vec<Value>> {
     }).collect())
 }
 pub async fn task(root: &Path) -> Result<Value> {
+    read_task(root, true).await
+}
+pub async fn task_summary(root: &Path) -> Result<Value> {
+    read_task(root, false).await
+}
+async fn read_task(root: &Path, include_tree: bool) -> Result<Value> {
     let entry = worktrees(root)
         .await?
         .into_iter()
@@ -431,7 +437,7 @@ pub async fn task(root: &Path) -> Result<Value> {
         &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )
     .await?;
-    let tree = read(
+    let tree = if include_tree { read(
         root,
         &[
             "ls-files",
@@ -441,7 +447,7 @@ pub async fn task(root: &Path) -> Result<Value> {
             "-z",
         ],
     )
-    .await?;
+    .await? } else { String::new() };
     let index = read(root, &["ls-files", "--stage", "--cached", "-z"]).await?;
     let files = changes(&status);
     let mut bytes = format!("{}\0{}\0{}", text(&entry, "head"), status, index).into_bytes();
@@ -456,12 +462,31 @@ pub async fn task(root: &Path) -> Result<Value> {
         }
     }
     let branch = text(&entry, "branch");
+    let branch_ref = format!("refs/heads/{branch}");
+    let upstream = read(root, &["for-each-ref", "--format=%(upstream)", &branch_ref]).await?;
+    let upstream = upstream.trim();
+    let mut tracking = json!({"upstream":if upstream.is_empty(){Value::Null}else{json!(upstream)},"ahead":null,"behind":null});
+    let head = text(&entry, "head");
+    if sha(head) && head.bytes().any(|byte| byte != b'0') && !upstream.is_empty() && !read(root, &["for-each-ref", "--format=%(objectname)", upstream]).await?.trim().is_empty() {
+        let range = format!("HEAD...{upstream}");
+        let counts = read(root, &["rev-list", "--left-right", "--count", &range, "--"]).await?;
+        let values: Vec<_> = counts.split_whitespace().collect();
+        if values.len() != 2 { return Err("Git 同步数量返回格式无效。".into()); }
+        tracking["ahead"] = json!(values[0].parse::<u64>().map_err(|_| "Git 同步数量返回格式无效。")?);
+        tracking["behind"] = json!(values[1].parse::<u64>().map_err(|_| "Git 同步数量返回格式无效。")?);
+    }
     let tree: BTreeSet<&str> = tree.split('\0').filter(|s| !s.is_empty()).collect();
     Ok(
-        json!({"id":format!("worktree:{branch}:{}",root.display()),"path":root.to_string_lossy(),"branch":branch,"head":entry["head"],"files":files,"tree":tree,"error":"","changeKey":digest(bytes)}),
+        json!({"id":format!("worktree:{branch}:{}",root.display()),"path":root.to_string_lossy(),"branch":branch,"head":entry["head"],"files":files,"tree":tree,"error":"","changeKey":digest(bytes),"tracking":tracking}),
     )
 }
 pub async fn history(root: &Path) -> Result<Vec<Value>> {
+    read_history(root, "-200").await
+}
+pub async fn history_summary(root: &Path) -> Result<Vec<Value>> {
+    read_history(root, "-1").await
+}
+async fn read_history(root: &Path, limit: &str) -> Result<Vec<Value>> {
     let refs = read(
         root,
         &[
@@ -479,7 +504,7 @@ pub async fn history(root: &Path) -> Result<Vec<Value>> {
             "--exclude=refs/gittogether/recovery/*",
             "--all",
             "--topo-order",
-            "-200",
+            limit,
             "--format=%H%x00%P%x00%s%x00%an%x00%aI%x00",
             "--",
         ],
@@ -712,4 +737,42 @@ pub async fn remote_identity(value: &str) -> Result<Option<String>> {
     let output = String::from_utf8_lossy(&result.stdout);
     let hostname = output.lines().find_map(|line| line.strip_prefix("hostname ")).unwrap_or(host);
     Ok(Some(format!("{}/{path}", hostname.to_lowercase())))
+}
+
+#[cfg(test)]
+mod lite_tests {
+    use super::*;
+
+    async fn fixture_git(root: &Path, args: &[&str]) -> String {
+        run(root, args, Options { write: true, ..Default::default() }).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn summary_preserves_change_identity_and_exact_tracking_counts() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(temporary.path()).unwrap();
+        for args in [vec!["init", "--quiet", "--initial-branch=main", "--template="], vec!["config", "user.name", "Fixture"], vec!["config", "user.email", "fixture@example.invalid"], vec!["config", "commit.gpgsign", "false"]] {
+            fixture_git(&root, &args).await;
+        }
+        std::fs::write(root.join("file.txt"), "base\n").unwrap();
+        fixture_git(&root, &["add", "file.txt"]).await;
+        fixture_git(&root, &["commit", "--quiet", "-m", "base"]).await;
+        fixture_git(&root, &["remote", "add", "origin", "https://example.invalid/fixture.git"]).await;
+        fixture_git(&root, &["update-ref", "refs/remotes/origin/main", "HEAD"]).await;
+        fixture_git(&root, &["config", "branch.main.remote", "origin"]).await;
+        fixture_git(&root, &["config", "branch.main.merge", "refs/heads/main"]).await;
+        std::fs::write(root.join("file.txt"), "committed\n").unwrap();
+        fixture_git(&root, &["commit", "--quiet", "-am", "local"]).await;
+        std::fs::write(root.join("file.txt"), "dirty\n").unwrap();
+        let full = task(&root).await.unwrap();
+        let summary = task_summary(&root).await.unwrap();
+        assert_eq!(summary["changeKey"], full["changeKey"]);
+        assert_eq!(summary["files"], full["files"]);
+        assert_eq!(summary["tree"], json!([]));
+        assert!(!full["tree"].as_array().unwrap().is_empty());
+        assert_eq!(summary["tracking"]["ahead"], 1);
+        assert_eq!(summary["tracking"]["behind"], 0);
+        assert_eq!(summary["tracking"]["upstream"], "refs/remotes/origin/main");
+        assert_eq!(std::fs::read_to_string(root.join("file.txt")).unwrap(), "dirty\n");
+    }
 }

@@ -52,6 +52,7 @@ async fn foreground_cancels_native_reads_only_for_its_repository_and_resumes_aft
 async fn actual_commit_preserves_excluded_staging_and_remains_idempotent() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("checkout"); fs::create_dir(&root).unwrap();
+    let root = dunce::canonicalize(root).unwrap();
     for arguments in [
         vec!["init", "--quiet", "--initial-branch=main", "--template="],
         vec!["config", "user.name", "Fixture"], vec!["config", "user.email", "fixture@example.invalid"],

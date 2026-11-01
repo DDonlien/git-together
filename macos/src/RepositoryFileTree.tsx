@@ -1,10 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { Button, Icon, IconButton } from './ui';
+import { Button, Icon, IconButton, Notice } from './ui';
 import type { RepositoryTask } from './repository-model';
 import { providerName, type Account, type BranchIssue, type RemoteRepository } from './import-model';
 import { importAPI } from './import-api';
 import { PresenceAvatars } from './PresenceAvatars';
-import { LocalPathIssue, type DismissBranchIssue } from './BranchIssueNotice';
 import { LocalFileTree } from './LocalFileTree';
 import { FileTypeIcon } from './FileTypeIcon';
 import { repositoryFileURL } from './repository-file-url';
@@ -28,7 +27,7 @@ function TreeNode({ node, depth, selected, onSelect, actions }: { node: Decorate
   </div>;
 }
 
-export function RepositoryFileTree({ task, selected, onSelect, complete, changes, repository, account, onChanged, branchIssues = [], onDismissIssue }: { task: RepositoryTask; selected?: string; onSelect: (path: string) => void; complete: boolean; changes?: FileTreeChange[]; repository?: RemoteRepository; account?: Account; onChanged?: () => void; branchIssues?: BranchIssue[]; onDismissIssue?: DismissBranchIssue }) {
+export function RepositoryFileTree({ task, selected, onSelect, complete, changes, repository, account, onChanged }: { task: RepositoryTask; selected?: string; onSelect: (path: string) => void; complete: boolean; changes?: FileTreeChange[]; repository?: RemoteRepository; account?: Account; onChanged?: () => void }) {
   const nodes = useMemo(() => task.remote || !repository ? decoratedFileTree(task.tree, changes || task.files) : [], [task.tree, changes, task.files, task.remote, repository]);
   const [opening, setOpening] = useState<string | null>(null);
   const [openingDirectory, setOpeningDirectory] = useState(false);
@@ -61,13 +60,13 @@ export function RepositoryFileTree({ task, selected, onSelect, complete, changes
   } : undefined;
   return <section className="repository-tree-task" aria-label={`文件树：${task.branch}`}>
     {!task.remote && repository && task.path ? <LocalFileTree key={task.id} task={task} repositoryId={repository.id} enabled={repository.available && !task.error} selected={selected} onSelect={onSelect} changes={changes || task.files} onChanged={onChanged} openFile={path => actions?.open(path)} /> : <div className="repository-task-tree">{nodes.length ? nodes.map(node => <TreeNode key={node.path} node={node} depth={0} selected={selected} onSelect={onSelect} actions={actions} />) : <p className="repository-tree-empty">{task.error ? '文件树暂不可用。' : task.remote ? complete ? '所选远端分支没有文件。' : '正在读取远端文件树…' : task.path ? '没有可显示的文件。' : '分支文件树读取等待服务更新。'}</p>}</div>}
-    {openError && <p className="repository-task-error" role="alert">{openError}</p>}
-    {!complete && task.path && !task.missing && <p className="repository-data-note">当前仅列出更改文件；完整目录等待服务更新。</p>}
-    {task.remote && task.treeComplete === false && task.tree.length > 0 && <p className="repository-data-note">文件树不完整，显示已读取部分。</p>}
-    {task.error && !task.missing && <p className="repository-task-error" role="alert">{task.error}</p>}
+    {openError && <Notice kind="error" onClose={() => setOpenError('')}>{openError}</Notice>}
+    {!complete && task.path && !task.missing && <Notice kind="info">当前仅列出更改文件；完整目录等待服务更新。</Notice>}
+    {task.remote && task.treeComplete === false && task.tree.length > 0 && <Notice kind="info">文件树不完整，显示已读取部分。</Notice>}
+    {task.error && !task.missing && <Notice kind="error">{task.error}</Notice>}
     <footer className="repository-tree-identity">
       <div className="repository-tree-branch"><Icon name="branch" size={14} /><strong title={task.branch}>{task.branch}</strong>{repository && <PresenceAvatars repository={repository} branch={task.branch} />}</div>
-      {!task.remote && <div className="local-path-with-issue">{task.path ? <Button variant="quiet" className="repository-tree-path" title={task.path} aria-label={`在文件浏览器中打开 ${task.path}`} disabled={task.missing || !repository?.available || !account || openingDirectory || opening !== null} aria-busy={openingDirectory || undefined} onClick={openDirectory}>{task.path}</Button> : <small>未检出</small>}{branchIssues.filter(issue => issue.kind === 'local-missing' && issue.paths.includes(task.path || '')).map(issue => <LocalPathIssue key={issue.id} issue={issue} onDismiss={onDismissIssue} />)}</div>}
+      {!task.remote && <div className="local-path-with-issue">{task.path ? <Button variant="quiet" className="repository-tree-path" title={task.path} aria-label={`在文件浏览器中打开 ${task.path}`} disabled={task.missing || !repository?.available || !account || openingDirectory || opening !== null} aria-busy={openingDirectory || undefined} onClick={openDirectory}>{task.path}</Button> : <small>未检出</small>}</div>}
       <code title={task.head || undefined}>{task.head.slice(0, 8) || '未读取'}</code>
     </footer>
   </section>;

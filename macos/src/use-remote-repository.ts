@@ -11,6 +11,7 @@ const interruptedRead = (problem: Error) => ['仓库读取已取消。', '仓库
 
 // Workspace-owned readers retain results and retry deadlines across navigation.
 export function useRemoteRepositories(repositories: RemoteRepository[], instanceId: string, enabled: boolean, changes: Record<string, number> = {}, checkParticipation = false, onFetched?: (repositoryId: string) => void, systemRepositories: ReadonlySet<string> = new Set(), priority: { activeRepositoryId?: string; lastUsed?: Record<string, number>; pinned?: readonly string[]; paused?: ReadonlySet<string> } = {}) {
+  const activeRepository = useRef(priority.activeRepositoryId); activeRepository.current = priority.activeRepositoryId;
   const keyFor = (repository: RemoteRepository) => resourceKey(repository, instanceId);
   const systemModes = useRef(systemRepositories); systemModes.current = systemRepositories;
   const identities = repositories.map(keyFor);
@@ -42,7 +43,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
   }, [identityKey]);
   const reader = useAutoRefresh({ resources, intervalMs: syncIntervals.remote, intervals, initialDelays, priorities, maxConcurrent: 2, maxBackoffMs: syncIntervals.remoteMaxBackoff, minTriggerIntervalMs: syncIntervals.remoteChange,
     pausedResources: repositories.filter(repository => priority.paused?.has(repository.id)).map(keyFor),
-    triggers: Object.fromEntries(repositories.map(repository => [keyFor(repository), (changes[repository.id] ?? 0) * 2 + Number(checkParticipation)])),
+    triggers: Object.fromEntries(repositories.map(repository => [keyFor(repository), (changes[repository.id] ?? 0) * 2 + Number(priority.activeRepositoryId === repository.id)])),
     onReading: (key, loading) => setStates(previous => {
       const state = previous[key] || { workspace: null, error: '', loading: false };
       return state.loading === loading ? previous : { ...previous, [key]: { ...state, loading } };
@@ -52,7 +53,8 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
       const [, repositoryId] = JSON.parse(key) as [string, string];
       const repository = repositories.find(repository => repository.id === repositoryId)!;
       const system = systemRepositories.has(repositoryId);
-      const sameAuthentication = () => current.current.has(key) && systemModes.current.has(repositoryId) === system;
+      const summaryOnly = priority.activeRepositoryId !== repositoryId;
+      const sameAuthentication = () => current.current.has(key) && systemModes.current.has(repositoryId) === system && summaryOnly === (activeRepository.current !== repositoryId);
       let taskFailures = false;
       let retryAt = 0;
       let readFailure: Error | undefined;
@@ -80,14 +82,14 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
         return;
       }
       try {
-        const workspace = await importAPI('remoteWorkspace', { repositoryId, ...(checkParticipation ? { checkParticipation: true } : {}) }, signal);
+        const workspace = await importAPI('remoteWorkspace', { repositoryId, summaryOnly }, signal);
         if (signal.aborted || !sameAuthentication()) return;
         setStates(previous => {
           // Removed mappings and restarted services cannot inherit old contents.
           const retained = Object.entries(previous).filter(([id]) => known.current.has(id) && id !== key);
           return { ...Object.fromEntries(retained), [key]: acceptRemoteWorkspace(previous[key] || { workspace: null, loading: false, error: '' }, workspace, pushVersion !== (pushVersions.current.get(key) || 0)) };
         });
-        taskFailures = workspace.tasks.some(task => !!task.error || !!task.participationError);
+        taskFailures = workspace.tasks.some(task => !!task.error);
         retryAt = workspace.retryAt ?? 0;
       } catch (problem) {
         if (signal.aborted || !sameAuthentication()) return;
@@ -129,7 +131,7 @@ export function useRemoteRepositories(repositories: RemoteRepository[], instance
 }
 
 export function useRemoteRepository(repository: RemoteRepository | undefined, instanceId: string, enabled: boolean, sharedState?: RemoteRepositoryState, checkParticipation = false) {
-  const { remoteStates: states } = useRemoteRepositories(repository && !sharedState ? [repository] : [], instanceId, enabled && !sharedState, {}, checkParticipation);
+  const { remoteStates: states } = useRemoteRepositories(repository && !sharedState ? [repository] : [], instanceId, enabled && !sharedState, {}, false, undefined, new Set(), { activeRepositoryId: repository?.id });
   const resource = repository && instanceId ? resourceKey(repository, instanceId) : '';
   const active = enabled && !!repository?.available && !!resource;
   const current = useRef(''); current.current = active ? resource : '';

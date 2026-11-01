@@ -24,7 +24,7 @@ export function UpdateSettings({ busy, updates }: { busy: boolean; updates: Upda
             : <Button disabled={!supported || status.phase === 'unavailable' || waiting} onClick={() => void action('check')}>{status.phase === 'checking' ? '检查中…' : status.phase === 'downloading' ? '下载中…' : status.phase === 'installing' ? '安装中…' : '检查更新'}</Button>}
       </div>
       <div className="update-feedback" aria-live="polite">
-        {status.phase === 'error' || (status.phase === 'ready' && status.message) ? <Notice kind="error">{updateDescription(status)}</Notice> : <p>{updateDescription(status)}</p>}
+        {waiting ? <p>{updateDescription(status)}</p> : <Notice kind={status.phase === 'error' || status.phase === 'ready' && status.message ? 'error' : status.phase === 'current' || status.phase === 'ready' ? 'success' : 'info'}>{updateDescription(status)}</Notice>}
         {showProgress && <>
           <progress aria-label="更新下载进度" max={100} {...(percent === undefined ? {} : { value: percent })} />
           <small className="update-transfer">{updateTransferDescription(status)}</small>

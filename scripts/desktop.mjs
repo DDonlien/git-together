@@ -15,6 +15,7 @@ const commands = {
   test: [['--prefix', 'macos', 'test']],
   build: [['--prefix', 'macos', 'run', 'build']],
   package: [['--prefix', 'macos', 'run', 'tauri', '--', 'build']],
+  'package:trial': [['--prefix', 'macos', 'run', 'package:trial']],
   'release-build': [['--prefix', 'macos', 'run', 'tauri', '--', 'build']],
 };
 

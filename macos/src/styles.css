@@ -153,8 +153,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
 .remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
 /* Reserve a row-tail slot without shifting Git actions relative to their headings. */
-.remote-repo-table.has-repository-pins { min-width: 1276px; }
-.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 332px; }
+.remote-repo-table.has-repository-pins { min-width: 1190px; }
+.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 246px; }
 .remote-repo-table.has-repository-pins :is(th, td).repository-action-cell { padding-right: 40px; }
 .dashboard-repository-row .repository-pin-button { position: absolute; right: 4px; top: 0; bottom: 0; margin-block: auto; }
 .dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
@@ -175,7 +175,7 @@ button.repository-count-action:disabled { opacity: .7; }
 .dashboard-branch-content { display: flex; align-items: center; gap: var(--icon-label-gap); min-width: 0; }
 .dashboard-branch-content .branch-label { color: var(--text); }
 .dashboard-default-branch { flex-shrink: 0; color: var(--muted); font-size: 10px; }
-.dashboard-branch-message [role='status'] { display: inline-flex; align-items: center; gap: var(--icon-label-gap); color: var(--muted); font-size: 11px; }
+.dashboard-branch-message [role='status']:not(.notice) { display: inline-flex; align-items: center; gap: var(--icon-label-gap); color: var(--muted); font-size: 11px; }
 .dashboard-branch-message .notice { margin: 0; }
 .remote-name > div { min-width: 0; }
 .remote-name strong, .remote-name .repository-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--repository-name-size); line-height: var(--repository-text-leading); font-weight: 550; }
@@ -251,21 +251,6 @@ button.repository-count-action:disabled { opacity: .7; }
 .account-settings-entry { border-bottom: 1px solid var(--line); }
 .account-settings-entry:last-child { border-bottom: 0; }
 .account-settings-entry .account-setting { border-bottom: 0; }
-.account-repository-access { padding: 0 0 16px 60px; font-size: 12px; }
-.account-access-heading { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.account-access-heading > span { flex: 1; min-width: 180px; }
-.account-access-heading .account-warning { margin: 0; font-size: 12px; }
-.account-access-details { margin-top: 8px; }
-.account-access-details > summary { cursor: pointer; padding: 8px 0; }
-.account-access-details > p { color: var(--muted); line-height: 1.6; margin: 4px 0 12px; }
-.repository-access-row { display: flex; gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.repository-access-description { flex: 1; min-width: 200px; overflow-wrap: anywhere; }
-.repository-access-description strong { font-size: 12px; font-weight: 550; }
-.repository-access-permissions { display: flex; flex-wrap: wrap; gap: 12px; margin: 5px 0; }
-.repository-access-permissions [data-permission="denied"] { color: var(--warning); }
-.repository-access-permissions [data-permission="unknown"], .repository-access-description small, .repository-access-unlinked, .account-access-checked { color: var(--muted); font-size: 11px; line-height: 1.5; }
-.account-access-checked { display: block; margin-top: 12px; }
-@media (max-width: 700px) { .account-repository-access { padding-left: 0; } }
 .settings-empty { display: flex; align-items: center; gap: 9px; padding: 22px 0; flex-wrap: wrap; }
 .settings-empty > svg { color: var(--muted); }
 .settings-empty p { flex-basis: 100%; font-size: 12px; color: var(--muted); padding-left: 33px; }
@@ -402,6 +387,10 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-submit-count { margin-bottom: 12px; color: var(--muted); font-size: 12px; }
 .repository-submit-content h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
 .repository-submit-content h3 svg { flex-shrink: 0; }
+.repository-submit-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.repository-submit-heading > h3 { flex: 1; min-width: 0; margin: 0; }
+.repository-submit-heading > h3 > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repository-submit-heading > .app-button { flex-shrink: 0; }
 .repository-commit-files { margin-top: 8px; font-size: 12px; }
 .submit-file-selection, .submit-file-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--muted); }
 .submit-file-selection small, .submit-file-group-heading small { font-size: 10px; }
@@ -954,13 +943,18 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .preview-file span { flex: 1; }
 .preview-file:hover { color: var(--blue); }
 .branch-empty { flex: 1; }
-.notice { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 7px; margin-top: 14px; font-size: 12px; flex-shrink: 0; }
-.notice > span { flex: 1; }
+.notice { position: relative; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 10px 48px 10px 12px; border-radius: 7px; margin-top: 14px; font-size: 12px; line-height: 20px; flex-shrink: 0; }
+.notice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.notice > .notice-close { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; min-width: 28px; height: 28px; min-height: 28px; margin: 0; opacity: 0; pointer-events: none; }
+.notice:hover > .notice-close, .notice:focus-within > .notice-close { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .notice > .notice-close { opacity: 1; pointer-events: auto; } }
+.import-dashboard > .notice, .update-feedback > .notice, .presence-feedback > .notice, .account-edit-form > .notice, .github-authorization > .notice, .repository-sync-dialog > .notice { margin: 0; }
 .notice.success { color: var(--teal); background: color-mix(in srgb,var(--teal) 8%,var(--content)); }
 .notice.warning { color: var(--warning); background: color-mix(in srgb,var(--warning) 9%,var(--content)); }
 .notice.error { color: var(--danger); background: color-mix(in srgb,var(--danger) 8%,var(--content)); }
 .notice.info { color: var(--purple); background: color-mix(in srgb,var(--purple) 8%,var(--content)); }
 .notice .text-button { margin-left: 6px; }
+.update-feedback:empty, .diagnostics-feedback:empty { display: none; }
 
 /* Inspector is a content pane, not another floating glass layer. */
 .details-panel { display: flex; flex-direction: column; width: 300px; flex-shrink: 0; overflow: auto; background: var(--content); border-radius: var(--radius-panel); }
@@ -1244,3 +1238,7 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .file-operation-preview li > span + span { color: var(--muted); font-size: 11px; }
 .file-operation-dialog .notice { margin: 0; }
 .file-operation-dialog .modal-actions { margin-top: 0; }
+
+/* Lite: Fetch/Pull, Commit, Push and manual visibility. */
+.dashboard-signal-sort { grid-template-columns: var(--repository-action-pair-width) repeat(3, var(--repository-action-single-width)); }
+.dashboard-signal-sort [data-signal="hidden"] { grid-column: 4; }

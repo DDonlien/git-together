@@ -10,7 +10,6 @@ export type LocalPushInput = { repositoryId: string; taskId: string; expectedHea
 export type LocalPushResult = LocalSubmitResult & { pushed: true };
 export type PushLocalCommit = (input: LocalPushInput) => Promise<LocalPushResult>;
 export type GenerateCommitMessage = (input: Omit<ApiInputs['generateCommitMessage'], 'generationId'>, signal: AbortSignal) => Promise<CommitDraft>;
-export type GenerateCommitPlan = (input: Omit<ApiInputs['generateCommitPlan'], 'generationId'>, signal: AbortSignal) => Promise<CommitPlan>;
 
 export function commitMessage(draft: CommitDraft): string {
   return `${draft.summary.trim()}${draft.description.trim() ? `\n\n${draft.description.trim()}` : ''}\n`;

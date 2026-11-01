@@ -23,6 +23,7 @@ export function repositoryActionBusy(busy: Record<string, boolean>, repositoryId
 }
 export interface LocalRepositoryState { path: string; snapshot: LocalSnapshot | null; workspace?: RepositoryWorkspace; mappingKey?: string; loading?: boolean; error: string; checkedAt: number }
 export function useWorkspace(activeRepositoryId = '') {
+  const activeRepository = useRef(activeRepositoryId); activeRepository.current = activeRepositoryId;
   const updates = useUpdates();
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
   const catalogRef = useRef<Catalog>(emptyCatalog);
@@ -150,7 +151,7 @@ export function useWorkspace(activeRepositoryId = '') {
   const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system'])) : [];
   const localReader = useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
     pausedResources: localResources.filter(resource => pausedRepositories.has((JSON.parse(resource) as [string, string])[1])),
-    triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']), fetchVersions[link.repositoryId] ?? 0])),
+    triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']), (fetchVersions[link.repositoryId] ?? 0) * 2 + Number(activeRepositoryId === link.repositoryId)])),
     onReading: (resource, loading) => {
       const [instanceId, repositoryId, path] = JSON.parse(resource) as [string, string, string];
       if (instanceId !== catalogRef.current.instanceId || !catalogRef.current.links.some(link => JSON.stringify([instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']) === resource)) return;
@@ -165,9 +166,11 @@ export function useWorkspace(activeRepositoryId = '') {
       const currentLink = () => instanceId === catalogRef.current.instanceId && catalogRef.current.links.some(link => link.repositoryId === repositoryId && link.path === path && JSON.stringify(link.worktrees) === JSON.stringify(worktrees === null ? undefined : worktrees) && (link.authentication || 'system') === authentication);
       if (!currentLink()) return;
       const readVersion = localReadVersions.current.get(resource) || 0;
+      const summaryOnly = repositoryId !== activeRepositoryId;
+      const sameReadMode = () => summaryOnly === (repositoryId !== activeRepository.current);
       try {
-        const workspace = await importAPI('localWorkspace', { repositoryId }, signal);
-        if (signal.aborted || !currentLink() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
+        const workspace = await importAPI('localWorkspace', { repositoryId, summaryOnly }, signal);
+        if (signal.aborted || !currentLink() || !sameReadMode() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
         const previousChanges = localChanges.current.get(resource);
         const nextChanges = new Map<string, string>();
         let changed = false;
@@ -194,7 +197,7 @@ export function useWorkspace(activeRepositoryId = '') {
           return { ...current, [repositoryId]: { path, mappingKey: resource, snapshot: null, workspace: stable, loading: false, error: '', checkedAt: Date.now() } };
         });
       } catch (problem) {
-        if (signal.aborted || !currentLink() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
+        if (signal.aborted || !currentLink() || !sameReadMode() || readVersion !== (localReadVersions.current.get(resource) || 0)) return;
         setLocalStates(current => {
           const previous = current[repositoryId];
           const sameMapping = previous?.mappingKey === resource;
@@ -224,7 +227,7 @@ export function useWorkspace(activeRepositoryId = '') {
     });
   }, [linkIdentities]);
   const linkedRepositoryIds = new Set(catalog.links.map(link => link.repositoryId));
-  const remoteReader = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id) || preferences.repositoryLastUsed[repository.id] !== undefined || preferences.pinnedRepositories.includes(repository.id) || repository.id === activeRepositoryId), catalog.instanceId, monitoring, changeVersions, preferences.unworkedBranchBehavior === 'hide', onFetched, new Set(catalog.links.filter(usesSystemAuthentication).map(link => link.repositoryId)), { activeRepositoryId, lastUsed: preferences.repositoryLastUsed, pinned: preferences.pinnedRepositories, paused: pausedRepositories });
+  const remoteReader = useRemoteRepositories(catalog.repositories.filter(repository => linkedRepositoryIds.has(repository.id) || preferences.repositoryLastUsed[repository.id] !== undefined || preferences.pinnedRepositories.includes(repository.id) || repository.id === activeRepositoryId), catalog.instanceId, monitoring, changeVersions, false, onFetched, new Set(catalog.links.filter(usesSystemAuthentication).map(link => link.repositoryId)), { activeRepositoryId, lastUsed: preferences.repositoryLastUsed, pinned: preferences.pinnedRepositories, paused: pausedRepositories });
   const { remoteStates, confirmPush } = remoteReader;
   const localResourceFor = (repositoryId: string) => {
     const link = catalogRef.current.links.find(item => item.repositoryId === repositoryId);
@@ -274,7 +277,7 @@ export function useWorkspace(activeRepositoryId = '') {
     try { return await run(); }
     catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
   }
-  async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync' | 'applyGraphMerge' | 'executeGraph' | 'createGraphWorktree'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
+  async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync' | 'executeGraph'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
     await ensureService();
     const link = catalogRef.current.links.find(link => link.repositoryId === input.repositoryId);
     if (!link) throw new Error('请先关联本地目录。');
@@ -310,7 +313,7 @@ export function useWorkspace(activeRepositoryId = '') {
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),
-    writeGraph: <M extends 'applyGraphMerge' | 'executeGraph' | 'createGraphWorktree'>(method: M, input: ApiInputs[M]) => writeCommit(method, input),
+    writeGraph: <M extends 'executeGraph'>(method: M, input: ApiInputs[M]) => writeCommit(method, input),
     connect: (input: ConnectInput) => task('connect', () => connectAfterServiceCheck(input, ensureService)),
     updateAccount: (input: UpdateAccountInput) => task(input.accountId, async () => { await ensureService(); return importAPI('updateAccount', input); }),
     startGithubAuthorization: (name: string) => connectionTask(async () => { await ensureService(); return importAPI('githubAuthStart', { name }); }),
@@ -343,7 +346,6 @@ export function useWorkspace(activeRepositoryId = '') {
       return matchedRepositoryIds;
     },
     unlink: (repositoryId: string, branch?: string) => task(repositoryId, () => importAPI('unlink', { repositoryId, ...(branch === undefined ? {} : { branch }) })),
-    dismissBranchIssue: (repositoryId: string, issueId: string) => task(repositoryId, () => importAPI('dismissBranchIssue', { repositoryId, issueId })),
   };
 }
 export type WorkspaceController = ReturnType<typeof useWorkspace>;

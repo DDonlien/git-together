@@ -13,6 +13,7 @@ use std::{fs, path::Path};
 
 #[cfg(target_os = "macos")]
 fn password(app: &str, create: bool) -> Result<Vec<u8>> {
+    let app = if cfg!(gittogether_lite) && app == "GitTogether" { "GitTogether Lite" } else { app };
     // Preserve Electron's keychain identity. No prompts or unlock requests are
     // initiated by migration; inaccessible originals are left byte-for-byte intact.
     #[link(name = "Security", kind = "framework")]
@@ -132,6 +133,10 @@ pub fn oauth_secret(root: &Path) -> Result<Option<String>> {
     } else if root.parent().is_some_and(|p| p.file_name().is_some_and(|n|n=="instances")) {
         // Share the installed GitHub application's developer configuration, never user accounts.
         return oauth_secret(root.parent().unwrap().parent().ok_or("实例目录无效。")?);
+    } else if cfg!(gittogether_lite) {
+        // Lite uses its own developer configuration or public device flow.
+        // Never request another application's keychain item to start login.
+        None
     } else {
         let legacy = root
             .parent()
@@ -153,4 +158,26 @@ pub fn oauth_secret(root: &Path) -> Result<Option<String>> {
         return Ok(Some(secret));
     }
     Ok(None)
+}
+
+#[cfg(all(test, gittogether_lite))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lite_missing_developer_configuration_does_not_read_or_migrate_legacy_storage() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().join("GitTogether-Lite");
+        let legacy = fixture.path().join("GitTogether Authorization/github-oauth-v1.encrypted");
+        // An unreadable file-shaped directory catches a legacy read before any
+        // keychain lookup, so the fixture cannot access actual credentials.
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(legacy.join("sentinel"), b"preserve legacy configuration").unwrap();
+        for local in [&root, &root.join("instances/fixture")] {
+            assert!(oauth_secret(local).unwrap().is_none());
+            assert!(!local.join("github-oauth-v1.encrypted").exists());
+        }
+        assert_eq!(fs::read(legacy.join("sentinel")).unwrap(), b"preserve legacy configuration");
+        assert!(!root.exists());
+    }
 }

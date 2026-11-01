@@ -51,12 +51,11 @@ export function DesktopAccounts({ controller }: { controller: WorkspaceControlle
     {(accounts.length > 0 || adding) && <div className="settings-group account-settings-list" role="group" aria-label="账号列表">
       {accounts.map(account => <div className="account-settings-entry" key={account.id}><div className="account-setting">
         <DesktopAccountAvatar account={account} />
-        <div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login} · {new URL(account.host).host}</small>{account.error && <span className="account-warning" role="status">{account.error}</span>}</div>
+        <div><strong>{account.name}</strong><small>{providerName(account.provider)} · {account.login} · {new URL(account.host).host}</small>{account.error && <Notice kind="warning">{account.error}</Notice>}</div>
         <div className="account-entry-actions">
           {(account.provider === 'github' || account.provider === 'github-enterprise') && <Button variant="quiet" disabled={busy || adding} onClick={() => editName(account)}>编辑名称</Button>}
           {account.provider === 'gitea' && <Button variant="quiet" disabled={busy || adding} onClick={() => add(account)}>重新连接</Button>}
           <Button variant="quiet" disabled={busy} onClick={() => void run(() => controller.refresh(account.id))}>刷新</Button>
-          <Button variant="quiet" disabled={busy} onClick={() => void run(() => importAPI('openAccountAccessSettings', { accountId: account.id }))}>授权管理</Button>
           <Button variant="quiet" disabled={busy} onClick={() => void run(() => controller.removeAccount(account.id))}>退出登录</Button>
         </div>
       </div></div>)}

@@ -14,11 +14,12 @@ pub struct Updates {
     ready: tokio::sync::Mutex<Option<(Update, Option<Vec<u8>>)>>,
 }
 impl Updates {
+    fn disabled() -> bool { cfg!(debug_assertions) || cfg!(gittogether_lite) }
     pub fn new(diagnostics: Diagnostics) -> Self {
         Self {
             diagnostics,
             status: Arc::new(Mutex::new(
-                json!({"phase":if cfg!(debug_assertions){"unavailable"}else{"idle"},"currentVersion":crate::VERSION}),
+                json!({"phase":if Self::disabled(){"unavailable"}else{"idle"},"currentVersion":crate::VERSION,"message":if cfg!(gittogether_lite){ "独立试用版，请使用提供的安装包更新。" }else{ "" }}),
             )),
             operation: tokio::sync::Mutex::new(()),
             ready: tokio::sync::Mutex::new(None),
@@ -71,7 +72,7 @@ impl Updates {
         self.diagnostics.record(&event, false);
     }
     pub async fn check(&self, app: &tauri::AppHandle) -> Value {
-        if cfg!(debug_assertions) {
+        if Self::disabled() {
             return self.status();
         }
         let Ok(_guard) = self.operation.try_lock() else {
@@ -116,7 +117,7 @@ impl Updates {
         }
     }
     pub async fn download(&self) -> Value {
-        if cfg!(debug_assertions) {
+        if Self::disabled() {
             return self.status();
         }
         let Ok(_guard) = self.operation.try_lock() else {
@@ -205,7 +206,7 @@ impl Updates {
         }
     }
     pub async fn install(&self, app: tauri::AppHandle, service: &Arc<Service>) -> Value {
-        if cfg!(debug_assertions) {
+        if Self::disabled() {
             return self.status();
         }
         let Ok(_guard) = self.operation.try_lock() else {

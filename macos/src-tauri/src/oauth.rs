@@ -26,6 +26,32 @@ use std::{
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 pub const CLIENT_ID: &str = "Iv23liKMFYSaYtpe3XnL";
+const DEVICE_ENDPOINT: &str = "https://github.com/login/device/code";
+const DEVICE_DISABLED: &str = "GitTogether 的 GitHub 设备授权尚未启用，请联系开发者开启设备授权，或使用访问令牌连接。";
+
+enum GitHubStart {
+    Web(String),
+    Device(Value),
+}
+
+async fn github_start<F, Fut>(configuration: Result<Option<String>>, device_start: F) -> Result<GitHubStart>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Value>>,
+{
+    match configuration {
+        Ok(Some(secret)) => Ok(GitHubStart::Web(secret)),
+        // This is the developer application's secret, not a user's account.
+        // Missing, locked or damaged configuration must not block the public
+        // client flow, and must never be reset or replaced to start it.
+        Ok(None) | Err(_) => {
+            let mut session = device_start().await?;
+            session["flow"] = json!("device");
+            Ok(GitHubStart::Device(session))
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Authorization {
     service: Weak<Service>,
@@ -151,6 +177,9 @@ impl Authorization {
         })
     }
     fn listener_error(&self, error: &std::io::Error) -> String {
+        if cfg!(gittogether_lite) && error.kind() == std::io::ErrorKind::AddrInUse {
+            return "浏览器授权通道正在被其他应用使用。GitHub 将尝试设备授权；其他平台可使用访问令牌连接，或退出另一个 GitTogether 后重试网页授权。".into();
+        }
         let reason = match error.kind() {
             std::io::ErrorKind::AddrInUse => "已被其他进程占用",
             std::io::ErrorKind::PermissionDenied => "被系统拒绝使用，可能是系统保留端口",
@@ -213,6 +242,19 @@ impl Authorization {
             },
         )?;
         let name = util::field(input, "name", 120)?;
+        let github_secret = if kind == "github" {
+            match github_start(credentials::oauth_secret(&self.root), || self.device_start(&name)).await? {
+                GitHubStart::Web(secret) => Some(secret),
+                GitHubStart::Device(session) => {
+                    if let Some(service) = self.service.upgrade() {
+                        service.diagnostics.record(&json!({"event":"authorization","method":"start","outcome":"fallback","code":"developer-configuration-unavailable","flow":"device"}), false);
+                    }
+                    return Ok(session);
+                },
+            }
+        } else {
+            None
+        };
         if let Err(error) = self.listen().await {
             let problem = self.listener_error(&error);
             if let Some(service) = self.service.upgrade() {
@@ -233,8 +275,7 @@ impl Authorization {
         let (client_id, secret) = if kind == "github" {
             (
                 CLIENT_ID.to_owned(),
-                credentials::oauth_secret(&self.root)?
-                    .ok_or("GitHub 网页授权应用尚未配置；请先在本机授权配置页完成一次配置。")?,
+                github_secret.ok_or("GitHub 网页授权应用尚未配置。")?,
             )
         } else {
             let file = self.root.join("provider-oauth-v1.encrypted");
@@ -411,7 +452,7 @@ impl Authorization {
     pub async fn device_start(&self, name: &str) -> Result<Value> {
         let value = post_json(
             &self.client,
-            "https://github.com/login/device/code",
+            DEVICE_ENDPOINT,
             &[("client_id", CLIENT_ID)],
         )
         .await?;
@@ -661,14 +702,18 @@ async fn post_json(client: &reqwest::Client, url: &str, body: &[(&str, &str)]) -
         }
         bytes.extend_from_slice(&chunk);
     }
+    authorization_response(url, status, &bytes)
+}
+fn authorization_response(url: &str, status: reqwest::StatusCode, bytes: &[u8]) -> Result<Value> {
+    let value = serde_json::from_slice::<Value>(bytes);
+    if url == DEVICE_ENDPOINT
+        && value.as_ref().is_ok_and(|value| value["error"] == "device_flow_disabled") {
+        return Err(DEVICE_DISABLED.into());
+    }
     if !status.is_success() {
-        if url == "https://github.com/login/device/code"
-            && serde_json::from_slice::<Value>(&bytes).ok().is_some_and(|value| value["error"] == "device_flow_disabled") {
-            return Err("GitTogether 的 GitHub 备用网页授权尚未启用，请联系开发者开启设备授权。".into());
-        }
         return Err(format!("网页授权服务返回 HTTP {}，请检查该域名的应用配置与授权状态。", status.as_u16()));
     }
-    serde_json::from_slice(&bytes).map_err(|_| "网页授权服务返回格式无效。".into())
+    value.map_err(|_| "网页授权服务返回格式无效。".into())
 }
 fn trusted(h: &HeaderMap, auth: &Authorization) -> bool {
     let origin = auth.origin();
@@ -797,5 +842,73 @@ async fn save_setup(
     ) {
         Ok(()) => page("<h1>配置已保存</h1><p>请回到 GitTogether 开始授权。</p>"),
         Err(_) => page("<h1>配置未保存</h1><p>系统加密存储暂不可用，原配置已经保留。</p>"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn configured_github_keeps_web_flow_without_starting_device_flow() {
+        let start = github_start(Ok(Some("fixture-developer-secret".into())), || async {
+            panic!("configured web authorization must not request a device code");
+        }).await.unwrap();
+        match start {
+            GitHubStart::Web(secret) => assert_eq!(secret, "fixture-developer-secret"),
+            GitHubStart::Device(_) => panic!("expected configured web authorization"),
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_or_unreadable_developer_configuration_starts_public_device_flow() {
+        for configuration in [
+            Ok(None),
+            Err("系统加密存储目前不可读取；原账号配置已保留，请稍后重试。".into()),
+            Err("GitHub应用配置身份不匹配；原文件未修改。".into()),
+        ] {
+            let calls = AtomicUsize::new(0);
+            let start = github_start(configuration, || async {
+                calls.fetch_add(1, Ordering::SeqCst);
+                Ok(json!({"id":"fixture-session","userCode":"ABCD-1234","verificationURL":"https://github.com/login/device","expiresAt":12345,"interval":5}))
+            }).await.unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            match start {
+                GitHubStart::Device(session) => {
+                    assert_eq!(session["flow"], "device");
+                    assert_eq!(session["userCode"], "ABCD-1234");
+                    assert_eq!(session["verificationURL"], "https://github.com/login/device");
+                    assert!(session.get("secret").is_none());
+                    assert!(session.get("token").is_none());
+                }
+                GitHubStart::Web(_) => panic!("unavailable configuration must use device authorization"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn unavailable_device_flow_reports_its_error_without_resetting_configuration() {
+        let result = github_start(Err("fixture-locked-configuration".into()), || async {
+            Err(DEVICE_DISABLED.into())
+        }).await;
+        match result {
+            Err(error) => {
+                assert_eq!(error, DEVICE_DISABLED);
+                assert!(!error.contains("fixture-locked-configuration"));
+            }
+            Ok(_) => panic!("disabled device authorization must not create a successful session"),
+        }
+    }
+
+    #[test]
+    fn device_disabled_is_explicit_for_success_and_error_http_responses_only_on_github() {
+        let body = br#"{"error":"device_flow_disabled","error_description":"fixture-private-provider-detail"}"#;
+        for status in [reqwest::StatusCode::OK, reqwest::StatusCode::BAD_REQUEST] {
+            assert_eq!(authorization_response(DEVICE_ENDPOINT, status, body).unwrap_err(), DEVICE_DISABLED);
+        }
+        let error = authorization_response("https://enterprise.test/login/device/code", reqwest::StatusCode::BAD_REQUEST, body).unwrap_err();
+        assert!(error.contains("HTTP 400"));
+        assert!(!error.contains("fixture-private-provider-detail"));
+        assert!(!error.contains("设备授权尚未启用"));
     }
 }

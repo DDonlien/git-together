@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { Children, isValidElement, useState, useCallback, useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { Button as BaseButton, IconButton as BaseIconButton, GlassSystemProvider, SearchField, Dialog, type ButtonProps } from 'open-glass-ui';
 import { componentTheme } from './theme';
 export { SegmentedControl as Segmented, Select, TextField, Textarea, Switch, Menu, MenuItem, Popover, Toolbar } from 'open-glass-ui';
@@ -84,4 +84,27 @@ export function Modal({ title, children, onClose, visible = true, onCollapse }: 
   }, [visible]);
   return <Dialog title={title} open={visible} onOpenChange={changeOpen}>{onCollapse && <button type="button" className="modal-collapse-control" aria-label={`收起 ${title}`} onClick={onCollapse}><MinusIcon size={18} /></button>}{children}</Dialog>;
 }
-export function Notice({ kind, children, onClose, closeLabel = '关闭提示', closeDisabled = false }: { kind: 'success' | 'warning' | 'error' | 'info'; children: ReactNode; onClose?: () => void; closeLabel?: string; closeDisabled?: boolean }) { return <div className={`notice ${kind}`} role={kind === 'error' ? 'alert' : 'status'}><Icon name={kind === 'success' ? 'success' : kind === 'error' || kind === 'warning' ? 'warning' : 'sparkle'} size={17} /><span>{children}</span>{onClose && <IconButton icon="close" label={closeLabel} disabled={closeDisabled} onClick={onClose} />}</div>; }
+type NoticeProps = { kind: 'success' | 'warning' | 'error' | 'info'; children: ReactNode; onClose?: () => void; closeLabel?: string; closeDisabled?: boolean };
+
+// Polling can recreate JSX without changing its message. Only a new message
+// should reopen a dismissed notice; closing never clears the business error.
+function noticeText(children: ReactNode): string {
+  return Children.toArray(children).map(child => {
+    if (typeof child === 'string' || typeof child === 'number') return String(child);
+    return isValidElement<{ children?: ReactNode }>(child) ? noticeText(child.props.children) : '';
+  }).join('');
+}
+
+function NoticeMessage({ kind, children, onClose, closeLabel = '关闭提示', closeDisabled = false }: NoticeProps) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return <div className={`notice ${kind}`} role={kind === 'error' ? 'alert' : 'status'}>
+    <Icon name={kind === 'success' ? 'success' : kind === 'error' || kind === 'warning' ? 'warning' : 'sparkle'} size={17} />
+    <span>{children}</span>
+    <IconButton type="button" className="notice-close" icon="close" label={closeLabel} disabled={closeDisabled} onClick={() => { setDismissed(true); onClose?.(); }} />
+  </div>;
+}
+
+export function Notice(props: NoticeProps) {
+  return <NoticeMessage key={`${props.kind}:${noticeText(props.children)}`} {...props} />;
+}

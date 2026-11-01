@@ -14,29 +14,16 @@ pub fn home() -> Result<PathBuf> {
         .ok_or("无法读取用户目录。".into())
 }
 
-pub(crate) fn device_name() -> String {
-    #[cfg(unix)]
-    {
-        let mut bytes = [0u8; 256];
-        if unsafe { libc::gethostname(bytes.as_mut_ptr().cast(), bytes.len()) } == 0 {
-            if let Ok(name) = std::ffi::CStr::from_bytes_until_nul(&bytes) {
-                let value = name.to_string_lossy();
-                if !value.is_empty() { return value.chars().take(120).collect(); }
-            }
-        }
-    }
-    std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).ok().filter(|s|!s.is_empty()).unwrap_or_else(||"我的电脑".into()).chars().take(120).collect()
-}
-
 pub fn data_root() -> Result<PathBuf> {
+    let directory = if cfg!(gittogether_lite) { "GitTogether-Lite" } else { "GitTogether-Standalone-Demo" };
     #[cfg(windows)]
     return Ok(windows::local_app_data()
         .map_err(|_| "无法读取Windows应用目录。")?
-        .join("GitTogether-Standalone-Demo"));
+        .join(directory));
     #[cfg(target_os = "macos")]
-    return Ok(home()?.join("Library/Application Support/GitTogether-Standalone-Demo"));
+    return Ok(home()?.join("Library/Application Support").join(directory));
     #[cfg(not(any(windows, target_os = "macos")))]
-    return Ok(home()?.join(".local/share/GitTogether-Standalone-Demo"));
+    return Ok(home()?.join(".local/share").join(directory));
 }
 
 pub fn private_directory(path: &Path) -> io::Result<()> {

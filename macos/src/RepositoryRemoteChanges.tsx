@@ -16,7 +16,7 @@ export function RepositoryRemoteChanges({ task, commitId, selectedCommit, state,
       {task.error && <Notice kind="error">{task.error}</Notice>}
       {!details ? <div className="repository-column-empty" role="status"><Icon name={!task.error ? 'spinner' : 'commit'} className={!task.error ? 'spin' : ''} size={24} /><p>{task.error ? '远端内容尚未读取' : '正在读取远端提交…'}</p></div> : <>
         <RepositoryChangedFiles files={details.files} selected={selected} onSelect={onSelect} search={search} grouped={grouped} label={`已提交文件：${task.branch}`} />
-        {details.warnings.map(warning => <p key={warning} className="repository-data-note">{warning}</p>)}
+        {details.warnings.map(warning => <Notice key={warning} kind="warning">{warning}</Notice>)}
       </>}
     </div>
     {selectedCommit && <RepositoryCommitDetails commit={details?.commit || selectedCommit} branch={task.branch} />}

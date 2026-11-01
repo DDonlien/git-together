@@ -1,6 +1,6 @@
 {
   "name": "gittogether-standalone",
-  "version": "0.38.11",
+  "version": "0.38.11-lite.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,8 +16,10 @@
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "icons": "tsx scripts/generate-icons.ts",
     "package:desktop": "tsx scripts/package-desktop.ts",
+    "test:lite": "tsx --test tests/desktop-lite-ui.test.ts",
     "test:sites": "node --test tests/sites-worker.test.mjs",
-    "package:windows": "tsx scripts/package-windows.ts"
+    "package:windows": "tsx scripts/package-windows.ts",
+    "package:trial": "tsx scripts/package-trial.ts"
   },
   "dependencies": {
     "@fontsource/roboto": "5.3.0",

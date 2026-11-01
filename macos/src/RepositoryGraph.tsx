@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Button, Icon, Menu, MenuItem, Popover } from './ui';
+import { Button, Icon, Menu, MenuItem, Notice, Popover } from './ui';
 import { RepositoryColumnHeading } from './RepositoryColumnHeading';
 import { commitMatchesSearch, graphNavigationIndex, graphRowHeight, graphVisibleWindow, layoutCommitGraph, nextGraphMatch, parseCommitSearch, repositoryGraphAuthors, repositoryGraphBranches, repositoryGraphCommits } from './commit-graph';
 import type { RepositoryWorkspace } from './repository-model';
@@ -19,16 +19,13 @@ function CommitActions({ commit, onCopy, onLocateParent, onAction, onOpenCommit,
   const committed = !!commit && !commit.workingTask;
   return <>
     <div className="graph-menu-group-label">标准 Git 操作</div>
-    {(['compare', 'branch', 'tag', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'abort'] as const).map(action => <MenuItem key={action} disabled={!onAction || !commit || !committed && action !== 'abort'} onClick={() => commit && onAction?.(action, commit)}><Icon name={action === 'branch' || action === 'merge' || action === 'rebase' ? 'branch' : action === 'compare' ? 'code' : action === 'abort' ? 'close' : 'commit'} size={14} />{graphActionLabels[action]}</MenuItem>)}
-    <div className="graph-menu-group-label">Git Together · 非 AI</div>
-    <MenuItem disabled={!onAction || !committed} onClick={() => commit && onAction?.('worktree', commit)}><Icon name="folder" size={14} />创建并关联工作目录</MenuItem>
+    {(['compare', 'branch', 'checkout', 'tag', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'abort'] as const).map(action => <MenuItem key={action} disabled={!onAction || !commit || !committed && action !== 'abort'} onClick={() => commit && onAction?.(action, commit)}><Icon name={action === 'branch' || action === 'merge' || action === 'rebase' ? 'branch' : action === 'compare' ? 'code' : action === 'abort' ? 'close' : 'commit'} size={14} />{graphActionLabels[action]}</MenuItem>)}
+    <div className="graph-menu-group-label">提交信息</div>
     <MenuItem disabled={!onLocateWorktree || !commit} onClick={() => commit && onLocateWorktree?.(commit)}><Icon name="folder" size={14} />定位关联工作目录</MenuItem>
     <MenuItem disabled={!onOpenCommit || !committed} onClick={() => commit && onOpenCommit?.(commit)}><Icon name="external" size={14} />在远端打开提交</MenuItem>
     <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.id)}><Icon name="copy" size={14} />复制完整提交哈希</MenuItem>
     <MenuItem disabled={!committed} onClick={() => commit && onCopy(commit.summary)}><Icon name="copy" size={14} />复制提交说明</MenuItem>
     <MenuItem disabled={!committed || !commit?.parents.length} onClick={() => commit && onLocateParent(commit)}><Icon name="branch" size={14} />定位父提交</MenuItem>
-    <div className="graph-menu-group-label">AI 操作</div>
-    {window.gittogether?.backend !== 'github-desktop' && <MenuItem disabled={!onAction || !commit} onClick={() => commit && onAction?.('ai-sync', commit)}><Icon name="sparkle" size={14} />同步到最新</MenuItem>}
   </>;
 }
 
@@ -187,9 +184,9 @@ export function RepositoryGraph({ workspace, verifiedPushHeads, search, focusedT
         <GraphFilter label="提交者" options={authorOptions} selection={authorSelection} title={authorName} onChange={selection => { setAuthorSelection(selection); setContext(null); }} />
       </span>
     } />
-    {feedback && <p className="repository-data-note" role="status">{feedback}</p>}
-    {authorSelection !== null && rows.length > 0 && rows.every(row => row.commit.workingTask) && <p className="repository-data-note" role="status">{emptyGraphLabel}；以下仅显示未提交更改。</p>}
-    {!workspace.complete && !workspace.source && workspace.commits.length > 0 && <p className="repository-data-note">最近提交；完整分支关系等待服务更新。</p>}
+    {feedback && <Notice kind="info" onClose={() => setFeedback('')}>{feedback}</Notice>}
+    {authorSelection !== null && rows.length > 0 && rows.every(row => row.commit.workingTask) && <Notice kind="info">{emptyGraphLabel}；以下仅显示未提交更改。</Notice>}
+    {!workspace.complete && !workspace.source && workspace.commits.length > 0 && <Notice kind="info">最近提交；完整分支关系等待服务更新。</Notice>}
     <div ref={scrollRef} className="repository-graph-scroll">
       {rows.length ? <table className="repository-graph-table" aria-label="提交历史" aria-rowcount={rows.length}><colgroup><col style={{ width: lanes * 14 + 20 }} /><col /><col style={{ width: 78 }} /></colgroup><tbody>
         <tr className="repository-graph-spacer" aria-hidden="true"><td colSpan={3} style={{ height: range.start * rowHeight }} /></tr>
@@ -219,8 +216,8 @@ export function RepositoryGraph({ workspace, verifiedPushHeads, search, focusedT
       </tbody></table> : <div className="repository-column-empty"><Icon name="branch" size={28} /><p>{emptyGraphLabel}</p></div>}
       {!!loadMoreBranches.length && <div ref={loadMoreRef} className="repository-history-more">
         {loadingMore && <span role="status">正在加载更早提交…</span>}
-        {!!historyError && <span role="alert">{historyError}</span>}
-        {!loadingMore && <Button variant="quiet" onClick={() => onLoadMoreHistory?.(loadMoreBranches.map(branch => branch.branch), true)}>{historyError ? '重试读取更早提交' : '加载更早提交'}</Button>}
+        {!!historyError && <Notice kind="error">{historyError}{!loadingMore && <Button variant="quiet" onClick={() => onLoadMoreHistory?.(loadMoreBranches.map(branch => branch.branch), true)}>重试读取更早提交</Button>}</Notice>}
+        {!loadingMore && !historyError && <Button variant="quiet" onClick={() => onLoadMoreHistory?.(loadMoreBranches.map(branch => branch.branch), true)}>加载更早提交</Button>}
       </div>}
     </div>
     {loading && <div className="repository-graph-loading" role="status"><Icon name="spinner" className="spin" size={14} /><span>正在加载…</span></div>}

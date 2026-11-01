@@ -5,22 +5,20 @@ import { useRepositoryOperations } from './RepositoryOperationProvider';
 import type { RepositoryActionTarget } from './repository-action-model';
 import { logDiagnostic } from './diagnostics-api';
 
-type ActionKey = 'pull' | 'latest' | 'commit' | 'submit' | 'push' | 'clear';
+type ActionKey = 'fetch' | 'pull' | 'commit' | 'push';
 type Action = { key: ActionKey; label: string; icon: IconName; description: string };
 const groups: { key: keyof GitSignals; label: string; actions: Action[] }[] = [
   { key: 'pull', label: '远端内容', actions: [
+    { key: 'fetch', label: 'Fetch', icon: 'refresh', description: '获取远端引用，不合并当前分支。' },
     { key: 'pull', label: 'Pull', icon: 'arrowDown', description: '获取远端更新并合入当前本地分支。' },
-    { key: 'latest', label: 'Get Latest', icon: 'download', description: '下载当前分支最新快照，确认下载完成后清理旧历史与缓存。' },
   ] },
   { key: 'commit', label: '本地内容', actions: [
     { key: 'commit', label: 'Commit', icon: 'commit', description: '确认提交说明和文件清单后，仅创建本地提交。' },
-    { key: 'submit', label: 'Submit', icon: 'upload', description: '填写或 AI 生成说明，确认文件清单后创建本地提交并推送。' },
   ] },
   { key: 'push', label: '待推送', actions: [{ key: 'push', label: 'Push', icon: 'arrowUp', description: '推送所选范围内已有的本地提交。' }] },
-  { key: 'clear', label: '清理', actions: [{ key: 'clear', label: 'Clear', icon: 'clear', description: '以远端为准清理或恢复本地文件。' }] },
 ];
 
-type ActionCallbacks = { allowUnknownPush?: boolean; onCommit?: () => void; onSubmit?: () => void; onPush?: () => void; onPull?: () => void; onLatest?: () => void; onClean?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };
+type ActionCallbacks = { allowUnknownPush?: boolean; onCommit?: () => void; onPush?: () => void; onPull?: () => void; onFetch?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };
 
 export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden, unlinked = false, onDownload, downloadBlocked = false, downloadBusy = false, ...callbacks }: {
   itemLabel: string; signals: GitSignals; hidden: boolean; onToggleHidden?: () => void;
@@ -34,7 +32,7 @@ export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidde
   </div>;
 }
 
-export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, onPull, onLatest, onClean, busy = false, actionErrors = {}, operationScope, operationTargets, allowUnknownPush = false }: { label: string; signals: GitSignals } & ActionCallbacks) {
+export function RepositoryActions({ label, signals, onCommit, onPush, onPull, onFetch, busy = false, actionErrors = {}, operationScope, operationTargets, allowUnknownPush = false }: { label: string; signals: GitSignals } & ActionCallbacks) {
   const operations = useRepositoryOperations();
   const blocked = busy || Object.values(signals).some(signal => signal.status === 'reading');
   const [pressed, setPressed] = useState<ActionKey | null>(null);
@@ -44,14 +42,14 @@ export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, 
   const pulse = (key: ActionKey) => { logDiagnostic({ event: 'ui-action', outcome: 'blocked', method: key }); press(key); releaseTimer.current = setTimeout(() => { releaseTimer.current = null; setPressed(null); }, 180); };
   useEffect(() => () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); }, []);
   useEffect(() => { if (blocked) clearPress(); }, [blocked]);
-  const callbacks = { commit: onCommit, submit: onSubmit, push: onPush, pull: onPull, latest: onLatest, clear: onClean };
+  const callbacks = { commit: onCommit, push: onPush, pull: onPull, fetch: onFetch };
   return <div className="repository-actions" role="group" aria-label={label}>
     {groups.map(group => {
       const signal = signals[group.key], count = signal.count, hasCount = count !== undefined && count > 0;
       return <div key={group.key} className="git-action-group" role="group" aria-label={group.label}>
         {group.actions.map(action => {
-          const ownSignal = signals[action.key === 'submit' ? 'commit' : action.key];
-          const operation = operationScope ? operations.get(action.key === 'clear' ? 'clean' : action.key, operationScope, operationTargets) : undefined;
+          const ownSignal = signals[action.key === 'fetch' ? 'pull' : action.key];
+          const operation = action.key !== 'fetch' && operationScope ? operations.get(action.key, operationScope, operationTargets) : undefined;
           const pending = operation?.state === 'preparing' || operation?.state === 'working';
           const actionBlocked = !operation && (blocked || !!operationTargets && operations.blocked(operationTargets));
           const callback = action.key in callbacks ? callbacks[action.key as keyof typeof callbacks] : undefined;
@@ -59,7 +57,7 @@ export function RepositoryActions({ label, signals, onCommit, onSubmit, onPush, 
           const operationDetail = operation ? `${({ preparing: '正在准备', ready: '等待确认', working: '正在执行', failed: '执行未完成', completed: '已完成' } as const)[operation.state]}；点击查看原任务。` : '';
           const description = `${operationDetail || action.description} ${ownSignal.detail} ${ownSignal.statusDetail || ''} ${error}`;
           const badge = error && <span className="git-action-read-badge error" role="img" aria-label={error} data-action-name={error} tabIndex={blocked ? -1 : 0} onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()} onKeyUp={event => event.stopPropagation()}>!</span>;
-          if (callback || operation) return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${actionBlocked ? ' is-blocked' : ''}`}><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={actionBlocked || !operation && ['commit', 'submit', 'push'].includes(action.key) && !hasCount && !(action.key === 'push' && allowUnknownPush && count === undefined && !!operationTargets?.some(target => target.task.path && target.task.head && !target.task.error))} aria-busy={pending || undefined} onClick={operation ? () => operations.restore(operation.id) : callback} />{operation && <span className="git-operation-indicator" data-state={operation.state} aria-hidden="true">{pending ? <Icon name="spinner" size={10} className="spin" /> : operation.state === 'failed' ? '!' : <Icon name={operation.state === 'completed' ? 'check' : 'clock'} size={10} />}</span>}{badge}</span>;
+          if (callback || operation) return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${actionBlocked ? ' is-blocked' : ''}`}><IconButton icon={action.icon} label={`${action.label}：${description}`} title="" disabled={actionBlocked || !operation && ['commit', 'push'].includes(action.key) && !hasCount && !(action.key === 'push' && allowUnknownPush && count === undefined && !!operationTargets?.some(target => target.task.path && target.task.head && !target.task.error))} aria-busy={pending || undefined} onClick={operation ? () => operations.restore(operation.id) : callback} />{operation && <span className="git-operation-indicator" data-state={operation.state} aria-hidden="true">{pending ? <Icon name="spinner" size={10} className="spin" /> : operation.state === 'failed' ? '!' : <Icon name={operation.state === 'completed' ? 'check' : 'clock'} size={10} />}</span>}{badge}</span>;
           // Missing callbacks represent an unavailable task/scope; execution
           // is enabled only when the parent supplies a validated target range.
           return <span key={action.key} data-action-name={action.label} className={`git-action-anchor${blocked ? ' is-blocked' : ''}${pressed === action.key && !blocked ? ' is-pressed' : ''}`} role="button" aria-disabled="true" tabIndex={blocked ? -1 : 0} aria-label={`${action.label}：${description} 当前范围没有可操作的工作目录。`}

@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
     git,
-    remote_control::repository_id,
     util::{self, text},
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -82,85 +81,9 @@ pub(super) struct NativeProjects {
     checked: Option<tokio::time::Instant>,
     revision: Option<u64>,
     projects: BTreeMap<String, Vec<Project>>,
-    tasks: BTreeMap<String, Vec<Value>>,
 }
 
 impl Presence {
-    pub(crate) fn control_servers(&self) -> Vec<String> {
-        let c = self.config.borrow();
-        if !c.enabled || c.account.is_none() {
-            return vec![];
-        }
-        c.servers
-            .iter()
-            .filter(|s| s.enabled)
-            .map(|s| s.url.clone())
-            .collect()
-    }
-    pub(crate) fn binding_for(&self, url: &str) -> Result<String> {
-        let c = self.config.borrow();
-        if !c.enabled || c.account.is_none() || !c.servers.iter().any(|s| s.enabled && s.url == url)
-        {
-            return Err("Presence已停用、账号退出或服务器已移除。".into());
-        }
-        Ok(util::digest(if url == c.server_url {
-            format!("{}:{}", url, c.account.as_ref().unwrap().id)
-        } else {
-            format!(
-                "{}:{}:{}",
-                url,
-                c.server_url,
-                c.account.as_ref().unwrap().id
-            )
-        }))
-    }
-    pub(crate) fn home_server(&self) -> String {
-        self.config.borrow().server_url.clone()
-    }
-    pub(crate) async fn prepare_server(&self, url: &str) -> Result<(String, String)> {
-        let (url, token) = self.access_for(url)?;
-        let c = self.config.borrow().clone();
-        let catalog = self.service.catalog().await?;
-        let repositories = catalog["repositories"]
-            .as_array()
-            .ok_or("Git仓库清单无效。")?
-            .iter()
-            .filter(|r| r["available"] == true)
-            .map(|r| repository_id(text(r, "url")))
-            .collect::<Result<BTreeSet<_>>>()?;
-        let value = self
-            .account_http(
-                &url,
-                "catalogue",
-                Some(&token),
-                Some(&json!({"deviceId":c.device_id,"repositories":repositories})),
-            )
-            .await?;
-        let _guard = self.configure_lock.lock().await;
-        let mut latest = self.config.borrow().clone();
-        if latest.server_url != c.server_url
-            || latest.account.as_ref().map(|a| &a.id) != c.account.as_ref().map(|a| &a.id)
-        {
-            return Err("Presence身份已改变。".into());
-        }
-        let server = latest
-            .servers
-            .iter_mut()
-            .find(|s| s.url == url)
-            .ok_or("服务器已移除。")?;
-        Self::organization_metadata(server, &value)?;
-        self.save_cached(latest).await?;
-        Ok((url, token))
-    }
-    pub(crate) fn access_for(&self, url: &str) -> Result<(String, String)> {
-        self.binding_for(url)?;
-        let c = self.config.borrow();
-        let s = c.servers.iter().find(|s| s.url == url).unwrap();
-        if s.token.is_empty() || s.expires_at <= util::now() as u64 {
-            return Err("Presence登录会话已过期，请重新登录账号服务。".into());
-        }
-        Ok((s.url.clone(), s.token.clone()))
-    }
     pub(super) fn connection_credentials(&self, url: &str) -> Result<(String, String)> {
         let c = self.config.borrow();
         let s = c
@@ -175,21 +98,6 @@ impl Presence {
             return Err("Presence登录已过期，请重新登录。".into());
         }
         Ok((String::new(), s.token.clone()))
-    }
-    pub(crate) async fn save_device_access(&self, url: &str, id: &str, token: &str) -> Result<()> {
-        let _guard = self.configure_lock.lock().await;
-        let mut c = self.config.borrow().clone();
-        let s = c
-            .servers
-            .iter_mut()
-            .find(|s| s.url == url)
-            .ok_or("服务器已移除。")?;
-        if s.device_id == id && s.device_token == token {
-            return Ok(());
-        }
-        s.device_id = id.into();
-        s.device_token = token.into();
-        self.save_cached(c).await
     }
     pub(super) async fn save_cached(&self, c: Configuration) -> Result<()> {
         if self.persistent {
@@ -560,7 +468,6 @@ impl Presence {
         loop {
             if let Err(error) = self.source_projects().await {
                 let mut cache = self.native_projects.lock().await;
-                cache.tasks.clear();
                 for project in cache.projects.values_mut().flatten() {
                     invalidate_project(project);
                 }
@@ -585,16 +492,6 @@ impl Presence {
             }
         }
         projects.into_values().collect()
-    }
-    pub(crate) async fn source_tasks(&self, repository: &str) -> Result<Vec<Value>> {
-        Ok(self
-            .native_projects
-            .lock()
-            .await
-            .tasks
-            .get(repository)
-            .cloned()
-            .unwrap_or_default())
     }
     pub(super) async fn source_projects(&self) -> Result<Vec<Project>> {
         let catalog = self.service.catalog().await?;
@@ -692,12 +589,10 @@ impl Presence {
                         }
                         projects.push(project);
                     }
-                    cache.tasks.insert(id.clone(), tasks);
                     cache.projects.insert(id, projects);
                 }
                 Err(error) => {
                     errors.push(error);
-                    cache.tasks.remove(&id);
                     if let Some(previous) = cache.projects.get_mut(&id) {
                         for p in previous {
                             invalidate_project(p);
@@ -706,7 +601,6 @@ impl Presence {
                 }
             }
         }
-        cache.tasks.retain(|id, _| active.contains(id));
         cache.projects.retain(|id, _| active.contains(id));
         cache.checked = Some(tokio::time::Instant::now());
         cache.revision = revision;
@@ -736,4 +630,15 @@ fn invalidate_project(project: &mut Project) {
             source.activity = Activity::Idle;
         }
     }
+}
+
+pub(crate) fn repository_id(input: &str) -> Result<String> {
+    let url = url::Url::parse(input).map_err(|_| "仓库远端身份无效。")?;
+    let host = url.host_str().ok_or("仓库远端身份无效。")?;
+    let authority = if let Some(port) = url.port() {
+        format!("{host}:{port}")
+    } else {
+        host.to_owned()
+    };
+    Ok(format!("{}{}", authority, url.path().trim_end_matches('/')).to_lowercase())
 }

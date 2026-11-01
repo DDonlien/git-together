@@ -12,10 +12,7 @@ pub mod operations;
 pub mod platform;
 pub mod preferences;
 pub mod presence;
-pub mod remote_control;
-mod remote_git;
 pub mod provider;
-pub mod repository_access;
 pub mod proxy;
 pub mod service;
 pub mod update_archive;
@@ -26,7 +23,7 @@ mod instances;
 use serde_json::{json, Value};
 use service::Service;
 use std::{path::PathBuf, sync::Arc};
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 use updates::Updates;
 pub fn data_root() -> util::Result<PathBuf> {
     instances::data_root()
@@ -73,12 +70,9 @@ fn environment() -> Value {
 #[tauri::command]
 async fn presence_command(
     presence: State<'_, Arc<presence::Presence>>,
-    control: State<'_, Arc<remote_control::RemoteControl>>,
     method: String,
     input: Option<Value>,
 ) -> util::Result<Value> {
-    if matches!(method.as_str(),"register"|"login"|"logout"|"configure"|"selectServer"|"removeServer") && control.busy().await {return Ok(envelope(Err("请先等待远端操作结束或中止，再更换账号。".into())));}
-    if method=="logout" && presence.signed_in() {control.forget_account(true).await?;}
     let result=presence.command(&method, input.unwrap_or(json!({}))).await;
     Ok(envelope(
         result,
@@ -102,37 +96,6 @@ fn set_theme(window: tauri::WebviewWindow, theme: String) -> util::Result<()> {
             tauri::window::Color(246, 245, 250, 255)
         }))
         .map_err(|_| "窗口背景更新失败。".into())
-}
-#[tauri::command]
-async fn remote_control_command(
-    app: tauri::AppHandle,
-    control: State<'_, Arc<remote_control::RemoteControl>>, method: String, input: Option<Value>,
-) -> util::Result<Value> {
-    let result=control.command(&method, input.unwrap_or(json!({}))).await;
-    if control.enabled() { remote_tray(&app).map_err(|_|"后台托盘无法启动，请保留窗口运行。")?; }
-    else if let Some(tray)=app.tray_by_id("remote-control") { tray.set_visible(false).map_err(|_|"托盘状态更新失败。")?; }
-    Ok(envelope(result))
-}
-fn remote_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
-    if let Some(tray)=app.tray_by_id("remote-control") { return tray.set_visible(true); }
-    use tauri::{menu::{Menu,MenuItem},tray::TrayIconBuilder};
-    let show=MenuItem::with_id(app,"remote-open","打开 GitTogether",true,None::<&str>)?;
-    let quit=MenuItem::with_id(app,"remote-quit","退出 GitTogether",true,None::<&str>)?;
-    let menu=Menu::with_items(app,&[&show,&quit])?;
-    let mut tray=TrayIconBuilder::with_id("remote-control").menu(&menu).tooltip("GitTogether · 远端控制后台").on_menu_event(|app,event|{
-        match event.id.as_ref() {
-            "remote-open"=>if let Some(window)=app.get_webview_window("main") {
-                if window.show().and_then(|_|window.unminimize()).and_then(|_|window.set_focus()).is_err() {
-                    app.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"background-show"}),false);
-                }
-            },
-            "remote-quit"=>app.exit(0),
-            _=>(),
-        }
-    });
-    if let Some(icon)=app.default_window_icon(){tray=tray.icon(icon.clone());}
-    tray.build(app)?;
-    Ok(())
 }
 #[tauri::command]
 async fn open_github_authorization() -> util::Result<()> {
@@ -166,10 +129,7 @@ async fn update_install(
     Ok(updates.install(app, &service).await)
 }
 pub fn run() {
-    let mut context = tauri::generate_context!();
-    let profile = instances::profile().expect("Invalid instance name");
-    // Separate both the lock and on-disk account data for each explicitly opened instance.
-    if let Some(id) = &profile { context.config_mut().identifier.push_str(&format!(".instance.p{}", util::digest(id))); }
+    let context = tauri::generate_context!();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app,_,_|{
             if let Some(window)=app.get_webview_window("main") {
@@ -181,14 +141,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            use tauri::menu::{Menu, MenuItem};
-            let menu = Menu::default(app.handle())?;
-            let other = MenuItem::with_id(app, "presence-other-instance", "打开另一个实例", true, None::<&str>)?;
-            if let Some(submenu) = menu.items()?.first().and_then(|item| item.as_submenu()) { submenu.append(&other)?; }
-            app.set_menu(menu)?;
-            if instances::profile().map_err(std::io::Error::other)?.is_some() {
-                if let Some(window) = app.get_webview_window("main") { window.set_title("GitTogether · 独立实例")?; }
-            }
             let root = data_root().map_err(std::io::Error::other)?;
             let service = Service::new(root.clone(), !cfg!(debug_assertions), "app")
                 .map_err(std::io::Error::other)?;
@@ -196,42 +148,15 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             let updates = Updates::new(service.diagnostics.clone());
             app.manage(service.clone());
-            let control = remote_control::RemoteControl::new(service.clone(), presence.clone(), !cfg!(debug_assertions))
-                .map_err(std::io::Error::other)?;
-            if control.enabled() { remote_tray(app.handle())?; }
-            app.manage(control);
             app.manage(presence);
             app.manage(updates);
             Ok(())
-        })
-        .on_menu_event(|app, event| {
-            if event.id.as_ref() == "presence-other-instance" {
-                if let Err(error) = instances::open_other() { app.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"open-other-instance","error":error}), false); }
-            }
-        })
-        .on_window_event(|window,event| {
-            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, position }) = event {
-                let service = window.state::<Arc<Service>>();
-                match service.file_state.lock().unwrap_or_else(|e| e.into_inner()).drop_files(paths.clone()) {
-                    Ok(drop_id) => { let _ = window.emit("gittogether-file-drop", json!({"dropId":drop_id,"position":{"x":position.x,"y":position.y}})); }
-                    Err(error) => { let _ = window.emit("gittogether-file-drop", json!({"error":error,"position":{"x":position.x,"y":position.y}})); }
-                };
-            }
-            if let tauri::WindowEvent::CloseRequested {api,..}=event {
-                if window.state::<Arc<remote_control::RemoteControl>>().enabled() {
-                    api.prevent_close();
-                    if window.hide().is_err() {
-                        window.state::<Arc<Service>>().diagnostics.record(&json!({"event":"window","outcome":"error","method":"background-hide"}),false);
-                    }
-                }
-            }
         })
         .invoke_handler(tauri::generate_handler![
             import_command,
             github_web,
             diagnostics_command,
             presence_command,
-            remote_control_command,
             environment,
             set_theme,
             open_github_authorization,

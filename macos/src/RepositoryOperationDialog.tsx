@@ -3,24 +3,23 @@ import { RepositoryActionDialog } from './RepositoryActionDialog';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
 import { importAPI, RepositoryOperationError } from './import-api';
-import { DivergencePanel } from './DivergencePanel';
 import { isRepositorySyncProgress, type ApplyRepositorySync, type RepositorySyncMode, type RepositorySyncPlan, type RepositorySyncResult, type RepositorySyncProgress } from './repository-sync-model';
 import { Button, Icon, Modal, Notice } from './ui';
 import { LinearProgress } from './material-inputs';
 
-const isSync = (mode: RepositoryActionMode): mode is RepositorySyncMode => mode === 'pull' || mode === 'latest' || mode === 'clean';
-const labels = { pull: 'Pull', latest: 'Get Latest', clean: 'Clear' };
+const isSync = (mode: RepositoryActionMode): mode is 'pull' => mode === 'pull';
+const labels = { pull: 'Pull' };
 const discard = (plan: RepositorySyncPlan) => importAPI('discardSync', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(() => { console.warn('操作预览清理未完成，服务将在预览到期后再次清理。'); });
 export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
   mode: RepositoryActionMode; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onPush: PushLocalCommit;
-  onGenerate: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
+  onGenerate?: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void; onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
 } & RepositoryOperationControls) {
   return isSync(mode) ? <RepositorySyncDialog mode={mode} targets={targets} onApply={onSync} onComplete={onComplete} onClose={onClose} {...controls} /> :
     <RepositoryActionDialog mode={mode} targets={targets} onCommit={onCommit} onPush={onPush} onGenerate={onGenerate} onCommitted={onCommitted} onDraftChange={onDraftChange} onComplete={onComplete} onClose={onClose} {...controls} />;
 }
 export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished }: {
-  mode: RepositorySyncMode; targets: RepositoryActionTarget[]; onApply?: ApplyRepositorySync;
+  mode: 'pull'; targets: RepositoryActionTarget[]; onApply?: ApplyRepositorySync;
   onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
 } & RepositoryOperationControls) {
   const [plans, setPlans] = useState<Record<string, RepositorySyncPlan>>({});
@@ -126,11 +125,11 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
             <small>工作目录 {targets.findIndex(item => key(item) === id) + 1} / {targets.length} · 已用 {elapsed < 60 ? `${elapsed} 秒` : `${Math.floor(elapsed / 60)} 分 ${elapsed % 60} 秒`}{now - current.updatedAt >= 15_000 ? ' · 等待 Git 返回下一条进度…' : ''}</small>
           </div>}
           {writing && !running && !result && !errors[id] && <p className="muted">等待前一个工作目录完成…</p>}
-          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件${mode === 'latest' ? ` · 回收 ${(result.reclaimedBytes / 1024 / 1024).toFixed(1)} MB${result.protectedHistory ? '，共享历史仍保留' : ''}` : ''}`}</Notice> : errors[id] ? <><Notice kind="error">{errors[id]}</Notice>{diverged[id] && (mode === 'pull' || mode === 'latest') && <DivergencePanel target={target} mode={mode} onBusy={onPanelBusy} blocked={panelBusy && !busyPanels[id]} onAttempted={() => setNeedsRefresh(true)} />}</> : plan ? <>
+          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件`}</Notice> : errors[id] ? <><Notice kind="error">{errors[id]}</Notice></> : plan ? <>
             <p>{plan.note}</p>
-            {mode === 'latest' && <p>当前分支旧历史：{plan.historyCommits} 个提交；最新目录保留 1 个提交。</p>}
+
             <details open><summary>{plan.files.length} 个受影响文件</summary><ul>{plan.files.map(file => <li key={file.path}><span>{file.action === 'delete' ? '删除' : file.action === 'add' ? '补齐' : '恢复'} </span><code>{file.path}</code></li>)}</ul></details>
-            {!plan.files.length && <p className="muted">文件已与远端一致{mode === 'latest' ? '，确认后仍会整理当前分支历史' : ''}。</p>}
+            {!plan.files.length && <p className="muted">文件已与远端一致。</p>}
           </> : <p><Icon name="spinner" className="spin" /> 正在下载并核验文件预览…</p>}
         </section>;
       })}

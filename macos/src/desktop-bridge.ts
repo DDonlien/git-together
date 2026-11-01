@@ -33,7 +33,6 @@ export async function installDesktopBridge(): Promise<void> {
     setTheme: theme => call('theme', theme),
     import: (method, input) => call('import', method, input),
     presence: (method, input) => call('presence', method, input),
-    remoteControl: (method, input) => call('control', method, input),
     chooseDirectory: () => call('directory', 'choose'),
     openGithubAuthorization: async () => { await call('import', 'connect', { provider: 'github', host: 'https://github.com', token: '', name: '' }); },
     updates: { status: () => call<UpdateStatus>('updates', 'status'), check: () => call<UpdateStatus>('updates', 'check'), download: () => call<UpdateStatus>('updates', 'download'), install: () => call<UpdateStatus>('updates', 'install') },

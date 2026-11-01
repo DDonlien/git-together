@@ -238,6 +238,8 @@ impl Presence {
             };
             let value = if let Some(value) = saved {
                 Some(value)
+            } else if cfg!(gittogether_lite) {
+                None
             } else {
                 private_json(&directory.join("gittogether.local.json"))?
             };
@@ -520,40 +522,6 @@ impl Presence {
         }
     }
 
-    pub(crate) async fn ensure_saved(&self, root: &Path, paths: &[String]) -> Result<()> {
-        if private_json(&self.private_directory.join("connection.json"))?.is_none() {
-            if self
-                .editor_roots
-                .read()
-                .await
-                .get(root)
-                .is_some_and(|p| p.files.iter().any(|f| !f.sources.is_empty()))
-            {
-                return Err("目标编辑器的状态已失联，请先恢复连接或保存文件。".into());
-            }
-            return Ok(());
-        }
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(2))
-            .build()
-            .map_err(|_| "无法检查目标编辑器状态。")?;
-        let read = self.read_bridge(&client).await;
-        let roots = self.editor_roots.read().await;
-        if let Some(project) = roots.get(root) {
-            let observed = project.files.iter().any(|f| !f.sources.is_empty());
-            if observed && read.is_err() {
-                return Err("目标编辑器状态未知，请恢复连接后重试。".into());
-            }
-            if project.files.iter().any(|f| {
-                paths.contains(&f.path) && !f.sources.is_empty() && f.editor != Fact::Clean
-            }) {
-                return Err("选中的文件在目标编辑器中尚未保存或状态未知，请先保存。".into());
-            }
-        }
-        Ok(())
-    }
     async fn read_bridge(&self, client: &reqwest::Client) -> Result<Vec<Project>> {
         let value = private_json(&self.private_directory.join("connection.json"))?
             .ok_or("本机 Bridge 尚未运行，本机协作状态未知。")?;
