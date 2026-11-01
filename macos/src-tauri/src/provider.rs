@@ -369,6 +369,70 @@ impl Provider {
         };
         tokio::select! { result = operation => result, _ = cancel.cancelled() => Err("操作已取消。".into()) }
     }
+
+    // This is the same authenticated, read-only ref advertisement that Git
+    // requests before a push. Never follow redirects or send a receive-pack POST.
+    pub(crate) async fn gitea_push_access(
+        &self,
+        repo: &Value,
+        cancel: &CancellationToken,
+    ) -> Result<bool> {
+        if self.kind() != "gitea" || text(&self.account, "login").is_empty() {
+            return Err("无法确认 Gitea 账号身份。".into());
+        }
+        let network = Network::new(repo, self)?;
+        let mut url = Url::parse(&format!("{}/info/refs", network.url))
+            .map_err(|_| "无效的仓库远端。")?;
+        url.query_pairs_mut().append_pair("service", "git-receive-pack");
+        let operation = async {
+            let token = self.access_token(None, cancel).await?;
+            let mut permit = self.read_state.acquire(&self.budget_key(), cancel).await?;
+            let mut response = self.client.get(url)
+                .basic_auth(text(&self.account, "login"), Some(token))
+                .header("Accept", "application/x-git-receive-pack-advertisement")
+                .header("Cache-Control", "no-cache")
+                .send().await.map_err(transport_error)?;
+            let status = response.status().as_u16();
+            let headers = response.headers().clone();
+            let mut error_body = Vec::new();
+            if status == 403 && !read_state::rate_limited(status, &headers, &[]) {
+                while let Some(chunk) = response.chunk().await.map_err(transport_error)? {
+                    if error_body.len() + chunk.len() > 65_536 { break; }
+                    error_body.extend_from_slice(&chunk);
+                }
+            }
+            let limited = read_state::rate_limited(status, &headers, &error_body);
+            permit.observe(status, &headers, limited);
+            if limited {
+                let retry = self.retry_at().await.unwrap_or_else(|| util::now() + 60_000);
+                return Err(read_state::cooldown_message(retry, Some(status)));
+            }
+            if status == 403 {
+                return Ok(false);
+            }
+            if status != 200 {
+                return Err(format!("Gitea 推送授权检查返回 HTTP {status}，无法确认写权限。"));
+            }
+            let content_type = headers.get("content-type").and_then(|v| v.to_str().ok())
+                .and_then(|v| v.split(';').next()).map(str::trim);
+            if !content_type.is_some_and(|v| v.eq_ignore_ascii_case("application/x-git-receive-pack-advertisement")) {
+                return Err("Gitea 推送授权检查返回了非 Git 响应，无法确认写权限。".into());
+            }
+            const PREFIX: &[u8] = b"001f# service=git-receive-pack\n0000";
+            let mut prefix = Vec::with_capacity(PREFIX.len());
+            while prefix.len() < PREFIX.len() {
+                let Some(chunk) = response.chunk().await.map_err(transport_error)? else { break; };
+                let needed = PREFIX.len() - prefix.len();
+                prefix.extend_from_slice(&chunk[..chunk.len().min(needed)]);
+            }
+            if prefix != PREFIX {
+                return Err("Gitea 推送授权检查返回了无效的 Git 响应，无法确认写权限。".into());
+            }
+            Ok(true)
+        };
+        tokio::select! { result = operation => result, _ = cancel.cancelled() => Err("操作已取消。".into()) }
+    }
+
     pub fn record(&self, raw: &Value) -> Result<Value> {
         let normalized;
         let raw = if self.kind() == "gitlab" {

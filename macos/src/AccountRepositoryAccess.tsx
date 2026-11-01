@@ -17,7 +17,7 @@ export function AccountRepositoryAccess({ account, controller, disabled, refresh
   const [refresh, setRefresh] = useState(0);
   const repositories = controller.catalog.repositories.filter(repo => repo.accountId === account.id);
   const resource = JSON.stringify([controller.catalog.instanceId, account.id, repositories.map(repo => [repo.id, repo.available, repo.permissions])]);
-  useAutoRefresh({ resources: !controller.loading && !controller.error && !disabled ? [resource] : [], intervalMs: 60_000,
+  useAutoRefresh({ resources: !controller.loading && !controller.error && !disabled ? [resource] : [], intervalMs: account.provider === 'gitea' ? 300_000 : 60_000,
     triggers: { [resource]: refresh + refreshKey },
     onReading: (_, value) => setReading(value),
     run: async (_, signal) => { const next = await importAPI('accountRepositoryAccess', { accountId: account.id }, signal); if (!signal.aborted) { setSnapshot(next); setError(next.error || ''); } if (next.error) throw new Error(next.error); },

@@ -2,7 +2,7 @@
 
 [当前正式版 GitTogether 0.38.11](https://github.com/DDonlien/git-together/releases/tag/v0.38.11) 修复 Gitea 空仓库分支误报和成功提示不消失的问题：完整成功提示 6 秒后自动消失，部分完成、警告和错误保留。远端文件树支持悬停或键盘聚焦文件行后打开浏览器，触控环境保留可见入口；Presence 头像环按同一人员＋设备在本次打开期间固定颜色。桌面统一使用 Tauri 2/Rust：macOS Apple Silicon ZIP 约 6.96 MB，Windows x86/x64 安装包约 5.97/6.38 MB。更新卡片显示实际已下载容量、总容量、百分比和速度。macOS Developer ID 签名与 Apple 公证、三平台更新签名及公开完整下载均已核对。
 
-新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
+新增 [Swift iOS 客户端](ios/README.md)：在 Mac 用 Xcode 26 打开 `ios/git-together.xcodeproj`，选择 `git-together` scheme。手机只浏览远端，通过 Presence 查看每个仓库在具体设备上的 worktree，并发起现有有限远程操作；系统底栏与搜索使用 Liquid Glass，正文沿用 Material 3。真实账号、双设备操作与原生视觉验收见 [iOS 需求](issue/issue-00043_%E6%98%8E%E7%A1%AE%E5%8E%9F%E7%94%9F%E8%BF%9C%E7%AB%AF%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BA%A4%E4%BB%98%E8%8C%83%E5%9B%B4.md)。
 
 历史记录：0.36.1 曾为 Gitea 使用 Chromium 网络与证书处理；该实现属于迁移前版本。当前桌面连接、Git 执行与应用更新由 Tauri 2 和 Rust 负责。
 
@@ -74,7 +74,7 @@ GitTogether 的核心视角是：仓库是项目，分支与 worktree（同一�
 
 已有本地仓库默认使用系统 Git/SSH，沿用原来的远端地址、凭据助手、SSH 密钥与 agent。需要使用应用登录的账号时，在「设置 → 账号 → 仓库授权与本地认证」中为该仓库选择「应用账号」。首次下载未关联分支使用应用账号，之后沿用该仓库已保存的认证方式；失败时不会自动切换账号。
 
-账号设置会显示应用的仓库授权、读取和基础写权限，并列出未授权、无写权限、尚未确认及检查错误。GitHub App 需要安装到对应仓库且拥有 Contents 写权限，用户本身也需有写权限。系统认证可能使用另一账号，应用权限提示不代表系统 Git 的权限；受保护分支和 GitHub Actions 工作流还可能有额外限制。当前认证分支还保护 Git/LFS 操作期间的凭据，避免后台续期中断操作，并分别说明服务器拒绝原因。这些改动尚未随正式安装包交付。
+账号设置会显示应用的仓库授权、读取和基础写权限，并列出未授权、无写权限、尚未确认及检查错误。GitHub App 需要安装到对应仓库且拥有 Contents 写权限，用户本身也需有写权限。Gitea 通过当前仓库角色和应用账号的只读推送授权握手共同判断；握手不会推送内容，无法核实时保留“未确认”。系统认证可能使用另一账号，应用权限提示不代表系统 Git 的权限；受保护分支和 GitHub Actions 工作流还可能有额外限制。当前认证分支还保护 Git/LFS 操作期间的凭据，避免后台续期中断操作，并分别说明服务器拒绝原因。这些改动尚未随正式安装包交付。
 
 ### 让信息有序，给工作留出空间
 
@@ -159,7 +159,7 @@ GitHub 网页授权的首次开发配置、桌面打包与验证命令见[运行
 
 ## 进一步了解
 
-[产品范围与进展](issue/issue_%E4%BB%A5%E5%9B%BA%E5%AE%9A%E7%89%88%E6%9C%ACGitHub%20Desktop%E5%8E%9F%E5%A7%8B%E4%BB%A3%E7%A0%81%E6%9B%BF%E6%8D%A2Git%E4%B8%8E%E6%8E%88%E6%9D%83%E6%89%A7%E8%A1%8C%E5%9F%BA%E7%A1%80.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
+[产品范围与进展](issue/issue-00012_%E4%BB%A5%E5%9B%BA%E5%AE%9A%E7%89%88%E6%9C%ACGitHub%20Desktop%E5%8E%9F%E5%A7%8B%E4%BB%A3%E7%A0%81%E6%9B%BF%E6%8D%A2Git%E4%B8%8E%E6%8E%88%E6%9D%83%E6%89%A7%E8%A1%8C%E5%9F%BA%E7%A1%80.md) · [界面设计](DESIGN.md) · [技术架构](ARCHITECTURE.md)
 
 Summary与Description在中栏和提交弹窗中使用官方Material Web描边文本框，保留浮动标签和官方焦点样式。顶部搜索由官方填充字段与图标按钮按M3 Search bar规范组合，采用36px紧凑高度与13px文字，顶部默认宽300px；支持即时筛选、清空和Cmd/Ctrl+K。Material Web尚未提供独立Search bar组件。短窗口中提交字段独立滚动，底部操作保持可见。
 

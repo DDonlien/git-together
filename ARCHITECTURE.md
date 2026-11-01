@@ -97,7 +97,7 @@ LocalLink 保存可选 authentication（system / account）；已有记录缺省
 
 setRepositoryAuthentication 只修改已有 LocalLink；按仓库保存锁及执行任务守卫保护切换，上下文摘要和前端读取资源键包含选择，旧计划/读取不能用于新模式。应用 API 仓库访问失败不阻止系统模式的本地操作；远端 API 浏览仍独立显示其应用账号错误。未知推送数量保持未知，系统模式可显式选择本地提交并由真实 Push 的引用复核确认结果。
 
-repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。安装令牌、细粒度令牌及无法报告令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，每60秒更新且隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录，不发送 Git 写操作。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
+repository_access 使用有限 accountRepositoryAccess 协议从保存的账号检查权限，不接收调用者域名、URL 或令牌。GitHub App 分页读取 /user/installations 与 /user/installations/{id}/repositories，仓库是否授予应用与 Contents 写权限、用户仓库 push 权限分别判断；列表未完整读取时保留未知，读取公开内容不代表写权限。Gitea 逐仓库读取当前角色，并用同一应用账号进行 Git receive-pack 的只读引用握手；两者均通过才确认基础写权限，身份不符、网络故障和无效响应保留未知，归档和镜像仓库不可写。握手不跟随重定向、不发送 Git 写操作，使用已有账号读取限流。其他无法核实令牌权限的平台不猜测写权限。设置页按账号读取、取消与退避，Gitea 每5分钟更新、其他账号每60秒更新，隐藏/离线暂停，手动检查使用同一读取器；结果不写入凭据目录。openAccountAccessSettings 只打开保存账号对应的固定 GitHub 设置地址。
 
 ## 当前运行结构
 

@@ -6,6 +6,9 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(test)]
+mod tests;
+
 pub fn github_app(saved: &Value) -> bool {
     matches!(
         text(&saved["account"], "provider"),
@@ -160,6 +163,57 @@ async fn app_access(
     }).collect())
 }
 
+async fn gitea_access(
+    provider: &Provider,
+    repositories: &[Value],
+    cancel: &CancellationToken,
+) -> Result<Vec<Value>> {
+    let mut rows = Vec::with_capacity(repositories.len());
+    for repo in repositories {
+        if cancel.is_cancelled() { return Err("操作已取消。".into()); }
+        let checked = async {
+            let path = crate::provider::repo_path(repo)?;
+            let (current, _) = provider.get(&path, &[], "json", cancel).await?;
+            let id = repo["remoteId"].as_u64().ok_or("仓库身份无效。")?;
+            if current["id"].as_u64() != Some(id)
+                || !text(&current, "full_name").eq_ignore_ascii_case(text(repo, "fullName"))
+            {
+                return Err("Gitea 返回的仓库身份与账号记录不一致。".into());
+            }
+            let read = match current["permissions"]["pull"].as_bool() {
+                Some(true) => "granted",
+                Some(false) => "denied",
+                None => "unknown",
+            };
+            let (write, reason) = if current["archived"] == true {
+                ("denied", "仓库已归档，不能推送。")
+            } else if current["mirror"] == true {
+                ("denied", "镜像仓库为只读，不能推送。")
+            } else {
+                match current["permissions"]["push"].as_bool() {
+                    Some(false) => ("denied", "当前账号的仓库角色没有代码写权限。"),
+                    None => ("unknown", "Gitea 未返回当前账号的仓库写权限。"),
+                    Some(true) => match provider.gitea_push_access(repo, cancel).await {
+                        Ok(true) => ("granted", "仓库角色与应用账号的推送授权检查均通过；分支保护仍可能限制推送。"),
+                        Ok(false) => ("denied", "Gitea 拒绝了应用账号的推送授权检查；请检查令牌范围和服务器访问限制。"),
+                        Err(error) if cancel.is_cancelled() => return Err(error),
+                        Err(error) => return Ok(row(repo, "not-required", read, "unknown", &error)),
+                    },
+                }
+            };
+            Ok(row(repo, "not-required", read, write, reason))
+        }.await;
+        match checked {
+            Ok(value) => rows.push(value),
+            Err(error) => {
+                if cancel.is_cancelled() { return Err(error); }
+                rows.push(row(repo, "not-required", "unknown", "unknown", &error));
+            }
+        }
+    }
+    Ok(rows)
+}
+
 pub async fn inspect(
     saved: &Value,
     provider: &Provider,
@@ -197,6 +251,8 @@ pub async fn inspect(
             }
             Err(error) => Err(error),
         }
+    } else if provider.kind() == "gitea" {
+        gitea_access(provider, repositories, cancel).await
     } else {
         Ok(repositories
             .iter()
