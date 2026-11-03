@@ -7,12 +7,13 @@ import type { LocalLink } from '../src/import-model';
 
 const link = (paths: string[]): LocalLink => ({ repositoryId: 'fixture:project', path: 'D:\\Projects\\Gitea', worktrees: paths.map((path, index) => ({ branch: index ? `feature/${index}` : 'main', path })) });
 
-test('default download uses a repository container and an underscore before the safe branch name', () => {
-  assert.equal(branchDownloadFolderName('project-name', 'main'), 'project-name_main');
-  assert.equal(branchDownloadFolderName('project-name', 'codex/feature'), 'project-name_codex-feature');
+test('default download uses a project folder for one visible branch and branch folders for several', () => {
+  assert.equal(branchDownloadFolderName('main', 1), '');
+  assert.equal(branchDownloadFolderName('main', 2), 'main');
+  assert.equal(branchDownloadFolderName('codex/feature', 2), 'codex-feature');
   assert.equal(repositoryDownloadFolderName('project:name.'), 'project-name');
-  assert.equal(joinLocalPath('D:\\FOLDER', 'project-name', branchDownloadFolderName('project-name', 'main')), 'D:\\FOLDER\\project-name\\project-name_main');
-  assert.equal(joinLocalPath('/Users/test/FOLDER', 'project-name', branchDownloadFolderName('project-name', 'main')), '/Users/test/FOLDER/project-name/project-name_main');
+  assert.equal(joinLocalPath('D:\\FOLDER', 'project-name', branchDownloadFolderName('main', 2)), 'D:\\FOLDER\\project-name\\main');
+  assert.equal(joinLocalPath('/Users/test/FOLDER', 'project-name'), '/Users/test/FOLDER/project-name');
 });
 
 test('preview paths use drive, UNC or macOS separators without altering the original input', () => {
@@ -32,6 +33,7 @@ test('one default worktree displays the project container while retaining its ac
     ['D:\\FOLDER\\project-name\\project-name_main', 'D:\\FOLDER\\project-name'],
     ['D:/FOLDER/project-name/project-name_codex-feature', 'D:\\FOLDER\\project-name'],
     ['/Users/test/FOLDER/project-name/project-name_main', '/Users/test/FOLDER/project-name'],
+    ['/Users/test/FOLDER/project-name/main', '/Users/test/FOLDER/project-name'],
   ]) {
     const mapping = link([path]);
     const previous = structuredClone(mapping);

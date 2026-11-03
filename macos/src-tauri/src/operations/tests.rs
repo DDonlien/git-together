@@ -297,12 +297,12 @@ async fn branch_download_uses_project_container_and_preserves_existing_directori
         fs::read_to_string(path.join("keep.txt")).unwrap(),
         "do not overwrite"
     );
-    let feature = json!({"branch":"feature/layout","parentPath":downloads.to_string_lossy(),"folderName":"custom-worktree"});
+    let feature = json!({"branch":"feature/layout","parentPath":downloads.to_string_lossy(),"folderName":"feature-layout"});
     let feature_path = download(&storage, &repo, &feature, &network, &cancel)
         .await
         .unwrap();
     assert_eq!(feature_path.parent().unwrap(), path.parent().unwrap());
-    assert_eq!(feature_path.file_name().unwrap(), "custom-worktree");
+    assert_eq!(feature_path.file_name().unwrap(), "feature-layout");
     assert_eq!(
         git::read(&feature_path, &["branch", "--show-current"])
             .await
@@ -320,6 +320,54 @@ async fn branch_download_uses_project_container_and_preserves_existing_directori
     assert_eq!(
         fs::read_to_string(downloads.join("occupied")).unwrap(),
         "container is a file"
+    );
+
+    // An empty folder name places the worktree at the project path even when
+    // the remote has multiple branches, without replacing an existing path.
+    let direct_downloads = temporary.path().join("direct-downloads");
+    fs::create_dir(&direct_downloads).unwrap();
+    let direct_input = json!({"branch":"main","parentPath":direct_downloads.to_string_lossy(),"folderName":""});
+    let direct_path = download(
+        &temporary.path().join("direct-storage"),
+        &repo,
+        &direct_input,
+        &network,
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        direct_path,
+        dunce::canonicalize(&direct_downloads).unwrap().join("project")
+    );
+    assert!(direct_path.join(".git").is_file());
+    assert_eq!(
+        git::read(&direct_path, &["branch", "--show-current"]).await.unwrap().trim(),
+        "main"
+    );
+    assert_eq!(
+        fs::read_to_string(direct_path.join("hello.txt")).unwrap().replace("\r\n", "\n"),
+        "latest\n"
+    );
+    let service = crate::service::Service::new(temporary.path().join("direct-service"), false, "test").unwrap();
+    assert_eq!(
+        service.validate_path(&repo, direct_path.to_str().unwrap()).await.unwrap(),
+        direct_path
+    );
+    fs::write(direct_path.join("keep.txt"), "do not overwrite").unwrap();
+    assert!(download(&temporary.path().join("direct-storage"), &repo, &direct_input, &network, &cancel)
+        .await.unwrap_err().contains("目标目录已经存在"));
+    assert_eq!(fs::read_to_string(direct_path.join("keep.txt")).unwrap(), "do not overwrite");
+
+    let mut populated_repo = repo.clone();
+    populated_repo["name"] = json!("already-there");
+    fs::create_dir(direct_downloads.join("already-there")).unwrap();
+    fs::write(direct_downloads.join("already-there/keep.txt"), "untouched").unwrap();
+    assert!(download(&temporary.path().join("direct-storage"), &populated_repo, &direct_input, &network, &cancel)
+        .await.unwrap_err().contains("目标目录已经存在"));
+    assert_eq!(
+        fs::read_to_string(direct_downloads.join("already-there/keep.txt")).unwrap(),
+        "untouched"
     );
     daemon.kill().await.unwrap();
     daemon.wait().await.unwrap();
