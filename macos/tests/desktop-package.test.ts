@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { releaseBranch, updateSource } from '../src/update-model';
 
+test('official release keeps the established application identity and signed update feed', () => {
+  const root = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const client = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const config = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
+  const updater = JSON.parse(readFileSync(new URL('../../docs/release-updater.json', import.meta.url), 'utf8'));
+  const cargo = readFileSync(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf8');
+  assert.match(root.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(client.version, root.version);
+  assert.equal(cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1], root.version);
+  assert.equal(config.productName, 'GitTogether');
+  assert.equal(config.app.windows[0].title, 'GitTogether');
+  assert.equal(config.identifier, 'com.gittogether.standalone');
+  assert.equal(config.bundle.macOS.bundleVersion ?? root.version, root.version);
+  assert.deepEqual(config.plugins.updater.endpoints, ['https://github.com/DDonlien/git-together/releases/latest/download/latest.json']);
+  assert.equal(config.plugins.updater.pubkey, updater.plugins.updater.pubkey);
+  assert.equal(config.plugins.updater.requireSignedVersion, true);
+});
+
 test('Tauri build uses relative client assets and excludes Electron runtimes', () => {
   const source = readFileSync(new URL('../scripts/package-desktop.ts', import.meta.url), 'utf8');
   assert.ok(source.includes("configFile: false, root: source, base: './', envPrefix: []"));

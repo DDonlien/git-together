@@ -1,6 +1,6 @@
-# GitTogether Lite 运行架构
+# GitTogether 运行架构
 
-本分支使用 React / TypeScript / Vite 展示现有 Material 3 GUI，Tauri 2 连接同进程 Rust 服务。Rust 调用本机 Git / Git LFS；生产包不包含 Electron、Node 业务进程或 GitHub Desktop 原版执行器。
+桌面应用使用 React / TypeScript / Vite 展示现有 Material 3 GUI，Tauri 2 连接同进程 Rust 服务。Rust 调用本机 Git / Git LFS；生产包不包含 Electron、Node 业务进程或 GitHub Desktop 原版执行器。
 
 ## 保留的工作流
 
@@ -22,8 +22,8 @@ Presence 保留本机插件监听、在线工作区、远端观察及人员显�
 
 自定义 Submit / Get Latest / Clear、AI 提交分组与合并、远端文件/目录写入、远端控制、权限巡检和贡献自动隐藏均从有效请求路由或模块中移除。历史协议类型或参考文件不代表功能仍可执行；未知命令返回明确错误。
 
-## 独立试用身份
+## 正式版身份与更新
 
-试用应用标识为 com.gittogether.standalone.lite，账号、Presence 会话、偏好和钥匙串项与稳定版隔离。账号由用户正常登录，不复制稳定版令牌。Lite 只读取自身的 GitHub 开发者应用配置，不读取旧版授权目录。配置缺失或不可读取时直接使用 GitHub 设备验证码登录；有有效配置时保留浏览器回调，端口冲突时也可使用设备授权，不抢占其他应用端口。
+正式版应用标识为 `com.gittogether.standalone`，沿用 GitTogether 的数据目录和系统加密存储，以读取已有账号、Presence 会话与工作目录关联。GitHub 开发者应用配置可沿用已有配置；配置缺失或不可读取时使用设备验证码登录，有有效配置时保留浏览器回调。读取失败时保留原文件，不以明文替代。
 
-试用更新器不访问稳定更新源。package:trial 只生成本地已签名、公证的 macOS Apple Silicon 包，记录来源和摘要，不发布稳定版本或替换已安装应用。功能检查、签名公证和真实用户试用分别记录。
+正式版使用 GitHub Releases 的 Tauri 更新源和既有公钥。每次正式发布从同一 main 提交构建 macOS Apple Silicon、Windows x86 和 Windows x64 安装包，验证签名、Apple 公证、安装包和公开更新清单。安装与重启由用户决定；源码、公开包和实际客户端验收分别记录。

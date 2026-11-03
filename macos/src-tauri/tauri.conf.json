@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "GitTogether Lite",
+  "productName": "GitTogether",
   "version": "../package.json",
-  "identifier": "com.gittogether.standalone.lite",
+  "identifier": "com.gittogether.standalone",
   "build": {
     "beforeDevCommand": "npm run dev:ui",
     "devUrl": "http://127.0.0.1:4173",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "GitTogether Lite",
+        "title": "GitTogether",
         "width": 1500,
         "height": 950,
         "minWidth": 920,
@@ -45,13 +45,14 @@
     "macOS": {
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,
-      "entitlements": "entitlements.plist",
-      "bundleVersion": "0.38.11"
+      "entitlements": "entitlements.plist"
     }
   },
   "plugins": {
     "updater": {
-      "endpoints": [],
+      "endpoints": [
+        "https://github.com/DDonlien/git-together/releases/latest/download/latest.json"
+      ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk1RkQ2RkMzQUJENjNCNTkKUldSWk85YXJ3Mi85bFVwU0lpR01GUnQ4SmErODZ5ZFZKSGExUWgxM3dMbU4veFdaa0V3YkNFZjUK",
       "requireSignedVersion": true
     }

@@ -6,7 +6,7 @@ status: done
 importance: p0
 emergency: p1
 created-time: '2026-11-01T23:15:53+08:00'
-updated-time: '2026-11-02T11:22:01+08:00'
+updated-time: '2026-11-03T19:02:03+08:00'
 start-time: '2026-11-01T23:15:53+08:00'
 closed-time: '2026-11-01T23:42:29+08:00'
 created-version: 0.38.11
@@ -20,6 +20,8 @@ tags:
 ---
 
 # Description
+
+- [ ] 将当前精简功能作为 GitTogether 0.38.12 正式版发布：沿用正式应用标识、原账号与目录关联及签名更新源；macOS Apple Silicon、Windows x86 和 x64 的安装包、签名、公证与公开更新源待核验。
 
 用户要求减少错误与功能复杂度，仅保留 Tauri 的 GitHub Desktop 日常 Git 工作流、全套更新后的 GUI、绑定账号的全部仓库侧栏、Dashboard 多仓库/多分支及隐藏排序、非 GitHub 仓库的 Codex CLI 提交说明和 Presence 插件兼容。
 
@@ -41,6 +43,16 @@ tags:
 试用应用使用独立标识、存储和账号登录，稳定版不会被替换。此版沿用 Tauri/Rust 实现标准 Git 语义；历史 GitHub Desktop/Electron 参考源码不进入运行包。真实账号授权、Presence 插件连接、视觉与交互体验仍由用户试用确认；源码检查与隔离测试不代表这些验收已通过。
 
 # Comments
+
+## 20261103-190203_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
+
+按用户要求准备 GitTogether 0.38.12 正式版：移除产品名称及版本中的 Lite 后缀，恢复正式应用标识、原数据目录和签名更新源。以公开的 0.38.11 为上一版本；现有精简功能和分支下载目录调整保留。
+
+前端类型检查、生产构建、52 项基础前端测试、19 项精简功能测试和 67 项 Rust 测试通过，更新公钥与既有发布配置一致。正式安装包、Apple 公证及公开更新源仍待完成和核验。
+
+> [本次执行对话](codex://threads/01a1a0f2-4304-7e90-a497-5050df038618)
+
+---
 
 ## 20261102-112201_Codex_OpenAI-GPT-6.1-TERRA-ULTRA-UNKNOWN
 

@@ -26,6 +26,16 @@ pub fn data_root() -> Result<PathBuf> {
     return Ok(home()?.join(".local/share").join(directory));
 }
 
+#[cfg(all(test, not(gittogether_lite)))]
+mod official_identity_tests {
+    #[test]
+    fn official_application_keeps_the_existing_data_directory_and_version() {
+        let root = super::data_root().unwrap();
+        assert_eq!(root.file_name().unwrap(), "GitTogether-Standalone-Demo");
+        assert_eq!(env!("GITTOGETHER_VERSION"), env!("CARGO_PKG_VERSION"));
+    }
+}
+
 pub fn private_directory(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path)?;
     #[cfg(unix)]
