@@ -247,7 +247,7 @@ impl Authorization {
                 GitHubStart::Web(secret) => Some(secret),
                 GitHubStart::Device(session) => {
                     if let Some(service) = self.service.upgrade() {
-                        service.diagnostics.record(&json!({"event":"authorization","method":"start","outcome":"fallback","code":"developer-configuration-unavailable","flow":"device"}), false);
+                        service.diagnostics.record(&json!({"event":"authorization","method":"start","outcome":"partial","authReason":"configuration"}), false);
                     }
                     return Ok(session);
                 },

@@ -36,10 +36,21 @@ test('right-click and keyboard Ignore target the file without toggling selection
     assert.deepEqual(ignored, ['.DS_Store', 'new.txt']);
     assert.equal(selections, 0);
 
+    const checkbox = document.querySelector<HTMLInputElement>('.submit-file-row input[type="checkbox"]');
+    assert.ok(checkbox);
+    const contextEvent = new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 150, clientY: 90 });
+    await act(async () => { checkbox.dispatchEvent(contextEvent); });
+    assert.equal(contextEvent.defaultPrevented, true);
+    item = document.querySelector<HTMLElement>('[role="menuitem"]');
+    assert.ok(item?.textContent?.includes('停止跟踪'));
+    await act(async () => { item!.click(); });
+    assert.deepEqual(ignored, ['.DS_Store', 'new.txt', '.DS_Store']);
+    assert.equal(selections, 0);
+
     await act(async () => { root.render(createElement(RepositoryCommitFiles, { ...props, disabled: true })); });
     await act(async () => { choices[0].dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); });
     assert.equal(document.querySelector('[role="menuitem"]'), null);
-    assert.deepEqual(ignored, ['.DS_Store', 'new.txt']);
+    assert.deepEqual(ignored, ['.DS_Store', 'new.txt', '.DS_Store']);
   } finally {
     await act(async () => { root.unmount(); });
     dom.window.close();

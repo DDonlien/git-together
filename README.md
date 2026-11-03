@@ -7,9 +7,10 @@
 - 绑定 GitHub、GitHub Enterprise、Gitea、GitLab、Gitee 账号，侧栏列出账号可访问的全部仓库。
 - Dashboard 浏览全部仓库，展开多个分支，手动隐藏/恢复、置顶、筛选和排序。
 - 浏览提交历史、差异与文件树，关联已有工作目录或下载分支。
-- Commit、Fetch、Pull、Push 及标准分支操作。提交说明可编辑，选中文件之外的暂存内容保留；推送单独执行。
+- Commit、Fetch、Pull、Push 及标准分支操作。Update 按状态选择 Fetch、Pull 或 Push；Pull 或 Push 遇到分叉时尝试正常合并，冲突时保留现场。提交说明可编辑，选中文件之外的暂存内容保留；推送单独执行。提交清单可右键忽略文件，已跟踪文件停止跟踪但保留本地副本。
 - 非 GitHub / GitHub Enterprise 仓库可通过已登录的本机 Codex CLI 生成提交说明。
 - Presence 插件连接、工作区观察、在线人员与协作状态显示。
+- 设置中可展开、搜索近期日志，更多记录保存在日志文件夹；文件按 7 天或 512 MiB 的范围清理。
 
 已移除自定义 Submit / Get Latest / Clear、AI 拆分提交与分支整合、文件管理写入、远端控制、权限巡检和基于贡献的自动隐藏。Dashboard 后台只读取分支元数据，进入仓库后加载历史和文件树。
 

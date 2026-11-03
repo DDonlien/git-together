@@ -1,4 +1,5 @@
-import { diagnosticFailure, rendererDiagnostic, type DiagnosticInput, type DiagnosticsStatus } from './diagnostics-model';
+import { diagnosticEvents, diagnosticFailure, diagnosticOutcomes, rendererDiagnostic, uuidPattern, type DiagnosticInput, type DiagnosticsRecent, type DiagnosticsStatus } from './diagnostics-model';
+import { isRecord } from './import-model';
 import { installPerformanceDiagnostics } from './performance-diagnostics';
 
 let reportingFailure = false;
@@ -6,12 +7,16 @@ let installed = false;
 let stopDiagnostics: (() => void) | undefined;
 const pending: DiagnosticInput[] = [];
 let sending = false, dropped = 0;
-async function request(method: 'status' | 'record' | 'open' | 'copy', value: unknown = {}) {
+async function request(method: 'status' | 'recent' | 'record' | 'open' | 'copy', value: unknown = {}) {
   if (window.gittogether?.diagnostics) {
     const bridge = window.gittogether.diagnostics;
     if (method === 'copy') {
       if (!bridge.copy) throw new Error('当前 App 还未包含日志复制功能，请使用更新后的版本。');
       return bridge.copy();
+    }
+    if (method === 'recent') {
+      if (!bridge.recent) throw new Error('当前 App 还未包含日志查看功能，请使用更新后的版本。');
+      return bridge.recent();
     }
     return method === 'record' ? bridge.record(value as DiagnosticInput) : method === 'status' ? bridge.status() : bridge.open();
   }
@@ -23,8 +28,25 @@ async function request(method: 'status' | 'record' | 'open' | 'copy', value: unk
 }
 export async function diagnosticsStatus(): Promise<DiagnosticsStatus> {
   const status = await request('status');
-  if (!status || typeof status.directory !== 'string' || status.retentionHours !== 24 || !Number.isSafeInteger(status.maxBytes) || typeof status.limited !== 'boolean' || typeof status.error !== 'string') throw new Error('本地日志状态无效。');
+  if (!status || typeof status.directory !== 'string' || (!Number.isSafeInteger(status.retentionHours) || status.retentionHours < 1) || !Number.isSafeInteger(status.maxBytes) || status.maxBytes < 1 || typeof status.limited !== 'boolean' || typeof status.error !== 'string' ||
+      (status.writePaused !== undefined && typeof status.writePaused !== 'boolean') || (status.capacityPruned !== undefined && typeof status.capacityPruned !== 'boolean') ||
+      (status.retainedBytes !== undefined && (!Number.isSafeInteger(status.retainedBytes) || status.retainedBytes < 0))) throw new Error('本地日志状态无效。');
   return status;
+}
+export async function recentDiagnostics(): Promise<DiagnosticsRecent> {
+  const value: unknown = await request('recent');
+  const validTime = (time: unknown) => typeof time === 'string' && time.length <= 64 && Number.isFinite(Date.parse(time));
+  if (!isRecord(value) || !Array.isArray(value.records) || typeof value.truncated !== 'boolean' || typeof value.hasOlder !== 'boolean' ||
+      !Number.isSafeInteger(value.files) || (value.files as number) < 0 || !Number.isSafeInteger(value.totalBytes) || (value.totalBytes as number) < 0 ||
+      !Number.isSafeInteger(value.returnedBytes) || (value.returnedBytes as number) < 0 || !Number.isSafeInteger(value.maxRecords) || (value.maxRecords as number) < 1 || (value.maxRecords as number) > 500 ||
+      !Number.isSafeInteger(value.maxBytes) || (value.maxBytes as number) < 1 || (value.maxBytes as number) > 262144 || value.records.length > (value.maxRecords as number) || (value.returnedBytes as number) > (value.maxBytes as number) ||
+      !(value.oldestTime === null || validTime(value.oldestTime)) || !(value.newestTime === null || validTime(value.newestTime)) ||
+      !value.records.every(record => isRecord(record) && validTime(record.time) && typeof record.version === 'string' && /^[a-zA-Z0-9.+-]{1,64}$/.test(record.version) &&
+        typeof record.component === 'string' && ['app', 'preview', 'authorization', 'test'].includes(record.component) && typeof record.session === 'string' && uuidPattern.test(record.session) &&
+        typeof record.event === 'string' && (diagnosticEvents as readonly string[]).includes(record.event) && typeof record.outcome === 'string' && (diagnosticOutcomes as readonly string[]).includes(record.outcome))) {
+    throw new Error('最近日志返回格式无效，请重试。');
+  }
+  return value as DiagnosticsRecent;
 }
 export const openDiagnostics = (): Promise<unknown> => request('open');
 export async function copyDiagnostics(): Promise<number> {

@@ -3,8 +3,19 @@
 .presence-settings > .notice.warning { margin-top: 8px; }
 .presence-settings .presence-plugin-heading { border-bottom: 0; }
 .presence-plugin-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.presence-plugin-name strong { flex-shrink: 0; font-size: 14px; font-weight: 500; }
-.presence-settings .presence-plugin-name small { display: inline; min-width: 0; max-width: none; margin: 0; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.presence-plugin-name strong { flex-shrink: 0; font-size: 14px; font-weight: 500; line-height: 20px; }
+.presence-settings .presence-plugin-name small { display: inline-flex; align-items: center; min-width: 0; max-width: none; margin: 0; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transform: translateY(-1px); }
+.presence-account-add-row > span { flex: 1; min-width: 0; }
+.presence-account-add-row > span > strong { font-size: 13px; font-weight: 500; }
+.presence-server-list:empty { display: none; }
+.presence-server-entry + .presence-server-entry { border-top: 1px solid var(--line); }
+.presence-settings .presence-server-row { border-bottom: 0; }
+.presence-server-identity { flex: 1; min-width: 0; }
+.presence-server-identity > strong { display: block; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.presence-settings .presence-server-identity > small { display: block; margin-top: 3px; max-width: none; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.presence-server-row .presence-settings-actions { flex-shrink: 0; }
+.presence-server-entry > .notice { margin: 0 0 8px; }
+.presence-settings .presence-server-add-row { min-height: 48px; border-top: 1px solid var(--line); border-bottom: 0; }
 .presence-plugin-heading .ogui-switch { flex-shrink: 0; }
 .presence-server-row > span:first-child { min-width: 0; }
 .presence-server-row small { max-width: none; overflow-wrap: anywhere; }

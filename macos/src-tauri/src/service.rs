@@ -25,16 +25,18 @@ use tokio_util::sync::CancellationToken;
 mod refresh_tests;
 #[cfg(test)]
 mod lite_tests;
+#[cfg(test)]
+mod ignore_tests;
+#[cfg(all(test, unix))]
+mod sync_push_tests;
 
 struct State {
     value: Value,
     revision: u64,
     error: String,
 }
-fn operation_failure_reason(method: &str, input: &Value, error: &str) -> Option<&'static str> {
-    if method == "prepareSync" && input["mode"] == "pull" && error == operations::PULL_DIVERGED {
-        Some("diverged")
-    } else if method == "pushCommit" && error.starts_with(git::NON_FAST_FORWARD) {
+fn operation_failure_reason(method: &str, _input: &Value, error: &str) -> Option<&'static str> {
+    if method == "pushCommit" && error.starts_with(git::NON_FAST_FORWARD) {
         Some("non-fast-forward")
     } else { None }
 }
@@ -44,7 +46,6 @@ mod divergence_failure_tests {
     #[test]
     fn only_specific_git_failures_expose_a_resolution_reason() {
         let pull = json!({"mode":"pull"});
-        assert_eq!(operation_failure_reason("prepareSync", &pull, "本地与远端历史已分叉，请先合并或变基；Pull 没有修改文件。"), Some("diverged"));
         assert_eq!(operation_failure_reason("pushCommit", &pull, "远端已有新的提交，请先检查远端状态；未强制推送。 本地提交已保留。"), Some("non-fast-forward"));
         for error in ["远端拒绝访问：凭据被拒绝。", "远端规则拒绝推送。", "Git操作失败，请检查仓库状态和网络连接。", "无法确认本地与远端的共同祖先。", "本地还有未推送的提交。"] {
             assert_eq!(operation_failure_reason("prepareSync", &pull, error), None);
@@ -1147,7 +1148,7 @@ impl Service {
             "openCommit" | "link" | "unlink" | "downloadBranch" |
             "localWorkspace" | "snapshot" | "remoteWorkspace" | "remoteHistory" | "remoteCommit" | "remoteFile" |
             "discardSync" | "localCommit" | "diff" | "openDirectory" | "localDirectory" | "openFile" |
-            "generateCommitMessage" | "cancelCommitGeneration" | "prepareSync" | "submitCommit" | "pushCommit" | "applySync"
+            "generateCommitMessage" | "cancelCommitGeneration" | "prepareSync" | "submitCommit" | "pushCommit" | "applySync" | "ignoreFile"
         ) { return Err("精简版不提供此操作。".into()); }
         let request_limit = if matches!(method, "submitCommit" | "generateCommitMessage") {
             1_048_576
@@ -1164,7 +1165,7 @@ impl Service {
         }
         let writing = matches!(
             method,
-            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "executeGraph"
+            "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "executeGraph" | "ignoreFile"
         );
         let repository_read = matches!(method, "localWorkspace" | "remoteWorkspace" | "fetchRepository");
         let _target = if writing || repository_read {
@@ -1178,7 +1179,7 @@ impl Service {
                 let prefix = format!("{}:", text(&input, "repositoryId"));
                 let mut jobs = self.running_targets.lock().unwrap_or_else(|e| e.into_inner());
                 if repository_read && jobs.values().any(|(target, method, _)| target.starts_with(&prefix)
-                    && matches!(method.as_str(), "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage")) {
+                    && matches!(method.as_str(), "submitCommit" | "pushCommit" | "applySync" | "generateCommitMessage" | "ignoreFile")) {
                     cancel.cancel();
                     return Err("仓库正在提交，自动读取已暂停。".into());
                 }
@@ -1199,6 +1200,7 @@ impl Service {
         };
         let foreground = match method {
             "submitCommit" => Some("提交"),
+            "ignoreFile" => Some("忽略文件"),
             "pushCommit" => Some("推送"),
             "applySync" => Some("文件变更"),
             "executeGraph" => Some("分支操作"),
@@ -1696,7 +1698,7 @@ impl Service {
         } else {
             util::field(input, "taskId", 4096)?
         };
-        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync") {
+        let operation = if matches!(method, "submitCommit" | "pushCommit" | "applySync" | "ignoreFile") {
             let operation = util::field(input, "operationId", 100)?;
             uuid::Uuid::parse_str(&operation).map_err(|_| "操作标识无效。")?;
             let identity = util::digest(format!("{method}:{input}:{}", context.identity));
@@ -1709,6 +1711,18 @@ impl Service {
         };
         let root = self.task_root(&context, &task_id).await?;
         match method {
+            "ignoreFile" => {
+                util::allowed(input, &["repositoryId","taskId","expectedHead","changeKey","path","operationId"])?;
+                util::sha(text(input,"expectedHead"))?;
+                if text(input,"changeKey").len() != 64 || !util::valid_sha(text(input,"changeKey")) { return Err("工作目录状态无效，请刷新。".into()); }
+                let _guard = self.claim(&root,cancel).await?;
+                self.validate(&context).await?;
+                let (operation,identity)=operation.unwrap();
+                if let Some(result)=self.previous(&operation,&identity).await? { return Ok(result); }
+                let result=operations::ignore::file(&root,input,self,&context,cancel).await?;
+                self.remember(operation,identity,result.clone()).await;
+                Ok(result)
+            }
             "localCommit" => {
                 util::allowed(input, &["repositoryId", "taskId", "commitId"])?;
                 let result = git::commit(&root, text(input, "commitId")).await?;

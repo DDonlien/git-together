@@ -19,6 +19,16 @@ pub(super) struct ServerConfiguration {
     pub device_token: String,
     #[serde(default)]
     pub organizations: Vec<Organization>,
+    #[serde(default)]
+    pub auth_mode: String,
+    #[serde(default)]
+    pub account: Option<account::Account>,
+    #[serde(default)]
+    pub issuer_url: String,
+    #[serde(default)]
+    pub issuer_account: Option<account::Account>,
+    #[serde(default)]
+    pub account_service: Value,
 }
 impl ServerConfiguration {
     pub fn home(c: &Configuration) -> Self {
@@ -31,7 +41,69 @@ impl ServerConfiguration {
             device_id: String::new(),
             device_token: String::new(),
             organizations: vec![],
+            auth_mode: if c.account.is_some() {
+                "direct"
+            } else {
+                "observer"
+            }
+            .into(),
+            account: c.account.clone(),
+            issuer_url: String::new(),
+            issuer_account: None,
+            account_service: Value::Null,
         }
+    }
+    pub fn has_credentials(&self) -> bool {
+        !self.token.is_empty() || !self.device_token.is_empty()
+    }
+    pub fn logged_in(&self) -> bool {
+        self.has_credentials() && (self.account.is_some() || self.issuer_account.is_some())
+    }
+    pub fn profile(&self) -> Option<&account::Account> {
+        self.account.as_ref().or(self.issuer_account.as_ref())
+    }
+    pub fn connection_device<'a>(&'a self, fallback: &'a str) -> &'a str {
+        if self.device_token.is_empty() {
+            fallback
+        } else {
+            &self.device_id
+        }
+    }
+    pub fn connection_config(&self, config: &Configuration) -> Configuration {
+        let mut child = config.clone();
+        child.server_url = self.url.clone();
+        child.account = self.account.clone().or(self.issuer_account.clone());
+        child
+    }
+}
+
+pub(super) fn primary_account(config: &Configuration) -> Option<account::Account> {
+    config
+        .servers
+        .iter()
+        .filter(|server| server.logged_in())
+        .find_map(|server| server.account.clone())
+        .or_else(|| {
+            config
+                .servers
+                .iter()
+                .filter(|server| server.logged_in())
+                .find_map(|server| server.issuer_account.clone())
+        })
+}
+
+pub(super) fn synchronize_legacy(config: &mut Configuration) {
+    if let Some(server) = config
+        .servers
+        .iter()
+        .find(|server| server.auth_mode == "direct" && server.logged_in())
+    {
+        config.account = server.account.clone();
+        config.server_url = server.url.clone();
+        config.server_token = server.token.clone();
+    } else {
+        config.account = None;
+        config.server_token.clear();
     }
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
@@ -57,6 +129,12 @@ pub(super) struct ServerStatus {
     pub enabled: bool,
     pub connection: String,
     pub error: String,
+    pub name: String,
+    pub logged_in: bool,
+    pub auth_mode: String,
+    pub account: Option<account::Account>,
+    pub account_summary: Value,
+    pub issuer_url: Option<String>,
 }
 impl ServerStatus {
     pub fn new(c: &ServerConfiguration) -> Self {
@@ -66,6 +144,27 @@ impl ServerStatus {
             enabled: c.enabled,
             connection: if c.enabled { "connecting" } else { "disabled" }.into(),
             error: String::new(),
+            name: c
+                .profile()
+                .map(|profile| profile.display_name.clone())
+                .unwrap_or_else(|| {
+                    Url::parse(&c.url)
+                        .ok()
+                        .and_then(|url| url.host_str().map(str::to_owned))
+                        .unwrap_or_else(|| "Presence".into())
+                }),
+            logged_in: c.logged_in(),
+            auth_mode: c.auth_mode.clone(),
+            account: c.account.clone(),
+            account_summary: c
+                .profile()
+                .map(|profile| json!({"displayName":profile.display_name,"email":profile.email}))
+                .unwrap_or(Value::Null),
+            issuer_url: if c.issuer_url.is_empty() {
+                None
+            } else {
+                Some(c.issuer_url.clone())
+            },
         }
     }
 }
@@ -100,6 +199,10 @@ impl Presence {
         Ok((String::new(), s.token.clone()))
     }
     pub(super) async fn save_cached(&self, c: Configuration) -> Result<()> {
+        if self.read_only {
+            return Err("Presence 配置尚未安全读取，原文件已保留，暂不能保存设置。".into());
+        }
+        validate_configuration(&c)?;
         if self.persistent {
             credentials::save(
                 &self.root.join("presence-v1.encrypted"),
@@ -117,8 +220,12 @@ impl Presence {
         &self,
         url: &str,
         organizations: Vec<Organization>,
+        generation: u64,
     ) -> Result<()> {
         let _guard = self.configure_lock.lock().await;
+        if self.state.read().await.generation != generation {
+            return Err("Presence 连接已变化，未保存旧组织响应。".into());
+        }
         let mut c = self.config.borrow().clone();
         let server = c
             .servers
@@ -137,17 +244,54 @@ impl Presence {
         url: &str,
         c: &Configuration,
     ) -> Result<ServerConfiguration> {
-        let a = c.account.as_ref().ok_or("请先登录Presence账号。")?;
-        let value = if url == c.server_url {
-            self.account_http(url, "status", Some(&c.server_token), None)
-                .await?
-        } else {
+        if let Some(existing) = c
+            .servers
+            .iter()
+            .find(|server| server.url == url && server.auth_mode == "direct" && server.logged_in())
+        {
+            let value = self
+                .account_http(url, "status", Some(&existing.token), None)
+                .await?;
+            let profile = account::profile(&value, url, Some(existing.expires_at))?;
+            if !account::same_identity(existing.account.as_ref().unwrap(), &profile) {
+                return Err("Presence 返回了不匹配的账号，原登录未修改。".into());
+            }
+            let mut server = existing.clone();
+            server.enabled = true;
+            server.account = Some(profile);
+            Self::organization_metadata(&mut server, &value)?;
+            return Ok(server);
+        }
+        let issuer = c
+            .servers
+            .iter()
+            .find(|server| server.url == url)
+            .filter(|server| server.auth_mode == "delegated")
+            .map(|server| server.issuer_url.as_str())
+            .unwrap_or(&c.server_url);
+        let owner = c
+            .servers
+            .iter()
+            .find(|server| {
+                server.url == issuer && server.auth_mode == "direct" && server.logged_in()
+            })
+            .ok_or("请先重新登录账号归属服务器，或在此服务器直接登录。")?;
+        let a = owner.account.as_ref().ok_or("请先登录Presence账号。")?;
+        if c.servers
+            .iter()
+            .find(|server| server.url == url)
+            .and_then(|server| server.issuer_account.as_ref())
+            .is_some_and(|original| !account::same_identity(original, a))
+        {
+            return Err("账号归属服务器已切换身份，请对目标 Presence 服务器明确重新登录。".into());
+        }
+        let value = {
             let challenge = self
                 .account_http(
                     url,
                     "identity/challenge",
                     None,
-                    Some(&json!({"issuer":if a.issuer.is_empty(){&c.server_url}else{&a.issuer}})),
+                    Some(&json!({"issuer":if a.issuer.is_empty(){&owner.url}else{&a.issuer}})),
                 )
                 .await?;
             if challenge["audience"] != url {
@@ -155,9 +299,9 @@ impl Presence {
             }
             let ticket = self
                 .account_http(
-                    &c.server_url,
+                    &owner.url,
                     "identity/ticket",
-                    Some(&c.server_token),
+                    Some(&owner.token),
                     Some(&json!({"audience":url,"nonce":challenge["nonce"]})),
                 )
                 .await?;
@@ -170,36 +314,36 @@ impl Presence {
             .await?
         };
         let expected = if a.identity_id.is_empty() {
-            util::digest(format!("{}\0{}", c.server_url, a.id))
+            util::digest(format!("{}\0{}", owner.url, a.id))
         } else {
             a.identity_id.clone()
         };
         if value["account"]["identityId"] != expected || value["automaticManagement"] != true {
             return Err("服务器未确认当前个人身份或不支持自动纳管。".into());
         }
-        let token = if url == c.server_url {
-            c.server_token.clone()
-        } else {
-            util::field(&value, "token", 512)?
-        };
+        let token = util::field(&value, "token", 512)?;
         let mut server = ServerConfiguration {
             url: url.into(),
             enabled: true,
             token,
-            expires_at: if url == c.server_url {
-                a.expires_at
-            } else {
-                value["expiresAt"].as_u64().ok_or("账号有效期无效。")?
-            },
+            expires_at: value["expiresAt"].as_u64().ok_or("账号有效期无效。")?,
             user_id: util::field(&value["account"], "id", 160)?,
             device_id: String::new(),
             device_token: String::new(),
             organizations: vec![],
+            auth_mode: "delegated".into(),
+            account: None,
+            issuer_url: owner.url.clone(),
+            issuer_account: Some(a.clone()),
+            account_service: Value::Null,
         };
         Self::organization_metadata(&mut server, &value)?;
         Ok(server)
     }
-    fn organization_metadata(server: &mut ServerConfiguration, value: &Value) -> Result<()> {
+    pub(super) fn organization_metadata(
+        server: &mut ServerConfiguration,
+        value: &Value,
+    ) -> Result<()> {
         let mut organizations: Vec<Organization> =
             serde_json::from_value(value["organizations"].clone())
                 .map_err(|_| "服务器组织范围无效。")?;
@@ -223,9 +367,12 @@ impl Presence {
         Ok(())
     }
     pub(super) async fn server_command(&self, method: &str, input: Value) -> Result<Value> {
+        if self.read_only {
+            return Err("Presence 配置尚未安全读取，原文件已保留，暂不能修改服务器。".into());
+        }
         let _guard = self.configure_lock.lock().await;
         let mut c = self.config.borrow().clone();
-        if c.account.is_none() {
+        if !c.servers.iter().any(ServerConfiguration::logged_in) {
             return Err("请先登录Presence账号。".into());
         }
         match method {
@@ -253,8 +400,10 @@ impl Presence {
                 if enabled {
                     let old = c.servers[index].clone();
                     let mut next = self.authenticated_server(&old.url, &c).await?;
-                    next.device_id = old.device_id;
-                    next.device_token = old.device_token;
+                    if next.user_id == old.user_id {
+                        next.device_id = old.device_id;
+                        next.device_token = old.device_token;
+                    }
                     c.servers[index] = next;
                 } else {
                     c.servers[index].enabled = false;
@@ -278,9 +427,9 @@ impl Presence {
             .servers
             .iter()
             .filter(|s| s.enabled)
+            .filter(|s| s.has_credentials())
             .map(|s| {
-                let mut child = c.clone();
-                child.server_url = s.url.clone();
+                let child = s.connection_config(&c);
                 self.remote_loop(child, generation)
             })
             .collect::<Vec<_>>();
@@ -289,7 +438,7 @@ impl Presence {
         }
         tokio::select! { _=futures_util::future::join_all(connections)=>{}, _=self.catalogue_loop(generation)=>{}, _=self.source_loop(generation)=>{} }
     }
-    async fn catalogue_loop(&self, generation: u64) {
+    pub(super) async fn catalogue_loop(&self, generation: u64) {
         loop {
             let catalog = self.service.catalog().await;
             if let Ok(catalog) = catalog {
@@ -314,7 +463,7 @@ impl Presence {
                             &original.url,
                             method,
                             Some(token),
-                            Some(&json!({"deviceId":c.device_id,"repositories":repositories})),
+                            Some(&json!({"deviceId":original.connection_device(&c.device_id),"repositories":repositories})),
                         )
                         .await
                     {
@@ -328,10 +477,7 @@ impl Presence {
                             }
                             let _guard = self.configure_lock.lock().await;
                             let mut latest = self.config.borrow().clone();
-                            if latest.server_url != c.server_url
-                                || latest.account.as_ref().map(|a| &a.id)
-                                    != c.account.as_ref().map(|a| &a.id)
-                            {
+                            if self.state.read().await.generation!=generation || !latest.servers.iter().any(|server|server.url==original.url&&server.token==original.token&&server.user_id==original.user_id&&server.enabled) {
                                 break;
                             }
                             if let Some(s) =
@@ -407,6 +553,18 @@ impl Presence {
         if let Some(mut sessions) = sessions {
             for s in &mut sessions {
                 s.server_id = id.clone();
+                s.is_current = c
+                    .servers
+                    .iter()
+                    .find(|server| server.url == url)
+                    .is_some_and(|server| {
+                        server.user_id == s.user_id
+                            && s.device_id == server.connection_device(&c.device_id)
+                            && server.profile().is_none_or(|profile| {
+                                profile.identity_id.is_empty()
+                                    || profile.identity_id == s.identity_id
+                            })
+                    });
             }
             entry.sessions = sessions;
         } else {
@@ -459,10 +617,15 @@ impl Presence {
             "disabled"
         }
         .into();
-        state.error.clear();
     }
     async fn source_loop(&self, generation: u64) {
-        if self.config.borrow().account.is_none() {
+        if !self
+            .config
+            .borrow()
+            .servers
+            .iter()
+            .any(ServerConfiguration::logged_in)
+        {
             std::future::pending::<()>().await;
         }
         loop {

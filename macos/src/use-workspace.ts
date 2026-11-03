@@ -277,7 +277,7 @@ export function useWorkspace(activeRepositoryId = '') {
     try { return await run(); }
     catch (problem) { if (mounted.current && !updates.installingRef.current && installation === updates.installationRef.current && problem instanceof LocalServiceError) setError(problem.message); throw problem; }
   }
-  async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync' | 'executeGraph'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
+  async function writeCommit<M extends 'submitCommit' | 'pushCommit' | 'applySync' | 'executeGraph' | 'ignoreFile'>(method: M, input: ApiInputs[M]): Promise<ApiOutputs[M]> {
     await ensureService();
     const link = catalogRef.current.links.find(link => link.repositoryId === input.repositoryId);
     if (!link) throw new Error('请先关联本地目录。');
@@ -297,6 +297,14 @@ export function useWorkspace(activeRepositoryId = '') {
         setChangeVersions(current => ({ ...current, [input.repositoryId]: (current[input.repositoryId] || 0) + 1 }));
       }
       return result;
+    } catch (problem) {
+      // A failed merge may leave conflicts in the worktree; refresh even when
+      // the operation did not return a success result.
+      if (method === 'ignoreFile' || method === 'applySync' || method === 'pushCommit') {
+        localReadVersions.current.set(resource, (localReadVersions.current.get(resource) || 0) + 1);
+        if (currentLink()) setChangeVersions(current => ({ ...current, [input.repositoryId]: (current[input.repositoryId] || 0) + 1 }));
+      }
+      throw problem;
     } finally {
       running.current.delete(key);
       resumeRefresh();
@@ -310,6 +318,11 @@ export function useWorkspace(activeRepositoryId = '') {
   };
   return {
     catalog, localStates, remoteStates, hiddenEntries, preferences, updatePreferences, setAccountDisplayName, toggleRepositoryPin, markRepositoryUsed, loading, error, storageError, busy, reload, service, needsReload, updates, refreshLocal: onFetched, refreshRepository, pauseRepositoryRefresh, pausedRepositories, generateCommitMessage,
+    ignoreRepositoryFile: async (target: import('./repository-action-model').RepositoryActionTarget, file: import('./import-model').LocalFile) => {
+      if (!target.task.changeKey) throw new Error('工作目录状态未准备好，请刷新后重试。');
+      const result = await writeCommit('ignoreFile', { repositoryId: target.repositoryId, taskId: target.task.id, expectedHead: target.task.head, changeKey: target.task.changeKey, path: file.path, operationId: crypto.randomUUID() });
+      return { task: { ...target.task, files: result.files, changeKey: result.changeKey } };
+    },
     submitCommit: (input: ApiInputs['submitCommit']) => writeCommit('submitCommit', input),
     pushCommit: (input: ApiInputs['pushCommit']) => writeCommit('pushCommit', input),
     applySync: (input: ApiInputs['applySync']) => writeCommit('applySync', input),

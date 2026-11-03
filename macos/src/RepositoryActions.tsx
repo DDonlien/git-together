@@ -3,6 +3,7 @@ import type { GitSignals } from './branch-links';
 import { Icon, IconButton, type IconName } from './ui';
 import { useRepositoryOperations } from './RepositoryOperationProvider';
 import type { RepositoryActionTarget } from './repository-action-model';
+import { repositoryUpdateDecision, repositoryUpdateScope } from './repository-update-model';
 import { logDiagnostic } from './diagnostics-api';
 
 type ActionKey = 'fetch' | 'pull' | 'commit' | 'push';
@@ -18,7 +19,7 @@ const groups: { key: keyof GitSignals; label: string; actions: Action[] }[] = [
   { key: 'push', label: '待推送', actions: [{ key: 'push', label: 'Push', icon: 'arrowUp', description: '推送所选范围内已有的本地提交。' }] },
 ];
 
-type ActionCallbacks = { allowUnknownPush?: boolean; onCommit?: () => void; onPush?: () => void; onPull?: () => void; onFetch?: () => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };
+type ActionCallbacks = { allowUnknownPush?: boolean; onCommit?: () => void; onPush?: () => void; onPull?: () => void; onFetch?: () => void; onUpdate?: (mode: 'pull' | 'push', targets: RepositoryActionTarget[], scope: string | undefined) => void; busy?: boolean; actionErrors?: Partial<Record<ActionKey, string>>; operationScope?: string; operationTargets?: readonly RepositoryActionTarget[] };
 
 export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidden, unlinked = false, onDownload, downloadBlocked = false, downloadBusy = false, ...callbacks }: {
   itemLabel: string; signals: GitSignals; hidden: boolean; onToggleHidden?: () => void;
@@ -32,7 +33,7 @@ export function RepositoryRowActions({ itemLabel, signals, hidden, onToggleHidde
   </div>;
 }
 
-export function RepositoryActions({ label, signals, onCommit, onPush, onPull, onFetch, busy = false, actionErrors = {}, operationScope, operationTargets, allowUnknownPush = false }: { label: string; signals: GitSignals } & ActionCallbacks) {
+export function RepositoryActions({ label, signals, onCommit, onPush, onPull, onFetch, onUpdate, busy = false, actionErrors = {}, operationScope, operationTargets, allowUnknownPush = false }: { label: string; signals: GitSignals } & ActionCallbacks) {
   const operations = useRepositoryOperations();
   const blocked = busy || Object.values(signals).some(signal => signal.status === 'reading');
   const [pressed, setPressed] = useState<ActionKey | null>(null);
@@ -43,7 +44,17 @@ export function RepositoryActions({ label, signals, onCommit, onPush, onPull, on
   useEffect(() => () => { if (releaseTimer.current) clearTimeout(releaseTimer.current); }, []);
   useEffect(() => { if (blocked) clearPress(); }, [blocked]);
   const callbacks = { commit: onCommit, push: onPush, pull: onPull, fetch: onFetch };
+  const update = repositoryUpdateDecision(operationTargets || [], signals);
+  const updateName = `Update · ${{ fetch: 'Fetch', pull: 'Pull', push: 'Push' }[update.action]}`;
+  const updateScope = update.action !== 'fetch' && operationScope ? repositoryUpdateScope(operationScope, update.action, update.targets) : undefined;
+  const updateOperation = update.action !== 'fetch' && updateScope ? operations.get(update.action, updateScope, update.targets) : undefined;
+  const updatePending = updateOperation?.state === 'preparing' || updateOperation?.state === 'working';
+  const updateCallback = update.action === 'fetch' ? onFetch : onUpdate ? () => onUpdate(update.action as 'pull' | 'push', update.targets, updateScope) : undefined;
+  const updateBlocked = !updateOperation && (blocked || !!operationTargets && operations.blocked(operationTargets) || !updateCallback);
   return <div className="repository-actions" role="group" aria-label={label}>
+    <div className="git-action-group repository-update-group" role="group" aria-label="Update">
+      <span className={`git-action-anchor${updateBlocked ? ' is-blocked' : ''}`} data-action-name={updateName}><IconButton icon={{ fetch: 'refresh', pull: 'arrowDown', push: 'arrowUp' }[update.action] as IconName} label={`${updateName}：${update.detail}`} title="" disabled={updateBlocked} aria-busy={updatePending || undefined} onClick={updateOperation ? () => operations.restore(updateOperation.id) : updateCallback} />{updateOperation && <span className="git-operation-indicator" data-state={updateOperation.state} aria-hidden="true">{updatePending ? <Icon name="spinner" size={10} className="spin" /> : updateOperation.state === 'failed' ? '!' : <Icon name={updateOperation.state === 'completed' ? 'check' : 'clock'} size={10} />}</span>}</span>
+    </div>
     {groups.map(group => {
       const signal = signals[group.key], count = signal.count, hasCount = count !== undefined && count > 0;
       return <div key={group.key} className="git-action-group" role="group" aria-label={group.label}>

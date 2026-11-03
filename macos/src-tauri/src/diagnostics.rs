@@ -2,12 +2,20 @@ use crate::util::{self, text, Result};
 use serde_json::{json, Value};
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
     sync::{atomic::{AtomicU64, Ordering}, mpsc::{self, SyncSender}, Arc, Mutex},
     time::{Duration, Instant},
 };
-const MAX_BYTES: u64 = 128 * 1024 * 1024;
+const RETENTION_HOURS: i64 = 7 * 24;
+const MAX_BYTES: u64 = 512 * 1024 * 1024;
+const RECENT_RECORDS: usize = 500;
+const RECENT_BYTES: usize = 256 * 1024;
+const RECENT_FILE_BYTES: u64 = 256 * 1024;
+const RECENT_FILES: usize = 64;
+const RECENT_SOURCE_BYTES: u64 = RECENT_FILE_BYTES * RECENT_FILES as u64;
+const RECENT_LINE_BYTES: usize = 16 * 1024;
+const CAPACITY_ERROR: &str = "日志达到空间上限，当前日志文件已保留，写入已暂停；仍可查看、打开或复制现有日志，下一小时轮换后会重试写入。";
 #[derive(Clone)]
 pub struct Diagnostics {
     pub directory: PathBuf,
@@ -28,6 +36,10 @@ struct LogState {
     error: String,
     last: i64,
     written: u64,
+    total: u64,
+    pruned: bool,
+    write_paused: bool,
+    required: u64,
 }
 impl Diagnostics {
     pub fn new(directory: PathBuf, component: &str) -> Self {
@@ -40,6 +52,10 @@ impl Diagnostics {
                 error: String::new(),
                 last: 0,
                 written: 0,
+                total: 0,
+                pruned: false,
+                write_paused: false,
+                required: 0,
             }),
         });
         let (sender, receiver) = mpsc::sync_channel(512);
@@ -105,7 +121,7 @@ impl LogWriter {
         value["time"] = json!(util::iso()); value["version"] = json!(crate::VERSION); value["component"] = json!(self.component); value["session"] = json!(self.session); value
     }
     fn prepare(&self) -> Result<()> {
-        if fs::symlink_metadata(&self.directory).is_ok_and(|m| m.file_type().is_symlink()) {
+        if fs::symlink_metadata(&self.directory).is_ok_and(|m| crate::platform::is_link(&m)) {
             return Err("日志目录链接无效（ELOOP）。".into());
         }
         crate::platform::private_directory(&self.directory).map_err(|_| "无法保护日志目录。".into())
@@ -120,66 +136,62 @@ impl LogWriter {
                 continue;
             };
             let m = fs::symlink_metadata(item.path()).map_err(|_| "无法读取日志文件状态。")?;
-            if !m.is_file() || m.file_type().is_symlink() {
+            if !m.is_file() || crate::platform::is_link(&m) {
                 continue;
             }
             files.push((item.path(), hour, m.len()));
         }
-        files.sort_by_key(|(_, hour, _)| *hour);
+        files.sort_by(|(a, ah, _),(b, bh, _)| ah.cmp(bh).then_with(||a.cmp(b)));
         Ok(files)
     }
-    fn prune(&self, state: &mut LogState) -> Result<()> {
+    fn prune_at(&self, state: &mut LogState, now: i64, max_bytes: u64) -> Result<()> {
+        self.prune_for_write(state,now,max_bytes,state.required)
+    }
+    fn prune_for_write(&self, state: &mut LogState, now: i64, max_bytes: u64, incoming_bytes: u64) -> Result<()> {
         self.prepare()?;
-        let cutoff = util::now() - 86_400_000;
+        let cutoff = now - RETENTION_HOURS * 3_600_000;
         for (path, hour, _) in self.files()? {
             if hour + 3_600_000 <= cutoff {
                 let _ = fs::remove_file(path);
-            } else if hour <= cutoff {
-                let bytes = fs::read(&path).map_err(|_| "日志边界清理读取失败。")?;
-                if bytes.len() > MAX_BYTES as usize {
-                    return Err("日志文件超过清理上限。".into());
-                }
-                let retained = String::from_utf8_lossy(&bytes)
-                    .lines()
-                    .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-                    .filter(|v| {
-                        chrono::DateTime::parse_from_rfc3339(text(v, "time"))
-                            .is_ok_and(|d| d.timestamp_millis() >= cutoff)
-                            && sanitize(v, false).is_some()
-                    })
-                    .map(|v| v.to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                if retained.is_empty() {
-                    let _ = fs::remove_file(path);
-                } else {
-                    let mut temp = tempfile::NamedTempFile::new_in(&self.directory)
-                        .map_err(|_| "日志清理写入失败。")?;
-                    crate::platform::private_file(temp.as_file()).map_err(|_| "日志保护失败。")?;
-                    writeln!(temp, "{retained}").map_err(|_| "日志清理写入失败。")?;
-                    temp.persist(path).map_err(|_| "日志清理发布失败。")?;
-                }
             }
         }
+        // Keep boundary-hour archives intact rather than rewriting their
+        // records. Hourly rotation conservatively retains up to one extra hour.
         let files = self.files()?;
-        let mut total = files.iter().map(|(_, _, s)| s).sum::<u64>();
-        for (path, _, size) in files {
-            if total <= MAX_BYTES {
+        let mut total = files.iter().fold(0u64,|total,(_,_,size)|total.saturating_add(*size));
+        for (path, hour, size) in files {
+            if total <= max_bytes.saturating_sub(incoming_bytes) {
                 break;
             }
+            // A current-hour file may still be open by another log writer.
+            // Preserve active archives instead of deleting the newest records.
+            if hour >= now / 3_600_000 * 3_600_000 { continue; }
             fs::remove_file(path).map_err(|_| "日志容量清理失败。")?;
             total = total.saturating_sub(size);
             state.limited = true;
+            state.pruned = true;
         }
-        state.last = util::now();
+        state.total=total;
+        state.write_paused=total>=max_bytes || total.saturating_add(incoming_bytes)>max_bytes;
+        if state.write_paused { state.limited=true;state.error=CAPACITY_ERROR.into(); }
+        else { state.required=0;if state.error==CAPACITY_ERROR { state.error.clear(); } }
+        state.last = now;
         state.written = 0;
         Ok(())
     }
     fn write_records(&self, values: &[Value]) -> bool {
+        self.write_records_with_limit(values,MAX_BYTES)
+    }
+    fn write_records_with_limit(&self, values: &[Value], max_bytes: u64) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let result = (|| {
-            if util::now() - state.last > 60_000 || state.written >= 1_048_576 {
-                self.prune(&mut state)?;
+            let row = values.iter().map(|v| format!("{v}\n")).collect::<String>();
+            if util::now() - state.last > 60_000 || state.written >= 1_048_576 || state.total.saturating_add(row.len() as u64)>max_bytes {
+                self.prune_for_write(&mut state,util::now(),max_bytes,row.len() as u64)?;
+            }
+            if state.total.saturating_add(row.len() as u64)>max_bytes {
+                state.limited=true;state.write_paused=true;state.required=row.len() as u64;
+                return Err(CAPACITY_ERROR.into());
             }
             self.prepare()?;
             let path = self.directory.join(format!(
@@ -192,10 +204,12 @@ impl LogWriter {
                 crate::platform::open_regular(&path, OpenOptions::new().create(true).append(true))
                     .map_err(|_| "日志写入失败。")?;
             crate::platform::private_file(&file).map_err(|_| "日志保护失败。")?;
-            let row = values.iter().map(|v| format!("{v}\n")).collect::<String>();
             file.write_all(row.as_bytes())
                 .map_err(|_| "日志写入失败。")?;
             state.written += row.len() as u64;
+            state.total=state.total.saturating_add(row.len() as u64);
+            state.write_paused=false;
+            state.required=0;
             Ok::<(), String>(())
         })();
         match result {
@@ -210,11 +224,74 @@ impl LogWriter {
         }
     }
     pub fn status(&self) -> Value {
+        self.status_with_limit(MAX_BYTES)
+    }
+    fn status_with_limit(&self,max_bytes: u64) -> Value {
         let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = self.prune(&mut s) {
+        if let Err(e) = self.prune_at(&mut s,util::now(),max_bytes) {
             s.error = e;
         }
-        json!({"directory":self.directory.to_string_lossy(),"retentionHours":24,"maxBytes":MAX_BYTES,"limited":s.limited,"error":s.error})
+        json!({"directory":self.directory.to_string_lossy(),"retentionHours":RETENTION_HOURS,"maxBytes":max_bytes,"limited":s.limited,"error":s.error,"retainedBytes":s.total.min(9_007_199_254_740_991),"capacityPruned":s.pruned,"writePaused":s.write_paused})
+    }
+
+    fn recent(&self, flushed: bool) -> Result<Value> {
+        let mut files = match fs::symlink_metadata(&self.directory) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(_) => return Err("日志目录无法读取。".into()),
+            Ok(metadata) if !metadata.is_dir() || crate::platform::is_link(&metadata) => return Err("日志目录链接无效（ELOOP）。".into()),
+            Ok(_) => self.files()?,
+        };
+        let file_count=files.len();
+        let total_bytes=files.iter().fold(0u64,|total,(_,_,size)|total.saturating_add(*size)).min(9_007_199_254_740_991);
+        // Last modification selects the files most recently written even when
+        // several sessions/components share one hourly bucket. Record times,
+        // not directory order, determine the final ordering across those files.
+        files.sort_by_cached_key(|(path,_,_)| (std::cmp::Reverse(fs::metadata(path).and_then(|metadata|metadata.modified()).unwrap_or(std::time::UNIX_EPOCH)),path.clone()));
+        let mut candidates=Vec::new();
+        let mut read_bytes=0u64;
+        let mut omitted=file_count>RECENT_FILES;
+        let mut invalid=false;
+        for (rank,(path,_,_)) in files.into_iter().take(RECENT_FILES).enumerate() {
+            if read_bytes>=RECENT_SOURCE_BYTES { omitted=true;break; }
+            let name=path.file_name().and_then(|name|name.to_str()).ok_or("日志文件名称无效。")?;
+            let (_,component,session)=log_identity(name).ok_or("日志文件名称无效。")?;
+            let mut file=crate::platform::open_regular(&path,OpenOptions::new().read(true)).map_err(|_| "近期日志文件无法读取。")?;
+            let length=file.metadata().map_err(|_| "近期日志状态无法读取。")?.len();
+            let count=length.min(RECENT_FILE_BYTES).min(RECENT_SOURCE_BYTES-read_bytes);
+            let offset=length-count;
+            if offset>0 { omitted=true; }
+            file.seek(SeekFrom::Start(offset)).map_err(|_| "近期日志定位失败。")?;
+            let mut bytes=Vec::with_capacity(count as usize);
+            Read::by_ref(&mut file).take(count).read_to_end(&mut bytes).map_err(|_| "近期日志读取失败。")?;
+            if bytes.len() as u64!=count { omitted=true; }
+            read_bytes+=bytes.len() as u64;
+            let start=if offset>0 { bytes.iter().position(|byte|*byte==b'\n').map_or(bytes.len(),|position|position+1) }else{0};
+            let end=bytes.iter().rposition(|byte|*byte==b'\n').map_or(0,|position|position+1);
+            if end<bytes.len() { invalid=true; }
+            if start>=end { continue; }
+            for (line_index,line) in bytes[start..end].split(|byte|*byte==b'\n').enumerate() {
+                if line.is_empty() { continue; }
+                if line.len()>RECENT_LINE_BYTES { invalid=true;continue; }
+                let record=serde_json::from_slice::<Value>(line).ok().and_then(|value|recent_record(&value,component,&session));
+                if let Some((timestamp,record))=record { candidates.push((timestamp,rank,line_index,record)); }
+                else { invalid=true; }
+            }
+        }
+        candidates.sort_by(|a,b|b.0.cmp(&a.0).then_with(||a.1.cmp(&b.1)).then_with(||b.2.cmp(&a.2)));
+        let mut records=Vec::new();
+        let mut returned_bytes=2usize;
+        let candidate_count=candidates.len();
+        for (_,_,_,record) in candidates {
+            let bytes=serde_json::to_vec(&record).map_err(|_| "近期日志格式无效。")?.len()+usize::from(!records.is_empty());
+            // Leave room for the fixed response metadata so the whole reply
+            // remains within 256 KiB, not only its record array.
+            if records.len()>=RECENT_RECORDS || returned_bytes+bytes>RECENT_BYTES-4096 { omitted=true;break; }
+            returned_bytes+=bytes; records.push(record);
+        }
+        if records.len()<candidate_count { omitted=true; }
+        let newest=records.first().map(|record|record["time"].clone()).unwrap_or(Value::Null);
+        let oldest=records.last().map(|record|record["time"].clone()).unwrap_or(Value::Null);
+        Ok(json!({"records":records,"truncated":omitted||invalid||!flushed,"hasOlder":omitted,"files":file_count,"totalBytes":total_bytes,"returnedBytes":returned_bytes,"maxRecords":RECENT_RECORDS,"maxBytes":RECENT_BYTES,"oldestTime":oldest,"newestTime":newest}))
     }
 }
 impl Diagnostics {
@@ -225,6 +302,15 @@ impl Diagnostics {
     pub async fn command(&self, method: &str, input: &Value) -> Result<Value> {
         match method {
             "status" => self.inspect().await,
+            "recent" => {
+                util::allowed(input,&[])?;
+                let diagnostics=self.clone();
+                tokio::task::spawn_blocking(move || {
+                    let (sender,receiver)=mpsc::sync_channel(1);
+                    let flushed=diagnostics.sender.try_send(LogMessage::Barrier(sender)).is_ok() && receiver.recv_timeout(Duration::from_secs(2)).is_ok();
+                    diagnostics.writer.recent(flushed)
+                }).await.map_err(|_| "近期日志读取未完成。")?
+            }
             "record" => {
                 if self.record(input, true) {
                     Ok(json!(true))
@@ -233,10 +319,13 @@ impl Diagnostics {
                 }
             }
             "open" => {
-                let status = self.inspect().await?;
-                if status["error"] != "" {
-                    return Err(text(&status, "error").into());
-                }
+                self.inspect().await?;
+                let directory=self.directory.clone();
+                tokio::task::spawn_blocking(move || {
+                    let metadata=fs::symlink_metadata(directory).map_err(|_| "日志目录无法读取。")?;
+                    if !metadata.is_dir() || crate::platform::is_link(&metadata) { return Err("日志目录链接无效（ELOOP）。".to_string()); }
+                    Ok(())
+                }).await.map_err(|_| "日志目录验证未完成。")??;
                 crate::service::open(self.directory.to_str().ok_or("日志目录名称无法读取。")?)
                     .await?;
                 Ok(json!(true))
@@ -259,18 +348,40 @@ impl Diagnostics {
     }
 }
 fn log_hour(name: &str) -> Option<i64> {
+    log_identity(name).map(|(hour,_,_)|hour)
+}
+fn log_identity(name: &str) -> Option<(i64,&str,uuid::Uuid)> {
     let tail = name.strip_prefix("diagnostics-")?.strip_suffix(".jsonl")?;
     let (hour, rest) = tail.split_once('-')?;
     if hour.len() != 13 {
         return None;
     }
     let (component, id) = rest.split_once('-')?;
-    if !matches!(component, "app" | "preview" | "authorization" | "test")
-        || uuid::Uuid::parse_str(id).is_err()
-    {
+    if !matches!(component, "app" | "preview" | "authorization" | "test") {
         return None;
     }
-    hour.parse().ok()
+    Some((hour.parse().ok()?,component,uuid::Uuid::parse_str(id).ok()?))
+}
+fn recent_record(value: &Value,component: &str,session: &uuid::Uuid) -> Option<(chrono::DateTime<chrono::Utc>,Value)> {
+    let time=text(value,"time");
+    if time.len()>64 { return None; }
+    let timestamp=chrono::DateTime::parse_from_rfc3339(time).ok()?;
+    let version=display_version(text(value,"version"))?;
+    if text(value,"component")!=component || uuid::Uuid::parse_str(text(value,"session")).ok().as_ref()!=Some(session) { return None; }
+    let mut clean=sanitize(value,false)?;
+    // Updater chains on disk are bounded developer diagnostics but can contain
+    // free text. The app viewer only exposes finite allowlisted fields.
+    clean.as_object_mut()?.remove("errorChain");
+    if clean.get("updateVersion").is_some_and(|version|display_version(version.as_str().unwrap_or("")).is_none()) { clean.as_object_mut()?.remove("updateVersion"); }
+    clean["time"]=json!(timestamp.to_utc().to_rfc3339_opts(chrono::SecondsFormat::AutoSi,true));
+    clean["version"]=json!(version); clean["component"]=json!(component); clean["session"]=json!(session.to_string());
+    Some((timestamp.to_utc(),clean))
+}
+fn display_version(value: &str) -> Option<String> {
+    if value.len()>64 { return None; }
+    let parsed=semver::Version::parse(value).ok()?;
+    if !parsed.build.is_empty() || !parsed.pre.is_empty() && !parsed.pre.as_str().strip_prefix("lite.").is_some_and(|number|!number.is_empty()&&number.bytes().all(|byte|byte.is_ascii_digit())) { return None; }
+    Some(parsed.to_string())
 }
 pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
     let event = text(v, "event");
@@ -298,7 +409,7 @@ pub fn sanitize(v: &Value, renderer: bool) -> Option<Value> {
             if v[key].as_i64().is_some_and(|n|(-31_536_000..=31_536_000).contains(&n)) { clean[key]=v[key].clone(); }
         }
     }
-    let allowed=[("method","integrationBranches integrationCommits prepareIntegration applyIntegration restoreIntegration discardIntegration graphSources graphPreview prepareGraphMerge cancelGraphPreparation discardGraphMerge applyGraphMerge executeGraph createGraphWorktree openCommit fetchRepository prepareSync inspectDivergence applySync discardSync submitCommit pushCommit submit generateCommitMessage generateCommitPlan cancelCommitGeneration status catalog connect accountRepositoryAccess openAccountAccessSettings setRepositoryAuthentication updateAccount refresh removeAccount matchAccountRepositories link downloadBranch dismissBranchIssue unlink snapshot localWorkspace localCommit remoteWorkspace remoteHistory remoteCommit remoteFile localDirectory prepareFileOperation applyFileOperation discardFileOperation openFile openDirectory openLocalDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github github-enterprise gitlab gitee gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files check-ignore rev-parse for-each-ref config fetch ls-remote clone push add commit other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing git-lfs-object-missing git-lfs ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED ERR_UPDATER_INVALID_ARCHIVE ERR_UPDATER_VERSION ERR_UPDATER_HTTP ERR_UPDATER_TEMP_DIR ERR_UPDATER_RESTORE EXDEV EROFS EBUSY INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
+    let allowed=[("method","integrationBranches integrationCommits prepareIntegration applyIntegration restoreIntegration discardIntegration graphSources graphPreview prepareGraphMerge cancelGraphPreparation discardGraphMerge applyGraphMerge executeGraph createGraphWorktree openCommit fetchRepository prepareSync inspectDivergence applySync discardSync ignoreFile submitCommit pushCommit submit generateCommitMessage generateCommitPlan cancelCommitGeneration status catalog connect accountRepositoryAccess openAccountAccessSettings setRepositoryAuthentication updateAccount refresh removeAccount matchAccountRepositories link downloadBranch dismissBranchIssue unlink snapshot localWorkspace localCommit remoteWorkspace remoteHistory remoteCommit remoteFile localDirectory prepareFileOperation applyFileOperation discardFileOperation openFile openDirectory openLocalDirectory openRepository diff githubAuthStart githubAuthPoll githubAuthCancel start poll cancel open check download install commit fetch pull push latest reconcile clear hide restore chooseDirectory preferences"),("provider","github github-enterprise gitlab gitee gitea"),("endpoint","identity repositories branches history tree commit file classification other"),("verb","status log diff worktree ls-tree ls-files check-ignore rev-parse for-each-ref config fetch ls-remote clone push add commit other"),("code","unknown aborted timeout connection permission rate-limit certificate invalid-data version session git git-remote-ref-missing git-lfs-missing git-lfs-object-missing git-lfs ENOENT EACCES EPERM ENOSPC EIO ELOOP EEXIST ENOTDIR EADDRINUSE ERR_CHILD_PROCESS_STDIO_MAXBUFFER ECONNREFUSED ENOTFOUND EAI_AGAIN ECONNRESET ETIMEDOUT UND_ERR_CONNECT_TIMEOUT CERT_HAS_EXPIRED DEPTH_ZERO_SELF_SIGNED_CERT SELF_SIGNED_CERT_IN_CHAIN UNABLE_TO_VERIFY_LEAF_SIGNATURE ERR_TLS_CERT_ALTNAME_INVALID ERR_UPDATER_INVALID_SIGNATURE ERR_UPDATER_INVALID_RELEASE_FEED ERR_UPDATER_INVALID_ARCHIVE ERR_UPDATER_VERSION ERR_UPDATER_HTTP ERR_UPDATER_TEMP_DIR ERR_UPDATER_RESTORE EXDEV EROFS EBUSY INVALID_LOG LOG_CAPACITY"),("signal","SIGTERM SIGKILL SIGABRT SIGSEGV"),("errorKind","Error TypeError SyntaxError RangeError ReferenceError AbortError TimeoutError")];
     for (key, list) in allowed {
         if v[key].is_string() && list.split_whitespace().any(|s| s == text(v, key)) {
             clean[key] = v[key].clone();
@@ -440,4 +551,138 @@ fn copy_files(files: &[PathBuf]) -> Result<()> {
 #[cfg(not(any(target_os = "macos", windows)))]
 fn copy_files(_: &[PathBuf]) -> Result<()> {
     Err("当前系统暂不支持复制日志文件。".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    fn writer(directory: &Path) -> LogWriter {
+        LogWriter {directory:directory.into(),component:"test".into(),session:uuid::Uuid::new_v4().to_string(),state:Mutex::new(LogState {limited:false,error:String::new(),last:0,written:0,total:0,pruned:false,write_paused:false,required:0})}
+    }
+    fn row(session: &uuid::Uuid, time: &str, tasks: u64) -> Value {
+        json!({"time":time,"version":crate::VERSION,"component":"test","session":session.to_string(),"event":"api","outcome":"success","method":"localWorkspace","tasks":tasks})
+    }
+    fn file(directory: &Path,hour: i64,session: &uuid::Uuid,values: &[Value]) -> PathBuf {
+        fs::create_dir_all(directory).unwrap();
+        let path=directory.join(format!("diagnostics-{hour}-test-{session}.jsonl"));
+        fs::write(&path,values.iter().map(|value|format!("{value}\n")).collect::<String>()).unwrap();
+        path
+    }
+    fn hour() -> i64 {util::now()/3_600_000*3_600_000}
+    fn time(millis: i64) -> String {chrono::DateTime::from_timestamp_millis(millis).unwrap().to_rfc3339()}
+
+    #[test]
+    fn recent_resanitizes_disk_records_and_retains_safe_authorization_and_ignore_events() {
+        let temporary=tempfile::tempdir().unwrap(); let writer=writer(temporary.path()); let session=uuid::Uuid::new_v4();
+        let mut auth=row(&session,&time(hour()+1000),1);
+        auth["event"]=json!("authorization");auth["outcome"]=json!("partial");auth["authReason"]=json!("configuration");
+        auth["token"]=json!("fixture-private-token");auth["path"]=json!("/fixture/private/path");auth["message"]=json!("fixture-private-message");
+        let mut ignore=row(&session,&time(hour()+2000),2);ignore["method"]=json!("ignoreFile");
+        let mut update=row(&session,&time(hour()+3000),3);update["event"]=json!("update");update["errorChain"]=json!(["fixture-private-token"]);update["updateVersion"]=json!("1.2.3-sensitiveversion");
+        let path=file(temporary.path(),hour(),&session,&[auth,ignore,update]); let original=fs::read(&path).unwrap();
+        let result=writer.recent(true).unwrap(); let records=result["records"].as_array().unwrap();
+        assert_eq!(records.len(),3);assert_eq!(records[1]["method"],"ignoreFile");assert_eq!(records[2]["authReason"],"configuration");assert_eq!(records[2]["outcome"],"partial");
+        for private in ["fixture-private-token","/fixture/private/path","fixture-private-message","sensitiveversion","errorChain"] {assert!(!result.to_string().contains(private),"{private}");}
+        assert_eq!(fs::read(&path).unwrap(),original);
+    }
+
+    #[test]
+    fn recent_merges_same_hour_sessions_by_timestamp_including_submillisecond_order() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());
+        let a=uuid::Uuid::new_v4();let b=uuid::Uuid::new_v4();
+        file(temporary.path(),hour(),&a,&[row(&a,"2026-11-02T00:00:00.000000001Z",1),row(&a,"2026-11-02T00:00:00.000000003Z",3)]);
+        file(temporary.path(),hour(),&b,&[row(&b,"2026-11-02T00:00:00.000000002Z",2)]);
+        let result=writer.recent(true).unwrap();
+        assert_eq!(result["records"].as_array().unwrap().iter().map(|value|value["tasks"].as_u64().unwrap()).collect::<Vec<_>>(),[3,2,1]);
+        assert_eq!(result["newestTime"],"2026-11-02T00:00:00.000000003Z");
+        assert_eq!(result["oldestTime"],"2026-11-02T00:00:00.000000001Z");assert_eq!(result["truncated"],false);
+    }
+
+    #[test]
+    fn recent_does_not_starve_a_fifth_file_with_newest_records_and_older_mtime() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());
+        for index in 0..5 {
+            let session=uuid::Uuid::new_v4();let path=file(temporary.path(),hour(),&session,&[]);
+            let value=row(&session,&time(hour()+if index==4 {10_000}else{index*1000}),index as u64);
+            let mut bytes=if index<4 {vec![b'x';RECENT_FILE_BYTES as usize+10]}else{Vec::new()};
+            if !bytes.is_empty() {bytes.push(b'\n');}bytes.extend(format!("{value}\n").as_bytes());fs::write(&path,bytes).unwrap();
+            let modified=std::time::UNIX_EPOCH+Duration::from_secs(if index==4 {1}else{10+index as u64});
+            fs::File::options().write(true).open(path).unwrap().set_times(fs::FileTimes::new().set_modified(modified)).unwrap();
+        }
+        let result=writer.recent(true).unwrap();assert_eq!(result["records"][0]["tasks"],4);assert_eq!(result["records"].as_array().unwrap().len(),5);assert_eq!(result["hasOlder"],true);
+    }
+
+    #[test]
+    fn recent_limits_record_count_bytes_and_untrusted_line_allocation() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());let session=uuid::Uuid::new_v4();
+        let values=(0..600).map(|index|row(&session,&time(hour()+index),index as u64)).collect::<Vec<_>>();
+        let path=file(temporary.path(),hour(),&session,&values);
+        let result=writer.recent(true).unwrap();assert_eq!(result["records"].as_array().unwrap().len(),500);assert_eq!(result["records"][0]["tasks"],599);assert_eq!(result["truncated"],true);
+        let mut dense=row(&session,&time(hour()+10_000),999);
+        for key in ["durationMs","retryMs","failures","tasks","frames","slowFrames","frameMaxMs","lagMaxMs","inputMaxMs","nextFrameMaxMs","longTasks","longTaskSupported","longTaskMaxMs","renders","renderMaxMs","renderTotalMs","items","activeRequests","peakRequests","characters","queueMs","bytes","dropped","queued","writeMs"] {dense[key]=json!(1_000_000_000_000u64);}
+        file(temporary.path(),hour(),&session,&vec![dense;600]);
+        let result=writer.recent(true).unwrap();assert!(result["records"].as_array().unwrap().len()<500);assert!(serde_json::to_vec(&result).unwrap().len()<=RECENT_BYTES);assert_eq!(result["returnedBytes"].as_u64().unwrap() as usize,serde_json::to_vec(&result["records"]).unwrap().len());
+        let mut bytes=vec![b'x';2*1024*1024];bytes.push(b'\n');bytes.extend(format!("{}\n",row(&session,&time(hour()+20_000),123)).as_bytes());bytes.extend(b"{partial-private-record");fs::write(path,bytes).unwrap();
+        let result=writer.recent(true).unwrap();assert_eq!(result["records"].as_array().unwrap().len(),1);assert_eq!(result["records"][0]["tasks"],123);assert_eq!(result["truncated"],true);assert!(!result.to_string().contains("partial-private-record"));
+    }
+
+    #[test]
+    fn retention_preserves_two_day_archives_and_retires_whole_expired_hours() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());let session=uuid::Uuid::new_v4();
+        let kept=file(temporary.path(),hour()-48*3_600_000,&session,&[row(&session,&time(hour()-48*3_600_000),1)]);let bytes=fs::read(&kept).unwrap();
+        let expired=file(temporary.path(),hour()-170*3_600_000,&uuid::Uuid::new_v4(),&[]);
+        fs::write(temporary.path().join("unrelated.txt"),"keep unrelated bytes").unwrap();
+        let status=writer.status();assert_eq!(status["retentionHours"],168);assert_eq!(status["maxBytes"],536_870_912u64);assert_eq!(fs::read(&kept).unwrap(),bytes);assert!(!expired.exists());assert!(temporary.path().join("unrelated.txt").exists());
+    }
+
+    #[test]
+    fn capacity_preserves_current_archive_and_pauses_instead_of_erasing_recent_records() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());let session=uuid::Uuid::new_v4();
+        let active=file(temporary.path(),hour(),&session,&[]);fs::write(&active,vec![b'x';256]).unwrap();
+        let value=writer.decorate(json!({"event":"api","outcome":"success","method":"catalog"}));
+        assert!(!writer.write_records_with_limit(&[value],256));
+        assert_eq!(fs::read(&active).unwrap(),vec![b'x';256]);
+        let state=writer.state.lock().unwrap();assert!(state.write_paused);assert!(state.limited);assert!(!state.pruned);assert_eq!(state.error,CAPACITY_ERROR);
+    }
+
+    #[test]
+    fn incoming_record_reserves_space_and_evicts_only_older_closed_archives() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());
+        let value=writer.decorate(json!({"event":"api","outcome":"success","method":"catalog"}));let size=format!("{value}\n").len() as u64;
+        let old=file(temporary.path(),hour()-3_600_000,&uuid::Uuid::new_v4(),&[]);fs::write(&old,vec![b'x';size as usize+20]).unwrap();
+        assert!(writer.write_records_with_limit(&[value],size+50));assert!(!old.exists());
+        let state=writer.state.lock().unwrap();assert!(state.pruned);assert!(!state.write_paused);assert_eq!(state.total,size);
+    }
+
+    #[test]
+    fn capacity_pause_remembers_required_headroom_across_status_reads() {
+        let temporary=tempfile::tempdir().unwrap();let writer=writer(temporary.path());let session=uuid::Uuid::new_v4();
+        let value=writer.decorate(json!({"event":"api","outcome":"success","method":"catalog"}));let size=format!("{value}\n").len() as u64;
+        let limit=size+100;let active=file(temporary.path(),hour(),&session,&[]);fs::write(&active,vec![b'x';101]).unwrap();
+        assert!(!writer.write_records_with_limit(&[value],limit));
+        for _ in 0..3 {let status=writer.status_with_limit(limit);assert_eq!(status["writePaused"],true);assert_eq!(status["capacityPruned"],false);assert_eq!(status["error"],CAPACITY_ERROR);assert_eq!(status["retainedBytes"],101);}
+        assert_eq!(fs::read(&active).unwrap(),vec![b'x';101]);
+    }
+
+    #[tokio::test]
+    async fn recent_command_is_finite_flushes_current_events_and_rejects_path_inputs() {
+        let temporary=tempfile::tempdir().unwrap();let directory=temporary.path().join("logs");let diagnostics=Diagnostics::new(directory.clone(),"test");
+        assert!(diagnostics.command("recent",&json!({"path":"/arbitrary/path"})).await.is_err());assert!(diagnostics.command("recent",&Value::Null).await.is_err());
+        let empty=diagnostics.command("recent",&json!({})).await.unwrap();assert_eq!(empty["records"],json!([]));assert_eq!(empty["oldestTime"],Value::Null);assert!(!directory.exists());
+        assert!(diagnostics.record(&json!({"event":"authorization","outcome":"partial","authReason":"configuration"}),false));
+        let result=diagnostics.command("recent",&json!({})).await.unwrap();assert_eq!(result["records"][0]["authReason"],"configuration");assert_eq!(result["maxRecords"],500);assert_eq!(result["maxBytes"],262_144);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recent_refuses_directory_links_and_skips_file_links_and_foreign_names() {
+        use std::os::unix::fs::symlink;
+        let temporary=tempfile::tempdir().unwrap();let logs=temporary.path().join("logs");fs::create_dir(&logs).unwrap();
+        let outside=temporary.path().join("outside");fs::write(&outside,"fixture-private-outside").unwrap();
+        symlink(&outside,logs.join(format!("diagnostics-{}-test-{}.jsonl",hour(),uuid::Uuid::new_v4()))).unwrap();fs::write(logs.join("accounts-v2.encrypted"),"fixture-private-outside").unwrap();
+        let result=writer(&logs).recent(true).unwrap();assert_eq!(result["files"],0);assert_eq!(result["records"],json!([]));
+        let alias=temporary.path().join("alias");symlink(&logs,&alias).unwrap();assert!(writer(&alias).recent(true).is_err());assert_eq!(fs::read_to_string(outside).unwrap(),"fixture-private-outside");
+    }
 }

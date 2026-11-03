@@ -1,29 +1,44 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { usePresence } from './PresenceProvider';
-import { presenceConnectionLabels } from './presence-model';
-import { Button, Checkbox, Notice, Switch } from './ui';
-import { OutlinedTextField } from './material-inputs';
-import { PresenceAccountSettings } from './PresenceAccountSettings';
+import { presenceConnectionLabels, type PresenceServer } from './presence-model';
+import { Button, Notice, Switch } from './ui';
+import { PresenceAccountSettings, type PresenceLoginTarget } from './PresenceAccountSettings';
 
 export function PresenceSettings({ disabled = false }: { disabled?: boolean }) {
   const presence = usePresence();
-  const [serverUrl, setServerUrl] = useState('');
+  const [editing, setEditing] = useState<PresenceLoginTarget | null>(null);
+  const [serverError, setServerError] = useState('');
+  const formId = useId(), trigger = useRef<HTMLButtonElement | null>(null);
   const status = presence?.status;
   const busy = disabled || !!presence?.busy;
-  async function addServer() {
-    if (!presence) return;
-    try { await presence.server('addServer', { serverUrl }); setServerUrl(''); } catch { /* Shared controller keeps the error and entered URL. */ }
+  const servers = (status?.servers || []).filter(server => server.loggedIn ?? !!status?.account);
+  const visibleIds = servers.map(server => server.id).join(',');
+  useEffect(() => { if (!status?.enabled || editing?.serverId && !servers.some(server => server.id === editing.serverId)) setEditing(null); }, [status?.enabled, editing?.serverId, visibleIds]);
+  const sharedError = status?.error || (!editing && !serverError ? presence?.error : '');
+  const summary = (server: PresenceServer) => server.accountSummary === undefined && server.authMode === undefined ? status?.account : server.accountSummary;
+  const add = () => setEditing({ serverUrl: '', email: '' });
+  const login = (server: PresenceServer) => setEditing({ serverId: server.id, serverUrl: server.url, email: summary(server)?.email || '', delegated: server.authMode === 'delegated' });
+  async function logout(server: PresenceServer) {
+    if (!presence || busy) return;
+    setServerError('');
+    try { await presence.account('logout', { serverId: server.id }); }
+    catch (problem) { setServerError(`${summary(server)?.displayName || server.name || 'Presence 服务器'} · ${server.url}：${problem instanceof Error ? problem.message : '退出登录未完成，请重试。'}`); }
   }
+  const closeForm = () => { setEditing(null); requestAnimationFrame(() => { if (trigger.current?.isConnected) trigger.current.focus(); }); };
+  const form = editing && <PresenceAccountSettings key={editing.serverId || 'add'} id={formId} target={editing} disabled={disabled} onSaved={closeForm} onCancel={closeForm} />;
   return <section className="settings-section" aria-labelledby="plugins-settings-title"><h2 id="plugins-settings-title">插件</h2><div className="settings-group presence-settings">
     <div className="setting-row presence-plugin-heading"><span className="presence-plugin-name"><strong>Presence</strong><small>个人设备与组织协作</small></span><Switch label="启用 Presence" checked={!!status?.enabled} disabled={busy || !status} onCheckedChange={enabled => { void presence?.configure({ enabled }).catch(() => {}); }} /></div>
     {status?.enabled && <>
-      <PresenceAccountSettings disabled={disabled} />
       {status.localError && <Notice kind="warning">{status.localError}</Notice>}
-      {status.account && <section className="presence-server-settings" aria-labelledby="presence-servers-title"><h3 id="presence-servers-title">Presence 服务器</h3>
-        <div className="presence-server-list">{(status.servers || []).map(server => <div className="setting-row" key={server.id}><span className="presence-server-selection"><Checkbox label={`连接 ${server.url}`} checked={server.enabled} disabled={busy} onChange={() => { void presence?.server('selectServer', { serverId: server.id, enabled: !server.enabled }).catch(() => {}); }} /><span title={server.url}>{server.url}</span></span><span className="presence-settings-actions"><span className={`presence-connection ${server.connection}`}><i aria-hidden="true" />{presenceConnectionLabels[server.connection]}</span><Button variant="quiet" disabled={busy} onClick={() => { void presence?.server('removeServer', { serverId: server.id }).catch(() => {}); }}>移除</Button></span>{server.error && <Notice kind="error">{server.error}</Notice>}</div>)}</div>
-        <form className="presence-server-add" onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.requestSubmit(); } }} onSubmit={event => { event.preventDefault(); void addServer(); }}><OutlinedTextField label="服务器地址" value={serverUrl} onChange={event => setServerUrl(event.target.value)} placeholder="https://presence.example.com/" type="url" required disabled={busy} /><Button type="submit" disabled={busy || !serverUrl.trim()}>添加</Button></form>
-      </section>}
+      <div className="presence-server-list">{servers.map(server => <div className="presence-server-entry" data-server-id={server.id} key={server.id}>
+        <div className="setting-row presence-server-row"><span className="presence-server-identity"><strong title={summary(server)?.email || undefined}>{summary(server)?.displayName || server.name || 'Presence 服务器'}</strong><small title={server.url}>{server.url}</small></span><span className="presence-settings-actions"><span className={`presence-connection ${server.connection}`}><i aria-hidden="true" />{server.authMode === 'delegated' ? '共享账号' : presenceConnectionLabels[server.connection]}</span><Button variant="quiet" disabled={busy} aria-expanded={editing?.serverId === server.id} aria-controls={formId} onClick={event => { trigger.current = event.currentTarget; login(server); }}>重新登录</Button><Button variant="quiet" disabled={busy} onClick={() => { void logout(server); }}>退出登录</Button></span></div>
+        {server.error && <Notice kind="error">{server.error}</Notice>}
+        {editing?.serverId === server.id && form}
+      </div>)}</div>
+      <div className={`setting-row presence-account-add-row${servers.length ? ' presence-server-add-row' : ''}`}><span><strong>{servers.length ? '添加 Presence 服务器' : 'Presence 账号'}</strong>{!servers.length && <small>连接个人设备与组织协作</small>}</span><Button disabled={busy} aria-expanded={!!editing && !editing.serverId} aria-controls={formId} onClick={event => { trigger.current = event.currentTarget; add(); }}>添加</Button></div>
+      {editing && !editing.serverId && form}
     </>}
-    {(presence?.error || status?.error) && <Notice kind="error">{presence?.error || status?.error}</Notice>}
+    {serverError && <Notice kind="error" onClose={() => setServerError('')}>{serverError}</Notice>}
+    {sharedError && <Notice kind="error">{sharedError}</Notice>}
   </div></section>;
 }

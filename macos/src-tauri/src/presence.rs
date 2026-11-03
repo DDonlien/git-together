@@ -119,6 +119,8 @@ pub struct Session {
     server_id: String,
     #[serde(default)]
     device_name: Option<String>,
+    #[serde(default)]
+    is_current: bool,
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -176,7 +178,10 @@ impl Status {
             generation: 0,
             version: 1,
             enabled: config.enabled,
-            configured: !config.server_token.is_empty(),
+            configured: config
+                .servers
+                .iter()
+                .any(ServerConfiguration::has_credentials),
             server_url: config.server_url.clone(),
             server_name: config.server_name.clone(),
             connection: if config.enabled {
@@ -193,8 +198,13 @@ impl Status {
                 error: String::new(),
                 projects: vec![],
             },
-            account: config.account.clone(),
-            account_service: json!(null),
+            account: servers::primary_account(config),
+            account_service: config
+                .servers
+                .iter()
+                .find(|server| server.logged_in())
+                .map(|server| Presence::account_metadata(&server.account_service))
+                .unwrap_or(Value::Null),
             servers: config.servers.iter().map(ServerStatus::new).collect(),
             organizations: config
                 .servers
@@ -217,11 +227,16 @@ pub struct Presence {
     root: PathBuf,
     private_directory: PathBuf,
     persistent: bool,
+    read_only: bool,
     config: watch::Sender<Configuration>,
     state: RwLock<Status>,
     configure_lock: Mutex<()>,
     editor_roots: RwLock<std::collections::BTreeMap<PathBuf, Project>>,
     native_projects: Mutex<servers::NativeProjects>,
+    #[cfg(test)]
+    test_http: Option<account::TestTransport>,
+    #[cfg(test)]
+    test_save_failure: bool,
 }
 impl Presence {
     pub fn new(
@@ -246,29 +261,32 @@ impl Presence {
             let Some(value) = value else {
                 return Ok(Configuration::default());
             };
-            let config: Configuration = serde_json::from_value(value)
+            let mut config: Configuration = serde_json::from_value(value)
                 .map_err(|_| "Presence 配置格式无效；原文件已保留。")?;
+            migrate_configuration(&mut config)?;
             validate_configuration(&config)?;
             Ok(config)
         })();
-        let (mut config, error) = match loaded {
+        let (config, error) = match loaded {
             Ok(c) => (c, String::new()),
             Err(e) => (Configuration::default(), e),
         };
-        if config.servers.is_empty() && !config.server_token.is_empty() {
-            config.servers.push(ServerConfiguration::home(&config));
-        }
         let (tx, mut rx) = watch::channel(config.clone());
         let presence = Arc::new(Self {
             service,
             root,
             private_directory: directory,
             persistent,
+            read_only: !error.is_empty(),
             config: tx,
             state: RwLock::new(Status::new(&config, error)),
             configure_lock: Mutex::new(()),
             editor_roots: RwLock::new(std::collections::BTreeMap::new()),
             native_projects: Mutex::new(servers::NativeProjects::default()),
+            #[cfg(test)]
+            test_http: None,
+            #[cfg(test)]
+            test_save_failure: false,
         });
         let weak = Arc::downgrade(&presence);
         tauri::async_runtime::spawn(async move {
@@ -297,6 +315,9 @@ impl Presence {
     }
 
     pub async fn command(&self, method: &str, input: Value) -> Result<Value> {
+        if self.read_only && !matches!(method, "status" | "openAccount" | "accountStatus") {
+            return Err("Presence 配置尚未安全读取，原文件已保留，暂不能修改登录或设置。".into());
+        }
         if matches!(
             method,
             "accountStatus" | "register" | "login" | "logout" | "openAccount"
@@ -470,7 +491,7 @@ impl Presence {
                                 if sessions.len() > 2000 || sessions.iter().any(|s| !valid_session(s)) { return Err("Presence 服务器快照无效，未使用异常数据。".into()); }
                                 if revision.is_some_and(|previous| current < previous) { return Err("Presence 服务器快照顺序无效。".into()); }
                                 revision = Some(current);
-                                self.cache_organizations(&config.server_url,organizations).await?;
+                                self.cache_organizations(&config.server_url,organizations,generation).await?;
                                 self.remote_update(generation, &config.server_url, Some(sessions), String::new()).await;
                             },
                             ServerMessage::Error { code } => return Err(if code == "repository_forbidden" { "Presence 尚未授权访问这个仓库。" } else { "Presence 服务器拒绝了当前会话。" }.into()),
@@ -636,11 +657,81 @@ fn validate_configuration(config: &Configuration) -> Result<()> {
         || config.server_name.is_empty()
         || config.server_name.chars().count() > 120
         || !config.server_token.is_empty() && !valid_token(&config.server_token)
+        || config
+            .account
+            .as_ref()
+            .is_some_and(|profile| !account::valid_account(profile))
     {
         return Err("Presence 配置或访问密钥无效。".into());
     }
+    if config.servers.len() > 32 {
+        return Err("Presence 服务器数量超出上限；原配置已保留。".into());
+    }
+    let mut urls = std::collections::BTreeSet::new();
+    for server in &config.servers {
+        if server_url(&server.url)?.as_str() != server.url
+            || !urls.insert(&server.url)
+            || !matches!(
+                server.auth_mode.as_str(),
+                "direct" | "delegated" | "observer"
+            )
+            || !server.token.is_empty() && !valid_token(&server.token)
+            || !server.device_token.is_empty()
+                && (!valid_token(&server.device_token) || !valid_id(&server.device_id))
+            || server.account.as_ref().is_some_and(|profile| {
+                profile.id != server.user_id || !account::valid_account(profile)
+            })
+            || server
+                .issuer_account
+                .as_ref()
+                .is_some_and(|profile| !account::valid_account(profile))
+            || server.auth_mode == "direct"
+                && (server.account.is_none() || server.issuer_account.is_some())
+            || server.auth_mode == "delegated"
+                && (server.account.is_some()
+                    || server.issuer_account.is_none()
+                    || server_url(&server.issuer_url).is_err())
+        {
+            return Err("Presence 服务器身份或凭据配置无效；原配置已保留。".into());
+        }
+    }
     Ok(())
 }
+fn migrate_configuration(config: &mut Configuration) -> Result<()> {
+    config.server_url = server_url(&config.server_url)?.to_string();
+    if let Some(profile) = config.account.as_mut() {
+        account::normalize_account(profile, &config.server_url)?;
+    }
+    if config.servers.is_empty() && !config.server_token.is_empty() {
+        config.servers.push(ServerConfiguration::home(config));
+    }
+    for server in &mut config.servers {
+        server.url = server_url(&server.url)?.to_string();
+        if server.auth_mode.is_empty() {
+            if server.url == config.server_url && config.account.is_some() {
+                server.auth_mode = "direct".into();
+                server.account = config.account.clone();
+            } else if let Some(profile) = config.account.as_ref() {
+                server.auth_mode = "delegated".into();
+                server.issuer_url = config.server_url.clone();
+                server.issuer_account = Some(profile.clone());
+            } else {
+                server.auth_mode = "observer".into();
+            }
+        }
+        if let Some(profile) = server.account.as_mut() {
+            account::normalize_account(profile, &server.url)?;
+        }
+        if let Some(profile) = server.issuer_account.as_mut() {
+            account::normalize_account(profile, &server.issuer_url)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "presence/tests.rs"]
+mod tests;
 fn valid_project(project: &Project) -> bool {
     let mut paths = std::collections::HashSet::new();
     !project.repository_id.is_empty()
@@ -687,9 +778,10 @@ fn valid_session(session: &Session) -> bool {
         && valid_id(&session.user_id)
         && valid_id(&session.identity_id)
         && valid_id(&session.device_id)
-        && session.device_name.as_ref().is_none_or(|name| {
-            !name.trim().is_empty() && name.chars().count() <= 120
-        })
+        && session
+            .device_name
+            .as_ref()
+            .is_none_or(|name| !name.trim().is_empty() && name.chars().count() <= 120)
         && !session.display_name.is_empty()
         && session.display_name.chars().count() <= 200
         && session.avatar_url.as_ref().is_none_or(|value| {

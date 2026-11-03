@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import type { UpdateStatus } from './update-model';
-import type { DiagnosticsStatus } from './diagnostics-model';
+import type { DiagnosticsRecent, DiagnosticsStatus } from './diagnostics-model';
 
 // Keep the renderer's finite protocol; all business operations run in Rust.
 export async function installNativeBridge(): Promise<void> {
@@ -14,6 +14,7 @@ export async function installNativeBridge(): Promise<void> {
     presence: (method, input) => invoke('presence_command', { method, input }),
     diagnostics: {
       status: () => invoke<DiagnosticsStatus>('diagnostics_command', { method: 'status' }),
+      recent: () => invoke<DiagnosticsRecent>('diagnostics_command', { method: 'recent' }),
       record: input => invoke('diagnostics_command', { method: 'record', input }),
       open: () => invoke('diagnostics_command', { method: 'open' }),
       copy: () => invoke('diagnostics_command', { method: 'copy' }),

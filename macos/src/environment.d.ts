@@ -1,5 +1,5 @@
 import type { UpdateBridge } from './update-model';
-import type { DiagnosticInput, DiagnosticsStatus } from './diagnostics-model';
+import type { DiagnosticInput, DiagnosticsRecent, DiagnosticsStatus } from './diagnostics-model';
 import type { PresenceMethod } from './presence-model';
 declare global {
   interface Window {
@@ -13,6 +13,7 @@ declare global {
       presence?: (method: PresenceMethod, input: unknown) => Promise<unknown>;
       diagnostics?: {
         status: (input?: unknown) => Promise<DiagnosticsStatus>;
+        recent?: () => Promise<DiagnosticsRecent>;
         record: (input: DiagnosticInput) => Promise<boolean>;
         open: (input?: unknown) => Promise<boolean>;
         copy?: () => Promise<number>;

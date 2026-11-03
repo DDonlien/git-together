@@ -7,7 +7,7 @@ export type LocalSubmitInput = CommitDraft & { repositoryId: string; taskId: str
 export type LocalSubmitResult = { taskId: string; commitId: string; branch: string; warning?: string; commits?: LocalSubmitResult[]; incomplete?: boolean };
 export type SubmitLocalCommit = (input: LocalSubmitInput) => Promise<LocalSubmitResult>;
 export type LocalPushInput = { repositoryId: string; taskId: string; expectedHead: string; commitId: string; operationId: string };
-export type LocalPushResult = LocalSubmitResult & { pushed: true };
+export type LocalPushResult = LocalSubmitResult & { pushed: true; requestedCommitId?: string };
 export type PushLocalCommit = (input: LocalPushInput) => Promise<LocalPushResult>;
 export type GenerateCommitMessage = (input: Omit<ApiInputs['generateCommitMessage'], 'generationId'>, signal: AbortSignal) => Promise<CommitDraft>;
 
@@ -39,5 +39,10 @@ export function isCommitPlan(value: unknown, paths?: string[]): value is CommitP
   return !paths || found.size === paths.length && paths.every(path => found.has(path));
 }
 export function isLocalPushResult(value: unknown): value is LocalPushResult {
-  return isRecord(value) && value.pushed === true && isLocalSubmitResult(value);
+  if (!isRecord(value) || value.pushed !== true || value.requestedCommitId !== undefined && (typeof value.requestedCommitId !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.requestedCommitId))) return false;
+  return isLocalSubmitResult(value);
+}
+export function isExpectedPushResult(value: unknown, input: Pick<LocalPushInput, 'taskId' | 'commitId' | 'expectedHead'>): value is LocalPushResult {
+  if (!isLocalPushResult(value) || value.taskId !== input.taskId || value.requestedCommitId !== undefined && value.requestedCommitId !== input.commitId) return false;
+  return value.commitId === input.commitId || value.requestedCommitId === input.commitId && input.commitId === input.expectedHead;
 }

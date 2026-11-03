@@ -3,6 +3,7 @@
 @import '@fontsource/roboto/latin-700.css';
 
 @import './material-tokens.css';
+@import './diagnostics-viewer.css';
 
 * { box-sizing: border-box; }
 /* Hide scrollbar chrome, not scrolling; include document and portalled controls. */
@@ -153,8 +154,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .remote-repo-table .dashboard-branch-row td:last-child { text-align: right; padding-right: 0; }
 .remote-repo-table td.repository-action-cell, .remote-repo-table .dashboard-branch-row td.repository-action-cell { padding-left: 16px; padding-right: 4px; }
 /* Reserve a row-tail slot without shifting Git actions relative to their headings. */
-.remote-repo-table.has-repository-pins { min-width: 1190px; }
-.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 246px; }
+.remote-repo-table.has-repository-pins { min-width: 1232px; }
+.remote-repo-table.has-managed-column.has-repository-pins th:nth-child(8) { width: 288px; }
 .remote-repo-table.has-repository-pins :is(th, td).repository-action-cell { padding-right: 40px; }
 .dashboard-repository-row .repository-pin-button { position: absolute; right: 4px; top: 0; bottom: 0; margin-block: auto; }
 .dashboard-hidden-row .repository-link, .dashboard-hidden-row .dashboard-branch-content { color: var(--muted); }
@@ -390,7 +391,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .repository-submit-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .repository-submit-heading > h3 { flex: 1; min-width: 0; margin: 0; }
 .repository-submit-heading > h3 > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.repository-submit-heading > .app-button { flex-shrink: 0; }
+.repository-action-dialog .modal-actions { align-items: center; }
+.repository-action-dialog .repository-batch-generate { margin-inline-end: auto; }
 .repository-commit-files { margin-top: 8px; font-size: 12px; }
 .submit-file-selection, .submit-file-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--muted); }
 .submit-file-selection small, .submit-file-group-heading small { font-size: 10px; }
@@ -1239,6 +1241,10 @@ tr:hover .inline-actions, tr:focus-within .inline-actions, tr.selected-row .inli
 .file-operation-dialog .notice { margin: 0; }
 .file-operation-dialog .modal-actions { margin-top: 0; }
 
-/* Lite: Fetch/Pull, Commit, Push and manual visibility. */
-.dashboard-signal-sort { grid-template-columns: var(--repository-action-pair-width) repeat(3, var(--repository-action-single-width)); }
-.dashboard-signal-sort [data-signal="hidden"] { grid-column: 4; }
+/* Lite: Update, Fetch/Pull, Commit, Push and manual visibility. */
+.dashboard-signal-sort { grid-template-columns: var(--repository-action-single-width) var(--repository-action-pair-width) repeat(3, var(--repository-action-single-width)); }
+.dashboard-update-heading { grid-column: 1; text-align: center; font-size: 10px; }
+.dashboard-signal-sort [data-signal="pull"] { grid-column: 2; }
+.dashboard-signal-sort [data-signal="commit"] { grid-column: 3; }
+.dashboard-signal-sort [data-signal="push"] { grid-column: 4; }
+.dashboard-signal-sort [data-signal="hidden"] { grid-column: 5; }

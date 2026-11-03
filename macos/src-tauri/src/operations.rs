@@ -14,8 +14,7 @@ use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 mod tests;
-
-pub const PULL_DIVERGED: &str = "本地与远端历史已分叉，请先合并或变基；Pull 没有修改文件。";
+pub mod ignore;
 
 pub async fn idle(root: &Path) -> Result<()> {
     for name in [
@@ -123,6 +122,7 @@ pub fn selected_paths(files: &[&Value]) -> Vec<String> {
 pub(crate) struct IndexLock {
     path: PathBuf,
     file: Option<fs::File>,
+    published: bool,
 }
 impl IndexLock {
     pub(crate) fn take(path: PathBuf) -> Result<Self> {
@@ -132,6 +132,7 @@ impl IndexLock {
         Ok(Self {
             path,
             file: Some(file),
+            published: false,
         })
     }
     pub(crate) fn publish(&mut self, index: &Path, data: &[u8]) -> Result<()> {
@@ -141,13 +142,14 @@ impl IndexLock {
             .map_err(|_| "暂存状态写入失败。")?;
         self.file.take();
         fs::rename(&self.path, index).map_err(|_| "暂存状态发布失败。")?;
+        self.published = true;
         Ok(())
     }
 }
 impl Drop for IndexLock {
     fn drop(&mut self) {
         self.file.take();
-        let _ = fs::remove_file(&self.path);
+        if !self.published { let _ = fs::remove_file(&self.path); }
     }
 }
 pub async fn submit(
@@ -209,19 +211,31 @@ pub async fn submit(
         },
     )
     .await?;
-    git::run(
-        root,
-        &["add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul"],
-        Options {
-            environment: env.clone(),
-            stdin: Some(pathspec_input(&paths)),
-            cancel: Some(cancel.clone()),
-            write: true,
-            diagnostics: Some(service.diagnostics.clone()),
-            ..Default::default()
-        },
-    )
-    .await?;
+    let mut add_paths = Vec::new();
+    let mut ignored_deletions = Vec::new();
+    for path in &paths {
+        let literal = format!(":(literal){path}");
+        let indexed = git::read(root, &["ls-files", "--cached", "-z", "--", &literal]).await?;
+        if indexed.is_empty() && text(&before,"head").bytes().any(|byte| byte != b'0') && root.join(path).is_file()
+            && !git::read(root, &["ls-files", "--with-tree", text(&before,"head"), "-z", "--", &literal]).await?.is_empty()
+            && ignore::is_ignored(root, path, Some(cancel.clone())).await? {
+            ignored_deletions.push(path.clone());
+        } else {
+            add_paths.push(path.clone());
+        }
+    }
+    // An empty pathspec input means all files to Git, so never invoke add with
+    // an empty selection. Preserve ignored files' real staged deletions instead
+    // of adding their still-present working copies back from the HEAD baseline.
+    for (verb, selected) in [("add", &add_paths), ("rm", &ignored_deletions)] {
+        if selected.is_empty() { continue; }
+        let args = if verb == "add" {
+            vec!["add", "--all", "--pathspec-from-file=-", "--pathspec-file-nul"]
+        } else {
+            vec!["rm", "--cached", "--quiet", "--pathspec-from-file=-", "--pathspec-file-nul"]
+        };
+        git::run(root, &args, Options { environment: env.clone(), stdin: Some(pathspec_input(selected)), cancel: Some(cancel.clone()), write:true, diagnostics:Some(service.diagnostics.clone()), ..Default::default() }).await?;
+    }
     current(root, input).await?;
     service.validate(context).await?;
     if cancel.is_cancelled() {
@@ -324,7 +338,9 @@ pub async fn push(
     {
         return Err("分支或本地提交已变化，请查看最新状态后重试。".into());
     }
-    let commit = util::sha(text(input, "commitId"))?;
+    idle(root).await?;
+    let requested = util::sha(text(input, "commitId"))?;
+    let mut commit = requested.clone();
     let branch = text(&task, "branch");
     git::read(root, &["check-ref-format", &format!("refs/heads/{branch}")]).await?;
     if git::read(
@@ -337,6 +353,7 @@ pub async fn push(
         return Err("所选提交不属于当前分支历史，未推送。".into());
     }
     let reference = format!("refs/heads/{branch}");
+    let read_network = network.for_worktree(root);
     let network = network.for_push(root).await?;
     let remote_head = |s: String| -> Result<Option<String>> {
         let rows: Vec<_> = s
@@ -360,14 +377,106 @@ pub async fn push(
             120,
         )
         .await?;
-    if remote_head(before)?.as_deref() != Some(&commit) {
-        service.validate(context).await?;
-        if cancel.is_cancelled() {
-            return Err("推送已取消，本地提交已保留。".into());
+    let before = remote_head(before)?;
+    let mut integrated = false;
+    let mut lfs_warning = false;
+    if let Some(remote) = before.as_deref().filter(|remote| *remote != commit) {
+        // When pushing a selected historical commit, silently merging into
+        // HEAD would include commits the user did not choose to publish.
+        let is_ancestor = git::read(root, &["merge-base", "--is-ancestor", remote, &commit])
+            .await
+            .is_ok();
+        if !is_ancestor {
+            if commit != text(&task, "head") {
+                return Err("所选历史提交无法直接推送；请先处理远端分叉，或选择当前分支的最新提交。未推送。".into());
+            }
+            let state = pull_state(root).await?;
+            let fetched = read_network
+                .fetch(root, &[branch.to_owned()], cancel)
+                .await?
+                .remove(0);
+            // A push URL may point to a different server than the fetch URL.
+            // Only integrate a commit confirmed on the actual push target.
+            if fetched != remote {
+                return Err("拉取与推送目标的分支状态不同，无法安全自动合并；未推送。".into());
+            }
+            let action = integration(root, &commit, remote).await?;
+            if action != Integration::UpToDate {
+                if pull_state(root).await? != state {
+                    return Err("工作目录或连接配置已变化，请刷新后重试；未推送。".into());
+                }
+                let latest = git::task(root).await?;
+                if latest["id"] != task["id"]
+                    || latest["head"] != task["head"]
+                    || latest["changeKey"] != task["changeKey"]
+                {
+                    return Err("获取远端期间本地更改已变化，请刷新后重试；未推送。".into());
+                }
+                let current_remote = network
+                    .run(
+                        root,
+                        &["ls-remote", "--", &network.url, &reference],
+                        Some(cancel.clone()),
+                        true,
+                        true,
+                        120,
+                    )
+                    .await?;
+                if remote_head(current_remote)?.as_deref() != Some(remote) {
+                    return Err("远端分支已变化，请刷新后重试；未推送。".into());
+                }
+                if cancel.is_cancelled() {
+                    return Err("推送已取消，本地提交已保留。".into());
+                }
+                service.validate(context).await?;
+                commit =
+                    integrate(root, &read_network, branch, branch, remote, &commit, true).await?;
+                integrated = true;
+                lfs_warning = read_network.hydrate(root, &commit, None).await.is_err();
+            }
         }
-        let t = git::task(root).await?;
-        if t["id"] != task["id"] || t["head"] != task["head"] {
-            return Err("本地提交已变化，未推送。".into());
+    }
+    if before.as_deref() != Some(&commit) {
+        let with_lfs_warning = |error: String| {
+            if lfs_warning {
+                format!("{error} 合并后的 LFS 文件未全部下载，请检查网络后补齐。")
+            } else {
+                error
+            }
+        };
+        service.validate(context).await.map_err(|e| {
+            with_lfs_warning(if integrated {
+                format!("本地合并已完成，但账号或仓库状态已变化，尚未推送：{e}")
+            } else {
+                e
+            })
+        })?;
+        if cancel.is_cancelled() {
+            return Err(with_lfs_warning(
+                if integrated {
+                    "推送已取消；本地合并已完成，尚未推送。"
+                } else {
+                    "推送已取消，本地提交已保留。"
+                }
+                .into(),
+            ));
+        }
+        let t = git::task(root).await.map_err(|e| {
+            with_lfs_warning(if integrated {
+                format!("本地合并已完成，尚未推送；请检查工作目录：{e}")
+            } else {
+                e
+            })
+        })?;
+        if t["id"] != task["id"] || t["head"] != commit {
+            return Err(with_lfs_warning(
+                if integrated {
+                    "本地合并已完成，但分支随后发生变化；未推送，请刷新检查。"
+                } else {
+                    "本地提交已变化，未推送。"
+                }
+                .into(),
+            ));
         }
         network
             .run(
@@ -387,7 +496,13 @@ pub async fn push(
                 1800,
             )
             .await
-            .map_err(|e| format!("{e} 本地提交已保留。"))?;
+            .map_err(|e| {
+                with_lfs_warning(if integrated {
+                    format!("{e} 本地合并已完成；推送结果请刷新远端后确认。")
+                } else {
+                    format!("{e} 本地提交已保留；推送结果请刷新远端后确认。")
+                })
+            })?;
         let after = network
             .run(
                 root,
@@ -397,12 +512,32 @@ pub async fn push(
                 true,
                 120,
             )
-            .await?;
-        if remote_head(after)?.as_deref() != Some(&commit) {
-            return Err("远端状态已变化，无法确认本次推送；本地提交已保留，请刷新后检查。".into());
+            .await
+            .map_err(|e| {
+                with_lfs_warning(format!(
+                    "推送已执行，但无法确认远端结果：{e} 请刷新后检查。"
+                ))
+            })?;
+        if remote_head(after)
+            .map_err(|e| {
+                with_lfs_warning(format!(
+                    "推送已执行，但无法确认远端结果：{e} 请刷新后检查。"
+                ))
+            })?
+            .as_deref()
+            != Some(&commit)
+        {
+            return Err(with_lfs_warning(
+                "远端状态已变化，无法确认本次推送；本地提交已保留，请刷新后检查。".into(),
+            ));
         }
     }
-    Ok(json!({"taskId":input["taskId"],"commitId":commit,"branch":branch,"pushed":true}))
+    let mut result = json!({"taskId":input["taskId"],"commitId":commit,"requestedCommitId":requested,"branch":branch,"pushed":true});
+    if lfs_warning {
+        result["warning"] =
+            json!("推送已完成，但合并后的 LFS 文件未全部下载；请检查网络后再次 Pull 补齐。");
+    }
+    Ok(result)
 }
 pub async fn common(root: &Path) -> Result<PathBuf> {
     let p = git::read(root, &["rev-parse", "--git-common-dir"]).await?;
@@ -645,8 +780,15 @@ async fn pull_state(root: &Path) -> Result<String> {
     let config = git::read(root, &["config", "--null", "--list"]).await?;
     Ok(util::digest(format!("{}:{}:{}:{}", text(&task,"branch"), text(&task,"head"), text(&task,"changeKey"), config)))
 }
-async fn upstream_branch(root: &Path, branch: &str) -> Result<String> {
+async fn upstream_branch(root: &Path, branch: &str, network: &Network) -> Result<String> {
     let configuration = git::read(root, &["config", "--null", "--list"]).await?;
+    let remote_key = format!("branch.{branch}.remote");
+    let configured_remote: Vec<_> = configuration.split('\0').filter_map(|entry| entry.split_once('\n'))
+        .filter(|(name,_)| name.eq_ignore_ascii_case(&remote_key)).map(|(_,value)|value).collect();
+    let actual_remote = network.fetch_remote(root).await?;
+    if configured_remote.len() != 1 || configured_remote[0] != actual_remote {
+        return Err("当前分支的上游远端与所选仓库不一致，无法安全 Pull；请先检查远端配置。".into());
+    }
     let key = format!("branch.{branch}.merge");
     let values: Vec<_> = configuration.split('\0').filter_map(|entry| entry.split_once('\n'))
         .filter(|(name,_)| name.eq_ignore_ascii_case(&key)).map(|(_,value)|value).collect();
@@ -658,6 +800,150 @@ async fn upstream_branch(root: &Path, branch: &str) -> Result<String> {
     Ok(remote.to_owned())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Integration {
+    UpToDate,
+    FastForward,
+    Merge,
+}
+
+async fn integration(root: &Path, local: &str, remote: &str) -> Result<Integration> {
+    if git::read(root, &["merge-base", "--is-ancestor", remote, local])
+        .await
+        .is_ok()
+    {
+        return Ok(Integration::UpToDate);
+    }
+    if git::read(root, &["merge-base", "--is-ancestor", local, remote])
+        .await
+        .is_ok()
+    {
+        return Ok(Integration::FastForward);
+    }
+    match crate::history_relationship::inspect(root, local, remote).await? {
+        crate::history_relationship::Relationship::Diverged { .. } => Ok(Integration::Merge),
+        _ => Err("无法确认本地与远端的共同祖先；请检查历史是否完整。".into()),
+    }
+}
+
+// Git owns the merge state and normal hooks. Never abort or reset on error:
+// doing so could overwrite a user's concurrently made conflict resolution.
+async fn integrate(
+    root: &Path,
+    network: &Network,
+    local_branch: &str,
+    branch: &str,
+    remote: &str,
+    old: &str,
+    for_push: bool,
+) -> Result<String> {
+    let kind = integration(root, old, remote).await?;
+    let actual_head = git::read(root, &["rev-parse", "HEAD"]).await?;
+    let actual_branch = git::read(root, &["symbolic-ref", "--quiet", "--short", "HEAD"]).await?;
+    if actual_head.trim() != old || actual_branch.trim() != local_branch {
+        return Err("执行合并前本地分支已变化，请刷新检查。".into());
+    }
+    // Label the fixed SHA with the verified tracking branch, without putting
+    // a URL (which may contain credentials) into permanent commit history.
+    let remote_name = network.fetch_remote(root).await?;
+    let message = format!("Merge remote-tracking branch '{remote_name}/{branch}'");
+    let outcome = network
+        .run(
+            root,
+            &[
+                "-c",
+                "merge.autoStash=false",
+                "merge",
+                "--ff",
+                "--no-edit",
+                "-m",
+                &message,
+                remote,
+            ],
+            None,
+            true,
+            false,
+            120,
+        )
+        .await;
+    let push_status = if for_push { "未执行 Push。" } else { "" };
+    if let Err(error) = outcome {
+        let merge_head = git::read(
+            root,
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "MERGE_HEAD",
+            ],
+        )
+        .await
+        .map_err(|_| {
+            format!("自动合并未完成，且无法读取 Git 合并状态；请检查工作目录。{push_status}")
+        })?;
+        if Path::new(merge_head.trim()).exists() {
+            let conflicts = git::read(root, &["diff", "--name-only", "--diff-filter=U", "-z"]).await.map_err(|_| format!("自动合并尚未完成，但无法读取冲突清单；请在外部检查 Git 状态，处理后执行 git merge --continue，或执行 git merge --abort 中止。{push_status}"))?;
+            let paths = conflicts
+                .split('\0')
+                .filter(|path| !path.is_empty())
+                .map(|path| path.replace('\n', "\\n").replace('\r', "\\r"))
+                .collect::<Vec<_>>();
+            if paths.is_empty() {
+                return Err(format!("自动合并尚未完成，工作目录保留 Git 合并状态。{error} 请检查签名或提交钩子后执行 git merge --continue；或执行 git merge --abort 中止。{push_status}"));
+            }
+            let details = format!(
+                "冲突文件：{}。",
+                paths
+                    .iter()
+                    .take(12)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join("、")
+            );
+            return Err(format!("自动合并尚未完成，工作目录保留 Git 合并状态。{details}请在外部解决冲突并用 git add 暂存后执行 git merge --continue；或执行 git merge --abort 中止。{push_status}"));
+        }
+        let current = git::read(root, &["rev-parse", "HEAD"])
+            .await
+            .unwrap_or_default();
+        let has_local_changes = git::task(root)
+            .await
+            .ok()
+            .and_then(|task| task["files"].as_array().map(|files| !files.is_empty()))
+            .unwrap_or(false);
+        return Err(if current.trim() != old {
+            format!("自动合并未能确认完成：{error} 本地 HEAD 已变化，请刷新检查。{push_status}")
+        } else if has_local_changes {
+            format!("自动合并未完成：{error} Git 可能因未提交或未跟踪的文件拒绝合并，请检查本地更改。{push_status}")
+        } else {
+            format!("自动合并未完成：{error} 请检查工作目录。{push_status}")
+        });
+    }
+    let verification_error = |error: String| {
+        format!("Git 已执行合并，但无法确认结果：{error} 请检查本地分支。{push_status}")
+    };
+    let head = git::read(root, &["rev-parse", "HEAD"])
+        .await
+        .map_err(&verification_error)?;
+    let head = util::sha(head.trim()).map_err(&verification_error)?;
+    let branch_after = git::read(root, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .await
+        .map_err(&verification_error)?;
+    let expected = match kind {
+        Integration::FastForward => head == remote,
+        Integration::UpToDate => head == old,
+        Integration::Merge => {
+            let ancestry = git::read(root, &["rev-list", "--parents", "-n", "1", &head])
+                .await
+                .map_err(&verification_error)?;
+            let parents = ancestry.split_whitespace().collect::<Vec<_>>();
+            parents.as_slice() == [head.as_str(), old, remote]
+        }
+    };
+    if branch_after.trim() != local_branch || !expected {
+        return Err(format!("合并后分支历史发生变化，请刷新检查。{push_status}"));
+    }
+    Ok(head)
+}
 pub async fn prepare(
     root: &Path,
     input: &Value,
@@ -671,27 +957,17 @@ pub async fn prepare(
     if task["id"] != input["taskId"] || task["branch"] == "Detached HEAD" {
         return Err("工作目录分支已变化，请刷新后重试。".into());
     }
-    if !task["files"].as_array().unwrap().is_empty() {
-        return Err("Pull 前请先提交或处理未提交文件。".into());
-    }
     let branch = text(&task, "branch");
     git::read(root, &["check-ref-format", "--branch", branch]).await?;
-    let remote_branch = upstream_branch(root, branch).await?;
+    let remote_branch = upstream_branch(root, branch, network).await?;
     let remote_head = network.fetch(root, &[remote_branch.clone()], cancel).await?.remove(0);
     let current = git::task(root).await?;
     if current["head"] != task["head"] || current["branch"] != task["branch"] || current["changeKey"] != task["changeKey"] {
         return Err("工作目录在获取远端期间已变化，请重新检查。".into());
     }
-    let behind = git::read(root, &["merge-base", "--is-ancestor", text(&task,"head"), &remote_head]).await.is_ok();
-    let ahead = git::read(root, &["merge-base", "--is-ancestor", &remote_head, text(&task,"head")]).await.is_ok();
-    if !behind && !ahead {
-        return Err(match crate::history_relationship::inspect(root,text(&task,"head"),&remote_head).await? {
-            crate::history_relationship::Relationship::Diverged{..} => PULL_DIVERGED,
-            _ => "无法确认本地与远端的共同祖先；Pull 没有修改文件，请检查历史是否完整。",
-        }.into());
-    }
+    let integration = integration(root, text(&task,"head"), &remote_head).await?;
     let mut files = Vec::new();
-    if behind {
+    if integration == Integration::FastForward {
         let names=git::read(root,&["diff","--name-status","-z","--no-renames","--no-ext-diff","--no-textconv",text(&task,"head"),&remote_head]).await?;
         let rows:Vec<_>=names.split('\0').filter(|field|!field.is_empty()).collect();
         if rows.len()%2!=0 { return Err("Git 变更清单不完整。".into()); }
@@ -699,9 +975,14 @@ pub async fn prepare(
             files.push(json!({"path":util::file_path(pair[1])?,"action":match pair[0]{"D"=>"delete","A"=>"add",_=>"restore"}}));
         }
     }
+    let state = pull_state(root).await?;
+    let final_task = git::task(root).await?;
+    if final_task["id"] != task["id"] || final_task["head"] != task["head"] || final_task["branch"] != task["branch"] || final_task["changeKey"] != task["changeKey"] {
+        return Err("预览期间工作目录已变化，请刷新后重试。".into());
+    }
     Ok(SyncPlan {
-        public:json!({"id":uuid::Uuid::new_v4().to_string(),"repositoryId":input["repositoryId"],"taskId":input["taskId"],"mode":"pull","path":root.to_string_lossy(),"branch":branch,"remoteBranch":remote_branch,"head":task["head"],"remoteHead":remote_head,"files":files,"historyCommits":0,"protectedHistory":false,"note":"仅快进当前分支，不改写本地提交。"}),
-        root:root.to_owned(), state:pull_state(root).await?, created:util::now(),
+        public:json!({"id":uuid::Uuid::new_v4().to_string(),"repositoryId":input["repositoryId"],"taskId":input["taskId"],"mode":"pull","path":root.to_string_lossy(),"branch":branch,"remoteBranch":remote_branch,"head":task["head"],"remoteHead":remote_head,"files":files,"historyCommits":0,"protectedHistory":false,"integration": match integration { Integration::Merge => "merge", Integration::FastForward => "fast-forward", Integration::UpToDate => "up-to-date" },"note":match integration { Integration::Merge => "本地与远端都有新提交，将尝试自动合并；可能需要解决冲突。", Integration::FastForward => "将快进当前分支，不改写本地提交。", Integration::UpToDate => "当前分支已包含远端提交。" }}),
+        root:root.to_owned(), state, created:util::now(),
     })
 }
 
@@ -726,13 +1007,12 @@ pub async fn apply(
     service.validate(context).await?;
     let old=text(&plan.public,"head");
     let remote=text(&plan.public,"remoteHead");
-    if git::read(&plan.root,&["merge-base","--is-ancestor",remote,old]).await.is_err() {
-        network.run(&plan.root,&["merge","--ff-only","--no-edit",remote],None,true,false,120).await?;
-    }
-    let head=git::read(&plan.root,&["rev-parse","HEAD"]).await?.trim().to_owned();
+    let head=if git::read(&plan.root,&["merge-base","--is-ancestor",remote,old]).await.is_err() {
+        integrate(&plan.root,network,text(&plan.public,"branch"),branch,remote,old,false).await?
+    } else { git::read(&plan.root,&["rev-parse","HEAD"]).await?.trim().to_owned() };
     let mut result=json!({"taskId":plan.public["taskId"],"mode":"pull","head":head,"files":plan.public["files"].as_array().unwrap().len(),"reclaimedBytes":0,"protectedHistory":false});
     if network.hydrate(&plan.root,&head,None).await.is_err() {
-        result["warning"]=json!("Pull 已快进完成，但 LFS 下载未完成；请检查网络后再次 Pull 补齐。");
+        result["warning"]=json!("Pull 已完成，但 LFS 下载未完成；请检查网络后再次 Pull 补齐。");
     }
     Ok(result)
 }

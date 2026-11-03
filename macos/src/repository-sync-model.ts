@@ -6,6 +6,7 @@ export type RepositorySyncPlan = {
   id: string; repositoryId: string; taskId: string; mode: RepositorySyncMode;
   path: string; branch: string; head: string; remoteHead: string;
   files: SyncFile[]; historyCommits: number; protectedHistory: boolean; note: string;
+  integration?: 'merge' | 'fast-forward' | 'up-to-date';
 };
 export type RepositorySyncResult = {
   taskId: string; mode: RepositorySyncMode; head: string; files: number;
@@ -31,7 +32,7 @@ const nonnegative = (v: unknown) => typeof v === 'number' && Number.isSafeIntege
 export function isRepositorySyncPlan(v: unknown): v is RepositorySyncPlan {
   return isRecord(v) && ['id', 'repositoryId', 'taskId', 'path', 'branch', 'note'].every(k => typeof v[k] === 'string') &&
     ['pull', 'latest', 'clean'].includes(String(v.mode)) && sha(v.head) && sha(v.remoteHead) && nonnegative(v.historyCommits) &&
-    typeof v.protectedHistory === 'boolean' && Array.isArray(v.files) && v.files.every(f => isRecord(f) && typeof f.path === 'string' && ['add', 'restore', 'delete'].includes(String(f.action)));
+    typeof v.protectedHistory === 'boolean' && (v.integration === undefined || ['merge', 'fast-forward', 'up-to-date'].includes(String(v.integration))) && Array.isArray(v.files) && v.files.every(f => isRecord(f) && typeof f.path === 'string' && ['add', 'restore', 'delete'].includes(String(f.action)));
 }
 export function isRepositorySyncResult(v: unknown): v is RepositorySyncResult {
   return isRecord(v) && typeof v.taskId === 'string' && ['pull', 'latest', 'clean'].includes(String(v.mode)) && sha(v.head) && nonnegative(v.files) &&

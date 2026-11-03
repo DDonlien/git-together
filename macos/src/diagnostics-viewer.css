@@ -1,0 +1,29 @@
+.diagnostics-viewer { display: grid; gap: 12px; min-width: 0; padding: 0 0 16px; }
+.diagnostics-viewer-toolbar { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.diagnostics-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--content); color: var(--muted); }
+.diagnostics-search:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
+.diagnostics-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: none; background: transparent; font-size: 12px; }
+.diagnostics-search input:focus-visible { outline: none; }
+.diagnostics-viewer-toolbar > .app-button { flex-shrink: 0; }
+.diagnostics-viewer-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 11px; }
+.diagnostics-viewer > .notice { margin: 0; }
+.diagnostics-records { max-height: min(480px, 55dvh); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-control); }
+.diagnostics-record + .diagnostics-record { border-top: 1px solid var(--line); }
+.diagnostics-record > summary { display: grid; grid-template-columns: 112px minmax(70px, 100px) 64px minmax(0, 1fr) 13px; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; list-style: none; cursor: pointer; font-size: 11px; }
+.diagnostics-record > summary::-webkit-details-marker { display: none; }
+.diagnostics-record > summary:hover { background: var(--surface-hover); }
+.diagnostics-record > summary:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.diagnostics-record time { font-variant-numeric: tabular-nums; color: var(--muted); }
+.diagnostics-record-event, .diagnostics-record-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diagnostics-record-detail { color: var(--muted); }
+.diagnostics-record-result { color: var(--muted); }
+.diagnostics-record[data-outcome='error'] .diagnostics-record-result { color: var(--danger); }
+.diagnostics-record[data-outcome='warning'] .diagnostics-record-result { color: var(--warning); }
+.diagnostics-record[open] > summary > svg { transform: rotate(90deg); }
+.diagnostics-record pre { margin: 0; padding: 12px; border-top: 1px solid var(--line); color: var(--muted); background: var(--surface); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diagnostics-viewer-empty { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 12px; }
+@media (max-width: 620px) {
+  .diagnostics-record > summary { grid-template-columns: minmax(100px, 1fr) minmax(70px, 1fr) 64px 13px; gap: 8px; }
+  .diagnostics-record-detail { grid-column: 1 / 4; grid-row: 2; }
+  .diagnostics-record > summary > svg { grid-column: 4; grid-row: 1; }
+}

@@ -1,4 +1,4 @@
-import type { LocalLink, RemoteRepository } from './import-model';
+import type { LocalFile, LocalLink, RemoteRepository } from './import-model';
 import type { RepositoryTask } from './repository-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import type { LocalRepositoryState } from './use-workspace';
@@ -8,9 +8,16 @@ import type { CommitDraft } from './local-submit-model';
 
 export type RepositoryActionMode = 'commit' | 'push' | 'pull';
 export type RepositoryOperationState = 'preparing' | 'ready' | 'working' | 'failed' | 'completed';
-export type RepositoryOperationControls = { visible?: boolean; onCollapse?: () => void; onStateChange?: (state: RepositoryOperationState) => void; onFinished?: () => void; pauseRefresh?: () => () => void };
+export type RepositoryOperationControls = { visible?: boolean; autoStart?: boolean; onCollapse?: () => void; onStateChange?: (state: RepositoryOperationState) => void; onFinished?: () => void; pauseRefresh?: () => () => void };
 export const repositoryOperationScope = (repositoryId: string, branch?: string, taskId?: string) => JSON.stringify([repositoryId, branch || null, taskId || null]);
 export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string; draft?: CommitDraft; aiAllowed?: boolean };
+export type IgnoreRepositoryFile = (target: RepositoryActionTarget, file: LocalFile) => Promise<{ task: RepositoryTask }>;
+
+export function commitPathsAfterIgnore(previousFiles: readonly LocalFile[], paths: readonly string[], ignoredFile: LocalFile, files: readonly LocalFile[]): string[] {
+  const oldPaths = new Set(previousFiles.map(file => file.path));
+  const selected = new Set(paths);
+  return files.filter(file => selected.has(file.path) || file.path === '.gitignore' && !oldPaths.has(file.path) || file.path === ignoredFile.path && file.tracked && file.status.includes('D')).map(file => file.path);
+}
 
 export function repositoryActionTargets(repository: RemoteRepository, tasks: RepositoryTask[], mode: RepositoryActionMode, remote: RemoteRepositoryState, local?: LocalRepositoryState, link?: LocalLink): RepositoryActionTarget[] {
   const system = usesSystemAuthentication(link);

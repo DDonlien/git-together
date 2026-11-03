@@ -5,7 +5,9 @@ export async function presenceCommand(method: PresenceMethod, input: PresenceCon
   if (window.gittogether?.presence) result = await window.gittogether.presence(method, input);
   else {
     if (window.gittogether) throw new Error('当前版本尚未包含 Presence 插件，请更新 GitTogether。');
-    const response = await fetch(`/api/presence/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
+    // Login cleanup and legacy federated authentication may each require several network requests.
+    const timeout = ['login', 'register', 'logout', 'addServer', 'selectServer'].includes(method) ? 60000 : 20000;
+    const response = await fetch(`/api/presence/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1' }, body: JSON.stringify(input), signal: AbortSignal.timeout(timeout) });
     result = await response.json();
   }
   const envelope = result as { ok?: boolean; value?: PresenceStatus; error?: string };

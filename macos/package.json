@@ -16,7 +16,7 @@
     "check:rust": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "icons": "tsx scripts/generate-icons.ts",
     "package:desktop": "tsx scripts/package-desktop.ts",
-    "test:lite": "tsx --test tests/desktop-lite-ui.test.ts",
+    "test:lite": "tsx --test tests/desktop-lite-ui.test.ts tests/generate-commit-drafts.test.ts tests/repository-ignore-selection.test.ts tests/repository-update.test.ts tests/sync-push-result.test.ts",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "package:windows": "tsx scripts/package-windows.ts",
     "package:trial": "tsx scripts/package-trial.ts"

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { RepositoryActionDialog } from './RepositoryActionDialog';
 import type { RepositoryActionMode, RepositoryActionTarget, RepositoryOperationControls } from './repository-action-model';
 import type { CommitDraft, GenerateCommitMessage, LocalSubmitResult, PushLocalCommit, SubmitLocalCommit } from './local-submit-model';
-import { importAPI, RepositoryOperationError } from './import-api';
+import { importAPI } from './import-api';
 import { isRepositorySyncProgress, type ApplyRepositorySync, type RepositorySyncMode, type RepositorySyncPlan, type RepositorySyncResult, type RepositorySyncProgress } from './repository-sync-model';
 import { Button, Icon, Modal, Notice } from './ui';
 import { LinearProgress } from './material-inputs';
@@ -10,30 +10,30 @@ import { LinearProgress } from './material-inputs';
 const isSync = (mode: RepositoryActionMode): mode is 'pull' => mode === 'pull';
 const labels = { pull: 'Pull' };
 const discard = (plan: RepositorySyncPlan) => importAPI('discardSync', { repositoryId: plan.repositoryId, taskId: plan.taskId, planId: plan.id }).catch(() => { console.warn('操作预览清理未完成，服务将在预览到期后再次清理。'); });
-export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
+export function RepositoryOperationDialog({ mode, targets, onCommit, onPush, onGenerate, onIgnore, onSync, onComplete, onCommitted, onDraftChange, onClose, ...controls }: {
   mode: RepositoryActionMode; targets: RepositoryActionTarget[]; onCommit: SubmitLocalCommit; onPush: PushLocalCommit;
-  onGenerate?: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
+  onIgnore?: import('./repository-action-model').IgnoreRepositoryFile; onGenerate?: GenerateCommitMessage; onSync?: ApplyRepositorySync; onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
   onCommitted?: (target: RepositoryActionTarget, result: LocalSubmitResult) => void; onDraftChange?: (target: RepositoryActionTarget, draft: CommitDraft) => void;
 } & RepositoryOperationControls) {
   return isSync(mode) ? <RepositorySyncDialog mode={mode} targets={targets} onApply={onSync} onComplete={onComplete} onClose={onClose} {...controls} /> :
-    <RepositoryActionDialog mode={mode} targets={targets} onCommit={onCommit} onPush={onPush} onGenerate={onGenerate} onCommitted={onCommitted} onDraftChange={onDraftChange} onComplete={onComplete} onClose={onClose} {...controls} />;
+    <RepositoryActionDialog mode={mode} targets={targets} onCommit={onCommit} onPush={onPush} onGenerate={onGenerate} onIgnore={onIgnore} onCommitted={onCommitted} onDraftChange={onDraftChange} onComplete={onComplete} onClose={onClose} {...controls} />;
 }
-export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose, visible = true, onCollapse, onStateChange, onFinished }: {
+export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClose, visible = true, autoStart = false, onCollapse, onStateChange, onFinished }: {
   mode: 'pull'; targets: RepositoryActionTarget[]; onApply?: ApplyRepositorySync;
   onComplete?: (message: string, complete?: boolean) => void; onClose: () => void;
 } & RepositoryOperationControls) {
   const [plans, setPlans] = useState<Record<string, RepositorySyncPlan>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [diverged, setDiverged] = useState<Record<string, boolean>>({});
   const [busyPanels, setBusyPanels] = useState<Record<string, boolean>>({}), [needsRefresh, setNeedsRefresh] = useState(false);
   const panelBusy = Object.values(busyPanels).some(Boolean);
   const onPanelBusy = useCallback((key: string, busy: boolean) => setBusyPanels(current => current[key] === busy || !busy && !current[key] ? current : { ...current, [key]: busy }), []);
-  const [results, setResults] = useState<Record<string, RepositorySyncResult>>({});
+  const [results, setResults] = useState<Record<string, RepositorySyncResult & Pick<RepositorySyncPlan, 'integration'>>>({});
   const [reading, setReading] = useState(true), [writing, setWriting] = useState(false), [revision, setRevision] = useState(0);
   const [finished, setFinished] = useState(false);
   const [progress, setProgress] = useState<Record<string, RepositorySyncProgress>>({});
   const [now, setNow] = useState(Date.now);
   const active = useRef<{ key: string; operationId: string; repositoryId: string; taskId: string } | null>(null);
+  const running = useRef(false), autoStartAttempted = useRef(false);
   useEffect(() => {
     const receive = (event: Event) => {
       const value: unknown = (event as CustomEvent).detail, current = active.current;
@@ -50,12 +50,12 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
   }, [writing]);
   useEffect(() => { onStateChange?.(finished ? 'completed' : writing ? 'working' : Object.keys(errors).length ? 'failed' : reading ? 'preparing' : 'ready'); }, [finished, writing, errors, reading, onStateChange]);
   const saved = useRef<Record<string, RepositorySyncPlan>>({});
-  const completed = useRef<Record<string, RepositorySyncResult>>({});
+  const completed = useRef<Record<string, RepositorySyncResult & Pick<RepositorySyncPlan, 'integration'>>>({});
   const mounted = useRef(true);
   const key = (target: RepositoryActionTarget) => JSON.stringify([target.repositoryId, target.task.id]);
   useEffect(() => {
     mounted.current = true;
-    const cancellation = new AbortController(); saved.current = {}; setPlans({}); setErrors({}); setDiverged({}); setReading(true);
+    const cancellation = new AbortController(); saved.current = {}; setPlans({}); setErrors({}); setReading(true);
     void (async () => {
       for (const target of targets) {
         const id = key(target); if (completed.current[id] || cancellation.signal.aborted) continue;
@@ -66,7 +66,6 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
         } catch (p) {
           if (!cancellation.signal.aborted) {
             setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '文件预览未完成。' }));
-            if (p instanceof RepositoryOperationError && p.reason === 'diverged') setDiverged(current => ({ ...current, [id]: true }));
           }
         }
       }
@@ -77,38 +76,48 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
   const pending = targets.filter(target => !results[key(target)]);
   const canApply = pending.length > 0 && pending.every(target => plans[key(target)]) && !reading && !writing && !panelBusy && !needsRefresh && !Object.keys(errors).length;
   async function apply() {
-    if (!canApply) return;
-    setWriting(true);
-    const run = onApply || (input => importAPI('applySync', input));
-    for (const target of pending) {
-      const id = key(target), plan = saved.current[id];
-      if (!plan) break;
-      delete saved.current[id];
-      const operationId = crypto.randomUUID(), startedAt = Date.now();
-      active.current = { key: id, operationId, repositoryId: target.repositoryId, taskId: target.task.id };
-      setNow(startedAt);
-      setProgress(previous => ({ ...previous, [id]: { ...active.current!, state: 'running', title: '核验操作预览', description: '正在检查本地更改及跟踪分支。', value: null, startedAt, updatedAt: startedAt } }));
-      try {
-        const result = await run({ repositoryId: target.repositoryId, taskId: target.task.id, planId: plan.id, operationId });
-        completed.current[id] = result;
-        if (mounted.current) setResults(current => ({ ...current, [id]: result }));
-      } catch (p) {
-        if (mounted.current) setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '操作未完成。' }));
-        break; // Never continue a destructive batch after a failed target.
-      } finally {
-        active.current = null;
+    if (!canApply || running.current) return;
+    running.current = true;
+    try {
+      setWriting(true);
+      const run = onApply || (input => importAPI('applySync', input));
+      for (const target of pending) {
+        const id = key(target), plan = saved.current[id];
+        if (!plan) break;
+        delete saved.current[id];
+        const operationId = crypto.randomUUID(), startedAt = Date.now();
+        active.current = { key: id, operationId, repositoryId: target.repositoryId, taskId: target.task.id };
+        setNow(startedAt);
+        setProgress(previous => ({ ...previous, [id]: { ...active.current!, state: 'running', title: '核验操作预览', description: '正在检查本地更改及跟踪分支。', value: null, startedAt, updatedAt: startedAt } }));
+        try {
+          const result = { ...await run({ repositoryId: target.repositoryId, taskId: target.task.id, planId: plan.id, operationId }), integration: plan.integration };
+          completed.current[id] = result;
+          if (mounted.current) setResults(current => ({ ...current, [id]: result }));
+        } catch (p) {
+          if (mounted.current) setErrors(current => ({ ...current, [id]: p instanceof Error ? p.message : '操作未完成。' }));
+          break; // Never continue a destructive batch after a failed target.
+        } finally {
+          active.current = null;
+        }
       }
-    }
-    if (!mounted.current) return;
-    setWriting(false);
-    const count = Object.keys(completed.current).length;
-    const warnings = targets.flatMap(target => {
-      const warning = completed.current[key(target)]?.warning;
-      return warning ? [`${target.repositoryName} · ${target.task.branch}：${warning}`] : [];
-    });
-    if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。${warnings.length ? ` ${warnings.join(' ')}` : ''}`, count === targets.length && warnings.length === 0);
-    if (count === targets.length) { setFinished(true); onFinished?.(); }
+      if (!mounted.current) return;
+      setWriting(false);
+      const count = Object.keys(completed.current).length;
+      const warnings = targets.flatMap(target => {
+        const warning = completed.current[key(target)]?.warning;
+        return warning ? [`${target.repositoryName} · ${target.task.branch}：${warning}`] : [];
+      });
+      if (count) onComplete?.(`${labels[mode]} 已完成 ${count} 个工作目录${count < targets.length ? `，剩余 ${targets.length - count} 个未完成` : ''}。${warnings.length ? ` ${warnings.join(' ')}` : ''}`, count === targets.length && warnings.length === 0);
+      if (count === targets.length) { setFinished(true); onFinished?.(); }
+    } finally { running.current = false; }
   }
+  useEffect(() => {
+    if (!autoStart || autoStartAttempted.current || reading || writing || panelBusy) return;
+    // Consume the automatic attempt even when preparation failed. A later
+    // manual re-preview must never silently retry the operation.
+    autoStartAttempted.current = true;
+    if (canApply) void apply();
+  }, [autoStart, reading, writing, panelBusy, canApply]);
   return <Modal title={`${labels[mode]} · ${targets.length} 个工作目录`} visible={visible} onCollapse={onCollapse} onClose={() => { if (writing || panelBusy) onCollapse?.(); else onClose(); }}>
     <div className="commit-composer repository-sync-dialog">
       {!targets.length && <Notice kind="info">当前筛选范围没有可操作的已关联工作目录。</Notice>}
@@ -125,11 +134,11 @@ export function RepositorySyncDialog({ mode, targets, onApply, onComplete, onClo
             <small>工作目录 {targets.findIndex(item => key(item) === id) + 1} / {targets.length} · 已用 {elapsed < 60 ? `${elapsed} 秒` : `${Math.floor(elapsed / 60)} 分 ${elapsed % 60} 秒`}{now - current.updatedAt >= 15_000 ? ' · 等待 Git 返回下一条进度…' : ''}</small>
           </div>}
           {writing && !running && !result && !errors[id] && <p className="muted">等待前一个工作目录完成…</p>}
-          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || `${labels[mode]} 已完成 · ${result.files} 个文件`}</Notice> : errors[id] ? <><Notice kind="error">{errors[id]}</Notice></> : plan ? <>
+          {result ? <Notice kind={result.warning ? 'info' : 'success'}>{result.warning || (result.integration === 'merge' ? `${labels[mode]} 已完成 · 已合并远端提交` : `${labels[mode]} 已完成 · ${result.files} 个文件`)}</Notice> : errors[id] ? <><Notice kind="error">{errors[id]}</Notice></> : plan ? <>
             <p>{plan.note}</p>
 
-            <details open><summary>{plan.files.length} 个受影响文件</summary><ul>{plan.files.map(file => <li key={file.path}><span>{file.action === 'delete' ? '删除' : file.action === 'add' ? '补齐' : '恢复'} </span><code>{file.path}</code></li>)}</ul></details>
-            {!plan.files.length && <p className="muted">文件已与远端一致。</p>}
+            {plan.integration === 'merge' ? <p className="muted">合并结果将在执行后确定；如有冲突会保留现场供处理。</p> : <><details open><summary>{plan.files.length} 个受影响文件</summary><ul>{plan.files.map(file => <li key={file.path}><span>{file.action === 'delete' ? '删除' : file.action === 'add' ? '补齐' : '恢复'} </span><code>{file.path}</code></li>)}</ul></details>
+            {!plan.files.length && <p className="muted">{plan.integration === 'up-to-date' ? '远端提交已包含在当前分支中。' : '文件已与远端一致。'}</p>}</>}
           </> : <p><Icon name="spinner" className="spin" /> 正在下载并核验文件预览…</p>}
         </section>;
       })}

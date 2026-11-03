@@ -1,30 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePresence } from './PresenceProvider';
-import { Button, TextField } from './ui';
+import { Button, Notice, TextField } from './ui';
 import './presence-account.css';
 
-export function PresenceAccountSettings({ disabled = false }: { disabled?: boolean }) {
+export type PresenceLoginTarget = { serverId?: string; serverUrl: string; email: string; delegated?: boolean };
+
+export function PresenceAccountSettings({ disabled = false, id, target, onSaved, onCancel }: { disabled?: boolean; id?: string; target: PresenceLoginTarget; onSaved: () => void; onCancel: () => void }) {
   const presence = usePresence();
-  const status = presence?.status;
-  const [editing, setEditing] = useState(false);
-  const [serverUrl, setServerUrl] = useState('');
-  const [email, setEmail] = useState('');
+  const [serverUrl, setServerUrl] = useState(target.serverUrl);
+  const [email, setEmail] = useState(target.email);
   const [password, setPassword] = useState('');
-  useEffect(() => { setServerUrl(status?.account?.issuer || status?.serverUrl || ''); setEmail(status?.account?.email || ''); setPassword(''); }, [status?.account?.id, status?.serverUrl]);
-  if (!presence || !status) return null;
-  const busy = disabled || presence.busy;
-  const account = status.account;
+  const [error, setError] = useState('');
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => { form.current?.querySelector<HTMLInputElement>('input:not([readonly]):not(:disabled)')?.focus(); }, []);
+  const busy = disabled || !!presence?.busy;
+  const targetUrl = target.serverId ? target.serverUrl : serverUrl;
   async function login() {
-    if (!presence) return;
-    try { await presence.account('login', { serverUrl, email, password }); setPassword(''); setEditing(false); } catch { /* Shared controller retains the form and error. */ }
+    if (!presence || busy) return;
+    setError('');
+    try {
+      await presence.account('login', { serverUrl: targetUrl, email, password, ...(target.serverId ? { serverId: target.serverId } : {}) });
+      setPassword(''); onSaved();
+    } catch (problem) { setError(problem instanceof Error ? problem.message : '登录未完成，请重试。'); }
   }
-  return <section className="presence-account-settings" aria-labelledby="presence-account-title">
-    <div className="setting-row"><span><strong id="presence-account-title">Presence 账号</strong>{account && <small>{account.displayName} · {account.email}</small>}</span>{account && <span className="presence-settings-actions"><Button variant="quiet" disabled={busy} onClick={() => setEditing(value => !value)}>重新登录</Button><Button variant="quiet" disabled={busy} onClick={() => { void presence.account('logout').catch(() => {}); }}>退出登录</Button></span>}</div>
-    {(!account || editing) && <form className="presence-account-form" onSubmit={event => { event.preventDefault(); void login(); }}>
-      <TextField label="账号服务地址" value={serverUrl} onChange={event => setServerUrl(event.target.value)} type="url" maxLength={2048} required disabled={busy} />
-      <TextField label="邮箱" type="email" value={email} onChange={event => setEmail(event.target.value)} maxLength={254} autoComplete="username" required disabled={busy} />
-      <TextField label="密码" type="password" value={password} onChange={event => setPassword(event.target.value)} maxLength={128} minLength={1} autoComplete="current-password" required disabled={busy} />
-      <div className="presence-settings-actions"><Button type="submit" variant="primary" disabled={busy}>登录</Button>{account ? <Button disabled={busy} onClick={() => { setEditing(false); setPassword(''); }}>取消</Button> : <Button variant="quiet" disabled={busy || !serverUrl} onClick={() => { void presence.account('openAccount', { serverUrl }).catch(() => {}); }}>创建账号</Button>}</div>
-    </form>}
-  </section>;
+  async function openAccount() {
+    if (!presence || busy || !targetUrl.trim()) return;
+    setError('');
+    try { await presence.account('openAccount', { serverUrl: targetUrl }); }
+    catch (problem) { setError(problem instanceof Error ? problem.message : '账号页面打开失败，请重试。'); }
+  }
+  return <form ref={form} id={id} className="presence-account-form" aria-label={target.serverId ? '重新登录 Presence' : '添加 Presence'} onSubmit={event => { event.preventDefault(); void login(); }}>
+    {target.delegated && <Notice kind="info">当前通过其他服务器的账号连接。重新登录只会更换这台服务器的账号。</Notice>}
+    <TextField label="服务器地址" value={targetUrl} onChange={event => { if (!target.serverId) setServerUrl(event.target.value); }} type="url" maxLength={2048} required readOnly={!!target.serverId} disabled={busy} />
+    <TextField label="邮箱" type="email" value={email} onChange={event => setEmail(event.target.value)} maxLength={254} autoComplete="username" required disabled={busy} />
+    <TextField label="密码" type="password" value={password} onChange={event => setPassword(event.target.value)} maxLength={128} minLength={1} autoComplete="current-password" required disabled={busy} />
+    {error && <Notice kind="error">{error}</Notice>}
+    <div className="presence-settings-actions"><Button type="submit" variant="primary" disabled={busy || !targetUrl.trim() || !email.trim() || !password}>{busy ? '正在登录…' : '登录'}</Button><Button type="button" disabled={busy} onClick={() => { setPassword(''); onCancel(); }}>取消</Button><Button type="button" variant="quiet" disabled={busy || !targetUrl.trim()} onClick={() => { void openAccount(); }}>创建账号</Button></div>
+  </form>;
 }

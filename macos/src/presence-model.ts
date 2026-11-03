@@ -9,13 +9,18 @@ export type PresenceFile = {
 export type PresenceProject = { repositoryId: string; worktreeId: string; branch: string | null; head: string | null; gitReady: boolean; unpublishedCommits: number | null; files: PresenceFile[]; organizationId?: string | null };
 export type PresenceSession = { sessionId: string; userId: string; identityId?: string; serverId?: string; isCurrent?: boolean; displayName: string; avatarUrl: string | null; deviceId: string; deviceName?: string | null; alive: boolean; lastSeen: number; projects: PresenceProject[] };
 export type PresenceOrganization = { id: string; name: string; role: 'owner' | 'admin' | 'member'; projects: string[]; revision: number; serverId: string; serverUrl: string; connected: boolean };
-export type PresenceServer = { id: string; url: string; enabled: boolean; connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string };
+export type PresenceAccount = { id: string; identityId?: string; issuer?: string; subject?: string; email: string; displayName: string; emailVerified: boolean; expiresAt: number; repositories: string[]; mode: 'personal' | 'hosted' };
+export type PresenceServer = {
+  id: string; url: string; enabled: boolean; connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string;
+  name?: string; loggedIn?: boolean; authMode?: 'direct' | 'delegated' | 'observer';
+  account?: PresenceAccount | null; accountSummary?: Pick<PresenceAccount, 'displayName' | 'email'> | null; issuerUrl?: string | null;
+};
 export type PresenceStatus = {
   version: 1; enabled: boolean; configured: boolean; serverUrl: string; serverName: string;
   connection: 'disabled' | 'connecting' | 'connected' | 'offline'; error: string; localError?: string; sessions: PresenceSession[];
   bridge: { connected: boolean; error: string; projects: PresenceProject[] };
   local?: { deviceId: string; deviceName: string; connected: boolean; projects: PresenceProject[] } | null;
-  account?: { id: string; identityId?: string; issuer?: string; subject?: string; email: string; displayName: string; emailVerified: boolean; expiresAt: number; repositories: string[]; mode: 'personal' | 'hosted' } | null;
+  account?: PresenceAccount | null;
   servers?: PresenceServer[];
   organizations?: PresenceOrganization[];
   accountService?: { version: 1; mode: 'personal' | 'hosted'; organizationManagement: boolean; registrationAvailable: boolean; setupRequired: boolean } | null;
@@ -26,6 +31,11 @@ export type PresenceServerMethod = 'addServer' | 'selectServer' | 'removeServer'
 export type PresenceMethod = 'status' | 'configure' | 'reconnect' | PresenceAccountMethod | PresenceServerMethod;
 export type PresenceConfiguration = { enabled: boolean };
 export const presenceConnectionLabels: Record<PresenceStatus['connection'], string> = { disabled: '已停用', connecting: '正在连接…', connected: '已连接', offline: '连接已断开，状态未知' };
+
+export function presenceIdentityNames(status: PresenceStatus): string[] {
+  const names = (status.servers || []).filter(server => server.loggedIn).map(server => server.accountSummary?.displayName).filter((name): name is string => Boolean(name));
+  return names.length ? [...new Set(names)] : status.account?.displayName ? [status.account.displayName] : [];
+}
 
 export function presenceRepositoryId(repository: Pick<RemoteRepository, 'url'>): string {
   const url = new URL(repository.url);
@@ -129,8 +139,10 @@ export function presenceWorkspaces(status: PresenceStatus | null, repositoryId: 
   if (!status?.enabled) return [];
   const local = status.local;
   const projects = local?.projects.filter(project => project.repositoryId.toLowerCase() === repositoryId) || [];
+  const names = presenceIdentityNames(status);
+  const loggedInServers = (status.servers || []).filter(server => server.loggedIn);
   const workspaces: PresenceWorkspace[] = projects.map(project => ({
-    key: `local:${project.worktreeId}`, displayName: status.account?.displayName || '我', deviceName: local!.deviceName,
+    key: `local:${project.worktreeId}`, displayName: loggedInServers.length <= 1 && names.length === 1 ? names[0] : '我', deviceName: local!.deviceName,
     isCurrent: true, connection: local!.connected ? 'online' : 'unknown', project,
   }));
   for (const session of status.sessions) for (const project of session.projects) {

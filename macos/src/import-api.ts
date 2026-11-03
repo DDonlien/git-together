@@ -2,7 +2,7 @@ import { githubVerificationURL, isCatalog, isRecord, type ApiInputs, type ApiMet
 import { isRemoteCommitDetails, isRemoteFileContent, isRemoteHistoryPage, isRemoteWorkspace } from './remote-repository-model';
 import { isLocalWorkspace } from './repository-model';
 import { isLocalCommitDetails } from './local-commit-model';
-import { isCommitDraft, isLocalSubmitResult, isLocalPushResult, type GenerateCommitMessage } from './local-submit-model';
+import { isCommitDraft, isLocalSubmitResult, isExpectedPushResult, type GenerateCommitMessage } from './local-submit-model';
 import { logDiagnostic } from './diagnostics-api';
 import { isFileDirectory } from './file-operation-model';
 import { diagnosticFailure } from './diagnostics-model';
@@ -58,7 +58,7 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   }
   else {
     let response: Response;
-    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'remoteWorkspace' ? 15 * 60_000 : ['downloadBranch', 'prepareSync', 'applySync', 'submitCommit'].includes(method) ? 30 * 60_000 : 180000);
+    const timeout = AbortSignal.timeout(method === 'status' || method === 'catalog' ? 10000 : method.startsWith('githubAuth') ? 30000 : method === 'remoteWorkspace' ? 15 * 60_000 : ['downloadBranch', 'prepareSync', 'applySync', 'submitCommit', 'pushCommit'].includes(method) ? 30 * 60_000 : 180000);
     try { response = await fetch(`/api/import/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GitTogether-Client': '1', ...(requestId ? { 'X-GitTogether-Request': requestId } : {}) }, body: JSON.stringify(input), signal: signal ? AbortSignal.any([signal, timeout]) : timeout }); }
     catch {
       if (signal?.aborted) throw signal.reason;
@@ -116,7 +116,8 @@ async function readImportAPI<M extends ApiMethod>(method: M, input: ApiInputs[M]
   } else if (method === 'submitCommit') {
     if (!isLocalSubmitResult(value) || !('taskId' in input) || value.taskId !== input.taskId) throw new Error('提交结果返回格式无效，请检查本地提交历史。');
   } else if (method === 'pushCommit') {
-    if (!isLocalPushResult(value) || !('taskId' in input) || value.taskId !== input.taskId || !('commitId' in input) || value.commitId !== input.commitId) throw new Error('推送结果返回格式无效，请检查远端提交。');
+    const request = input as unknown as Record<string, unknown>;
+    if (typeof request.taskId !== 'string' || typeof request.commitId !== 'string' || typeof request.expectedHead !== 'string' || !isExpectedPushResult(value, { taskId: request.taskId, commitId: request.commitId, expectedHead: request.expectedHead })) throw new Error('推送结果返回格式无效，请检查远端提交。');
   } else if (method === 'prepareSync') {
     if (!isRepositorySyncPlan(value) || !('taskId' in input) || value.taskId !== input.taskId || !('repositoryId' in input) || value.repositoryId !== input.repositoryId || !('mode' in input) || value.mode !== input.mode) throw new Error('文件预览返回格式无效。');
   } else if (method === 'applySync') {
