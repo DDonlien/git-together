@@ -57,9 +57,11 @@ test('branch download creates depth-one worktrees without overwriting another ch
 });
 
 test('folder names remain one bounded path component', () => {
-  assert.equal(branchDownloadFolderName('project', 'feature/a'), 'project-feature-a');
-  assert.equal(branchDownloadFolderName('project', 'x'.repeat(200)).length, 160);
-  for (const name of ['', '.', '..', '../outside', '/absolute', 'bad\\name', 'bad\0name', 'bad.', 'bad ', 'x'.repeat(161)]) assert.equal(isDownloadFolderName(name), false, name);
+  assert.equal(branchDownloadFolderName('feature/a', 2), 'feature-a');
+  assert.equal(branchDownloadFolderName('x'.repeat(200), 2).length, 160);
+  assert.equal(branchDownloadFolderName('con', 2), '_con');
+  assert.equal(new TextEncoder().encode(branchDownloadFolderName('分支'.repeat(100), 2)).length, 159);
+  for (const name of ['', '.', '..', '../outside', '/absolute', 'bad\\name', 'bad\0name', 'bad.', 'bad ', 'x'.repeat(161), '分'.repeat(54), 'NUL']) assert.equal(isDownloadFolderName(name), false, name);
   assert.equal(isDownloadFolderName('project-main'), true);
 });
 

@@ -39,7 +39,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   branchIssues?: BranchIssue[]; onDismissIssue?: DismissBranchIssue;
   localLink?: LocalLink; hiddenEntries?: ReadonlySet<string>; manualHiddenEntries?: ReadonlySet<string>; onToggleHidden?: () => void;
   globalSearch: string; onSearchChange?: (value: string) => void; searchRef?: RefObject<HTMLElement | null>;
-  onConfigure: () => void; onDownload?: (repository: RemoteRepository, branch: string) => void; workspace?: RepositoryWorkspace;
+  onConfigure: () => void; onDownload?: (repository: RemoteRepository, branch: string, visibleBranchCount: number) => void; workspace?: RepositoryWorkspace;
   remoteState?: RemoteRepositoryState; readRemoteCommit?: ReadRemoteCommit;
   readLocalCommit?: ReadLocalCommit;
   applySync?: import('./repository-sync-model').ApplyRepositorySync; submitCommit?: SubmitLocalCommit; pushCommit?: PushLocalCommit; generateCommitMessage?: GenerateCommitMessage;
@@ -83,6 +83,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
   const treeHasFocusedTask = treeTasks.some(task => task.id === focus);
   const visibleTreeIds = new Set(treeTasks.filter(task => !focus || (treeHasFocusedTask ? task.id === focus : task.branch === focusedBranch)).map(task => task.id));
   const downloadableBranches = workspace.tasks.filter(task => task.remote && task.id !== 'remote:pending').map(task => task.branch);
+  const visibleDownloadBranchCount = new Set(downloadableBranches.filter(branch => branchSelection === undefined ? !hiddenEntries?.has(hiddenEntryKey(repository.id, branch)) : branchSelection === null || branchSelection.has(branch))).size;
   const filteredDownloadBranch = branchSelection?.size === 1 ? [...branchSelection][0] : undefined;
   const selectedDownloadBranch = [focusedBranch, filteredDownloadBranch].find(branch => branch && downloadableBranches.includes(branch));
   const downloadBranch = selectedDownloadBranch || repository.defaultBranch || downloadableBranches[0];
@@ -165,7 +166,7 @@ export function RepositoryView({ repository, account, localPath, localState, loc
         const state = task.remote ? remoteCommits[task.id] : localCommits[task.id];
         const details = commitId && state?.id === commitId ? state.details : null;
         return <div key={task.id} className="repository-task-slot" hidden={!visibleTreeIds.has(task.id)}><RepositoryFileTree branchIssues={branchIssues} onDismissIssue={onDismissIssue} onChanged={onLocalFilesChanged} task={task} repository={repository} account={account} changes={task.remote || commitId ? details?.files || noChanges : undefined} selected={contextFiles[task.id]} onSelect={path => select(task.id, path)} complete={task.remote ? task.treeComplete === true : current?.workspace ? !task.error : workspace.complete} /></div>;
-      })}{!visibleTreeIds.size && <div className="repository-column-empty" role="status"><Icon name="folder" size={26} /><p>{treeSource === 'local' ? !localPath ? '尚未关联本地目录。' : current?.error || (focus ? '这个分支尚无本地文件树。' : '正在读取本地文件树…') : remoteState?.error || (focus ? '这个分支尚无远端文件树。' : remoteState?.workspace ? '远端仓库尚无文件。' : remoteState?.loading ? '正在读取远端文件树…' : '远端文件树尚未接入。')}</p>{treeSource === 'local' && !localPath && <div className="repository-unlinked-actions">{onDownload && downloadBranch && <Button variant="quiet" leadingIcon={<Icon name="downloadSimple" size={15} />} onClick={() => onDownload(repository, downloadBranch)} disabled={!repository.available}>下载并关联</Button>}<Button onClick={onConfigure} disabled={!repository.available}>关联本地目录</Button></div>}</div>}</div></section>
+      })}{!visibleTreeIds.size && <div className="repository-column-empty" role="status"><Icon name="folder" size={26} /><p>{treeSource === 'local' ? !localPath ? '尚未关联本地目录。' : current?.error || (focus ? '这个分支尚无本地文件树。' : '正在读取本地文件树…') : remoteState?.error || (focus ? '这个分支尚无远端文件树。' : remoteState?.workspace ? '远端仓库尚无文件。' : remoteState?.loading ? '正在读取远端文件树…' : '远端文件树尚未接入。')}</p>{treeSource === 'local' && !localPath && <div className="repository-unlinked-actions">{onDownload && downloadBranch && <Button variant="quiet" leadingIcon={<Icon name="downloadSimple" size={15} />} onClick={() => onDownload(repository, downloadBranch, visibleDownloadBranchCount)} disabled={!repository.available}>下载并关联</Button>}<Button onClick={onConfigure} disabled={!repository.available}>关联本地目录</Button></div>}</div>}</div></section>
     </RepositoryColumns>
   </main>;
 }

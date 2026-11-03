@@ -522,8 +522,7 @@ pub async fn download(
     let branch = util::field(input, "branch", 1024)?;
     let parent = util::absolute(text(input, "parentPath"))?;
     let name = util::field(input, "folderName", 160)?;
-    if name.is_empty()
-        || name == "."
+    if name == "."
         || name == ".."
         || name.starts_with('.')
         || name.contains(['/', '\\', ':'])
@@ -545,7 +544,11 @@ pub async fn download(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
         Err(_) => return Err("仓库容器目录不可访问，未修改文件。".into()),
     }
-    let destination = project.join(&name);
+    let destination = if name.is_empty() {
+        project.clone()
+    } else {
+        project.join(&name)
+    };
     if destination.symlink_metadata().is_ok() {
         return Err("目标目录已经存在，未覆盖文件。".into());
     }
@@ -687,7 +690,9 @@ pub async fn download(
         if destination.symlink_metadata().is_ok() {
             return Err("目标文件夹已出现，未覆盖文件。".into());
         }
-        fs::create_dir_all(&project).map_err(|_| "无法创建仓库容器目录。")?;
+        if !name.is_empty() {
+            fs::create_dir_all(&project).map_err(|_| "无法创建仓库容器目录。")?;
+        }
         network
             .run(
                 &store,

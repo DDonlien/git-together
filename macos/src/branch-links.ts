@@ -2,7 +2,7 @@ import type { LocalLink } from './import-model';
 import type { RepositoryTask } from './repository-model';
 import type { RemoteRepositoryState } from './remote-repository-model';
 import type { LocalRepositoryState } from './use-workspace';
-import { repositoryDownloadFolderName } from './branch-download-model';
+import { branchDownloadFolderName, repositoryDownloadFolderName } from './branch-download-model';
 import { displayLocalPath } from './local-directory';
 
 export const hiddenEntryKey = (repositoryId: string, branch?: string) => JSON.stringify([repositoryId, branch ?? null]);
@@ -21,7 +21,8 @@ export function repositoryLocalDirectory(repositoryName: string, link?: LocalLin
     const folder = compare(parts[0].at(-1)!);
     // The mapping already proves Git identity. Names only determine whether
     // this is our project container, never which repository owns a directory.
-    if (compare(parts[0].at(-2) || '') === project && folder.startsWith(`${project}_`) && folder.length > project.length + 1) return parts[0].slice(0, -1).join(separator);
+    const defaultBranchFolder = link.worktrees?.some(item => compare(displayLocalPath(item.path)) === compare(unique[0]) && compare(branchDownloadFolderName(item.branch, 2)) === folder);
+    if (compare(parts[0].at(-2) || '') === project && ((folder.startsWith(`${project}_`) && folder.length > project.length + 1) || defaultBranchFolder)) return parts[0].slice(0, -1).join(separator);
     return unique[0];
   }
   let length = parts[0].length;
