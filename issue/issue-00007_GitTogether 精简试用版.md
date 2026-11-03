@@ -6,13 +6,15 @@ status: done
 importance: p0
 emergency: p1
 created-time: '2026-11-01T23:15:53+08:00'
-updated-time: '2026-11-03T19:02:03+08:00'
+updated-time: '2026-11-03T19:30:16+08:00'
 start-time: '2026-11-01T23:15:53+08:00'
 closed-time: '2026-11-01T23:42:29+08:00'
 created-version: 0.38.11
 closed-version: 0.38.11-lite.1
 created-by: github.com/DDonlien
 updated-by: github.com/DDonlien
+commit-related:
+  - e2dc5398c7720032b52a7ad37a729a4184e31cdd
 assignees:
   - github.com/DDonlien
 tags:
@@ -21,7 +23,7 @@ tags:
 
 # Description
 
-- [ ] 将当前精简功能作为 GitTogether 0.38.12 正式版发布：沿用正式应用标识、原账号与目录关联及签名更新源；macOS Apple Silicon、Windows x86 和 x64 的安装包、签名、公证与公开更新源待核验。
+- [x] 当前精简功能已作为 GitTogether 0.38.12 正式版发布，沿用正式应用标识、原账号与目录关联及签名更新源；macOS Apple Silicon、Windows x86 和 x64 安装包及公开更新清单已核验。实际安装版的更新与账号体验待用户验收。
 
 用户要求减少错误与功能复杂度，仅保留 Tauri 的 GitHub Desktop 日常 Git 工作流、全套更新后的 GUI、绑定账号的全部仓库侧栏、Dashboard 多仓库/多分支及隐藏排序、非 GitHub 仓库的 Codex CLI 提交说明和 Presence 插件兼容。
 
@@ -43,6 +45,20 @@ tags:
 试用应用使用独立标识、存储和账号登录，稳定版不会被替换。此版沿用 Tauri/Rust 实现标准 Git 语义；历史 GitHub Desktop/Electron 参考源码不进入运行包。真实账号授权、Presence 插件连接、视觉与交互体验仍由用户试用确认；源码检查与隔离测试不代表这些验收已通过。
 
 # Comments
+
+## 20261103-193016_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
+
+> e2dc5398c7720032b52a7ad37a729a4184e31cdd
+
+GitTogether 0.38.12 已作为[正式版本](https://github.com/DDonlien/git-together/releases/tag/v0.38.12)发布，应用名称和版本均不含 Lite。现有 0.38.11 的应用标识、更新地址与公钥已核对；未操作或更新已安装应用。
+
+macOS Apple Silicon 安装包经 Developer ID 签名，Apple 公证 Accepted（a5f3abf0-3c79-49e1-86f0-85d537b18e20），解压后的签名及公证票据通过核验；ZIP 与更新归档中的应用内容一致。Windows x86/x64 均完成[原生构建与安装校验](https://github.com/DDonlien/git-together/actions/runs/41624481228)，更新签名有效，安装器未配置 Authenticode 签名。
+
+公开 latest.json 已确认版本及三个平台的更新签名；八个发布文件的大小和 SHA-256 与构建产物一致。真实安装版的更新、账号和界面体验仍待用户验收。
+
+> [本次执行对话](codex://threads/01a1a0f2-4304-7e90-a497-5050df038618)
+
+---
 
 ## 20261103-190203_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
 
