@@ -10,7 +10,7 @@ export type RepositoryActionMode = 'commit' | 'push' | 'pull';
 export type RepositoryOperationState = 'preparing' | 'ready' | 'working' | 'failed' | 'completed';
 export type RepositoryOperationControls = { visible?: boolean; autoStart?: boolean; onCollapse?: () => void; onStateChange?: (state: RepositoryOperationState) => void; onFinished?: () => void; pauseRefresh?: () => () => void };
 export const repositoryOperationScope = (repositoryId: string, branch?: string, taskId?: string) => JSON.stringify([repositoryId, branch || null, taskId || null]);
-export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string; draft?: CommitDraft; aiAllowed?: boolean };
+export type RepositoryActionTarget = { repositoryId: string; repositoryName: string; task: RepositoryTask; commitId?: string; draft?: CommitDraft };
 export type IgnoreRepositoryFile = (target: RepositoryActionTarget, file: LocalFile) => Promise<{ task: RepositoryTask }>;
 
 export function commitPathsAfterIgnore(previousFiles: readonly LocalFile[], paths: readonly string[], ignoredFile: LocalFile, files: readonly LocalFile[]): string[] {
@@ -29,6 +29,6 @@ export function repositoryActionTargets(repository: RemoteRepository, tasks: Rep
       const count = gitSignals([task], remote, local, task.branch, repository.available, system).push.count;
       return (count || 0) > 0 || system && count === undefined && !!task.head;
     }
-    return !!task.files.length && !!task.changeKey;
+    return task.filesComplete !== false && !!task.files.length && !!task.changeKey;
   }).map(task => ({ repositoryId: repository.id, repositoryName: repository.fullName, task }));
 }

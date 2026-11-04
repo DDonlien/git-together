@@ -112,10 +112,10 @@ export function RepositoryView({ onFetch, repository, account, localPath, localS
   const pushState = repositoryPushState(pushRun, workspace.tasks);
   const commit: SubmitLocalCommit = submitCommit || (input => importAPI('submitCommit', input));
   const push: PushLocalCommit = pushCommit || (input => importAPI('pushCommit', input));
-  const generate = !['github', 'github-enterprise'].includes(account.provider) ? generateCommitMessage || generateWithService : undefined;
+  const generate = generateCommitMessage || generateWithService;
   const openAction = (mode: RepositoryActionMode, selected?: RepositoryActionTarget[], scope = repositoryOperationScope(repository.id), autoStart = false) => {
     setActionFeedback(null);
-    operations.open({ mode, scope, autoStart, targets: (selected || repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current, localLink)).map(target => ({ ...target, aiAllowed: !!generate })), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onIgnore: ignoreRepositoryFile, onComplete: (message, complete = true) => setActionFeedback({ kind: complete ? 'success' : 'warning', message }) });
+    operations.open({ mode, scope, autoStart, targets: selected || repositoryActionTargets(repository, actionTasks, mode, remoteState || { workspace: null, loading: false, error: '' }, current, localLink), onSync: applySync, onCommit: commit, onPush: push, onGenerate: generate, onIgnore: ignoreRepositoryFile, onComplete: (message, complete = true) => setActionFeedback({ kind: complete ? 'success' : 'warning', message }) });
   };
   const graphTargets = workspace.tasks.filter(task => !task.remote && task.path && !task.error && task.changeKey && /^[a-f0-9]{40,64}$/.test(task.head));
   const openGraphAction = (mode: GraphAction, selected: import('./commit-graph').GraphCommit) => {

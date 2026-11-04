@@ -37,7 +37,8 @@ export function RepositoryChanges({ task, selectedCommit, historyState, selected
       </>}
       <div className="repository-working-changes" hidden={!!selectedCommit}>
       {loading ? <div className="repository-column-empty" role="status"><Icon name="spinner" className="spin" size={24} /><p>正在读取本地 Git 仓库…</p></div> : <>
-        <RepositoryChangedFiles files={task.files} selected={selected} onSelect={onSelect} search={search} grouped={grouped} label={`文件更改：${task.branch}`} empty={<div className="repository-column-empty"><Icon name="commit" size={28} /><p>{task.missing ? '本地目录不存在' : !task.path ? linked ? '没有工作目录更改，可在右侧查看分支文件' : '关联本地目录后查看更改' : '没有未提交的更改'}</p></div>} />
+        <RepositoryChangedFiles files={task.files} selected={selected} onSelect={onSelect} search={search} grouped={grouped} label={`文件更改：${task.branch}`} empty={<div className="repository-column-empty"><Icon name="commit" size={28} /><p>{task.filesComplete === false ? '更改文件尚未完整读取' : task.missing ? '本地目录不存在' : !task.path ? linked ? '没有工作目录更改，可在右侧查看分支文件' : '关联本地目录后查看更改' : '没有未提交的更改'}</p></div>} />
+        {task.filesComplete === false && <Notice kind="warning">本地目录已关联，但扫描未在规定时间内完成。完整读取前不能提交；请检查目录访问速度或调整仓库的忽略规则。</Notice>}
       </>}
       {task.error && !task.missing && <Notice kind="error">{task.error}</Notice>}
       </div>

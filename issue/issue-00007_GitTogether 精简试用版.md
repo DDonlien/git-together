@@ -6,7 +6,7 @@ status: done
 importance: p0
 emergency: p1
 created-time: '2026-11-01T23:15:53+08:00'
-updated-time: '2026-11-03T19:30:16+08:00'
+updated-time: '2026-11-04T10:56:25+08:00'
 start-time: '2026-11-01T23:15:53+08:00'
 closed-time: '2026-11-01T23:42:29+08:00'
 created-version: 0.38.11
@@ -25,7 +25,7 @@ tags:
 
 - [x] 当前精简功能已作为 GitTogether 0.38.12 正式版发布，沿用正式应用标识、原账号与目录关联及签名更新源；macOS Apple Silicon、Windows x86 和 x64 安装包及公开更新清单已核验。实际安装版的更新与账号体验待用户验收。
 
-用户要求减少错误与功能复杂度，仅保留 Tauri 的 GitHub Desktop 日常 Git 工作流、全套更新后的 GUI、绑定账号的全部仓库侧栏、Dashboard 多仓库/多分支及隐藏排序、非 GitHub 仓库的 Codex CLI 提交说明和 Presence 插件兼容。
+用户要求减少错误与功能复杂度，仅保留 Tauri 的 GitHub Desktop 日常 Git 工作流、全套更新后的 GUI、绑定账号的全部仓库侧栏、Dashboard 多仓库/多分支及隐藏排序、AI 提交说明和 Presence 插件兼容。精简版当时仅向非 GitHub 仓库提供生成能力；现按用户要求恢复各平台入口，并将按钮统一命名为“AI 生成提交说明”。当前源码通过本机 Codex CLI 使用账号实际可用的模型，尚未更新正式安装包。
 
 - [x] 创建独立分支 `DDonlien/main/desktop-lite`，原工作区未提交改动保留。
 - [x] 保留标准 Git 操作、GUI、账号、Dashboard、手动隐藏/排序与 Presence 协议。
@@ -45,6 +45,16 @@ tags:
 试用应用使用独立标识、存储和账号登录，稳定版不会被替换。此版沿用 Tauri/Rust 实现标准 Git 语义；历史 GitHub Desktop/Electron 参考源码不进入运行包。真实账号授权、Presence 插件连接、视觉与交互体验仍由用户试用确认；源码检查与隔离测试不代表这些验收已通过。
 
 # Comments
+
+## 20261104-105625_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
+
+GitHub 和 GitHub Enterprise 仓库的提交弹窗及仓库详情重新提供 AI 生成入口，后台不再按仓库平台拦截；Gitea 等其他仓库继续可用。按钮名称改为“AI 生成提交说明”，生成仍使用当前实际接入的本机 Codex CLI 和登录账号可用模型，保留可编辑草稿、取消、选中文件范围检查及失败提示。
+
+54 项默认前端检查、19 项精简功能检查、GitHub / GitHub Enterprise 隔离仓库的生成准备与范围保护检查、类型检查、Cargo 检查及前端构建通过。本机独立 CLI 使用虚构改动成功返回符合格式的提交说明；这不是已安装应用的端到端验收。Windows 和正式安装包尚未验证或更新。
+
+> [本次执行对话](codex://threads/01a1a42d-02d7-7ac2-be33-61ab03a20b0c)
+
+---
 
 ## 20261103-193016_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
 

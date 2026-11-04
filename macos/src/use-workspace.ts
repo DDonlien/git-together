@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { connectAfterServiceCheck, generateCommitMessage as generateWithService, importAPI, LocalServiceError, RemoteReadError, verifyServiceVersion } from './import-api';
 import { emptyCatalog, isCatalog, isRecord, latestCatalog, type ApiInputs, type ApiOutputs, type Catalog, type ConnectInput, type LocalSnapshot, type ServiceInfo, type UpdateAccountInput } from './import-model';
-import { holdRepositoryRefreshes, syncIntervals } from './auto-refresh';
+import { holdRepositoryRefreshes, localRefreshInterval, syncIntervals } from './auto-refresh';
 import { useAutoRefresh } from './use-auto-refresh';
 import { useRemoteRepositories } from './use-remote-repository';
 import { productVersion } from './product-version';
@@ -149,7 +149,14 @@ export function useWorkspace(activeRepositoryId = '') {
     onError: (_resource, problem) => { if (!updates.installingRef.current && problem instanceof LocalServiceError) setError(problem.message); },
   });
   const localResources = monitoring ? catalog.links.map(link => JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system'])) : [];
+  const localIntervals = Object.fromEntries(localResources.map(resource => {
+    const [, repositoryId] = JSON.parse(resource) as [string, string];
+    const state = localStates[repositoryId];
+    const workspace = state?.mappingKey === resource ? state.workspace : undefined;
+    return [resource, localRefreshInterval(workspace)];
+  }));
   const localReader = useAutoRefresh({ resources: localResources, intervalMs: syncIntervals.local,
+    intervals: localIntervals,
     pausedResources: localResources.filter(resource => pausedRepositories.has((JSON.parse(resource) as [string, string])[1])),
     triggers: Object.fromEntries(catalog.links.map(link => [JSON.stringify([catalog.instanceId, link.repositoryId, link.path, link.worktrees, link.authentication || 'system']), (fetchVersions[link.repositoryId] ?? 0) * 2 + Number(activeRepositoryId === link.repositoryId)])),
     onReading: (resource, loading) => {
@@ -178,6 +185,7 @@ export function useWorkspace(activeRepositoryId = '') {
           if (!task.path || task.remote) continue;
           const previous = previousChanges?.get(task.path);
           if (task.error) { if (previous !== undefined) nextChanges.set(task.path, previous); continue; }
+          if (task.filesComplete === false) { if (previous !== undefined) nextChanges.set(task.path, previous); continue; }
           const next = JSON.stringify([task.branch, task.changeKey || [task.head, task.files, task.tree]]);
           nextChanges.set(task.path, next);
           if (previous !== undefined && previous !== next) changed = true;

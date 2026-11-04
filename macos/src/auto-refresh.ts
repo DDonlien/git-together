@@ -1,6 +1,10 @@
 // Local observation stays independent of the much slower remote read budget.
 export const syncIntervals = { service: 10_000, remote: 300_000, catalog: 1_800_000, local: 5_000, remoteChange: 120_000, maxBackoff: 300_000, remoteMaxBackoff: 1_800_000 } as const;
 
+export function localRefreshInterval(workspace?: { complete: boolean; tasks: readonly { filesComplete?: boolean }[] }): number {
+  return workspace?.tasks.some(task => task.filesComplete === false) ? syncIntervals.maxBackoff : workspace?.complete === false ? 30_000 : syncIntervals.local;
+}
+
 export function repositoryRefreshInterval(lastUsed: number | undefined, active: boolean, pinned: boolean, now = Date.now()): number {
   if (active) return syncIntervals.remote;
   const age = lastUsed === undefined ? Infinity : Math.max(0, now - lastUsed);

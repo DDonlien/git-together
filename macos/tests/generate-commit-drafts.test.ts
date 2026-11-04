@@ -8,18 +8,17 @@ type Entry = RepositoryActionTarget & { paths: string[]; complete?: boolean };
 const draft: CommitDraft = { summary: 'Generated summary', description: 'Generated description' };
 function entry(repositoryId: string, options: Partial<Entry> = {}): Entry {
   return {
-    repositoryId, repositoryName: `fixture/${repositoryId}`, aiAllowed: true,
+    repositoryId, repositoryName: `fixture/${repositoryId}`,
     task: { id: `${repositoryId}:main`, branch: 'main', head: 'a'.repeat(40), changeKey: 'b'.repeat(64), path: `/fixture/${repositoryId}`, files: [{ path: 'selected.ts', status: 'M', tracked: true }, { path: 'excluded.ts', status: 'M', tracked: true }], tree: [], error: '' },
     paths: ['selected.ts'], ...options,
   };
 }
 
-test('mixed providers skip disallowed, completed and unselected worktrees while preserving indices and selected paths', async () => {
+test('mixed providers generate for GitHub and other selected worktrees, skipping completed and unselected ones', async () => {
   const entries = [
     entry('gitea', { paths: ['selected.ts', 'docs/selected notes.md'] }),
-    entry('github', { aiAllowed: false }),
-    entry('enterprise', { aiAllowed: false }),
-    entry('unknown', { aiAllowed: undefined }),
+    entry('github'),
+    entry('enterprise'),
     entry('gitlab'),
     entry('gitee', { complete: true }),
     entry('empty', { paths: [] }),
@@ -33,7 +32,7 @@ test('mixed providers skip disallowed, completed and unselected worktrees while 
     return draft;
   };
   await generateCommitDrafts(entries, generate, controller.signal, index => events.push(`start:${index}`), (index, result) => { events.push(`draft:${index}`); assert.deepEqual(result, draft); });
-  assert.deepEqual(events, ['start:0', 'generate:gitea', 'draft:0', 'start:4', 'generate:gitlab', 'draft:4']);
+  assert.deepEqual(events, ['start:0', 'generate:gitea', 'draft:0', 'start:1', 'generate:github', 'draft:1', 'start:2', 'generate:enterprise', 'draft:2', 'start:3', 'generate:gitlab', 'draft:3']);
 });
 
 test('fully populated drafts are skipped and partial or absent drafts retain hand-authored fields', async () => {

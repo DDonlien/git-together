@@ -22,14 +22,48 @@ async fn lite_rejects_retired_operations_before_reading_or_writing_a_repository(
 }
 
 #[tokio::test]
-async fn github_accounts_cannot_launch_codex_commit_generation() {
+async fn github_accounts_can_prepare_commit_generation_without_changing_the_worktree() {
     for provider in ["github", "github-enterprise"] {
         let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().join("checkout");
+        fs::create_dir(&root).unwrap();
+        let root = dunce::canonicalize(root).unwrap();
+        let remote = if provider == "github" { "https://github.com/fixture/project.git" } else { "https://github.example.invalid/fixture/project.git" };
+        for args in [
+            vec!["init", "--quiet", "--initial-branch=main", "--template="],
+            vec!["config", "user.name", "Fixture"],
+            vec!["config", "user.email", "fixture@example.invalid"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["remote", "add", "origin", remote],
+        ] { git::run(&root, &args, git::Options { write:true, ..Default::default() }).await.unwrap(); }
+        fs::write(root.join("file.txt"), "initial\n").unwrap();
+        for args in [vec!["add", "file.txt"], vec!["commit", "--quiet", "-m", "initial"]] {
+            git::run(&root, &args, git::Options { write:true, ..Default::default() }).await.unwrap();
+        }
+        fs::write(root.join("file.txt"), "changed\n").unwrap();
+        fs::write(root.join("excluded.txt"), "not selected\n").unwrap();
+        let task = git::task(&root).await.unwrap();
+        let index_before = fs::read(root.join(".git/index")).unwrap();
         let service = Service::new(temporary.path().join("storage"), false, "test").unwrap();
-        service.state.write().await.value = fixture_state(None, provider);
-        let error = service.handle("generateCommitMessage", json!({"repositoryId":"fixture:1"}), CancellationToken::new()).await.unwrap_err();
-        assert!(error.contains("GitHub 仓库不提供 Codex CLI"), "{provider}: {error}");
+        service.state.write().await.value = fixture_state(Some(&root), provider);
+        let mut input = json!({
+            "repositoryId":"fixture:1", "taskId":task["id"], "expectedHead":task["head"],
+            "changeKey":task["changeKey"], "generationId":uuid::Uuid::new_v4().to_string(),
+            "paths":["file.txt"]
+        });
+        let context = service.context("fixture:1").await.unwrap();
+        let (prepared, selected) = ai::commit_context(&root, &input, &CancellationToken::new(), &service, &context).await.unwrap();
+        assert_eq!(selected, vec!["file.txt"]);
+        assert!(prepared["patch"].as_str().unwrap().contains("+changed"));
+        assert!(!prepared["files"].to_string().contains("excluded.txt"));
+        assert!(!prepared["untracked"].to_string().contains("excluded.txt"));
+        input["paths"] = json!(["not-selected.txt"]);
+        let error = service.handle("generateCommitMessage", input, CancellationToken::new()).await.unwrap_err();
+        assert_eq!(error, "提交文件范围已变化，请重新检查更改。", "{provider}");
         assert!(service.generations.lock().await.is_empty());
+        assert_eq!(fs::read(root.join(".git/index")).unwrap(), index_before);
+        assert_eq!(fs::read_to_string(root.join("file.txt")).unwrap(), "changed\n");
+        assert_eq!(git::read(&root, &["rev-parse", "HEAD"]).await.unwrap().trim(), task["head"].as_str().unwrap());
     }
 }
 

@@ -11,12 +11,15 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-04`、`IMPORT-04-worktrees`、`IMPORT-04-directory-display`、`IMPORT-04-directory-display-test`、`IMPORT-04-worktrees-test`、`IMPORT-04-account-batch`、`IMPORT-04-account-batch-feedback`、`IMPORT-04-account-batch-performance`、`IMPORT-04-account-batch-test`、`IMPORT-04-inline`、`IMPORT-04-path-hover`、`IMPORT-04-association-refresh`、`IMPORT-04-stale-worktrees`、`IMPORT-04-stale-branch-notices`、`IMPORT-04-open-folder`、`IMPORT-04-discovery-boundary`、`IMPORT-04-discovery-boundary-release`、`IMPORT-04-picker`、`IMPORT-04-picker-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-10-26T15:47:02+08:00'
+assignees: [github.com/DDonlien]
+updated-by: github.com/DDonlien
+updated-time: '2026-11-04T09:47:37+08:00'
 ---
 
 # Description
 
 ## 当前需求与范围
+- [ ] 大型工作目录关联状态：完整文件状态超时或超出读取上限时，保留已验证的 Git 目录和分支，明确文件清单未读全、不显示虚构数量，也不允许使用不完整清单提交；降低该目录后台重试频率，避免提示必须重新关联。源码和隔离检查已完成，真实 macOS NAS 目录的只读检查通过；完整大文件清单、Windows 原生运行、安装包和用户验收仍待确认。
 - [x] \[IMPORT-04] Dashboard 逐仓库通过 popup 关联已有本地目录，验证 Git 仓库与远端身份；可修改/移除关联，移除仅解除应用关联，不删除目录或文件。
   - [ ] 修正共享裸对象库被当作工作目录的问题：读取关联目录、匹配父目录和展示工作目录选单时，排除 Git 列表中的 bare 存储条目，保留实际 linked worktree、普通主目录和空仓库；现有共享对象库继续供工作目录使用。
     - [x] 在 GitTogether 适配边界统一识别实际 checkout，沿用原版 GitHub Desktop 的 Git 解析和执行。
@@ -71,6 +74,17 @@ updated-time: '2026-10-26T15:47:02+08:00'
 原文件的共用上下文及完整既有 Comments 仅保留在[首个任务](issue-00047_%E7%BB%9F%E4%B8%80Electron%E4%B8%8EGitHub%E7%BD%91%E9%A1%B5%E6%8E%88%E6%9D%83%E5%85%A5%E5%8F%A3%E5%B9%B6%E5%AE%8C%E5%96%84%E7%AD%89%E5%BE%85%E4%B8%8E%E9%87%8D%E8%AF%95%E6%B5%81%E7%A8%8B.md)，来源与历史没有删去。
 
 # Comments
+
+## 20261104-094737_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
+
+- 用户反馈 macOS 和 Windows 上仓库显示 Git 超时。截图中的 Gitea 账号已存在，问题发生在 `game-extraction-vault` 的本地关联读取。macOS 日志显示同一 Git status 反复到 10 秒超时；所示 NAS 目录和目标远端身份可读。已有清点文件记录约 39.9 万个文件，一次只读完整状态扫描超过 45 秒，普通摘要扫描约 3.25 秒。
+- 完整状态读取超时或输出超限时，显示读取改用有界的普通摘要；只用于展示，保留已验证目录、分支和提交身份，将文件清单标记为不完整，不生成可供提交使用的变更指纹或总数。后台对该状态放慢刷新，真实失败不再一律提示重新关联，重复错误只显示一次。完整读取和实际 Git 写操作仍使用原有严格检查。
+- 本机真实 NAS 目录只读运行新读取路径，11.35 秒返回已验证的分支和 HEAD、明确的不完整状态且没有提交指纹；没有修改该目录或已安装应用。Rust 定向测试、22 项相关前端检查、54 项项目默认测试、19 项精简版检查、类型检查、Cargo 检查及前端构建通过。额外旧测试有三项失败：两个依赖既有组件上下文和 CSS 断言，一个因当前 Node 不加载 CSS；相关组件上下文及样式在原版本已是相同状态。
+- 此次未验证 Windows 原生运行或用户界面，没有提交、推送、发布或安装更新。大型目录的完整更改清单仍未读出，不能据此提交。
+
+> [本次会话](codex://threads/01a1a42d-02d7-7ac2-be33-61ab03a20b0c)
+
+---
 
 ## 20261024-070820_Agent
 

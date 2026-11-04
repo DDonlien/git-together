@@ -20,12 +20,14 @@ test('lite exposes Fetch/Pull/Commit/Push and no custom sync controls', () => {
   assert.match(markup, /Fetch：[^"<>]*获取远端引用/);
 });
 
-test('GitHub composer without generation capability has no AI control', () => {
+test('composer offers AI generation for every repository with a generation capability', () => {
   const task = { id: 'local', branch: 'main', head: 'a'.repeat(40), path: '/fixture', files: [{ path: 'a.txt', status: 'M', tracked: true }], tree: [], error: '', changeKey: 'b'.repeat(64) };
   const plain = renderToStaticMarkup(wrap(createElement(RepositoryCommitComposer, { repositoryId: 'github:1', task })));
   assert.doesNotMatch(plain, /AI 生成提交说明|取消 AI 生成|Submit/);
-  const assisted = renderToStaticMarkup(wrap(createElement(RepositoryCommitComposer, { repositoryId: 'gitea:1', task, onGenerate: async () => ({ summary: 'sample', description: '' }) })));
-  assert.match(assisted, /AI 生成提交说明/);
+  for (const provider of ['github', 'github-enterprise', 'gitea']) {
+    const assisted = renderToStaticMarkup(wrap(createElement(RepositoryCommitComposer, { repositoryId: `${provider}:1`, task, onGenerate: async () => ({ summary: 'sample', description: '' }) })));
+    assert.match(assisted, /AI 生成提交说明/, provider);
+  }
 });
 
 test('manual hidden entries stay reversible without contribution-based rules', () => {

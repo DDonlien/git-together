@@ -62,10 +62,10 @@ export function associationStatus(link: LocalLink | undefined, local: LocalRepos
   const verified = completeBranches && !!local?.workspace && local.path === link.path && mappingRead && allTasks.length > 0 && tasks.every(task => !task.error) && !local.error;
   const complete = verified && expected.size > 0 && [...expected].every(branch => linked.has(branch));
   return { label: !verified ? '关联待确认' : !tasks.length ? '已关联' : complete ? '完全关联' : '部分关联', verified,
-    detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${!tasks.length && allTasks.length ? '当前可见范围没有已关联分支，保存的目录关联仍保留；' : ''}${completeBranches ? '' : '远端分支范围尚未完整读取；'}${[local?.error, remote.error, tasks.filter(task => task.error).map(task => task.error).join('；')].filter(Boolean).join('；') || directory}` };
+    detail: `${linked.size}/${expected.size || (completeBranches ? 0 : '?')} 个分支已验证；${!tasks.length && allTasks.length ? '当前可见范围没有已关联分支，保存的目录关联仍保留；' : ''}${completeBranches ? '' : '远端分支范围尚未完整读取；'}${tasks.some(task => task.filesComplete === false) ? '本地更改文件尚未完整读取；' : ''}${[local?.error, remote.error, tasks.filter(task => task.error).map(task => task.error).join('；')].filter(Boolean).join('；') || directory}` };
 }
 
-export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; status?: 'reading' | 'error'; statusDetail?: string };
+export type ActionSignal = { tone: 'off' | 'good' | 'warning' | 'error'; detail: string; count?: number; countIncomplete?: boolean; status?: 'reading' | 'error'; statusDetail?: string };
 export type GitSignals = Record<'commit' | 'fetch' | 'pull' | 'push' | 'latest' | 'reconcile' | 'clear', ActionSignal>;
 
 export function repositoryReadFeedback(signals: GitSignals) {
@@ -73,7 +73,7 @@ export function repositoryReadFeedback(signals: GitSignals) {
     reading: Object.values(signals).some(signal => signal.status === 'reading'),
     // Commit and Fetch own the local and remote readers respectively. The
     // other controls repeat those dependencies, so do not repeat their errors.
-    error: [signals.commit, signals.fetch].filter(signal => signal.status === 'error').map(signal => signal.statusDetail).filter(Boolean).join(' '),
+    error: [...new Set([signals.commit, signals.fetch].filter(signal => signal.status === 'error').map(signal => signal.statusDetail).filter(Boolean))].join(' '),
   };
 }
 
@@ -82,8 +82,9 @@ export function aggregateGitSignals(entries: GitSignals[]): GitSignals {
   return Object.fromEntries(keys.map(key => {
     const signals = entries.map(entry => entry[key]);
     const count = signals.reduce((sum, signal) => sum + (signal.count || 0), 0);
+    const countIncomplete = signals.some(signal => signal.countIncomplete);
     const reading = signals.some(signal => signal.status === 'reading'), error = signals.some(signal => signal.status === 'error');
-    return [key, { tone: count ? 'warning' : 'off', ...(count ? { count } : {}), detail: signals.slice(0, 4).map(signal => signal.detail).join(' '),
+    return [key, { tone: count || countIncomplete ? 'warning' : 'off', ...(count && !countIncomplete ? { count } : {}), ...(countIncomplete ? { countIncomplete: true } : {}), detail: signals.slice(0, 4).map(signal => signal.detail).join(' '),
       ...(reading || error ? { status: reading ? 'reading' : 'error', statusDetail: signals.map(signal => signal.statusDetail).filter(Boolean).slice(0, 4).join(' ') } : {}) }];
   })) as GitSignals;
 }
@@ -115,7 +116,8 @@ export function gitSignals(local: RepositoryTask[], remote: RemoteRepositoryStat
   result.reconcile.detail = '本地与远端的文件内容尚未完整比较，变更数量未确认。';
   result.clear.detail = '本地与远端的文件内容尚未完整比较，变更数量未确认。';
   const changes = tasks.reduce((sum, task) => sum + task.files.length, 0);
-  result.commit = { ...result.commit, tone: changes ? 'warning' : 'off', ...(changes ? { count: changes } : {}), detail: changes ? `工作目录中有 ${changes} 项未提交更改（含未跟踪文件）。` : tasks.some(task => task.error) ? '本地更改尚未确认。' : '已关联工作目录没有未提交更改。' };
+  const incompleteFiles = tasks.some(task => task.filesComplete === false);
+  result.commit = { ...result.commit, tone: changes || incompleteFiles ? 'warning' : 'off', ...(!incompleteFiles && changes ? { count: changes } : {}), ...(incompleteFiles ? { countIncomplete: true } : {}), detail: incompleteFiles ? '工作目录已关联，但更改文件尚未完整读取，数量未确认。' : changes ? `工作目录中有 ${changes} 项未提交更改（含未跟踪文件）。` : tasks.some(task => task.error) ? '本地更改尚未确认。' : '已关联工作目录没有未提交更改。' };
   const commits = new Map([...(remote.workspace?.commits || []), ...(localState?.workspace?.commits || [])].map(commit => [commit.id, commit.parents]));
   // Several directories can share the same branch/HEAD. Traverse each head
   // once, including the common-ancestor check for a proven divergence.

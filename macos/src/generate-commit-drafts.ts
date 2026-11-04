@@ -4,7 +4,7 @@ import type { RepositoryActionTarget } from './repository-action-model';
 type CommitDraftEntry = RepositoryActionTarget & { paths: string[]; complete?: boolean };
 
 export function canGenerateCommitDraft(entry: CommitDraftEntry): boolean {
-  return !!entry.aiAllowed && !entry.complete && entry.paths.length > 0 &&
+  return !entry.complete && entry.paths.length > 0 &&
     (!entry.draft?.summary.trim() || !entry.draft.description.trim());
 }
 

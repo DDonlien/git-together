@@ -21,7 +21,7 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
   const running = useRef(false), generation = useRef<AbortController | null>(null);
   const intent = useRef<LocalSubmitInput | null>(null);
   useEffect(() => () => generation.current?.abort(), []);
-  const ready = !!repositoryId && !!task.path && !!task.changeKey && !!task.files.length && !task.error;
+  const ready = !!repositoryId && !!task.path && task.filesComplete !== false && !!task.changeKey && !!task.files.length && !task.error;
   const disabled = !task.path || submitting || taskBusy;
   const edit = () => { intent.current = null; generation.current?.abort(); setGenerating(false); setFeedback(''); setError(''); };
   // A failed, definitely outdated snapshot can be reviewed and submitted anew;
@@ -63,7 +63,7 @@ export function RepositoryCommitComposer({ repositoryId, repositoryName = '', ta
       {error && <Notice kind="error">{error}</Notice>}
       {feedback && <Notice kind="success" onClose={() => setFeedback('')}>{feedback}</Notice>}
     </div>
-    <div className="repository-commit-actions"><small>{task.path ? `全部 ${task.files.length} 个更改` : '关联本地目录后提交'}</small><div className="repository-commit-buttons">
+    <div className="repository-commit-actions"><small>{task.filesComplete === false ? '更改文件尚未完整读取' : task.path ? `全部 ${task.files.length} 个更改` : '关联本地目录后提交'}</small><div className="repository-commit-buttons">
       {onGenerate && <IconButton type="button" icon={generating ? 'close' : 'sparkle'} label={generating ? '取消 AI 生成' : 'AI 生成提交说明'} title={generating ? '取消 AI 生成' : 'AI 生成提交说明'} className="repository-ai-commit" disabled={!ready || submitting || taskBusy || !onGenerate} aria-busy={generating} onClick={() => void generate()}>{generating && <span className="repository-ai-progress spin" aria-hidden="true" />}</IconButton>}
       <Button type="submit" disabled={!ready || !onSubmit || !summary.trim() || submitting || generating || taskBusy} aria-busy={submitting}>{submitting && <Icon name="spinner" className="spin" size={14} />}{submitting ? '提交中…' : 'Commit'}</Button>
     </div></div>

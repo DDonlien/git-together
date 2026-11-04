@@ -947,16 +947,16 @@ impl Service {
                 let root = self
                     .validate_path(&context.repository, text(&item, "path"))
                     .await?;
-                let task = if summary_only { git::task_summary(&root).await? } else { git::task(&root).await? };
+                let task = git::observed_task(&root, !summary_only).await?;
                 let commits = if summary_only { git::history_summary(&root).await? } else { git::history(&root).await? };
                 Ok::<_, String>((task, commits))
             }
             .await;
-            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"missing":missing_directory(text(&item,"path")),"error":format!("{e} 工作目录不可用或远端已变化，请重新关联。")}))}
+            match result{Ok((t,c))=>{tasks.push(t);commits.extend(c);},Err(e)=>tasks.push(json!({"id":format!("worktree:{}:{}",text(&item,"branch"),text(&item,"path")),"path":item["path"],"branch":if text(&item,"branch").is_empty(){"未读取分支"}else{text(&item,"branch")},"head":"","files":[],"tree":[],"missing":missing_directory(text(&item,"path")),"error":e}))}
         }
         self.validate(context).await?;
         Ok(
-            json!({"source":"local","summaryOnly":summary_only,"complete":tasks.iter().all(|t|t["error"]==""),"tasks":tasks,"commits":git::merge_history(commits)}),
+            json!({"source":"local","summaryOnly":summary_only,"complete":tasks.iter().all(|t|t["error"]=="" && t["filesComplete"] != false),"tasks":tasks,"commits":git::merge_history(commits)}),
         )
     }
     async fn fetch(
@@ -1479,9 +1479,6 @@ impl Service {
             return self.fetch(&context, cancel).await;
         }
         let context = self.context(&id).await?;
-        if method == "generateCommitMessage" && matches!(context.provider.kind(), "github" | "github-enterprise") {
-            return Err("GitHub 仓库不提供 Codex CLI 提交说明。".into());
-        }
         if matches!(method, "graphPreview" | "executeGraph" | "openCommit") {
             return self.graph_dispatch(method, input, &context, cancel).await;
         }
@@ -1769,7 +1766,6 @@ impl Service {
                 Ok(json!({"opened":true}))
             }
             "generateCommitMessage" => {
-                if matches!(context.provider.kind(), "github" | "github-enterprise") { return Err("GitHub 仓库不提供 Codex CLI 提交说明。".into()); }
                 util::allowed(
                     input,
                     &[

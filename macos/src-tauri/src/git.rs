@@ -363,6 +363,11 @@ async fn run_process(
     if let Some(code) = status.code() {
         details["exitCode"] = json!(code);
     }
+    // The bounded reader can close stdout before Git exits. Report the size
+    // limit even when that closure also makes the child exit unsuccessfully.
+    if output.len() > 16_000_000 {
+        return Err("Git输出超过可读取范围；未发布不完整结果。".into());
+    }
     // check-ignore uses 1 for a successful read with no ignored paths.
     let no_merge_base = options.no_merge_base_is_empty && args.first() == Some(&"merge-base") && args.get(1) == Some(&"--all") && status.code() == Some(1) && error.is_empty() && output.is_empty();
     if !status.success() && !no_merge_base && !(args.first() == Some(&"check-ignore") && status.code() == Some(1)) {
@@ -372,9 +377,6 @@ async fn run_process(
         let reason = rejection_reason(&output);
         if let Some(reason) = reason { details["gitFailureReason"] = json!(reason); }
         return Err(failure(&output, reason, options.authentication == Some("system")));
-    }
-    if output.len() > 16_000_000 {
-        return Err("Git输出超过可读取范围；未发布不完整结果。".into());
     }
     String::from_utf8(output).map_err(|_| "Git输出包含无法读取的文字。".into())
 }
@@ -418,12 +420,17 @@ pub async fn worktrees(root: &Path) -> Result<Vec<Value>> {
     }).collect())
 }
 pub async fn task(root: &Path) -> Result<Value> {
-    read_task(root, true).await
+    read_task(root, true, false).await
 }
 pub async fn task_summary(root: &Path) -> Result<Value> {
-    read_task(root, false).await
+    read_task(root, false, false).await
 }
-async fn read_task(root: &Path, include_tree: bool) -> Result<Value> {
+// Only display reads may return a partial status. Git write operations keep
+// using task/task_summary and require the complete change fingerprint.
+pub async fn observed_task(root: &Path, include_tree: bool) -> Result<Value> {
+    read_task(root, include_tree, true).await
+}
+async fn read_task(root: &Path, include_tree: bool, allow_partial: bool) -> Result<Value> {
     let entry = worktrees(root)
         .await?
         .into_iter()
@@ -436,8 +443,20 @@ async fn read_task(root: &Path, include_tree: bool) -> Result<Value> {
         root,
         &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )
-    .await?;
-    let tree = if include_tree { read(
+    .await;
+    finish_task(root, entry, include_tree, allow_partial, status).await
+}
+async fn finish_task(root: &Path, entry: Value, include_tree: bool, allow_partial: bool, status: Result<String>) -> Result<Value> {
+    let (status, partial) = match status {
+        Ok(status) => (status, false),
+        Err(error) if allow_partial && (diagnostic_code(&error) == "timeout" || error.starts_with("Git输出超过可读取范围")) => {
+            let mut options = READ_CONTEXT.try_with(Clone::clone).unwrap_or_default();
+            options.timeout = options.timeout.max(30);
+            (run(root, &["status", "--porcelain=v1", "-z", "--untracked-files=normal"], options).await?, true)
+        }
+        Err(error) => return Err(error),
+    };
+    let tree = if include_tree && !partial { read(
         root,
         &[
             "ls-files",
@@ -448,19 +467,26 @@ async fn read_task(root: &Path, include_tree: bool) -> Result<Value> {
         ],
     )
     .await? } else { String::new() };
-    let index = read(root, &["ls-files", "--stage", "--cached", "-z"]).await?;
-    let files = changes(&status);
-    let mut bytes = format!("{}\0{}\0{}", text(&entry, "head"), status, index).into_bytes();
-    for file in &files {
-        let path = text(file, "path");
-        file_path(path)?;
-        bytes.extend(path.as_bytes());
-        match std::fs::symlink_metadata(root.join(path)) {
-            Ok(m) => bytes.extend(format!("\0{}", crate::platform::metadata_key(&m)).as_bytes()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => bytes.extend(b"missing"),
-            Err(_) => return Err("无法完整检查本地更改，请刷新后重试。".into()),
+    let files: Vec<_> = changes(&status).into_iter().filter(|file| {
+        // In normal mode Git collapses whole untracked directories. They are
+        // not individual files and cannot be offered as commit selections.
+        !partial || file["tracked"] != false || !text(file, "path").ends_with('/')
+    }).collect();
+    let change_key = if partial { None } else {
+        let index = read(root, &["ls-files", "--stage", "--cached", "-z"]).await?;
+        let mut bytes = format!("{}\0{}\0{}", text(&entry, "head"), status, index).into_bytes();
+        for file in &files {
+            let path = text(file, "path");
+            file_path(path)?;
+            bytes.extend(path.as_bytes());
+            match std::fs::symlink_metadata(root.join(path)) {
+                Ok(m) => bytes.extend(format!("\0{}", crate::platform::metadata_key(&m)).as_bytes()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => bytes.extend(b"missing"),
+                Err(_) => return Err("无法完整检查本地更改，请刷新后重试。".into()),
+            }
         }
-    }
+        Some(digest(bytes))
+    };
     let branch = text(&entry, "branch");
     let branch_ref = format!("refs/heads/{branch}");
     let upstream = read(root, &["for-each-ref", "--format=%(upstream)", &branch_ref]).await?;
@@ -476,9 +502,10 @@ async fn read_task(root: &Path, include_tree: bool) -> Result<Value> {
         tracking["behind"] = json!(values[1].parse::<u64>().map_err(|_| "Git 同步数量返回格式无效。")?);
     }
     let tree: BTreeSet<&str> = tree.split('\0').filter(|s| !s.is_empty()).collect();
-    Ok(
-        json!({"id":format!("worktree:{branch}:{}",root.display()),"path":root.to_string_lossy(),"branch":branch,"head":entry["head"],"files":files,"tree":tree,"error":"","changeKey":digest(bytes),"tracking":tracking}),
-    )
+    let mut task = json!({"id":format!("worktree:{branch}:{}",root.display()),"path":root.to_string_lossy(),"branch":branch,"head":entry["head"],"files":files,"tree":tree,"error":"","tracking":tracking});
+    if let Some(key) = change_key { task["changeKey"] = json!(key); }
+    if partial { task["filesComplete"] = json!(false); }
+    Ok(task)
 }
 pub async fn history(root: &Path) -> Result<Vec<Value>> {
     read_history(root, "-200").await
@@ -774,5 +801,37 @@ mod lite_tests {
         assert_eq!(summary["tracking"]["behind"], 0);
         assert_eq!(summary["tracking"]["upstream"], "refs/remotes/origin/main");
         assert_eq!(std::fs::read_to_string(root.join("file.txt")).unwrap(), "dirty\n");
+    }
+
+    #[tokio::test]
+    async fn timed_out_display_read_keeps_verified_worktree_without_inventing_files_or_fingerprint() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(temporary.path()).unwrap();
+        for args in [vec!["init", "--quiet", "--initial-branch=main", "--template="], vec!["config", "user.name", "Fixture"], vec!["config", "user.email", "fixture@example.invalid"], vec!["config", "commit.gpgsign", "false"]] {
+            fixture_git(&root, &args).await;
+        }
+        std::fs::write(root.join("tracked.txt"), "base\n").unwrap();
+        fixture_git(&root, &["add", "tracked.txt"]).await;
+        fixture_git(&root, &["commit", "--quiet", "-m", "base"]).await;
+        std::fs::write(root.join("tracked.txt"), "changed\n").unwrap();
+        std::fs::write(root.join("new.txt"), "new\n").unwrap();
+        std::fs::create_dir(root.join("many")).unwrap();
+        std::fs::write(root.join("many/nested.txt"), "new\n").unwrap();
+        let entry = worktrees(&root).await.unwrap().into_iter().find(|v| text(v, "path") == root.to_string_lossy()).unwrap();
+        for error in ["Git操作超时，请稍后重试。", "Git输出超过可读取范围；未发布不完整结果。"] {
+            let partial = finish_task(&root, entry.clone(), true, true, Err(error.into())).await.unwrap();
+            assert_eq!(partial["filesComplete"], false);
+            assert!(partial.get("changeKey").is_none());
+            assert_eq!(partial["tree"], json!([]));
+            let paths: Vec<_> = partial["files"].as_array().unwrap().iter().map(|file| text(file, "path")).collect();
+            assert!(paths.contains(&"tracked.txt"));
+            assert!(paths.contains(&"new.txt"));
+            assert!(!paths.contains(&"many/"));
+            assert_eq!(finish_task(&root, entry.clone(), true, false, Err(error.into())).await.unwrap_err(), error);
+        }
+        let full = observed_task(&root, true).await.unwrap();
+        assert!(full.get("filesComplete").is_none());
+        assert!(full["changeKey"].as_str().is_some_and(|key| key.len() == 64));
+        assert!(full["files"].as_array().unwrap().iter().any(|file| file["path"] == "many/nested.txt"));
     }
 }
