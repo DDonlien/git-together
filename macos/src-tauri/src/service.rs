@@ -381,7 +381,7 @@ impl Service {
             let root = self
                 .validate_path(&context.repository, text(&item, "path"))
                 .await?;
-            let task = git::task(&root).await?;
+            let task = git::task_cached(&root).await?;
             if text(&task, "id") == id {
                 return Ok(root);
             }
@@ -1032,12 +1032,13 @@ impl Service {
                     let root = self
                         .validate_path(&context.repository, text(&item, "path"))
                         .await?;
-                    let task = git::task(&root).await?;
-                    if task["branch"] == "Detached HEAD" {
+                    // Fetch needs the branch, not a scan of every working file.
+                    let worktree = git::worktree(&root).await?;
+                    if worktree["branch"] == "Detached HEAD" {
                         return Ok(None);
                     }
                     let common = operations::common(&root).await?;
-                    Ok::<_, String>(Some((common, root, text(&task, "branch").to_owned())))
+                    Ok::<_, String>(Some((common, root, text(&worktree, "branch").to_owned())))
                 }
                 .await;
                 match result {

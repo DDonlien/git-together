@@ -1,4 +1,4 @@
-use crate::util::{self, digest, file_path, text, tool_path, valid_sha as sha, Result};
+use crate::util::{self, file_path, text, tool_path, valid_sha as sha, Result};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -10,6 +10,8 @@ use tokio::{
     process::Command,
 };
 use tokio_util::sync::CancellationToken;
+
+mod fingerprint;
 
 // Background queues await permits; foreground writes never queue behind reads.
 // Four read processes and two fetches bound IO pressure without hiding data.
@@ -420,17 +422,20 @@ pub async fn worktrees(root: &Path) -> Result<Vec<Value>> {
     }).collect())
 }
 pub async fn task(root: &Path) -> Result<Value> {
-    read_task(root, true, false).await
+    read_task(root, true, false, true).await
+}
+pub async fn task_cached(root: &Path) -> Result<Value> {
+    read_task(root, true, false, false).await
 }
 pub async fn task_summary(root: &Path) -> Result<Value> {
-    read_task(root, false, false).await
+    read_task(root, false, false, true).await
 }
 // Only display reads may return a partial status. Git write operations keep
 // using task/task_summary and require the complete change fingerprint.
 pub async fn observed_task(root: &Path, include_tree: bool) -> Result<Value> {
-    read_task(root, include_tree, true).await
+    read_task(root, include_tree, true, false).await
 }
-async fn read_task(root: &Path, include_tree: bool, allow_partial: bool) -> Result<Value> {
+pub async fn worktree(root: &Path) -> Result<Value> {
     let entry = worktrees(root)
         .await?
         .into_iter()
@@ -439,14 +444,30 @@ async fn read_task(root: &Path, include_tree: bool, allow_partial: bool) -> Resu
     if entry["bare"] == true || entry["prunable"] == true {
         return Err("工作目录不可读取。".into());
     }
+    Ok(entry)
+}
+async fn read_task(
+    root: &Path,
+    include_tree: bool,
+    allow_partial: bool,
+    verify_content: bool,
+) -> Result<Value> {
+    let entry = worktree(root).await?;
     let status = read(
         root,
         &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )
     .await;
-    finish_task(root, entry, include_tree, allow_partial, status).await
+    finish_task(root, entry, include_tree, allow_partial, status, verify_content).await
 }
-async fn finish_task(root: &Path, entry: Value, include_tree: bool, allow_partial: bool, status: Result<String>) -> Result<Value> {
+async fn finish_task(
+    root: &Path,
+    entry: Value,
+    include_tree: bool,
+    allow_partial: bool,
+    status: Result<String>,
+    verify_content: bool,
+) -> Result<Value> {
     let (status, partial) = match status {
         Ok(status) => (status, false),
         Err(error) if allow_partial && (diagnostic_code(&error) == "timeout" || error.starts_with("Git输出超过可读取范围")) => {
@@ -474,18 +495,11 @@ async fn finish_task(root: &Path, entry: Value, include_tree: bool, allow_partia
     }).collect();
     let change_key = if partial { None } else {
         let index = read(root, &["ls-files", "--stage", "--cached", "-z"]).await?;
-        let mut bytes = format!("{}\0{}\0{}", text(&entry, "head"), status, index).into_bytes();
-        for file in &files {
-            let path = text(file, "path");
-            file_path(path)?;
-            bytes.extend(path.as_bytes());
-            match std::fs::symlink_metadata(root.join(path)) {
-                Ok(m) => bytes.extend(format!("\0{}", crate::platform::metadata_key(&m)).as_bytes()),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => bytes.extend(b"missing"),
-                Err(_) => return Err("无法完整检查本地更改，请刷新后重试。".into()),
-            }
-        }
-        Some(digest(bytes))
+        let paths = files.iter().map(|file| text(file, "path").to_owned()).collect();
+        let cancel = READ_CONTEXT.try_with(|options| options.cancel.clone()).ok().flatten();
+        Some(fingerprint::change_key(
+            root, text(&entry, "head"), &status, &index, paths, cancel, verify_content,
+        ).await?)
     };
     let branch = text(&entry, "branch");
     let branch_ref = format!("refs/heads/{branch}");
@@ -775,6 +789,35 @@ mod lite_tests {
     }
 
     #[tokio::test]
+    async fn worktree_metadata_does_not_depend_on_status_filters() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(temporary.path()).unwrap();
+        for args in [
+            vec!["init", "--quiet", "--initial-branch=main", "--template="],
+            vec!["config", "user.name", "Fixture"],
+            vec!["config", "user.email", "fixture@example.invalid"],
+            vec!["config", "commit.gpgsign", "false"],
+            vec!["config", "filter.probe.clean", "cat"],
+            vec!["config", "filter.probe.smudge", "cat"],
+            vec!["config", "filter.probe.required", "true"],
+        ] {
+            fixture_git(&root, &args).await;
+        }
+        std::fs::write(root.join(".gitattributes"), "*.asset filter=probe\n").unwrap();
+        std::fs::write(root.join("asset.asset"), "base\n").unwrap();
+        fixture_git(&root, &["add", ".gitattributes", "asset.asset"]).await;
+        fixture_git(&root, &["commit", "--quiet", "-m", "base"]).await;
+        fixture_git(&root, &["config", "filter.probe.clean", "false"]).await;
+        std::fs::write(root.join("asset.asset"), "diff\n").unwrap();
+
+        assert!(task(&root).await.is_err());
+        let entry = worktree(&root).await.unwrap();
+        assert_eq!(entry["branch"], "main");
+        assert_eq!(entry["path"], root.to_string_lossy().as_ref());
+        assert_eq!(std::fs::read_to_string(root.join("asset.asset")).unwrap(), "diff\n");
+    }
+
+    #[tokio::test]
     async fn summary_preserves_change_identity_and_exact_tracking_counts() {
         let temporary = tempfile::tempdir().unwrap();
         let root = dunce::canonicalize(temporary.path()).unwrap();
@@ -819,7 +862,7 @@ mod lite_tests {
         std::fs::write(root.join("many/nested.txt"), "new\n").unwrap();
         let entry = worktrees(&root).await.unwrap().into_iter().find(|v| text(v, "path") == root.to_string_lossy()).unwrap();
         for error in ["Git操作超时，请稍后重试。", "Git输出超过可读取范围；未发布不完整结果。"] {
-            let partial = finish_task(&root, entry.clone(), true, true, Err(error.into())).await.unwrap();
+            let partial = finish_task(&root, entry.clone(), true, true, Err(error.into()), false).await.unwrap();
             assert_eq!(partial["filesComplete"], false);
             assert!(partial.get("changeKey").is_none());
             assert_eq!(partial["tree"], json!([]));
@@ -827,7 +870,7 @@ mod lite_tests {
             assert!(paths.contains(&"tracked.txt"));
             assert!(paths.contains(&"new.txt"));
             assert!(!paths.contains(&"many/"));
-            assert_eq!(finish_task(&root, entry.clone(), true, false, Err(error.into())).await.unwrap_err(), error);
+            assert_eq!(finish_task(&root, entry.clone(), true, false, Err(error.into()), true).await.unwrap_err(), error);
         }
         let full = observed_task(&root, true).await.unwrap();
         assert!(full.get("filesComplete").is_none());
