@@ -178,6 +178,8 @@ button.repository-count-action:disabled { opacity: .7; }
 .dashboard-default-branch { flex-shrink: 0; color: var(--muted); font-size: 10px; }
 .dashboard-branch-message [role='status']:not(.notice) { display: inline-flex; align-items: center; gap: var(--icon-label-gap); color: var(--muted); font-size: 11px; }
 .dashboard-branch-message .notice { margin: 0; }
+/* A dismissed notice leaves its message row mounted to remember dismissal. */
+.dashboard-branch-message:has(.dashboard-branch-cell-content:empty) { display: none; }
 .remote-name > div { min-width: 0; }
 .remote-name strong, .remote-name .repository-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--repository-name-size); line-height: var(--repository-text-leading); font-weight: 550; }
 .remote-name .repository-link:hover { color: var(--blue); }
