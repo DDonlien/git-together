@@ -11,8 +11,11 @@ status: 阻塞（沿用原需求记录）。
 拆分前标题: 'codex/standalone-ts: 账号与仓库导入（0.2.0–0.3.2）。'
 原稳定 ID: '`x`、`IMPORT-14`、`IMPORT-14-last-divider`、`IMPORT-14-last-divider-test`、`IMPORT-14-grouped-actions`、`IMPORT-14-header-alignment`、`IMPORT-14-header-alignment-runtime`、`IMPORT-14-header-count-corner`、`IMPORT-14-production-submit`、`IMPORT-14-submit-refresh-pause`、`IMPORT-14-submit-refresh-pause-test`、`IMPORT-14-submit-generation-job`、`IMPORT-14-submit-generation-job-test`、`IMPORT-14-production-submit-runtime`、`IMPORT-14-push-lfs-errors`、`IMPORT-14-submit-popup`、`IMPORT-14-submit-summary-only`、`IMPORT-14-submit-popup-width`、`IMPORT-14-windows-lfs-commit`、`IMPORT-14-commit-timeout-headless`、`IMPORT-14-submit-popup-production`、`IMPORT-14-submit-popup-h5`、`IMPORT-14-submit-ai`、`IMPORT-14-header-text`、`IMPORT-14-download-icon`、`IMPORT-14-grouped-icons`、`IMPORT-14-grouped-refinement`、`IMPORT-14-grouped-h5`、`IMPORT-14-branch-name-alignment`、`UI-04-repository-reveal`、`IMPORT-14-inline`、`IMPORT-14-number-ignore`、`IMPORT-14-read-badges`、`IMPORT-14-read-health-scope`、`IMPORT-14-read-badges-test`、`IMPORT-14-read-failure-live`、`IMPORT-14-check-cycle`、`IMPORT-14-change-trigger`、`IMPORT-14-zero-badges`、`IMPORT-14-diagnostics`、`IMPORT-14-performance`、`IMPORT-14-performance-source`、`IMPORT-14-performance-runtime`、`IMPORT-14-diagnostics-copy`、`IMPORT-14-diagnostics-test`、`IMPORT-14-operation-semantics`、`IMPORT-14-branch-download`、`IMPORT-14-branch-download-layout`、`IMPORT-14-branch-download-layout-test`、`IMPORT-14-operation-semantics-test`、`IMPORT-14-visible`、`IMPORT-14-hide`、`IMPORT-14-hide-counts`、`IMPORT-14-hide-header-count`、`IMPORT-14-operation-execution`、`IMPORT-14-operation-collapse`、`IMPORT-14-operation-collapse-icons`、`IMPORT-14-feedback`、`IMPORT-14-action-names`、`IMPORT-14-action-names-test`、`IMPORT-14-feedback-test`、`IMPORT-14-number-ignore-test`、`IMPORT-14-test`、`IMPORT-15`、`IMPORT-15-test`；保留既有编号与完成状态。'
 拆分状态说明: 状态 property 沿用原聚合记录；本文件各 checkbox 为该目标的真实状态，未重新验收。
-updated-time: '2026-11-04T10:16:06+08:00'
+updated-time: '2026-11-04T10:55:17+08:00'
 updated-by: github.com/DDonlien
+commit-related:
+  - d88b46a951ea1ff0de805ceee7348e01ae1a0ac1
+  - 6df989507fba069fa9b0410fa04e7ad142b44281
 assignees:
   - github.com/DDonlien
 ---
@@ -20,7 +23,7 @@ assignees:
 # Description
 
 ## 当前需求与范围
-- [ ] Dashboard 分支提示关闭后收起空白行；新出现的错误和仍在显示的状态提示保留。源码与隔离布局检查已完成，安装版界面待用户验收。
+- [ ] Dashboard 分支提示关闭后收起空白行；新出现的错误和仍在显示的状态提示保留。修复已随 0.38.13 发布，安装版界面待用户验收。
 - [ ] 分支下载目录：根据当前显示的分支数量选择默认路径。只显示一个分支时默认使用 `所选位置/项目名`；显示多个分支时默认使用 `所选位置/项目名/分支名`，分支名中的路径分隔符转为安全字符。文件夹名称可清空，清空后直接使用项目目录；目标已存在时不覆盖。源码、类型检查、前端构建和隔离 Git 检查已完成，安装版界面仍待用户验收。
 - [ ] \[IMPORT-14-push-badge-refresh] 修复 Push 成功后 Dashboard 仓库和分支行仍显示待推送角标：根据已验证的实际推送结果更新对应分支的比较依据，保留仍未推送的提交、其他分支和读取失败状态；较早发出的远端读取不能覆盖结果，后续有效读取继续反映真实远端变化。源码和局部检查完成，用户安装版验收待完成。
   - [x] Push 已验证的远端提交立即参与对应分支的同步比较；远端文件树与历史不改写，新的有效读取取代该确认结果。类型及 Rust 检查、生产构建、16 项相关回归和项目默认 29 项测试通过。
@@ -120,6 +123,19 @@ assignees:
 - [ ] \[IMPORT-14-avatar-row-height-acceptance] 用户在实际 Dashboard 视觉验收含头像与不含头像的仓库行高度一致。
 
 # Comments
+
+## 20261104-105517_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
+
+> d88b46a951ea1ff0de805ceee7348e01ae1a0ac1
+> 6df989507fba069fa9b0410fa04e7ad142b44281
+
+分支提示空白行修复已随 [GitTogether 0.38.13](https://github.com/DDonlien/git-together/releases/tag/v0.38.13) 发布。首次云端打包因 Cargo 路径不适配失败；已修正发布流程，沿用同一版本标签重试并成功发布。macOS 和 Windows 源码检查、Windows x86/x64 构建及安装器校验通过。
+
+macOS 安装包通过 Developer ID 签名和 Apple 公证，公证编号 `2942c8fd-086a-48fb-b290-4690eadfc6b5`。公开更新清单及三个平台的版本签名、八项资产的大小和 SHA-256 已复核；macOS ZIP 与更新包内容一致，签名及公证票据核验通过。Windows 安装器尚未配置 Authenticode 签名。未操作或验收用户安装版。
+
+> [本次执行对话](codex://threads/01a1a0f2-4304-7e90-a497-5050df038618)
+
+---
 
 ## 20261104-101606_Codex_GPT-6.1-TERRA-MAX-UNKNOWN
 
